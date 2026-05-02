@@ -33,15 +33,3 @@ variable "flavor" {
   description = "Instance flavor"
   default     = "gen-1-1"
 }
-
-variable "ssh_key_name" {
-  type        = string
-  description = "SSH key name"
-  default     = "vitali"
-}
-
-variable "subnet_name" {
-  type        = string
-  description = "Subnet name to attach interface to"
-  default     = "default"
-}
