@@ -340,7 +340,7 @@ run_ansible() {
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
     ANSIBLE_FORCE_COLOR=0 \
     ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" "${args[@]}" 2>&1 > "$tmp_output" &
+    "$ANSIBLE_PLAYBOOK" "${args[@]}" > "$tmp_output" 2>&1 &
     local ansible_pid=$!
 
     while kill -0 "$ansible_pid" 2>/dev/null; do
