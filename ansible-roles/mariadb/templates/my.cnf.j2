@@ -1,0 +1,15 @@
+# Managed by Ansible
+[client]
+user={{ db_user }}
+password={{ db_pass }}
+
+[mysqldump]
+user={{ db_user }}
+password={{ db_pass }}
+
+[mysqld]
+# Performance optimizations from MySQLTuner
+skip-name-resolve=ON
+tmp_table_size=16M
+max_heap_table_size=16M
+innodb_snapshot_isolation=ON

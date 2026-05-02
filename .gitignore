@@ -1,0 +1,36 @@
+# Claude local state (not for git)
+.claude/
+
+# Secrets (never commit)
+secrets/
+.env
+.env.local
+
+# Terraform state (never commit)
+*.tfstate*
+.terraform/
+terraform/.terraform/
+terraform/*.tfstate*
+
+# Ansible
+*.retry
+
+# Logs and temporary files
+logs/
+*.log
+/tmp/
+
+# System
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+__pycache__/
+*.pyc
+
+# Project instructions (internal)
+CLAUDE.md
+
+# Systemd service files (contain environment variables)
+*.service

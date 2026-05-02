@@ -1,0 +1,9 @@
+---
+- name: 03 Database & Restore
+  hosts: dreamseed
+  become: false
+  gather_facts: false
+
+  roles:
+    - mariadb
+    - restore

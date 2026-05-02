@@ -1,0 +1,95 @@
+---
+- name: Check if Nginx Exporter is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/nginx-prometheus-exporter
+  register: monitoring_nginx_bin
+
+- name: Set Nginx Exporter desired version
+  ansible.builtin.set_fact:
+    monitoring_nginx_version: "1.5.1"
+
+- name: Get current Nginx Exporter version
+  ansible.builtin.command: /usr/local/bin/nginx-prometheus-exporter --version
+  changed_when: false
+  failed_when: false
+  register: monitoring_nginx_current_version
+  when: monitoring_nginx_bin.stat.exists
+
+- name: Install/Upgrade Nginx Exporter
+  when: >
+    not monitoring_nginx_bin.stat.exists or
+    monitoring_nginx_version not in (monitoring_nginx_current_version.stdout | default(''))
+  block:
+    - name: Download Nginx Exporter
+      ansible.builtin.get_url:
+        url: "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v{{ monitoring_nginx_version }}/nginx-prometheus-exporter_{{ monitoring_nginx_version }}_linux_amd64.tar.gz"
+        dest: /tmp/nginx_exporter.tar.gz
+        mode: "0644"
+
+    - name: Extract Nginx Exporter
+      ansible.builtin.unarchive:
+        src: /tmp/nginx_exporter.tar.gz
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install Nginx Exporter binary
+      become: true
+      ansible.builtin.copy:
+        src: "/tmp/nginx-prometheus-exporter"
+        dest: /usr/local/bin/nginx-prometheus-exporter
+        mode: "0755"
+        remote_src: true
+      notify: Restart Nginx Exporter
+
+    - name: Cleanup Nginx Exporter temp files
+      ansible.builtin.shell: rm -rf /tmp/nginx_exporter* /tmp/nginx-prometheus-exporter
+      changed_when: false
+
+- name: Verify Nginx Exporter binary
+  ansible.builtin.command: /usr/local/bin/nginx-prometheus-exporter --version
+  changed_when: false
+  register: monitoring_nginx_verify
+  failed_when: monitoring_nginx_verify.rc != 0
+
+- name: Create nginx_exporter user
+  become: true
+  ansible.builtin.user:
+    name: nginx_exporter
+    system: true
+    create_home: false
+    shell: /bin/false
+
+- name: Deploy Nginx Exporter service
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/nginx_exporter.service
+    content: |
+      [Unit]
+      Description=Nginx Prometheus Exporter
+      After=network.target nginx.service
+
+      [Service]
+      Type=simple
+      User=nginx_exporter
+      ExecStart=/usr/local/bin/nginx-prometheus-exporter --web.listen-address=127.0.0.1:9113 --nginx.scrape-uri=http://127.0.0.1:80/nginx_status
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+  notify: Restart Nginx Exporter
+
+- name: Enable Nginx Exporter
+  become: true
+  ansible.builtin.systemd:
+    name: nginx_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Nginx Exporter to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 9113
+    timeout: 15
+

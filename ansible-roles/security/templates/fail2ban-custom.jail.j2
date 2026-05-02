@@ -1,0 +1,86 @@
+# Custom Fail2ban jails for DreamSeed
+
+# ============================================================
+# SSH
+# ============================================================
+[sshd]
+enabled  = true
+port     = ssh
+maxretry = 5
+bantime  = 1h
+
+# ============================================================
+# MODX Admin Panel
+# ============================================================
+[modx-admin]
+enabled  = true
+port     = http,https
+filter   = modx-admin
+{% if web_server == "nginx" %}
+logpath  = /var/log/nginx/access.log
+{% else %}
+logpath  = /var/log/apache2/access.log
+{% endif %}
+maxretry = 5
+findtime = 900
+bantime  = 1800
+
+# ============================================================
+# Grafana
+# ============================================================
+[grafana]
+enabled  = true
+port     = http,https
+filter   = grafana
+logpath  = /var/log/grafana/grafana.log
+maxretry = 5
+findtime = 10m
+bantime  = 1h
+
+# ============================================================
+# Web server jails
+# ============================================================
+{% if web_server == "nginx" %}
+[nginx-http-auth]
+enabled  = true
+port     = http,https
+maxretry = 5
+bantime  = 1h
+
+[nginx-botsearch]
+enabled  = true
+port     = http,https
+maxretry = 2
+bantime  = 12h
+
+[nginx-bad-request]
+enabled  = true
+port     = http,https
+maxretry = 6
+bantime  = 1h
+
+{% else %}
+[apache-auth]
+enabled  = true
+port     = http,https
+maxretry = 5
+bantime  = 1h
+
+[apache-shellshock]
+enabled  = true
+port     = http,https
+maxretry = 1
+bantime  = 1d
+
+[apache-badbots]
+enabled  = true
+port     = http,https
+maxretry = 2
+bantime  = 12h
+
+[apache-noscript]
+enabled  = true
+port     = http,https
+maxretry = 6
+bantime  = 1h
+{% endif %}

@@ -1,0 +1,24 @@
+---
+- name: Node Exporter
+  ansible.builtin.include_tasks: node_exporter.yml
+
+- name: Apache Exporter
+  ansible.builtin.include_tasks: apache_exporter.yml
+  when: web_server == "apache"
+
+- name: Nginx Exporter
+  ansible.builtin.include_tasks: nginx_exporter.yml
+  when: web_server == "nginx"
+
+- name: MySQL Exporter
+  ansible.builtin.include_tasks: mysql_exporter.yml
+  when: db_pass | default('') | length > 0
+
+- name: VictoriaMetrics
+  ansible.builtin.include_tasks: victoria.yml
+
+- name: Grafana
+  ansible.builtin.include_tasks: grafana.yml
+
+- name: Check site
+  ansible.builtin.include_tasks: check_site.yml

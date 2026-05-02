@@ -1,0 +1,23 @@
+---
+- name: Configure PHP memory limits
+  become: true
+  ansible.builtin.template:
+    src: php_limits.ini.j2
+    dest: "/etc/php/{{ php_version }}/fpm/conf.d/50-limits.ini"
+    mode: "0644"
+  notify: Restart PHP-FPM
+
+- name: Configure OPcache
+  become: true
+  ansible.builtin.template:
+    src: opcache.ini.j2
+    dest: "/etc/php/{{ php_version }}/fpm/conf.d/99-opcache.ini"
+    mode: "0644"
+  notify: Restart PHP-FPM
+
+- name: Ensure PHP-FPM is running
+  become: true
+  ansible.builtin.systemd:
+    name: "php{{ php_version }}-fpm"
+    state: started
+    enabled: true

@@ -1,0 +1,100 @@
+---
+- name: Check if VictoriaMetrics is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/victoria-metrics
+  register: monitoring_vm_bin
+
+- name: Install VictoriaMetrics (latest)
+  when: not monitoring_vm_bin.stat.exists
+  block:
+    - name: Get latest VictoriaMetrics version
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          curl -s "https://api.github.com/repos/VictoriaMetrics/VictoriaMetrics/releases?per_page=10" \
+            | jq -r '[.[] | select(.assets[] | .name | test("^victoria-metrics-linux-amd64-v[0-9]+\\.[0-9]+\\.[0-9]+\\.tar\\.gz$"))] | first | .tag_name' \
+            | sed 's/^v//'
+        executable: /bin/bash
+      register: monitoring_vm_version
+      changed_when: false
+
+    - name: Download VictoriaMetrics
+      ansible.builtin.get_url:
+        url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version.stdout }}/victoria-metrics-linux-amd64-v{{ monitoring_vm_version.stdout }}.tar.gz"
+        dest: /tmp/victoria-metrics.tar.gz
+        mode: "0644"
+
+    - name: Extract VictoriaMetrics
+      ansible.builtin.unarchive:
+        src: /tmp/victoria-metrics.tar.gz
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install VictoriaMetrics binary
+      become: true
+      ansible.builtin.copy:
+        src: /tmp/victoria-metrics-prod
+        dest: /usr/local/bin/victoria-metrics
+        mode: "0755"
+        remote_src: true
+
+    - name: Cleanup VictoriaMetrics temp files
+      ansible.builtin.shell: rm -f /tmp/victoria-metrics*
+      changed_when: false
+
+- name: Create victoria-metrics user
+  become: true
+  ansible.builtin.user:
+    name: victoria-metrics
+    system: true
+    create_home: false
+    shell: /bin/false
+
+- name: Create VictoriaMetrics directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    mode: "0755"
+  loop:
+    - {path: /var/lib/victoria-metrics, owner: victoria-metrics}
+    - {path: /etc/victoria-metrics, owner: root}
+
+- name: Deploy VictoriaMetrics scrape config
+  become: true
+  ansible.builtin.template:
+    src: scrape.yml.j2
+    dest: /etc/victoria-metrics/scrape.yml
+    mode: "0644"
+  notify: Restart VictoriaMetrics
+
+- name: Deploy VictoriaMetrics service
+  become: true
+  ansible.builtin.template:
+    src: victoria-metrics.service.j2
+    dest: /etc/systemd/system/victoria-metrics.service
+    mode: "0644"
+  notify: Restart VictoriaMetrics
+
+- name: Enable VictoriaMetrics
+  become: true
+  ansible.builtin.systemd:
+    name: victoria-metrics
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for VictoriaMetrics to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 8428
+    timeout: 15
+
+- name: Verify VictoriaMetrics health
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8428/api/v1/query?query=up
+    return_content: false
+    status_code: 200
+  retries: 3
+  delay: 2

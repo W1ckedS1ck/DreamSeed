@@ -1,0 +1,5 @@
+---
+# Skip rules that are not applicable or too strict for this project
+skip_list:
+  - yaml[line-length]  # URLs must be long
+  - command-instead-of-module  # curl/wget needed for version detection

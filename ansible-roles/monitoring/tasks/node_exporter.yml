@@ -1,0 +1,77 @@
+---
+- name: Check if Node Exporter is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/node_exporter
+  register: monitoring_ne_bin
+
+- name: Install Node Exporter (latest)
+  when: not monitoring_ne_bin.stat.exists
+  block:
+    - name: Get latest Node Exporter version
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest | jq -r '.tag_name' | sed 's/^v//'
+        executable: /bin/bash
+      register: monitoring_ne_version
+      changed_when: false
+
+    - name: Download Node Exporter
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ monitoring_ne_version.stdout }}/node_exporter-{{ monitoring_ne_version.stdout }}.linux-amd64.tar.gz"
+        dest: /tmp/node_exporter.tar.gz
+        mode: "0644"
+
+    - name: Extract Node Exporter
+      ansible.builtin.unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install Node Exporter binary
+      become: true
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ monitoring_ne_version.stdout }}.linux-amd64/node_exporter"
+        dest: /usr/local/bin/node_exporter
+        mode: "0755"
+        remote_src: true
+
+    - name: Cleanup Node Exporter temp files
+      ansible.builtin.shell: rm -rf /tmp/node_exporter*
+      changed_when: false
+
+- name: Verify Node Exporter binary
+  ansible.builtin.command: /usr/local/bin/node_exporter --version
+  changed_when: false
+  register: monitoring_ne_verify
+  failed_when: monitoring_ne_verify.rc != 0
+
+- name: Create node_exporter user
+  become: true
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    create_home: false
+    shell: /bin/false
+
+- name: Deploy Node Exporter service
+  become: true
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+  notify: Restart Node Exporter
+
+- name: Enable Node Exporter
+  become: true
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Node Exporter to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 9100
+    timeout: 15

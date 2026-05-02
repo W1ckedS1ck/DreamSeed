@@ -1,0 +1,12 @@
+# Fail2ban filter for Grafana authentication failures
+# Log path: /var/log/grafana/grafana.log
+
+[Definition]
+failregex = ^.*t=.*lvl=info msg="Invalid username or password" .* remote_addr=<HOST>.*$
+            ^.*t=.*lvl=eror msg="Invalid username or password" .* remote_addr=<HOST>.*$
+            ^.*Login Failed.*invalid username or password.*RemoteAddr=<HOST>.*$
+
+ignoreregex =
+
+[Init]
+datepattern = %%Y-%%m-%%d %%H:%%M:%%S

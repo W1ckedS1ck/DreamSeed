@@ -1,0 +1,9 @@
+---
+- name: Install Apache packages
+  become: true
+  ansible.builtin.apt:
+    name:
+      - apache2
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive

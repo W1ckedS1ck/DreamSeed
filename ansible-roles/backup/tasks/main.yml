@@ -1,0 +1,120 @@
+---
+- name: Create backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - "{{ scripts_dir_remote }}"
+    - "{{ backup_dir }}/project"
+    - "{{ backup_dir }}/db"
+
+- name: Upload backup scripts
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/{{ item }}"
+    dest: "{{ scripts_dir_remote }}/{{ item }}"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - smart_backup.sh
+    - upload_backups_to_gdrive.sh
+    - RESTORE_ALL.sh
+    - test_tg.sh
+    - common_functions.sh
+    - daily_report.sh
+    - weekly_report.sh
+    - bot_handler.sh
+
+- name: Upload Telegram bot script
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/telegram_bot.py"
+    dest: "{{ scripts_dir_remote }}/telegram_bot.py"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Upload bot runner script
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/run_bot.sh"
+    dest: "{{ scripts_dir_remote }}/run_bot.sh"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Deploy Telegram bot systemd service
+  ansible.builtin.template:
+    src: telegram_bot.service.j2
+    dest: /etc/systemd/system/telegram-bot.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Upload .env secrets
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/.env"
+    dest: "{{ scripts_dir_remote }}/.env"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+
+- name: Reload systemd and enable bot service
+  ansible.builtin.systemd:
+    daemon_reload: yes
+    name: telegram-bot
+    enabled: yes
+    state: started
+
+- name: Upload loadtest script as template
+  ansible.builtin.template:
+    src: "{{ scripts_dir }}/loadtest.sh.j2"
+    dest: "{{ scripts_dir_remote }}/loadtest.sh"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Upload test mail script
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/test_mail.py"
+    dest: "{{ scripts_dir_remote }}/test_mail.py"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Setup hourly backup cron
+  ansible.builtin.cron:
+    name: "DreamSeed hourly backup"
+    minute: "0"
+    job: "{{ scripts_dir_remote }}/smart_backup.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup daily GDrive upload cron
+  ansible.builtin.cron:
+    name: "DreamSeed daily gdrive upload"
+    minute: "15"
+    hour: "3"
+    job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup daily report cron
+  ansible.builtin.cron:
+    name: "DreamSeed daily report"
+    minute: "30"
+    hour: "15"
+    job: "{{ scripts_dir_remote }}/daily_report.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup weekly report cron
+  ansible.builtin.cron:
+    name: "DreamSeed weekly report"
+    minute: "30"
+    hour: "18"
+    weekday: "0"
+    job: "{{ scripts_dir_remote }}/weekly_report.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"

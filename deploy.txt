@@ -1,0 +1,211 @@
+DreamSeed — Deploy Manual
+=========================
+
+БЫСТРЫЙ СТАРТ
+-------------
+
+1. Скопировать секреты:
+   cp secrets/.env.example secrets/.env              # prod (AWS)
+   cp secrets/.env.example secrets/.env.dev-aws      # dev на AWS
+   cp secrets/.env.example secrets/.env.dev-hetz     # dev на Hetzner
+
+2. Заполнить нужный файл .env
+
+3. Запустить деплой:
+   ./deploy.sh prod -n          # Prod: AWS + Nginx
+   ./deploy.sh prod -a          # Prod: AWS + Apache
+   ./deploy.sh dev-aws -n       # Dev: AWS + Nginx
+   ./deploy.sh dev-hetz -n      # Dev: Hetzner + Nginx
+
+
+ВСЕ КОМАНДЫ
+-----------
+
+./deploy.sh prod -n                     Полный деплой prod (AWS + Nginx)
+./deploy.sh prod -a                     Полный деплой prod (AWS + Apache)
+./deploy.sh dev-aws -n                  Полный деплой dev на AWS (Nginx)
+./deploy.sh dev-hetz -n                 Полный деплой dev на Hetzner (Nginx)
+./deploy.sh dev-hetz -a                 Полный деплой dev на Hetzner (Apache)
+./deploy.sh prod -n -i 1.2.3.4         Только Ansible на существующий сервер
+./deploy.sh prod -a -i 1.2.3.4         То же, с Apache
+./deploy.sh dev-aws -n -i 1.2.3.4      Только Ansible на существующий AWS сервер
+./deploy.sh prod -n -d                  Dry-run (проверка без изменений)
+./deploy.sh prod -x                     Terraform destroy (удалить ресурсы prod)
+./deploy.sh dev-aws -x                  Terraform destroy dev-aws
+./deploy.sh -h                          Показать справку
+
+
+ТАРГЕТЫ (TARGET)
+----------------
+
+TARGET определяет провайдер + домен + файл секретов:
+
+  prod        AWS · dreamseed.online        · secrets/.env
+  dev-aws     AWS · aws.vitalikuts.online   · secrets/.env.dev-aws
+  dev-hetz    Hetzner · hetz.vitalikuts.online · secrets/.env.dev-hetz
+
+
+ФЛАГИ
+-----
+
+  -n                  Веб-сервер: Nginx
+  -a                  Веб-сервер: Apache
+  -i IP               Использовать существующий сервер, пропустить Terraform
+  -d, --dry-run       Dry-run режим (ansible --check, без изменений)
+  -x, --destroy       Уничтожить ресурсы через Terraform destroy
+  -h                  Справка
+
+
+ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ (для deploy.sh)
+-------------------------------------
+
+Можно переопределить перед запуском скрипта:
+
+  SSH_KEY             Путь к SSH ключу          (по умолчанию: ~/.ssh/Vitali.pem)
+  PHP_VERSION         Версия PHP                 (по умолчанию: 8.3)
+  ANSIBLE_PLAYBOOK    Путь к ansible-playbook    (по умолчанию: ansible-playbook)
+  TERRAFORM           Путь к terraform           (по умолчанию: terraform)
+  LOG_DIR             Директория для логов       (по умолчанию: ./logs)
+  SSH_ATTEMPTS        Попыток SSH (Hetzner)      (по умолчанию: 20)
+  AWS_SSH_ATTEMPTS    Попыток SSH (AWS)          (по умолчанию: 40)
+  MAX_LOG_FILES       Сколько лог-файлов хранить (по умолчанию: 10)
+
+Пример:
+  SSH_KEY=~/.ssh/mykey.pem PHP_VERSION=8.4 ./deploy.sh prod -n
+
+
+ПЕРЕМЕННЫЕ secrets/.env (и .env.dev-*)
+---------------------------------------
+
+ОБЯЗАТЕЛЬНЫЕ для любого деплоя:
+
+  DB_PASS             Пароль базы данных MariaDB
+
+  GRAFANA_PASS        Пароль администратора Grafana
+                      Логин всегда: admin
+                      URL: http://<IP>:3000
+
+  CLOUDFLARE_API_TOKEN  API токен Cloudflare для настройки DNS
+                        Dashboard → Profile → API Tokens → Create Token
+                        Нужны права: Zone / DNS / Edit
+
+ОБЯЗАТЕЛЬНЫЕ для деплоя на AWS (prod, dev-aws):
+
+  AWS_ACCESS_KEY      AWS Access Key ID (IAM → User → Security credentials)
+  AWS_SECRET_KEY      AWS Secret Access Key
+  AWS_REGION          Регион AWS (по умолчанию: us-west-1)
+
+ОБЯЗАТЕЛЬНЫЕ для деплоя на Hetzner (dev-hetz):
+
+  HCLOUD_TOKEN        API токен Hetzner Cloud (Project → Security → API tokens)
+
+ОПЦИОНАЛЬНЫЕ (Elastic IP для AWS):
+
+  AWS_EIP_ALLOCATION_ID  ID существующего Elastic IP (eipalloc-...)
+                         Если не задан — сервер получит случайный IP
+
+ОПЦИОНАЛЬНЫЕ (Telegram уведомления):
+
+  TG_TOKEN            Токен бота (получить у @BotFather)
+  TG_CHAT_ID          ID чата или группы
+  TG_THREAD_ID        ID топика в группе (если используются топики)
+
+ОПЦИОНАЛЬНЫЕ (Email / SMTP):
+
+  EMAIL_USER          Логин SMTP
+  EMAIL_PASS          Пароль SMTP
+  SMTP_SERVER         Адрес SMTP сервера
+  SMTP_PORT           Порт SMTP (обычно 587 или 465)
+
+ФИКСИРОВАННЫЕ (можно не менять):
+
+  DB_NAME             Имя базы данных    (по умолчанию: modx_db)
+  DB_USER             Пользователь БД    (по умолчанию: modx_user)
+
+
+TERRAFORM ПЕРЕМЕННЫЕ
+--------------------
+
+Все передаются автоматически через TF_VAR_* из secrets/.env и deploy.sh.
+Можно переопределить вручную через terraform.tfvars или флаг -var.
+
+AWS (terraform/aws/main.tf):
+
+  aws_region               Регион                    (по умолчанию: us-west-1)
+  instance_type            Тип инстанса              (по умолчанию: t3.small)
+  ssh_public_key_path      Путь к публичному ключу   (по умолчанию: ~/.ssh/Vitali.pub)
+  elastic_ip_allocation_id ID существующего EIP      (по умолчанию: пусто = не привязывать)
+  environment              Окружение                  (deploy.sh передаёт автоматически)
+
+Hetzner (terraform/hetzner/main.tf):
+
+  hcloud_token        API токен Hetzner Cloud (обязательно, берётся из окружения)
+  ssh_key_name        Имя SSH ключа в Hetzner  (по умолчанию: Vitali)
+  primary_ip_name     Имя существующего Primary IP (по умолчанию: primary_ip-1)
+  environment         Окружение                  (deploy.sh передаёт автоматически)
+
+
+ИМЕНОВАНИЕ РЕСУРСОВ
+-------------------
+
+Ресурсы AWS и Hetzner именуются с суффиксом окружения во избежание конфликтов:
+
+  dreamseed-key-prod     / dreamseed-key-dev-aws     — AWS key pair
+  dreamseed-sg-prod      / dreamseed-sg-dev-aws      — AWS security group
+  dreamseed-prod         / dreamseed-dev-aws          — EC2 instance / Hetzner server
+  dreamseed-fw-prod      / dreamseed-fw-dev-hetz      — Hetzner firewall
+
+Terraform workspaces изолируют state:
+  prod (terraform/aws)  →  workspace "prod"
+  dev-aws               →  workspace "dev-aws"
+  dev-hetz              →  workspace "dev-hetz"
+
+
+СТРУКТУРА ДЕПЛОЯ
+----------------
+
+Скрипт запускает плейбуки в таком порядке:
+
+  [1] playbook-01-base.yml      Базовые пакеты, пользователи, swap
+  [2] playbook-02-web.yml       Веб-сервер Apache + PHP + SSL
+      playbook-02-nginx.yml     Веб-сервер Nginx + PHP + SSL
+  [3] playbook-03-db.yml        MariaDB + restore
+  [4] playbook-04-monitor.yml   VictoriaMetrics + Grafana + экспортеры
+  [5] playbook-05-security.yml  fail2ban, firewall, SSH hardening
+
+
+ПОСЛЕ ДЕПЛОЯ
+------------
+
+  SSH:        ssh -i ~/.ssh/Vitali.pem ubuntu@<IP>
+  Grafana:    http://<IP>:3000   (логин: admin / пароль: GRAFANA_PASS)
+  Сайт:       https://<domain>
+
+Логи деплоя:    ./logs/deploy_<дата>.log
+Логи Terraform: ./logs/terraform_<дата>.log
+
+
+ТИПИЧНЫЕ ПРОБЛЕМЫ
+-----------------
+
+  "SSH key not found"
+      → Проверить путь: ls ~/.ssh/Vitali.pem
+      → Или задать: SSH_KEY=/path/to/key ./deploy.sh prod -n
+
+  "DB_PASS not set"
+      → Заполнить DB_PASS в нужном .env файле
+
+  "GRAFANA_PASS not set"
+      → Заполнить GRAFANA_PASS в нужном .env файле
+
+  "AWS_ACCESS_KEY and AWS_SECRET_KEY required"
+      → Заполнить AWS_ACCESS_KEY и AWS_SECRET_KEY в .env
+
+  "env file not found: secrets/.env.dev-aws"
+      → cp secrets/.env.example secrets/.env.dev-aws && заполнить
+
+  "Terraform config not found"
+      → Проверить что директория terraform/hetzner/ или terraform/aws/ существует
+
+  AWS: сервер получил случайный IP вместо Elastic
+      → Задать AWS_EIP_ALLOCATION_ID в .env (eipalloc-...)

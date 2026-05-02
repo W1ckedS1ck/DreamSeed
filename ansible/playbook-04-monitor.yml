@@ -1,0 +1,9 @@
+---
+- name: 04 Monitoring
+  hosts: dreamseed
+  become: true
+  gather_facts: true
+
+  roles:
+    - monitoring
+    - backup

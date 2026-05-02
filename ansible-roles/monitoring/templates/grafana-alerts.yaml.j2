@@ -1,0 +1,370 @@
+# Managed by Ansible
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: Telegram
+    receivers:
+      - uid: dreamseed-telegram
+        type: telegram
+        settings:
+          bottoken: "{{ grafana_telegram_token }}"
+          chatid: "{{ grafana_telegram_chat_id }}"
+          message: "{% raw %}{{ if .Alerts.Firing }}🔴 *{{ (index .Alerts.Firing 0).Labels.alertname }}* 🔴\n{{ range .Alerts.Firing }}{{ .Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ *{{ (index .Alerts.Resolved 0).Labels.alertname }}* — resolved ✅{{ end }}{% endraw %}"
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: Telegram
+    group_by:
+      - alertname
+      - instance
+    group_wait: 30s
+    group_interval: 1m
+    repeat_interval: 4h
+
+groups:
+  - orgId: 1
+    name: DreamSeed
+    folder: Alerts
+    interval: 1m
+    rules:
+
+      - uid: dreamseed-high-cpu
+        title: High CPU
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: '100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [85]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: >-
+            {% raw %}CPU usage > 85% for 5 min on {{ $labels.instance }}{% endraw %}
+
+      - uid: dreamseed-high-ram
+        title: High RAM
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [90]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: >-
+            {% raw %}RAM usage > 90% on {{ $labels.instance }}{% endraw %}
+
+      - uid: dreamseed-low-disk
+        title: Low Disk Space
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: '100 * node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"}'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [10]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: >-
+            {% raw %}Disk < 10% free on {{ $labels.instance }} mountpoint {{ $labels.mountpoint }}{% endraw %}
+
+      - uid: dreamseed-mysql-down
+        title: MySQL Down
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              expr: 'mysql_up'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: >-
+            {% raw %}MariaDB is down on {{ $labels.instance }}{% endraw %}
+
+{% if web_server == "apache" %}
+      - uid: dreamseed-apache-down
+        title: Apache Down
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              expr: 'apache_up'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: >-
+            {% raw %}Apache is down on {{ $labels.instance }}{% endraw %}
+{% endif %}
+
+{% if web_server == "nginx" %}
+      - uid: dreamseed-nginx-down
+        title: Nginx Down
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              expr: 'nginx_up'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: >-
+            {% raw %}Nginx is down on {{ $labels.instance }}{% endraw %}
+{% endif %}
+
+      - uid: dreamseed-site-down
+        title: Site Down
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 120
+              to: 0
+            model:
+              expr: 'site_up'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 120
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Website {{ domain }} is not responding (HTTP != 200)"
+
+      - uid: dreamseed-victoria-down
+        title: VictoriaMetrics Down
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              expr: 'victoria_up'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: >-
+            {% raw %}VictoriaMetrics is down on {{ $labels.instance }}{% endraw %}

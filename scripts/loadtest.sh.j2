@@ -1,0 +1,69 @@
+#!/bin/bash
+
+HOST="{{ domain }}"
+IP="{{ server_ip }}"
+
+# --- Install dependencies if needed ---
+if ! command -v wrk &>/dev/null; then
+  echo "Installing wrk..."
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apache2-utils libssl-dev git build-essential
+  cd /tmp
+  rm -rf wrk
+  git clone https://github.com/wg/wrk.git
+  cd wrk
+  make
+  sudo cp wrk /usr/local/bin/
+  echo "wrk installed"
+fi
+
+# --- Check ab (apache2-utils) ---
+if ! command -v ab &>/dev/null; then
+  echo "Installing apache2-utils..."
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apache2-utils
+fi
+
+echo "========================================"
+echo "🚀 LOAD TEST START"
+echo "Target: $HOST ($IP)"
+echo "========================================"
+
+# --- Прогрев ---
+echo "🔥 WARMUP..."
+for i in {1..50}; do
+  curl -s -H "Host: $HOST" http://$IP/ > /dev/null
+done
+
+sleep 5
+
+# --- TEST 1 ---
+echo ""
+echo "=== TEST 1: BASE (4 threads, 100 connections) ==="
+wrk -t4 -c100 -d30s -H "Host: $HOST" http://$IP/
+
+sleep 15
+
+# --- TEST 2 ---
+echo ""
+echo "=== TEST 2: HEAVY (8 threads, 300 connections) ==="
+wrk -t8 -c300 -d30s -H "Host: $HOST" http://$IP/
+
+sleep 15
+
+# --- TEST 3 ---
+echo ""
+echo "=== TEST 3: NO KEEP-ALIVE ==="
+wrk -t4 -c100 -d30s -H "Host: $HOST" -H "Connection: close" http://$IP/
+
+sleep 15
+
+# --- TEST 4 ---
+echo ""
+echo "=== TEST 4: AB ==="
+ab -n 3000 -c 100 -H "Host: $HOST" http://$IP/
+
+echo ""
+echo "========================================"
+echo "✅ TEST COMPLETE"
+echo "========================================"

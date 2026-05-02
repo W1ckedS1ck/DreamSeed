@@ -1,0 +1,184 @@
+---
+- name: Create rclone config directory
+  ansible.builtin.file:
+    path: "/home/ubuntu/.config/rclone"
+    state: directory
+    mode: "0700"
+
+- name: Upload rclone config
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/rclone.conf"
+    dest: "/home/ubuntu/.config/rclone/rclone.conf"
+    mode: "0600"
+
+# ========================
+#  Restore Project
+# ========================
+- name: Check if site already restored
+  ansible.builtin.stat:
+    path: "{{ web_root }}/index.php"
+  register: restore_site_exists
+
+- name: Find latest project backup
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rclone lsf gdrive:DreamSeed/backups/project/ | sort -r | head -1
+    executable: /bin/bash
+  register: restore_latest_project
+  changed_when: false
+  when: not restore_site_exists.stat.exists
+
+- name: Fail if no project backup found
+  ansible.builtin.fail:
+    msg: "No project backups found on Google Drive"
+  when: not restore_site_exists.stat.exists and (restore_latest_project.stdout | trim == "")
+
+- name: Download project backup
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rclone copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /tmp/
+    executable: /bin/bash
+  when: not restore_site_exists.stat.exists
+  changed_when: false
+
+- name: Verify project archive integrity
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      tar -tzf "/tmp/{{ restore_latest_project.stdout | trim }}" > /dev/null 2>&1
+    executable: /bin/bash
+  when: not restore_site_exists.stat.exists
+  register: restore_archive_check
+  changed_when: false
+  failed_when: restore_archive_check.rc != 0
+
+- name: Verify .htaccess exists in archive
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      tar -tzf "/tmp/{{ restore_latest_project.stdout | trim }}" | grep -c '.htaccess' && exit 0 || exit 0
+    executable: /bin/bash
+  when: not restore_site_exists.stat.exists
+  register: restore_htaccess_check
+  changed_when: false
+  failed_when: false
+
+- name: Extract project
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rm -rf {{ web_root }}
+      mkdir -p {{ web_root }}
+      tar -xzf "/tmp/{{ restore_latest_project.stdout | trim }}" -C /var/www/
+      chown -R www-data:www-data {{ web_root }}
+    executable: /bin/bash
+  when: not restore_site_exists.stat.exists
+  changed_when: false
+
+- name: Verify project extraction
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      test -f {{ web_root }}/index.php && test -s {{ web_root }}/.htaccess
+    executable: /bin/bash
+  when: not restore_site_exists.stat.exists
+  register: restore_extract_check
+  changed_when: false
+  failed_when: restore_extract_check.rc != 0
+
+- name: Cleanup project archive
+  ansible.builtin.file:
+    path: "/tmp/{{ restore_latest_project.stdout | trim }}"
+    state: absent
+  when: not restore_site_exists.stat.exists
+
+- name: Show restored project
+  ansible.builtin.debug:
+    msg: "✓ Restored project: {{ restore_latest_project.stdout | trim }}"
+  when: not restore_site_exists.stat.exists
+
+- name: Skip restore (already exists)
+  ansible.builtin.debug:
+    msg: "⊘ Site already exists at {{ web_root }}, skipping restore"
+  when: restore_site_exists.stat.exists
+
+# ========================
+#  Restore Database
+# ========================
+- name: Check if DB already has tables
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      mysql {{ db_name }} -e "SHOW TABLES" 2>/dev/null | wc -l
+    executable: /bin/bash
+  register: restore_db_tables
+  changed_when: false
+  failed_when: false
+
+- name: Set db_needs_restore fact
+  ansible.builtin.set_fact:
+    restore_db_needs_restore: "{{ (restore_db_tables.stdout | default('0') | int) < 2 }}"
+
+- name: Find latest DB backup
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rclone lsf gdrive:DreamSeed/backups/db/ | sort -r | head -1
+    executable: /bin/bash
+  register: restore_latest_db
+  changed_when: false
+  when: restore_db_needs_restore
+
+- name: Fail if no DB backup found
+  ansible.builtin.fail:
+    msg: "No DB backups found on Google Drive"
+  when: restore_db_needs_restore and (restore_latest_db.stdout | trim == "")
+
+- name: Download DB backup
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rclone copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /tmp/
+    executable: /bin/bash
+  when: restore_db_needs_restore
+  changed_when: false
+
+- name: Restore database
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql {{ db_name }}
+    executable: /bin/bash
+  when: restore_db_needs_restore
+  changed_when: false
+
+- name: Verify database restore (expect 50+ tables)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      mysql {{ db_name }} -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
+    executable: /bin/bash
+  register: restore_db_table_count
+  when: restore_db_needs_restore
+  changed_when: false
+  failed_when: (restore_db_table_count.stdout | int) < 50
+
+- name: Cleanup DB archive
+  ansible.builtin.file:
+    path: "/tmp/{{ restore_latest_db.stdout | trim }}"
+    state: absent
+  when: restore_db_needs_restore
+
+- name: Show restored DB
+  ansible.builtin.debug:
+    msg: "✓ Restored DB: {{ restore_latest_db.stdout | trim }} ({{ restore_db_table_count.stdout | default('?') }} tables)"
+  when: restore_db_needs_restore
+
+- name: Skip DB restore (already has data)
+  ansible.builtin.debug:
+    msg: "⊘ Database already has {{ restore_db_tables.stdout | trim }} tables, skipping restore"
+  when: not restore_db_needs_restore

@@ -1,0 +1,110 @@
+---
+- name: Enable Apache modules
+  become: true
+  ansible.builtin.command: "a2enmod {{ item }}"
+  loop:
+    - ssl
+    - http2
+    - brotli
+    - deflate
+    - headers
+    - expires
+    - proxy
+    - proxy_fcgi
+    - proxy_http
+    - proxy_wstunnel
+    - rewrite
+  register: apache_http_enmod_result
+  changed_when: "'Enabling' in apache_http_enmod_result.stdout"
+  failed_when: apache_http_enmod_result.rc != 0
+  notify: Restart Apache HTTP
+
+- name: Harden Apache — ServerTokens Prod
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apache2/conf-enabled/security.conf
+    regexp: '^#?\s*ServerTokens\s'
+    line: "ServerTokens Prod"
+  notify: Reload Apache HTTP
+
+- name: Harden Apache — ServerSignature Off
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apache2/conf-enabled/security.conf
+    regexp: '^#?\s*ServerSignature\s'
+    line: "ServerSignature Off"
+  notify: Reload Apache HTTP
+
+- name: Set global ServerName to suppress warning
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apache2/apache2.conf
+    regexp: '^ServerName'
+    line: "ServerName localhost"
+    insertafter: '^</Directory>'
+  notify: Reload Apache HTTP
+
+- name: Deploy HTTP vhost
+  become: true
+  ansible.builtin.template:
+    src: vhost-http.conf.j2
+    dest: "/etc/apache2/sites-available/{{ domain }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Deploy catch-all vhost (reject IP/unknown hosts)
+  become: true
+  ansible.builtin.template:
+    src: catch-all.conf.j2
+    dest: /etc/apache2/sites-available/000-catch-all.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Enable catch-all vhost
+  become: true
+  ansible.builtin.command: a2ensite 000-catch-all.conf
+  register: apache_http_catch_all_result
+  changed_when: "'enabled' in apache_http_catch_all_result.stdout"
+  failed_when: false
+  notify: Reload Apache HTTP
+
+- name: Disable default Ubuntu site
+  become: true
+  ansible.builtin.command: a2dissite 000-default.conf
+  register: apache_http_dissite_default
+  changed_when: "'disabled' in apache_http_dissite_default.stdout"
+  failed_when: false
+  notify: Reload Apache HTTP
+
+- name: Disable SSL site if present (will be re-enabled after certbot)
+  become: true
+  ansible.builtin.command: "a2dissite {{ domain }}-ssl.conf"
+  register: apache_http_dissite_ssl
+  changed_when: "'disabled' in apache_http_dissite_ssl.stdout"
+  failed_when: false
+
+- name: Enable HTTP site
+  become: true
+  ansible.builtin.command: "a2ensite {{ domain }}.conf"
+  register: apache_http_ensite_result
+  changed_when: "'Enabling' in apache_http_ensite_result.stdout"
+  failed_when: false
+
+- name: Validate Apache config
+  become: true
+  ansible.builtin.command: apache2ctl -t
+  changed_when: false
+
+- name: Start and enable Apache
+  become: true
+  ansible.builtin.systemd:
+    name: apache2
+    state: started
+    enabled: true
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers

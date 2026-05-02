@@ -1,0 +1,181 @@
+---
+# --- SSH Hardening ---
+- name: Disable SSH password authentication
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication\s'
+    line: "PasswordAuthentication no"
+    validate: "sshd -t -f %s"
+  notify: Restart sshd
+
+- name: Disable SSH root login
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PermitRootLogin\s'
+    line: "PermitRootLogin no"
+    validate: "sshd -t -f %s"
+  notify: Restart sshd
+
+- name: Remove all X11Forwarding entries from sshd_config
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*X11Forwarding\s'
+    state: absent
+  notify: Restart sshd
+
+- name: Disable X11 forwarding
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "X11Forwarding no"
+    validate: "sshd -t -f %s"
+  notify: Restart sshd
+
+- name: Remove conflicting X11Forwarding from sshd_config.d
+  become: true
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    regexp: '^X11Forwarding\s+yes\s*$'
+    replace: ''
+  failed_when: false
+  notify: Restart sshd
+
+- name: Set SSH MaxAuthTries
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*MaxAuthTries\s'
+    line: "MaxAuthTries 3"
+    validate: "sshd -t -f %s"
+  notify: Restart sshd
+
+- name: Restrict SSH access to allowed users
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*AllowUsers\s'
+    line: "AllowUsers ubuntu"
+    validate: "sshd -t -f %s"
+  notify: Restart sshd
+
+- name: Set authorized keys file
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*AuthorizedKeysFile\s'
+    line: "AuthorizedKeysFile .ssh/authorized_keys"
+    validate: "sshd -t -f %s"
+  notify: Restart sshd
+
+# --- Authorized Keys ---
+- name: Add additional SSH public keys
+  become: true
+  ansible.posix.authorized_key:
+    user: ubuntu
+    state: present
+    key: "{{ item }}"
+  loop:
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHnlra4vLtdXHPRNmOqtzrHlYh5oqAaGM24jTxM/yUft 2024@DESKTOP-6ADBQSM"
+
+# --- Fail2ban ---
+- name: Upload fail2ban config
+  become: true
+  ansible.builtin.copy:
+    src: "{{ configs_dir }}/fail2ban/jail.local"
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Deploy custom MODX admin filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-modx-admin.filter
+    dest: /etc/fail2ban/filter.d/modx-admin.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Deploy Grafana auth filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-grafana.filter
+    dest: /etc/fail2ban/filter.d/grafana.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Deploy custom Fail2ban jails
+  become: true
+  ansible.builtin.template:
+    src: fail2ban-custom.jail.j2
+    dest: /etc/fail2ban/jail.d/custom.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Test Fail2ban config
+  become: true
+  ansible.builtin.command: fail2ban-client -t
+  register: fail2ban_test
+  changed_when: false
+  failed_when: false
+
+- name: Enable Fail2ban
+  become: true
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: started
+    enabled: true
+
+# --- Kernel Hardening ---
+- name: Disable ICMP redirects
+  become: true
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "0"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - net.ipv4.conf.all.accept_redirects
+    - net.ipv4.conf.default.accept_redirects
+    - net.ipv4.conf.all.send_redirects
+    - net.ipv4.conf.default.send_redirects
+    - net.ipv6.conf.all.accept_redirects
+    - net.ipv6.conf.default.accept_redirects
+
+# --- MODX Security ---
+- name: Check if MODX config exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ web_root }}/core/config/config.inc.php"
+  register: modx_config_file
+
+- name: Secure MODX config (hide DB passwords)
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}/core/config/config.inc.php"
+    owner: root
+    group: www-data
+    mode: "0640"
+  when: modx_config_file.stat.exists
+
+- name: Secure MODX core directories
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      chmod -R 755 {{ web_root }}/core/cache
+      chmod -R 755 {{ web_root }}/core/logs
+      chmod -R 750 {{ web_root }}/core/model
+      chmod -R 750 {{ web_root }}/core/components
+    executable: /bin/bash
+  changed_when: false
+  when: modx_config_file.stat.exists

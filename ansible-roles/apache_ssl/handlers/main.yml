@@ -1,0 +1,6 @@
+---
+- name: Reload Apache SSL
+  become: true
+  ansible.builtin.systemd:
+    name: apache2
+    state: reloaded

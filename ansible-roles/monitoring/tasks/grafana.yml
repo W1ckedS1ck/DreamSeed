@@ -1,0 +1,179 @@
+---
+- name: Add Grafana GPG key
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana.gpg || curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana.gpg
+    executable: /bin/bash
+  args:
+    creates: /usr/share/keyrings/grafana.gpg
+  failed_when: false
+
+- name: Test Grafana repository accessibility
+  become: true
+  ansible.builtin.shell:
+    cmd: curl -s -o /dev/null -w "%{http_code}" https://apt.grafana.com/dists/stable/InRelease
+  register: grafana_repo_test
+  changed_when: false
+  failed_when: false
+
+- name: Set grafana_available fact
+  ansible.builtin.set_fact:
+    grafana_available: "{{ grafana_repo_test.stdout == '200' }}"
+
+- name: Show Grafana repository status
+  ansible.builtin.debug:
+    msg: "⚠️ Grafana repository unavailable (HTTP {{ grafana_repo_test.stdout }}), skipping Grafana installation"
+  when: not grafana_available
+
+- name: Add Grafana repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main"
+    filename: grafana
+    state: present
+  when: grafana_available
+
+- name: Install Grafana
+  become: true
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: grafana_available
+
+- name: Configure Grafana
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - {regexp: '^;?http_addr =', line: 'http_addr = 127.0.0.1'}
+    - {regexp: '^;?http_port =', line: 'http_port = {{ grafana_port }}'}
+    - {regexp: '^;?domain =', line: 'domain = {{ domain }}'}
+    - {regexp: '^;?root_url =', line: 'root_url = https://{{ domain }}/grafana'}
+    - {regexp: '^;?serve_from_sub_path =', line: 'serve_from_sub_path = true'}
+    - {regexp: '^;?admin_user =', line: 'admin_user = admin'}
+    - {regexp: '^;?admin_password =', line: 'admin_password = {{ grafana_admin_password }}'}
+  notify: Restart Grafana
+  when: grafana_available
+
+- name: Create Grafana directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: "0755"
+  loop:
+    - /etc/grafana/provisioning/datasources
+    - /etc/grafana/provisioning/dashboards
+    - /var/lib/grafana/dashboards
+  when: grafana_available
+
+- name: Deploy Grafana datasource
+  become: true
+  ansible.builtin.template:
+    src: grafana-datasource.yaml.j2
+    dest: /etc/grafana/provisioning/datasources/victoria.yaml
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  notify: Restart Grafana
+  when: grafana_available
+
+- name: Deploy Grafana dashboard provisioner
+  become: true
+  ansible.builtin.template:
+    src: grafana-dashboards.yaml.j2
+    dest: /etc/grafana/provisioning/dashboards/dashboards.yaml
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  notify: Restart Grafana
+  when: grafana_available
+
+- name: Deploy common Grafana dashboards
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /var/lib/grafana/dashboards/{{ item }}
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  loop:
+    - "node-exporter-full.json"
+    - "mysql-database.json"
+    - "victoria-metrics-single-node.json"
+  notify: Restart Grafana
+  when: grafana_available
+
+- name: Deploy Apache dashboards
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /var/lib/grafana/dashboards/{{ item }}
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  loop:
+    - "apache-exporter.json"
+  notify: Restart Grafana
+  when: grafana_available and web_server == "apache"
+
+- name: Deploy Nginx dashboards
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /var/lib/grafana/dashboards/{{ item }}
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  loop:
+    - "nginx.json"
+    - "nginx-prometheus.json"
+  notify: Restart Grafana
+  when: grafana_available and web_server == "nginx"
+
+- name: Create Grafana alerting provisioning directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/grafana/provisioning/alerting
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: "0755"
+  when: grafana_available
+
+- name: Deploy Grafana alerts
+  become: true
+  ansible.builtin.template:
+    src: grafana-alerts.yaml.j2
+    dest: /etc/grafana/provisioning/alerting/alerts.yaml
+    owner: grafana
+    group: grafana
+    mode: "0640"
+  notify: Restart Grafana
+  when: grafana_available and grafana_telegram_token | default('') | length > 0
+
+- name: Enable Grafana
+  become: true
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: started
+    enabled: true
+  when: grafana_available
+
+- name: Wait for Grafana to be ready
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ grafana_port }}/api/health
+    return_content: false
+    status_code: 200
+  retries: 30
+  delay: 2
+  when: grafana_available

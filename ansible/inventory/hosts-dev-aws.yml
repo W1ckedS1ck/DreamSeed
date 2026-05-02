@@ -1,0 +1,8 @@
+all:
+  hosts:
+    dreamseed:
+      ansible_host: 18.144.93.80
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ~/.ssh/Vitali.pem
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+      server_ip: 18.144.93.80

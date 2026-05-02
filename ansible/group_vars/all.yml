@@ -1,0 +1,32 @@
+---
+domain: "vitalikuts.online"
+domain_www: true
+admin_email: "hello@dreamseed.online"
+
+web_server: "nginx"
+
+db_name: "modx_db"
+db_user: "modx_user"
+db_pass: "{{ lookup('env', 'DB_PASS') }}"
+
+php_version: "8.3"  # fallback; overridden by auto-detection in packages_common
+
+backup_cron_enabled: true
+
+# Cloudflare DNS for SSL
+cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+
+# Grafana credentials (from secrets/.env)
+grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') }}"
+grafana_port: 3000
+
+# Telegram for Grafana alerts
+grafana_telegram_token: "{{ lookup('env', 'TG_TOKEN') }}"
+grafana_telegram_chat_id: "{{ lookup('env', 'TG_CHAT_ID') }}"
+
+# Directories
+web_root: "/var/www/html"
+backup_dir: "/home/ubuntu/backups"
+scripts_dir_remote: "/home/ubuntu/Scripts"
+scripts_dir: "{{ playbook_dir }}/../scripts"
+secrets_dir: "{{ playbook_dir }}/../secrets"
