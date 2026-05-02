@@ -66,22 +66,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  terraform-plan:
-    name: Terraform Plan (AWS)
+  terraform-validate:
+    name: Terraform Validate
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: latest
-      - name: Terraform Init
-        working-directory: terraform/aws
-        run: terraform init -backend=false
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-          AWS_DEFAULT_REGION: us-west-1
-      - name: Terraform Validate
-        working-directory: terraform/aws
-        run: terraform validate
+      - name: Validate all providers
+        run: |
+          for dir in terraform/aws terraform/hetzner terraform/cloudV2; do
+            echo "=== Validating $dir ==="
+            terraform -chdir="$dir" init -backend=false
+            terraform -chdir="$dir" validate
+          done
