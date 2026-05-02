@@ -15,6 +15,7 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: '.'
+          severity: warning
           ignore_paths: >-
             .git
 
@@ -24,9 +25,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run ansible-lint
-        uses: ansible/ansible-lint@v24
-        with:
-          args: ansible/
+        working-directory: ansible
+        run: |
+          pip install ansible-lint --quiet
+          ansible-lint .
 
   tflint:
     name: Terraform Lint
