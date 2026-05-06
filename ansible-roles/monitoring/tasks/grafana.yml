@@ -38,7 +38,7 @@
 - name: Install Grafana
   become: true
   ansible.builtin.apt:
-    name: grafana
+    name: grafana={{ grafana_version }}
     state: present
     update_cache: true
   environment:
@@ -47,19 +47,36 @@
 
 - name: Configure Grafana
   become: true
-  ansible.builtin.lineinfile:
-    path: /etc/grafana/grafana.ini
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-  loop:
-    - {regexp: '^;?http_addr =', line: 'http_addr = 127.0.0.1'}
-    - {regexp: '^;?http_port =', line: 'http_port = {{ grafana_port }}'}
-    - {regexp: '^;?domain =', line: 'domain = {{ domain }}'}
-    - {regexp: '^;?root_url =', line: 'root_url = https://{{ domain }}/grafana'}
-    - {regexp: '^;?serve_from_sub_path =', line: 'serve_from_sub_path = true'}
-    - {regexp: '^;?admin_user =', line: 'admin_user = admin'}
-    - {regexp: '^;?admin_password =', line: 'admin_password = {{ grafana_admin_password }}'}
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: "0640"
   notify: Restart Grafana
+  when: grafana_available
+
+- name: Create Grafana systemd override directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/grafana-server.service.d
+    state: directory
+    mode: "0755"
+  when: grafana_available
+
+- name: Set Grafana systemd memory limits
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/grafana-server.service.d/memory.conf
+    content: |
+      [Service]
+      Environment="GOMEMLIMIT=400MiB"
+      MemoryMax=480M
+      MemoryHigh=400M
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Grafana
   when: grafana_available
 
 - name: Create Grafana directories
@@ -177,3 +194,20 @@
   retries: 30
   delay: 2
   when: grafana_available
+
+- name: Reset Grafana admin password
+  become: true
+  ansible.builtin.shell: grafana-cli admin reset-admin-password {{ grafana_admin_password }}
+  changed_when: true
+  register: grafana_password_reset
+  when:
+    - grafana_available
+    - grafana_admin_password | default('') | length > 0
+
+- name: Warn if Grafana password reset failed
+  ansible.builtin.debug:
+    msg: "WARNING: Grafana password reset failed — {{ grafana_password_reset.stdout | default('') }}"
+  when:
+    - grafana_available
+    - grafana_admin_password | default('') | length > 0
+    - grafana_password_reset is failed

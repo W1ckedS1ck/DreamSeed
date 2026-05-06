@@ -43,5 +43,45 @@
 
 - name: Clean apt cache to save space
   become: true
-  ansible.builtin.shell: apt-get clean
-  changed_when: false
+  ansible.builtin.apt:
+    clean: true
+
+- name: Check if swap file exists
+  become: true
+  ansible.builtin.stat:
+    path: /swapfile
+  register: swapfile_stat
+
+- name: Create swap file (2 GB)
+  become: true
+  ansible.builtin.shell: fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+  when: not swapfile_stat.stat.exists
+  changed_when: true
+  timeout: 120
+
+- name: Set swap file permissions
+  become: true
+  ansible.builtin.file:
+    path: /swapfile
+    mode: "0600"
+  when: not swapfile_stat.stat.exists
+
+- name: Format swap file
+  become: true
+  ansible.builtin.command: mkswap /swapfile
+  when: not swapfile_stat.stat.exists
+  changed_when: true
+
+- name: Enable swap
+  become: true
+  ansible.builtin.command: swapon /swapfile
+  when: not swapfile_stat.stat.exists
+  changed_when: true
+  failed_when: false
+
+- name: Add swap to fstab
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "/swapfile none swap sw 0 0"
+    state: present

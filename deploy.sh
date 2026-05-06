@@ -13,6 +13,8 @@ PHP_VERSION="${PHP_VERSION:-8.3}"
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
 TERRAFORM="${TERRAFORM:-terraform}"
 
+export LC_ALL=C.UTF-8
+
 # Timeouts
 SSH_ATTEMPTS="${SSH_ATTEMPTS:-20}"
 SSH_RETRY_INTERVAL="${SSH_RETRY_INTERVAL:-1}"
@@ -52,6 +54,15 @@ YELLOW=$'\033[1;33m'
 CYAN=$'\033[0;36m'
 BOLD=$'\033[1m'
 NC=$'\033[0m'
+
+# --- Helpers ---
+yaml_escape() {
+    local val="$1"
+    val="${val//\\/\\\\}"
+    val="${val//\"/\\\"}"
+    val="${val//$'\n'/\\n}"
+    printf '%s' "$val"
+}
 
 # --- Targets ---
 # Each target defines: provider, domain, env file, terraform workspace
@@ -260,16 +271,17 @@ step_start() {
     local name=$1
     ((STEP_NUM++)) || true
     STEP_START=$(date +%s)
+    STEP_LABEL="$name"
     printf "\n  ${CYAN}[%d/%d]${NC} ${BOLD}%-40s${NC}" "$STEP_NUM" "$TOTAL_STEPS" "$name"
 }
 
 step_ok() {
     local elapsed=$(( $(date +%s) - STEP_START ))
-    echo -e "  ${GREEN}✓${NC} $(format_time $elapsed)"
+    printf "\r\033[K  ${CYAN}[%d/%d]${NC} ${BOLD}%-40s${NC} ${GREEN}✓${NC} ${YELLOW}%s${NC}\n" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}" "$(format_time $elapsed)"
 }
 
 step_fail() {
-    echo -e "  ${RED}✗${NC}"
+    printf "\r\033[K  ${CYAN}[%d/%d]${NC} ${RED}✗${NC}\n" "$STEP_NUM" "$TOTAL_STEPS"
     echo -e "${RED}Error: $1${NC}"
     exit 1
 }
@@ -437,6 +449,9 @@ terraform_destroy() {
     run_with_spinner "Destroying resources ($TARGET)" \
         bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color >> '$TF_LOG' 2>&1"
     
+    local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
+    rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
+    
     # Cleanup: delete workspace (non-prod only)
     if [[ "$TARGET" != "prod" ]]; then
         ( cd "$TF_DIR" && "$TERRAFORM" workspace select default >/dev/null 2>&1 && \
@@ -534,7 +549,7 @@ main() {
     fi
 
     echo -e "\n${CYAN}╔══════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║        DreamSeed Deploy  v${VERSION}              ║${NC}"
+    printf "${CYAN}║${NC}  ${BOLD}%-38s${NC}${CYAN}║${NC}\n" "DreamSeed Deploy  v${VERSION}"
     echo -e "${CYAN}╠══════════════════════════════════════════╣${NC}"
     printf "${CYAN}║${NC}  Target      ${BOLD}%-28s${NC}${CYAN}║${NC}\n" "$TARGET"
     printf "${CYAN}║${NC}  Domain      ${BOLD}%-28s${NC}${CYAN}║${NC}\n" "$DEPLOY_DOMAIN"
@@ -560,14 +575,12 @@ main() {
             exit 0
         fi
 
-        step_start "Terraform init"
+        step_start "Terraform init + apply"
         ( cd "$TF_DIR" && "$TERRAFORM" init -upgrade=false -input=false -no-color >> "$TF_LOG" 2>&1 ) || {
             log_error_details "$TF_LOG"
             step_fail "Terraform init failed"
         }
-        step_ok
 
-        step_start "Terraform apply"
         if [[ "$TF_PROVIDER" == "aws" ]]; then
             export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
             export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
@@ -606,6 +619,17 @@ main() {
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform output"
 
         ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
+
+        # Backup tfstate locally with rotation (keep 5)
+        local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
+        mkdir -p "$tfstate_backup_dir"
+        cp "$TF_DIR/terraform.tfstate" "$tfstate_backup_dir/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+        local tfstate_count
+        tfstate_count=$(ls -1t "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | wc -l)
+        if [[ $tfstate_count -gt 5 ]]; then
+            ls -1t "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate | tail -n +6 | xargs rm -f
+        fi
+
         step_ok
     else
         step_start "Using existing server"
@@ -665,19 +689,19 @@ INVEOF
 
     VAULT_TMP=$(mktemp)
     chmod 600 "$VAULT_TMP"
-    cat > "$VAULT_TMP" << VARSEOF
-db_pass: "${DB_PASS}"
-server_ip: "${SERVER_IP}"
-web_server: "${WEB_SERVER}"
-domain: "${DEPLOY_DOMAIN}"
-secrets_dir: "${SCRIPT_DIR}/secrets"
-configs_dir: "${SCRIPT_DIR}/configs"
-scripts_dir: "${SCRIPT_DIR}/scripts"
-VARSEOF
-    [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && \
-        echo "cloudflare_api_token: \"${CLOUDFLARE_API_TOKEN}\""   >> "$VAULT_TMP"
-    [[ -n "${GRAFANA_PASS:-}" ]] && \
-        echo "grafana_admin_password: \"${GRAFANA_PASS}\""         >> "$VAULT_TMP"
+    {
+        echo "db_pass: \"$(yaml_escape "${DB_PASS}")\""
+        echo "server_ip: \"${SERVER_IP}\""
+        echo "web_server: \"${WEB_SERVER}\""
+        echo "domain: \"${DEPLOY_DOMAIN}\""
+        echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
+        echo "configs_dir: \"${SCRIPT_DIR}/configs\""
+        echo "scripts_dir: \"${SCRIPT_DIR}/scripts\""
+        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && \
+            echo "cloudflare_api_token: \"$(yaml_escape "${CLOUDFLARE_API_TOKEN}")\""
+        [[ -n "${GRAFANA_PASS:-}" ]] && \
+            echo "grafana_admin_password: \"$(yaml_escape "${GRAFANA_PASS}")\""
+    } > "$VAULT_TMP"
 
     local base_args=("-i" "$INVENTORY_FILE" "--extra-vars" "@${VAULT_TMP}")
     [[ "$DRY_RUN" == "true" ]] && base_args+=("--check")
@@ -700,9 +724,9 @@ VARSEOF
 
     echo -e "\n${GREEN}╔══════════════════════════════════════════╗${NC}"
     if [[ "$DRY_RUN" == "true" ]]; then
-        echo -e "${GREEN}║  ✓ Dry-run complete                      ║${NC}"
+        printf "${GREEN}║${NC}  ${BOLD}%-38s${NC}${GREEN}║${NC}\n" "✓ Dry-run complete"
     else
-        echo -e "${GREEN}║  ✓ Deployment Successful!                ║${NC}"
+        printf "${GREEN}║${NC}  ${BOLD}%-38s${NC}${GREEN}║${NC}\n" "✓ Deployment Successful!"
     fi
     echo -e "${GREEN}╠══════════════════════════════════════════╣${NC}"
     printf "${GREEN}║${NC}  Server   ${BOLD}%-31s${NC}${GREEN}║${NC}\n" "$SERVER_IP"

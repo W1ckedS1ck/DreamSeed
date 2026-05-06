@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 
+import logging
 import os
 import sys
 import time
 import subprocess
 import requests
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    stream=sys.stdout,
+)
+log = logging.getLogger('dreamseed-bot')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(SCRIPT_DIR, '.env')
@@ -43,7 +51,7 @@ def get_size(filepath):
             return f"{size // 1048576}MB"
         else:
             return f"{size // 1024}KB"
-    except:
+    except Exception:
         return "-"
 
 def get_env():
@@ -76,12 +84,12 @@ def cmd_status():
         try:
             cloud_proj_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/project-{env}/', '--files-only', '--format', 'tps'], text=True).strip()
             cloud_proj_files = [line.split(';') for line in cloud_proj_out.split('\n') if line]
-        except:
+        except Exception:
             cloud_proj_files = []
         try:
             cloud_db_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/db-{env}/', '--files-only', '--format', 'tps'], text=True).strip()
             cloud_db_files = [line.split(';') for line in cloud_db_out.split('\n') if line]
-        except:
+        except Exception:
             cloud_db_files = []
 
         def cloud_size(size_bytes):
@@ -91,7 +99,7 @@ def cmd_status():
                     return f"{s // 1048576}MB"
                 else:
                     return f"{s // 1024}KB"
-            except:
+            except Exception:
                 return "-"
 
         msg = f"📊 *Backup Status* — {env}\n\n"
@@ -131,7 +139,7 @@ def cmd_backups():
 
 def main():
     if not TG_TOKEN:
-        print("TG_TOKEN not set")
+        log.error("TG_TOKEN not set")
         return
 
     last_update = None
@@ -169,7 +177,7 @@ def main():
                                   json=send_kwargs)
 
         except Exception as e:
-            print(f"Error: {e}")
+            log.error("Main loop error: %s", e)
 
         time.sleep(1)
 

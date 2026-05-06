@@ -5,3 +5,9 @@ upload_max_filesize = 32M
 max_execution_time = 300
 max_input_time = 300
 disable_functions = eval,shell_exec,system,passthru,proc_open,popen,pcntl_exec,phpinfo
+expose_php = Off
+
+[Session]
+session.cookie_httponly = On
+session.cookie_samesite = Lax
+session.use_strict_mode = On

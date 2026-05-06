@@ -48,6 +48,18 @@ server {
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.gravatar.com; font-src 'self' data:; frame-ancestors 'self';" always;
         try_files $uri $uri/ @modx;
+
+        location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+            fastcgi_buffer_size 32k;
+            fastcgi_buffers 16 16k;
+            fastcgi_connect_timeout 60s;
+            fastcgi_send_timeout 300s;
+            fastcgi_read_timeout 300s;
+        }
     }
 
     location ~ \.php$ {
@@ -65,6 +77,11 @@ server {
     location ~* \.(jpg|jpeg|gif|png|ico|css|js|svg|woff|woff2|ttf|eot|otf|webp)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
+    }
+
+    location ^~ /core {
+        deny all;
+        return 404;
     }
 
     location ~ /\.ht {

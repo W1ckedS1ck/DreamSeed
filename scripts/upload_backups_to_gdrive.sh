@@ -19,19 +19,10 @@ DB_DIR="$LOCAL_BACKUP_DIR/db"
 
 RCLONE_REMOTE="gdrive"
 
-# Detect environment from hostname
-HOSTNAME=$(hostname)
-case "$HOSTNAME" in
-    *-prod|*prod-*)  ENV="" ;;
-    *)               ENV="-preprod" ;;
-esac
+ENV=$(detect_env)
+ENV_DISPLAY=$(format_env_display "$ENV")
+ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 REMOTE_BASE="DreamSeed/backups"
-ENV_DISPLAY="${ENV:--preprod}"
-if [ -z "$ENV" ]; then
-    ENV_DISPLAY_ESCAPED="*PROD*"
-else
-    ENV_DISPLAY_ESCAPED="***$(escape_md2 "$ENV_DISPLAY")***"
-fi
 
 MAX_PROJECT_BACKUPS=5
 MAX_DB_BACKUPS=10
@@ -83,9 +74,8 @@ fi
 CLOUD_PROJ_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only | sort -r)
 PROJ_COUNT=$(echo "$CLOUD_PROJ_ALL" | grep -c '[^[:space:]]')
 if [ "$PROJ_COUNT" -gt "$MAX_PROJECT_BACKUPS" ]; then
-    DELETED_COUNT=0
     while read -r file; do
-        [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/$file" && ((DELETED_COUNT++))
+        [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/$file"
     done <<< "$(echo "$CLOUD_PROJ_ALL" | tail -n +$((MAX_PROJECT_BACKUPS + 1)))"
     CLOUD_PROJ=$(echo "$CLOUD_PROJ_ALL" | head -n "$MAX_PROJECT_BACKUPS")
 else
@@ -96,9 +86,8 @@ fi
 CLOUD_DB_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only | sort -r)
 DB_COUNT=$(echo "$CLOUD_DB_ALL" | grep -c '[^[:space:]]')
 if [ "$DB_COUNT" -gt "$MAX_DB_BACKUPS" ]; then
-    DELETED_COUNT=0
     while read -r file; do
-        [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/$file" && ((DELETED_COUNT++))
+        [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/$file"
     done <<< "$(echo "$CLOUD_DB_ALL" | tail -n +$((MAX_DB_BACKUPS + 1)))"
     CLOUD_DB=$(echo "$CLOUD_DB_ALL" | head -n "$MAX_DB_BACKUPS")
 else

@@ -70,6 +70,32 @@
     validate: "sshd -t -f %s"
   notify: Restart sshd
 
+- name: Remove EC2 Instance Connect from sshd_config
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*AuthorizedKeysCommand'
+    state: absent
+  notify: Restart sshd
+
+- name: Remove EC2 Instance Connect from cloud-init config
+  become: true
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    regexp: '^AuthorizedKeysCommand\s+.*$\n?'
+    replace: ''
+  failed_when: false
+  notify: Restart sshd
+
+- name: Remove EC2 Instance Connect user from cloud-init config
+  become: true
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    regexp: '^AuthorizedKeysCommandUser\s+.*$\n?'
+    replace: ''
+  failed_when: false
+  notify: Restart sshd
+
 # --- Authorized Keys ---
 - name: Add additional SSH public keys
   become: true
@@ -77,8 +103,7 @@
     user: ubuntu
     state: present
     key: "{{ item }}"
-  loop:
-    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHnlra4vLtdXHPRNmOqtzrHlYh5oqAaGM24jTxM/yUft 2024@DESKTOP-6ADBQSM"
+  loop: "{{ additional_ssh_keys | default([]) }}"
 
 # --- Fail2ban ---
 - name: Upload fail2ban config
@@ -151,6 +176,18 @@
     - net.ipv4.conf.default.send_redirects
     - net.ipv6.conf.all.accept_redirects
     - net.ipv6.conf.default.accept_redirects
+
+- name: Enable martian packet logging
+  become: true
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - net.ipv4.conf.all.log_martians
+    - net.ipv4.conf.default.log_martians
 
 # --- MODX Security ---
 - name: Check if MODX config exists

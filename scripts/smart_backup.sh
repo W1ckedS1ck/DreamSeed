@@ -11,7 +11,7 @@ PROJECT_DIR="/var/www/html"
 BACKUP_DIR="/home/ubuntu/backups"
 HASH_FILE="$BACKUP_DIR/.project_hash"
 
-PROJECT_KEEP=10
+PROJECT_KEEP=5
 DB_KEEP=15
 
 DATE=$(date +%F_%H-%M)
@@ -22,7 +22,7 @@ START_TIME=$(date +%s)
 rotate_files() {
     local pattern="$1"
     local keep="$2"
-    mapfile -t files < <(ls -1t $pattern 2>/dev/null)
+    mapfile -t files < <(ls -1dt $pattern 2>/dev/null)
     if [ "${#files[@]}" -gt "$keep" ]; then
         for ((i=keep; i<${#files[@]}; i++)); do
             rm -f "${files[i]}"
@@ -32,18 +32,9 @@ rotate_files() {
 
 mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db"
 
-# Detect environment from hostname
-HOSTNAME=$(hostname)
-case "$HOSTNAME" in
-    *-prod|*prod-*)  ENV="" ;;
-    *)               ENV="-preprod" ;;
-esac
-ENV_DISPLAY="${ENV:--preprod}"
-if [ -z "$ENV" ]; then
-    ENV_DISPLAY_ESCAPED="*PROD*"
-else
-    ENV_DISPLAY_ESCAPED="***$(escape_md2 "$ENV_DISPLAY")***"
-fi
+ENV=$(detect_env)
+ENV_DISPLAY=$(format_env_display "$ENV")
+ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 
 # ====== Lock against parallel runs ======
 LOCK_FILE="/tmp/smart_backup.lock"

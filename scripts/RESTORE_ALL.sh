@@ -28,13 +28,8 @@ SITE_URL="https://${SITE_DOMAIN:-localhost}"
 PROJECT_DIR="/var/www/html"
 BACKUP_DIR="/home/ubuntu/backups"
 
-# Detect environment from hostname
-HOSTNAME=$(hostname)
-case "$HOSTNAME" in
-    *-prod|*prod-*)  ENV="" ;;
-    *)               ENV="-preprod" ;;
-esac
-ENV_DISPLAY="${ENV:--preprod}"
+ENV=$(detect_env)
+ENV_DISPLAY=$(format_env_display "$ENV")
 
 START_TIME=$(date +%s)
 
@@ -100,7 +95,7 @@ select_backup() {
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
         local selected="${files[$((choice-1))]}"
         echo -e "${GREEN}Выбрано:${NC} $(basename "$selected")"
-        eval "$result_var=$selected"
+        declare -g "$result_var"="$selected"
         return 0
     else
         echo -e "${RED}Неверный номер!${NC}"
