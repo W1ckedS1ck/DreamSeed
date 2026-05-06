@@ -104,13 +104,13 @@ def cmd_status():
 
         msg = f"📊 *Backup Status* — {env}\n\n"
 
-        msg += f"📁 Local:\n"
+        msg += "📁 Local:\n"
         for f in proj_files[:2]:
             msg += f"  🖥 {format_proj_name(f)} ({get_size(f'{BACKUP_DIR}/project/{f}')})\n"
         for f in db_files[:2]:
             msg += f"  🗄 {format_db_name(f)} ({get_size(f'{BACKUP_DIR}/db/{f}')})\n"
 
-        msg += f"\n☁️ GDrive:\n"
+        msg += "\n☁️ GDrive:\n"
         for line in cloud_proj_files[:2]:
             msg += f"  🖥 {format_proj_name(line[1])} ({cloud_size(line[2])})\n"
         for line in cloud_db_files[:2]:
