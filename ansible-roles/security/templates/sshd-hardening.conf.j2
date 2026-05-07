@@ -1,0 +1,7 @@
+# DreamSeed SSH Hardening
+PasswordAuthentication no
+PermitRootLogin no
+X11Forwarding no
+MaxAuthTries 3
+AllowUsers {{ ansible_user }}
+AuthorizedKeysFile .ssh/authorized_keys

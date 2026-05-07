@@ -1,11 +1,4 @@
 ---
-- name: Ensure MariaDB is running
-  become: true
-  ansible.builtin.systemd:
-    name: mariadb
-    state: started
-    enabled: true
-
 - name: Deploy optimized my.cnf
   become: true
   ansible.builtin.copy:
@@ -19,6 +12,16 @@
     dest: /etc/mysql/conf.d/99-optimizations.cnf
     mode: "0644"
   notify: Restart MariaDB
+
+- name: Ensure MariaDB is running
+  become: true
+  ansible.builtin.systemd:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
 
 - name: Create database
   become: true

@@ -13,9 +13,9 @@
     - name: Wait for apt locks
       become: true
       ansible.builtin.shell: |
-        while fuser /var/lib/apt/lists/lock > /dev/null 2>&1; do sleep 2; done
-        while fuser /var/lib/dpkg/lock-frontend > /dev/null 2>&1; do sleep 2; done
+        while fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done
       changed_when: false
+      timeout: 120
 
   roles:
     - packages_common

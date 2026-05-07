@@ -50,6 +50,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Reload systemd and restart bot
 
 - name: Upload .env secrets
   ansible.builtin.copy:
@@ -59,9 +60,11 @@
     group: ubuntu
     mode: "0600"
 
-- name: Reload systemd and enable bot service
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Enable bot service
   ansible.builtin.systemd:
-    daemon_reload: yes
     name: telegram-bot
     enabled: yes
     state: started

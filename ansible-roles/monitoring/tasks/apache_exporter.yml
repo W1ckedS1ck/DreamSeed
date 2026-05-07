@@ -1,24 +1,28 @@
 ---
+- name: Set Apache Exporter desired version
+  ansible.builtin.set_fact:
+    monitoring_ae_version: "{{ monitoring_apache_version }}"
+
 - name: Check if Apache Exporter is installed
   ansible.builtin.stat:
     path: /usr/local/bin/apache_exporter
   register: monitoring_ae_bin
 
-- name: Install Apache Exporter (latest)
-  when: not monitoring_ae_bin.stat.exists
-  block:
-    - name: Get latest Apache Exporter version
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          curl -s https://api.github.com/repos/Lusitaniae/apache_exporter/releases/latest | jq -r '.tag_name' | sed 's/^v//'
-        executable: /bin/bash
-      register: monitoring_ae_version
-      changed_when: false
+- name: Get current Apache Exporter version
+  ansible.builtin.command: /usr/local/bin/apache_exporter --version
+  changed_when: false
+  failed_when: false
+  register: monitoring_ae_current_version
+  when: monitoring_ae_bin.stat.exists
 
+- name: Install/Upgrade Apache Exporter
+  when: >
+    not monitoring_ae_bin.stat.exists or
+    monitoring_ae_version not in (monitoring_ae_current_version.stdout | default(''))
+  block:
     - name: Download Apache Exporter
       ansible.builtin.get_url:
-        url: "https://github.com/Lusitaniae/apache_exporter/releases/download/v{{ monitoring_ae_version.stdout }}/apache_exporter-{{ monitoring_ae_version.stdout }}.linux-amd64.tar.gz"
+        url: "https://github.com/Lusitaniae/apache_exporter/releases/download/v{{ monitoring_ae_version }}/apache_exporter-{{ monitoring_ae_version }}.linux-amd64.tar.gz"
         dest: /tmp/apache_exporter.tar.gz
         mode: "0644"
 
@@ -29,25 +33,21 @@
         remote_src: true
 
     - name: Install Apache Exporter binary
-      become: true
       ansible.builtin.copy:
-        src: "/tmp/apache_exporter-{{ monitoring_ae_version.stdout }}.linux-amd64/apache_exporter"
+        src: "/tmp/apache_exporter-{{ monitoring_ae_version }}.linux-amd64/apache_exporter"
         dest: /usr/local/bin/apache_exporter
         mode: "0755"
         remote_src: true
 
     - name: Cleanup Apache Exporter temp files
-      ansible.builtin.shell: rm -rf /tmp/apache_exporter*
-      changed_when: false
-
-- name: Verify Apache Exporter binary
-  ansible.builtin.command: /usr/local/bin/apache_exporter --version
-  changed_when: false
-  register: monitoring_ae_verify
-  failed_when: monitoring_ae_verify.rc != 0
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/apache_exporter.tar.gz
+        - "/tmp/apache_exporter-{{ monitoring_ae_version }}.linux-amd64"
 
 - name: Create apache_exporter user
-  become: true
   ansible.builtin.user:
     name: apache_exporter
     system: true
@@ -55,7 +55,6 @@
     shell: /bin/false
 
 - name: Deploy Apache Exporter service
-  become: true
   ansible.builtin.copy:
     dest: /etc/systemd/system/apache_exporter.service
     content: |
@@ -67,23 +66,9 @@
       Type=simple
       User=apache_exporter
       ExecStart=/usr/local/bin/apache_exporter --web.listen-address=127.0.0.1:9117 --scrape_uri=http://127.0.0.1:80/server-status?auto
-      Restart=on-failure
+      Restart=always
 
       [Install]
       WantedBy=multi-user.target
     mode: "0644"
   notify: Restart Apache Exporter
-
-- name: Enable Apache Exporter
-  become: true
-  ansible.builtin.systemd:
-    name: apache_exporter
-    state: started
-    enabled: true
-    daemon_reload: true
-
-- name: Wait for Apache Exporter to be ready
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: 9117
-    timeout: 15

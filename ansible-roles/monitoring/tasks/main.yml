@@ -17,8 +17,27 @@
 - name: VictoriaMetrics
   ansible.builtin.include_tasks: victoria.yml
 
-- name: Grafana
-  ansible.builtin.include_tasks: grafana.yml
+- name: Reload systemd once
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Flush handler restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Build monitoring services list
+  ansible.builtin.set_fact:
+    _monitoring_services: >-
+      {{ ['node_exporter', 'victoria-metrics']
+         + (['nginx_exporter'] if web_server == 'nginx' else [])
+         + (['apache_exporter'] if web_server == 'apache' else [])
+         + (['mysqld_exporter'] if (db_pass | default('') | length > 0) else []) }}
+
+- name: Enable and start monitoring services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ _monitoring_services }}"
 
 - name: Check site
   ansible.builtin.include_tasks: check_site.yml

@@ -20,7 +20,7 @@ SSH_ATTEMPTS="${SSH_ATTEMPTS:-20}"
 SSH_RETRY_INTERVAL="${SSH_RETRY_INTERVAL:-1}"
 AWS_SSH_ATTEMPTS="${AWS_SSH_ATTEMPTS:-40}"
 AWS_SSH_RETRY_INTERVAL="${AWS_SSH_RETRY_INTERVAL:-10}"
-CLOUDINIT_ATTEMPTS="${CLOUDINIT_ATTEMPTS:-8}"
+CLOUDINIT_ATTEMPTS="${CLOUDINIT_ATTEMPTS:-15}"
 CLOUDINIT_RETRY_INTERVAL="${CLOUDINIT_RETRY_INTERVAL:-2}"
 
 # Runtime state
@@ -46,6 +46,8 @@ TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
 
 STEP_NUM=0
 TOTAL_STEPS=0
+STEP_DURATIONS=()
+STEP_NAMES=()
 
 # Colors
 RED=$'\033[0;31m'
@@ -53,6 +55,7 @@ GREEN=$'\033[0;32m'
 YELLOW=$'\033[1;33m'
 CYAN=$'\033[0;36m'
 BOLD=$'\033[1m'
+DIM=$'\033[2m'
 NC=$'\033[0m'
 
 # --- Helpers ---
@@ -62,6 +65,34 @@ yaml_escape() {
     val="${val//\"/\\\"}"
     val="${val//$'\n'/\\n}"
     printf '%s' "$val"
+}
+
+progress_bar() {
+    local current=$1 total=$2
+    local width=8 filled empty bar="" i
+    if (( total > 0 )); then
+        filled=$(( current * width / total ))
+    else
+        filled=0
+    fi
+    empty=$(( width - filled ))
+    for (( i=0; i<filled; i++ )); do bar+="━"; done
+    for (( i=0; i<empty; i++ )); do bar+="░"; done
+    printf '%s' "$bar"
+}
+
+step_icon() {
+    case "$1" in
+        *Terraform*)  printf '▲' ;;
+        *SSH*)        printf '→' ;;
+        *Cloud-init*) printf '☁' ;;
+        *Ansible*|*Base*|*Web*|*Database*|*Monitor*|*Grafana*|*Security*) printf '⚙' ;;
+        *existing*)   printf '↻' ;;
+        *Inventory*)  printf '⊞' ;;
+        *Destroy*)    printf '✕' ;;
+        *Check*|*check*) printf '✓' ;;
+        *)            printf '·' ;;
+    esac
 }
 
 # --- Targets ---
@@ -262,9 +293,8 @@ calculate_steps() {
     TOTAL_STEPS=0
     if [[ "$DESTROY_MODE" == "true" ]]; then TOTAL_STEPS=1; return; fi
     [[ "$SKIP_TERRAFORM" == "false" ]] && ((TOTAL_STEPS++)) || true
-    ((TOTAL_STEPS += 3))  # SSH, cloud-init, inventory
+    ((TOTAL_STEPS += 2))  # SSH, cloud-init
     TOTAL_STEPS=$((TOTAL_STEPS + ${#playbooks[@]}))
-    [[ "$DRY_RUN" == "false" ]] && ((TOTAL_STEPS++)) || true
 }
 
 step_start() {
@@ -272,16 +302,26 @@ step_start() {
     ((STEP_NUM++)) || true
     STEP_START=$(date +%s)
     STEP_LABEL="$name"
-    printf "\n  ${CYAN}[%d/%d]${NC} ${BOLD}%-40s${NC}" "$STEP_NUM" "$TOTAL_STEPS" "$name"
+    local bar icon
+    bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
+    icon=$(step_icon "$name")
+    printf "\n  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC}" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$name"
 }
 
 step_ok() {
     local elapsed=$(( $(date +%s) - STEP_START ))
-    printf "\r\033[K  ${CYAN}[%d/%d]${NC} ${BOLD}%-40s${NC} ${GREEN}✓${NC} ${YELLOW}%s${NC}\n" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}" "$(format_time $elapsed)"
+    local bar icon
+    bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
+    icon=$(step_icon "${STEP_LABEL:-}")
+    STEP_DURATIONS+=("$elapsed")
+    STEP_NAMES+=("${STEP_LABEL:-}")
+    printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC} ${GREEN}✓${NC} ${YELLOW}%s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}" "$(format_time $elapsed)"
 }
 
 step_fail() {
-    printf "\r\033[K  ${CYAN}[%d/%d]${NC} ${RED}✗${NC}\n" "$STEP_NUM" "$TOTAL_STEPS"
+    local bar
+    bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
+    printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${RED}✗${NC} ${BOLD}%-36s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}"
     echo -e "${RED}Error: $1${NC}"
     exit 1
 }
@@ -293,16 +333,36 @@ format_time() {
     else printf "%ds" "$s"; fi
 }
 
+print_summary() {
+    echo -e "\n  ${DIM}────────────────────────────────────────────────────${NC}"
+    printf "  ${BOLD}%-5s %-35s %s${NC}\n" "" "Step" "Time"
+    echo -e "  ${DIM}────────────────────────────────────────────────────${NC}"
+    local i icon name dur
+    for i in "${!STEP_NAMES[@]}"; do
+        name="${STEP_NAMES[$i]}"
+        dur="${STEP_DURATIONS[$i]}"
+        icon=$(step_icon "$name")
+        printf "  ${icon}  %-35s ${YELLOW}%s${NC}\n" "$name" "$(format_time $dur)"
+    done
+    echo -e "  ${DIM}────────────────────────────────────────────────────${NC}"
+    local total_time=$(( $(date +%s) - DEPLOY_START ))
+    printf "  ${BOLD}%-38s ${YELLOW}%s${NC}\n" "Total" "$(format_time $total_time)"
+}
+
 run_with_spinner() {
     local label="$1"; shift
     local spins=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local i=0
+    local icon
+    icon=$(step_icon "$label")
     "$@" &
     local pid=$!
     while kill -0 "$pid" 2>/dev/null; do
         local elapsed=$(( $(date +%s) - STEP_START ))
-        printf "\r\033[K  ${CYAN}[%d/%d]${NC} ${BOLD}%-40s${NC}  ${CYAN}%s${NC} ${YELLOW}%ds${NC}" \
-            "$STEP_NUM" "$TOTAL_STEPS" "$label" "${spins[$i]}" "$elapsed"
+        local bar
+        bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
+        printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC}  ${CYAN}%s${NC} ${YELLOW}%ds${NC}" \
+            "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$label" "${spins[$i]}" "$elapsed"
         i=$(( (i + 1) % ${#spins[@]} ))
         sleep 0.3
     done
@@ -398,16 +458,16 @@ terraform_select_workspace() {
 
 terraform_destroy() {
     if [[ "$TARGET" == "prod" ]]; then
-        echo -e "\n${RED}╔══════════════════════════════════════════╗${NC}"
-        echo -e "${RED}║   ⚠️   PRODUCTION DESTROY REQUESTED   ⚠️   ║${NC}"
-        echo -e "${RED}║                                          ║${NC}"
-        echo -e "${RED}║   This will PERMANENTLY DELETE:          ║${NC}"
-        echo -e "${RED}║     · EC2 instance (dreamseed.online)     ║${NC}"
-        echo -e "${RED}║     · Security group                     ║${NC}"
-        echo -e "${RED}║     · Key pair                           ║${NC}"
-        echo -e "${RED}║                                          ║${NC}"
-        echo -e "${RED}║   THE SITE WILL GO OFFLINE.              ║${NC}"
-        echo -e "${RED}╚══════════════════════════════════════════╝${NC}\n"
+echo -e "\n${RED}╭──────────────────────────────────────────────────╮${NC}"
+    printf "${RED}│${NC}  ${BOLD}%-48s${NC}${RED}│${NC}\n" "⚠  PRODUCTION DESTROY REQUESTED  ⚠"
+    echo -e "${RED}│${NC}                                                  ${RED}│${NC}"
+    printf "${RED}│${NC}  %-48s${RED}│${NC}\n" "This will PERMANENTLY DELETE:"
+    printf "${RED}│${NC}    · %-44s${RED}│${NC}\n" "EC2 instance (dreamseed.online)"
+    printf "${RED}│${NC}    · %-44s${RED}│${NC}\n" "Security group"
+    printf "${RED}│${NC}    · %-44s${RED}│${NC}\n" "Key pair"
+    echo -e "${RED}│${NC}                                                  ${RED}│${NC}"
+    printf "${RED}│${NC}  ${BOLD}%-48s${NC}${RED}│${NC}\n" "THE SITE WILL GO OFFLINE."
+    echo -e "${RED}╰──────────────────────────────────────────────────╯${NC}\n"
 
         read -rp "  Step 1/3 — Do you REALLY want to destroy PROD? [y/N] " a1
         [[ ! "${a1:-}" =~ ^[Yy]$ ]] && { echo -e "${GREEN}Good choice. Aborted.${NC}"; exit 1; }
@@ -463,7 +523,7 @@ terraform_destroy() {
 }
 
 check_services() {
-    echo -e "\n${CYAN}=== Post-deploy checks ===${NC}"
+    echo -e "\n  ${CYAN}▸ Post-deploy checks${NC}"
 
     local web_svc="nginx"
     [[ "$WEB_SERVER" == "apache" ]] && web_svc="apache2"
@@ -498,7 +558,7 @@ check_services() {
     done
 
     rm -rf "$result_dir"
-    $all_ok && echo -e "${GREEN}All services OK${NC}" || echo -e "${RED}Some services failed${NC}"
+    $all_ok && echo -e "  ${GREEN}All services OK${NC}" || echo -e "  ${RED}Some services failed${NC}"
 }
 
 rotate_logs() {
@@ -525,16 +585,20 @@ main() {
             "playbook-01-base.yml:Base packages"
             "playbook-02-nginx.yml:Web server (Nginx/PHP)"
             "playbook-03-db.yml:Database & Restore"
-            "playbook-04-monitor.yml:Monitoring"
-            "playbook-05-security.yml:Security hardening"
+            "playbook-04-monitor.yml:Monitoring (Exporters+VM)"
+            "playbook-04.5-backup.yml:Backup & Telegram bot"
+            "playbook-05-grafana.yml:Grafana"
+            "playbook-06-security.yml:Security hardening"
         )
     else
         playbooks=(
             "playbook-01-base.yml:Base packages"
             "playbook-02-web.yml:Web server (Apache/PHP)"
             "playbook-03-db.yml:Database & Restore"
-            "playbook-04-monitor.yml:Monitoring"
-            "playbook-05-security.yml:Security hardening"
+            "playbook-04-monitor.yml:Monitoring (Exporters+VM)"
+            "playbook-04.5-backup.yml:Backup & Telegram bot"
+            "playbook-05-grafana.yml:Grafana"
+            "playbook-06-security.yml:Security hardening"
         )
     fi
 
@@ -548,16 +612,22 @@ main() {
         exit 0
     fi
 
-    echo -e "\n${CYAN}╔══════════════════════════════════════════╗${NC}"
-    printf "${CYAN}║${NC}  ${BOLD}%-38s${NC}${CYAN}║${NC}\n" "DreamSeed Deploy  v${VERSION}"
-    echo -e "${CYAN}╠══════════════════════════════════════════╣${NC}"
-    printf "${CYAN}║${NC}  Target      ${BOLD}%-28s${NC}${CYAN}║${NC}\n" "$TARGET"
-    printf "${CYAN}║${NC}  Domain      ${BOLD}%-28s${NC}${CYAN}║${NC}\n" "$DEPLOY_DOMAIN"
-    printf "${CYAN}║${NC}  Provider    ${BOLD}%-28s${NC}${CYAN}║${NC}\n" "$TF_PROVIDER"
-    printf "${CYAN}║${NC}  Web server  ${BOLD}%-28s${NC}${CYAN}║${NC}\n" "$WEB_SERVER"
+    echo -e "\n${CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
+    printf "${CYAN}│${NC}  ${BOLD}%-56s${NC}${CYAN}│${NC}\n" "DreamSeed Deploy  v${VERSION}"
+    echo -e "${CYAN}├──────────────────────────────────────────────────────────┤${NC}"
+    printf "${CYAN}│${NC}  Target      ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$TARGET"
+    printf "${CYAN}│${NC}  Domain      ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$DEPLOY_DOMAIN"
+    printf "${CYAN}│${NC}  Provider    ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$TF_PROVIDER"
+    printf "${CYAN}│${NC}  Web server  ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$WEB_SERVER"
     [[ "$DRY_RUN" == "true" ]] && \
-    printf "${CYAN}║${NC}  ${YELLOW}%-40s${NC}${CYAN}║${NC}\n" "DRY-RUN MODE"
-    echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
+    printf "${CYAN}│${NC}  ${YELLOW}%-56s${NC}${CYAN}│${NC}\n" "DRY-RUN MODE"
+    echo -e "${CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
+
+    if [[ "$TARGET" == "prod" && "$DESTROY_MODE" == "false" ]]; then
+        echo -e "\n${YELLOW}⚠  Deploying to PRODUCTION (${DEPLOY_DOMAIN})${NC}"
+        read -rp "  Continue? [y/N] " confirm
+        [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo -e "${RED}Aborted.${NC}"; exit 1; }
+    fi
 
     rotate_logs
 
@@ -660,19 +730,19 @@ main() {
     $ssh_ready && step_ok || step_fail "SSH connection failed"
 
     step_start "Wait for Cloud-init"
-    ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'cloud-init status --wait' 2>/dev/null || {
+    local ci_timeout=300
+    ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" "timeout $ci_timeout cloud-init status --wait" >/dev/null 2>/dev/null || {
         for i in $(seq 1 "$CLOUDINIT_ATTEMPTS"); do
             local ci_status
             ci_status=$(ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
                 'cloud-init status 2>/dev/null || echo "unknown"' 2>/dev/null || echo "unknown")
             [[ "$ci_status" == *"status: done"* || "$ci_status" == *"No pending"* ]] && break
-            [[ $i -eq $CLOUDINIT_ATTEMPTS ]] && step_fail "Cloud-init timeout"
+            [[ $i -eq $CLOUDINIT_ATTEMPTS ]] && step_fail "Cloud-init timeout ($(( CLOUDINIT_ATTEMPTS * CLOUDINIT_RETRY_INTERVAL ))s)"
             printf "."; sleep "$CLOUDINIT_RETRY_INTERVAL"
         done
     }
     step_ok
 
-    step_start "Generate Ansible inventory"
     mkdir -p "$SCRIPT_DIR/ansible/inventory"
     local INVENTORY_FILE="$SCRIPT_DIR/ansible/inventory/hosts-${TF_WORKSPACE}.yml"
     cat > "$INVENTORY_FILE" << INVEOF
@@ -685,8 +755,6 @@ all:
       ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
       server_ip: ${SERVER_IP}
 INVEOF
-    step_ok
-
     VAULT_TMP=$(mktemp)
     chmod 600 "$VAULT_TMP"
     {
@@ -718,23 +786,31 @@ INVEOF
         fi
     done
 
-    [[ "$DRY_RUN" == "false" ]] && check_services
+    if [[ "$DRY_RUN" == "false" ]]; then
+        local checks_start=$(date +%s)
+        check_services
+        local checks_elapsed=$(( $(date +%s) - checks_start ))
+        STEP_DURATIONS+=("$checks_elapsed")
+        STEP_NAMES+=("Post-deploy checks")
+    fi
 
     local total_time=$(( $(date +%s) - DEPLOY_START ))
 
-    echo -e "\n${GREEN}╔══════════════════════════════════════════╗${NC}"
+    print_summary
+
+    echo -e "\n${GREEN}╭──────────────────────────────────────────────────────────╮${NC}"
     if [[ "$DRY_RUN" == "true" ]]; then
-        printf "${GREEN}║${NC}  ${BOLD}%-38s${NC}${GREEN}║${NC}\n" "✓ Dry-run complete"
+        printf "${GREEN}│${NC}  ${BOLD}%-56s${NC}${GREEN}│${NC}\n" "✓ Dry-run complete"
     else
-        printf "${GREEN}║${NC}  ${BOLD}%-38s${NC}${GREEN}║${NC}\n" "✓ Deployment Successful!"
+        printf "${GREEN}│${NC}  ${BOLD}%-56s${NC}${GREEN}│${NC}\n" "✓ Deployment Successful!"
     fi
-    echo -e "${GREEN}╠══════════════════════════════════════════╣${NC}"
-    printf "${GREEN}║${NC}  Server   ${BOLD}%-31s${NC}${GREEN}║${NC}\n" "$SERVER_IP"
-    printf "${GREEN}║${NC}  Site     ${BOLD}%-31s${NC}${GREEN}║${NC}\n" "https://${DEPLOY_DOMAIN}"
-    printf "${GREEN}║${NC}  Grafana  ${BOLD}%-31s${NC}${GREEN}║${NC}\n" "https://${DEPLOY_DOMAIN}/grafana/"
-    printf "${GREEN}║${NC}  SSH      ${BOLD}%-31s${NC}${GREEN}║${NC}\n" "ssh -i ${SSH_KEY##*/} ubuntu@${SERVER_IP}"
-    printf "${GREEN}║${NC}  Time     ${BOLD}%-31s${NC}${GREEN}║${NC}\n" "$(format_time $total_time)"
-    echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+    echo -e "${GREEN}├──────────────────────────────────────────────────────────┤${NC}"
+    printf "${GREEN}│${NC}  Server   ${BOLD}%-47s${NC}${GREEN}│${NC}\n" "$SERVER_IP"
+    printf "${GREEN}│${NC}  Site     ${BOLD}%-47s${NC}${GREEN}│${NC}\n" "https://${DEPLOY_DOMAIN}"
+    printf "${GREEN}│${NC}  Grafana  ${BOLD}%-47s${NC}${GREEN}│${NC}\n" "https://${DEPLOY_DOMAIN}/grafana/"
+    printf "${GREEN}│${NC}  SSH      ${BOLD}%-47s${NC}${GREEN}│${NC}\n" "ssh -i ${SSH_KEY##*/} ubuntu@${SERVER_IP}"
+    printf "${GREEN}│${NC}  Time     ${BOLD}%-47s${NC}${GREEN}│${NC}\n" "$(format_time $total_time)"
+    echo -e "${GREEN}╰──────────────────────────────────────────────────────────╯${NC}"
     echo -e "  Logs: ${LOG}\n"
 }
 

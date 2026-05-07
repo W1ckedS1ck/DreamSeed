@@ -1,10 +1,11 @@
+---
 [PHP]
-memory_limit = 512M
-post_max_size = 64M
-upload_max_filesize = 32M
-max_execution_time = 300
-max_input_time = 300
-disable_functions = eval,shell_exec,system,passthru,proc_open,popen,pcntl_exec,phpinfo
+memory_limit = {{ php_memory_limit | default('512M') }}
+post_max_size = {{ php_post_max_size | default('64M') }}
+upload_max_filesize = {{ php_upload_max_filesize | default('32M') }}
+max_execution_time = {{ php_max_execution_time | default(300) }}
+max_input_time = {{ php_max_input_time | default(300) }}
+disable_functions = {{ php_disable_functions | default('eval,shell_exec,system,passthru,proc_open,popen,pcntl_exec,phpinfo') }}
 expose_php = Off
 
 [Session]

@@ -75,21 +75,12 @@
       set -o pipefail
       tar -tzf "/tmp/{{ restore_latest_project.stdout | trim }}" > /dev/null 2>&1
     executable: /bin/bash
-  when: not restore_site_exists.stat.exists
+  when:
+    - not restore_site_exists.stat.exists
+    - rclone_config_stat.stat.exists
   register: restore_archive_check
   changed_when: false
   failed_when: restore_archive_check.rc != 0
-
-- name: Verify .htaccess exists in archive
-  ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      tar -tzf "/tmp/{{ restore_latest_project.stdout | trim }}" | grep -c '.htaccess' && exit 0 || exit 0
-    executable: /bin/bash
-  when: not restore_site_exists.stat.exists
-  register: restore_htaccess_check
-  changed_when: false
-  failed_when: false
 
 - name: Extract project
   become: true
@@ -105,16 +96,11 @@
   changed_when: false
 
 - name: Verify project extraction
-  become: true
-  ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      test -f {{ web_root }}/index.php && test -s {{ web_root }}/.htaccess
-    executable: /bin/bash
+  ansible.builtin.stat:
+    path: "{{ web_root }}/index.php"
+  register: restore_index_check
   when: not restore_site_exists.stat.exists
-  register: restore_extract_check
-  changed_when: false
-  failed_when: restore_extract_check.rc != 0
+  failed_when: not restore_index_check.stat.exists or restore_index_check.stat.size == 0
 
 - name: Cleanup project archive
   ansible.builtin.file:

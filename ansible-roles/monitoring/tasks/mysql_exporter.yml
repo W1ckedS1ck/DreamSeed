@@ -1,24 +1,28 @@
 ---
+- name: Set MySQL Exporter desired version
+  ansible.builtin.set_fact:
+    monitoring_mysql_version: "{{ monitoring_mysql_version }}"
+
 - name: Check if MySQL Exporter is installed
   ansible.builtin.stat:
     path: /usr/local/bin/mysqld_exporter
   register: monitoring_mysql_bin
 
-- name: Install MySQL Exporter (latest)
-  when: not monitoring_mysql_bin.stat.exists
-  block:
-    - name: Get latest MySQL Exporter version
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          curl -s https://api.github.com/repos/prometheus/mysqld_exporter/releases/latest | jq -r '.tag_name' | sed 's/^v//'
-        executable: /bin/bash
-      register: monitoring_mysql_version
-      changed_when: false
+- name: Get current MySQL Exporter version
+  ansible.builtin.command: /usr/local/bin/mysqld_exporter --version
+  changed_when: false
+  failed_when: false
+  register: monitoring_mysql_current_version
+  when: monitoring_mysql_bin.stat.exists
 
+- name: Install/Upgrade MySQL Exporter
+  when: >
+    not monitoring_mysql_bin.stat.exists or
+    monitoring_mysql_version not in (monitoring_mysql_current_version.stdout | default(''))
+  block:
     - name: Download MySQL Exporter
       ansible.builtin.get_url:
-        url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ monitoring_mysql_version.stdout }}/mysqld_exporter-{{ monitoring_mysql_version.stdout }}.linux-amd64.tar.gz"
+        url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ monitoring_mysql_version }}/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64.tar.gz"
         dest: /tmp/mysqld_exporter.tar.gz
         mode: "0644"
 
@@ -29,25 +33,21 @@
         remote_src: true
 
     - name: Install MySQL Exporter binary
-      become: true
       ansible.builtin.copy:
-        src: "/tmp/mysqld_exporter-{{ monitoring_mysql_version.stdout }}.linux-amd64/mysqld_exporter"
+        src: "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64/mysqld_exporter"
         dest: /usr/local/bin/mysqld_exporter
         mode: "0755"
         remote_src: true
 
     - name: Cleanup MySQL Exporter temp files
-      ansible.builtin.shell: rm -rf /tmp/mysqld_exporter*
-      changed_when: false
-
-- name: Verify MySQL Exporter binary
-  ansible.builtin.command: /usr/local/bin/mysqld_exporter --version
-  changed_when: false
-  register: monitoring_mysql_verify
-  failed_when: monitoring_mysql_verify.rc != 0
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/mysqld_exporter.tar.gz
+        - "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64"
 
 - name: Create mysqld_exporter user
-  become: true
   ansible.builtin.user:
     name: mysqld_exporter
     system: true
@@ -55,7 +55,6 @@
     shell: /bin/false
 
 - name: Create .my.cnf for exporter in system location
-  become: true
   ansible.builtin.copy:
     dest: /etc/mysql/conf.d/exporter.cnf
     content: |
@@ -68,7 +67,6 @@
   when: db_pass | default('') | length > 0
 
 - name: Deploy MySQL Exporter service
-  become: true
   ansible.builtin.copy:
     dest: /etc/systemd/system/mysqld_exporter.service
     content: |
@@ -80,23 +78,9 @@
       Type=simple
       User=mysqld_exporter
       ExecStart=/usr/local/bin/mysqld_exporter --config.my-cnf=/etc/mysql/conf.d/exporter.cnf --web.listen-address=127.0.0.1:9104 --no-collect.slave_status
-      Restart=on-failure
+      Restart=always
 
       [Install]
       WantedBy=multi-user.target
     mode: "0644"
   notify: Restart MySQL Exporter
-
-- name: Enable MySQL Exporter
-  become: true
-  ansible.builtin.systemd:
-    name: mysqld_exporter
-    state: started
-    enabled: true
-    daemon_reload: true
-
-- name: Wait for MySQL Exporter to be ready
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: 9104
-    timeout: 15

@@ -184,7 +184,7 @@
 - name: Generate self-signed private key for Nginx
   become: true
   ansible.builtin.command:
-    cmd: openssl genrsa -out /etc/ssl/private/nginx-selfsigned.key 4096
+    cmd: openssl genrsa -out /etc/ssl/private/nginx-selfsigned.key 2048
     creates: /etc/ssl/private/nginx-selfsigned.key
   when: not ssl_has_cert
 
