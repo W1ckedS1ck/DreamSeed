@@ -2,6 +2,7 @@
 # ========================
 #  General
 # ========================
+ansible_python_interpreter: /usr/bin/python3
 domain: "vitalikuts.online"
 domain_www: true
 admin_email: "hello@dreamseed.online"

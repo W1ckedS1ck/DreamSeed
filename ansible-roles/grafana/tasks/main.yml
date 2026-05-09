@@ -174,6 +174,7 @@
     stdin: "{{ grafana_admin_password }}"
   no_log: true
   changed_when: true
+  register: grafana_cli_result
   when:
     - grafana_admin_password | default('') | length > 0
     - not (grafana_password_flag.stat.exists | default(false))
@@ -194,6 +195,4 @@
   ansible.builtin.debug:
     msg: "WARNING: Grafana CLI password reset failed"
   when:
-    - grafana_admin_password | default('') | length > 0
-    - not (grafana_password_flag.stat.exists | default(false))
-    - grafana_password_result is defined and grafana_password_result.status == 401
+    - grafana_cli_result is defined and grafana_cli_result.rc != 0
