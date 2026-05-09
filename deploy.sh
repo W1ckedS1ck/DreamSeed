@@ -570,12 +570,13 @@ echo -e "\n${RED}╭────────────────────
     if ( cd "$TF_DIR" && "$TERRAFORM" show -no-color 2>/dev/null ) | grep -q "No state"; then
         echo -e "${YELLOW}No resources to destroy${NC}"; return 0
     fi
-    local tf_destroy_extra_vars=""
-    [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}'"
-    # Run destroy and check log for "Destroy complete!" — TFC exits 1 on empty state, so
-    # we rely on grep to determine success rather than terraform's exit code.
-    run_with_spinner "Destroying resources ($TARGET)" \
-        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} 2>&1 | tee -a '$TF_LOG'; grep -q 'Destroy complete' '$TF_LOG'"
+    local tf_destroy_var_arg=""
+    [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+    echo "  ━━━━━━━━ ✕ Destroying resources ($TARGET)"
+    # TFC exits 1 when there is nothing to destroy — use || true and check log instead
+    # shellcheck disable=SC2086
+    ( cd "$TF_DIR" && "$TERRAFORM" destroy -auto-approve -no-color $tf_destroy_var_arg 2>&1 | tee -a "$TF_LOG" ) || true
+    grep -q "Destroy complete" "$TF_LOG" || step_fail "Terraform destroy failed (check $TF_LOG)"
     
     local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
     rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
