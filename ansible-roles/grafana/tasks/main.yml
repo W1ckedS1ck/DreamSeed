@@ -86,11 +86,19 @@
     dest: /var/lib/grafana/dashboards/
     checksum: yes
     rsync_path: "sudo rsync"
-    rsync_opts: "{{ _web_excludes + ['--include=*.json', '--exclude=*', '--chown=grafana:grafana', '--chmod=F644'] }}"
+    rsync_opts: "{{ _web_excludes + ['--include=*.json', '--exclude=*', '--chmod=F644'] }}"
   become: false
   vars:
     _web_excludes: "{{ ['--exclude=apache-exporter.json'] if web_server == 'nginx' else ['--exclude=nginx.json', '--exclude=nginx-prometheus.json'] }}"
   notify: Restart Grafana
+
+- name: Fix Grafana dashboard ownership
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    owner: grafana
+    group: grafana
+    recurse: true
+  become: true
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
