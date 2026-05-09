@@ -563,7 +563,7 @@ echo -e "\n${RED}╭────────────────────
     current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
     if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
         run_with_spinner "Terraform init ($TARGET)" \
-            bash -c "cd '$TF_DIR' && '$TERRAFORM' init -reconfigure -input=false -no-color >> '$TF_LOG' 2>&1"
+            bash -c "cd '$TF_DIR' && '$TERRAFORM' init -reconfigure -input=false -no-color 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"
     fi
 
     ( cd "$TF_DIR" && terraform_select_workspace ) >> "$TF_LOG" 2>&1
@@ -573,7 +573,7 @@ echo -e "\n${RED}╭────────────────────
     local tf_destroy_extra_vars=""
     [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}'"
     run_with_spinner "Destroying resources ($TARGET)" \
-        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} >> '$TF_LOG' 2>&1"
+        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"
     
     local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
     rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
