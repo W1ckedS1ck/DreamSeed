@@ -573,10 +573,14 @@ echo -e "\n${RED}╭────────────────────
     local tf_destroy_extra_vars=""
     [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}'"
     local tf_rc=0
-    { run_with_spinner "Destroying resources ($TARGET)" \
-        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"; } || tf_rc=$?
+    set +e
+    run_with_spinner "Destroying resources ($TARGET)" \
+        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"
+    tf_rc=$?
+    set -e
     # TFC exits 1 when there is nothing to destroy — treat as success
     if [[ $tf_rc -ne 0 ]] && grep -q "Resources: 0 destroyed\|No objects need to be destroyed" "$TF_LOG" 2>/dev/null; then
+        echo "  Nothing to destroy (already clean)"
         tf_rc=0
     fi
     [[ $tf_rc -eq 0 ]] || step_fail "Terraform destroy failed (check $TF_LOG)"
