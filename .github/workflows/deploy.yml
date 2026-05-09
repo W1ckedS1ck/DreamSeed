@@ -41,7 +41,7 @@ jobs:
       - name: Setup Ansible
         run: |
           pip install ansible PyMySQL --quiet
-          ansible-galaxy collection install community.mysql ansible.posix --quiet
+          ansible-galaxy collection install community.mysql ansible.posix
 
       - name: Reconstruct secrets
         env:
