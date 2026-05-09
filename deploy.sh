@@ -572,8 +572,14 @@ echo -e "\n${RED}╭────────────────────
     fi
     local tf_destroy_extra_vars=""
     [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}'"
-    run_with_spinner "Destroying resources ($TARGET)" \
-        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"
+    local tf_rc=0
+    { run_with_spinner "Destroying resources ($TARGET)" \
+        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"; } || tf_rc=$?
+    # TFC exits 1 when there is nothing to destroy — treat as success
+    if [[ $tf_rc -ne 0 ]] && grep -q "Resources: 0 destroyed\|No objects need to be destroyed" "$TF_LOG" 2>/dev/null; then
+        tf_rc=0
+    fi
+    [[ $tf_rc -eq 0 ]] || step_fail "Terraform destroy failed (check $TF_LOG)"
     
     local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
     rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
