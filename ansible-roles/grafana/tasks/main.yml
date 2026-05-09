@@ -181,7 +181,7 @@
 
 - name: Fallback to CLI if API auth failed (password already changed)
   ansible.builtin.shell:
-    cmd: grafana-cli admin reset-admin-password --stdin
+    cmd: grafana-cli admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
   no_log: true
   changed_when: true

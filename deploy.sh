@@ -153,6 +153,8 @@ export_tf_env() {
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
     fi
     export TF_VAR_environment="$TARGET"
+    export TF_TOKEN_app_terraform_io="${TF_API_TOKEN:-}"
+    export TF_WORKSPACE="$TF_WORKSPACE"
 }
 
 # --- Helper functions ---
@@ -489,9 +491,11 @@ run_ansible() {
 }
 
 terraform_select_workspace() {
-    ( cd "$TF_DIR" && \
-        "$TERRAFORM" workspace select "$TF_WORKSPACE" 2>/dev/null || \
-        "$TERRAFORM" workspace new "$TF_WORKSPACE" ) >> "$TF_LOG" 2>&1
+    local ws="$TF_WORKSPACE"
+    # TF_WORKSPACE env var blocks workspace select/new — unset it inside the subshell.
+    ( cd "$TF_DIR" && unset TF_WORKSPACE && \
+        "$TERRAFORM" workspace select "$ws" 2>/dev/null || \
+        "$TERRAFORM" workspace new "$ws" ) >> "$TF_LOG" 2>&1
 }
 
 terraform_destroy() {
@@ -642,22 +646,27 @@ main() {
 
     if [[ "$SKIP_TERRAFORM" == "false" ]]; then
         step_start "Terraform init + apply"
-        if [[ ! -d "$TF_DIR/.terraform" ]]; then
-            ( cd "$TF_DIR" && "$TERRAFORM" init -upgrade=false -input=false -no-color >> "$TF_LOG" 2>&1 ) || {
+        export_tf_env
+
+        local current_ws
+        current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
+        if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
+            ( cd "$TF_DIR" && "$TERRAFORM" init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1 ) || {
                 log_error_details "$TF_LOG"
                 step_fail "Terraform init failed"
             }
         fi
 
-        export_tf_env
-
         ( cd "$TF_DIR" && terraform_select_workspace ) || \
             step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
+
+        local tf_apply_extra_vars=""
+        [[ "$TF_PROVIDER" == "aws" ]] && tf_apply_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-}'"
 
         local tf_ok=false
         for tf_attempt in 1 2; do
             if run_with_spinner "Terraform apply" \
-                bash -c "cd '$TF_DIR' && '$TERRAFORM' apply -auto-approve -no-color -var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH}' >> '$TF_LOG' 2>&1"; then
+                bash -c "cd '$TF_DIR' && '$TERRAFORM' apply -auto-approve -no-color $tf_apply_extra_vars >> '$TF_LOG' 2>&1"; then
                 tf_ok=true; break
             fi
             [[ $tf_attempt -lt 2 ]] && {
