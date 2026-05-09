@@ -559,6 +559,13 @@ echo -e "\n${RED}╭────────────────────
 
     export_tf_env
 
+    local current_ws
+    current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
+    if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
+        run_with_spinner "Terraform init ($TARGET)" \
+            bash -c "cd '$TF_DIR' && '$TERRAFORM' init -reconfigure -input=false -no-color >> '$TF_LOG' 2>&1"
+    fi
+
     ( cd "$TF_DIR" && terraform_select_workspace ) >> "$TF_LOG" 2>&1
     if ( cd "$TF_DIR" && "$TERRAFORM" show -no-color 2>/dev/null ) | grep -q "No state"; then
         echo -e "${YELLOW}No resources to destroy${NC}"; return 0
