@@ -80,43 +80,17 @@
     mode: "0644"
   notify: Restart Grafana
 
-- name: Deploy common Grafana dashboards
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}
-    owner: grafana
-    group: grafana
-    mode: "0644"
-  loop:
-    - "node-exporter-full.json"
-    - "mysql-database.json"
-    - "victoria-metrics-single-node.json"
+- name: Sync Grafana dashboards
+  ansible.posix.synchronize:
+    src: "{{ role_path }}/files/"
+    dest: /var/lib/grafana/dashboards/
+    checksum: yes
+    rsync_path: "sudo rsync"
+    rsync_opts: "{{ _web_excludes + ['--include=*.json', '--exclude=*', '--chown=grafana:grafana', '--chmod=F644'] }}"
+  become: false
+  vars:
+    _web_excludes: "{{ ['--exclude=apache-exporter.json'] if web_server == 'nginx' else ['--exclude=nginx.json', '--exclude=nginx-prometheus.json'] }}"
   notify: Restart Grafana
-
-- name: Deploy Apache dashboards
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}
-    owner: grafana
-    group: grafana
-    mode: "0644"
-  loop:
-    - "apache-exporter.json"
-  notify: Restart Grafana
-  when: web_server == "apache"
-
-- name: Deploy Nginx dashboards
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}
-    owner: grafana
-    group: grafana
-    mode: "0644"
-  loop:
-    - "nginx.json"
-    - "nginx-prometheus.json"
-  notify: Restart Grafana
-  when: web_server == "nginx"
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
