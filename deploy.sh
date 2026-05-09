@@ -582,10 +582,15 @@ echo -e "\n${RED}╭────────────────────
     rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
     
     # Cleanup: delete workspace (non-prod only)
+    # TFC may exit 1 on workspace delete even on success — use || true and check log
     if [[ "$TARGET" != "prod" ]]; then
-        ( cd "$TF_DIR" && "$TERRAFORM" workspace select default >/dev/null 2>&1 && \
-          "$TERRAFORM" workspace delete "$TF_WORKSPACE" >/dev/null 2>&1 ) >> "$TF_LOG" 2>&1
-        echo -e "  ${GREEN}✓${NC} Workspace deleted  ${YELLOW}($TF_WORKSPACE)${NC}"
+        ( cd "$TF_DIR" && "$TERRAFORM" workspace select default 2>&1 && \
+          "$TERRAFORM" workspace delete "$TF_WORKSPACE" 2>&1 ) >> "$TF_LOG" 2>&1 || true
+        if grep -q "Deleted workspace\|has been deleted\|workspace.*deleted" "$TF_LOG" 2>/dev/null; then
+            echo -e "  ${GREEN}✓${NC} Workspace deleted  ${YELLOW}($TF_WORKSPACE)${NC}"
+        else
+            echo -e "  ${YELLOW}⚠${NC} Workspace delete may have failed — check TFC UI  ${YELLOW}($TF_WORKSPACE)${NC}"
+        fi
     fi
     
     echo -e "  ${GREEN}✓${NC} Destroyed  ${YELLOW}Log: $TF_LOG${NC}"
