@@ -525,7 +525,10 @@ terraform_select_workspace() {
 }
 
 terraform_destroy() {
-    if [[ "$TARGET" == "prod" ]]; then
+    if [[ "$TTY_MODE" == "false" ]]; then
+        # CI: confirmation already validated by the workflow step via CI_DESTROY_CONFIRM
+        echo "CI destroy confirmed for: $TARGET (CI_DESTROY_CONFIRM=${CI_DESTROY_CONFIRM:-})"
+    elif [[ "$TARGET" == "prod" ]]; then
 echo -e "\n${RED}╭──────────────────────────────────────────────────╮${NC}"
     printf "${RED}│${NC}  ${BOLD}%-48s${NC}${RED}│${NC}\n" "⚠  PRODUCTION DESTROY REQUESTED  ⚠"
     echo -e "${RED}│${NC}                                                  ${RED}│${NC}"
