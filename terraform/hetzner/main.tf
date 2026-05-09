@@ -1,11 +1,19 @@
 terraform {
+  required_version = ">= 1.1"
+
+  backend "remote" {
+    organization = "Dreamseed"
+    workspaces {
+      prefix = "dreamseed-"
+    }
+  }
+
   required_providers {
     hcloud = {
       source  = "hetznercloud/hcloud"
       version = "~> 1.0"
     }
   }
-  required_version = ">= 0.14"
 }
 
 provider "hcloud" {

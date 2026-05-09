@@ -1,0 +1,52 @@
+name: Drift Detection
+
+on:
+  schedule:
+    - cron: '5 7 * * *'  # 07:05 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: drift-detection
+  cancel-in-progress: false
+
+jobs:
+  drift-prod-aws:
+    name: Detect drift — AWS prod
+    runs-on: ubuntu-latest
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      TF_WORKSPACE: prod
+      AWS_ACCESS_KEY_ID: ${{ secrets.PROD_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROD_SECRET_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.PROD_REGION }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Write prod SSH public key
+        run: echo "${{ secrets.PROD_SSH_PUBLIC_KEY }}" > /tmp/prod.pub
+
+      - name: Terraform Init
+        working-directory: terraform/aws
+        run: terraform init
+
+      - name: Detect Drift
+        id: plan
+        working-directory: terraform/aws
+        run: |
+          terraform plan -detailed-exitcode -no-color \
+            -var="ssh_public_key_path=/tmp/prod.pub" \
+            -var="elastic_ip_allocation_id=${{ secrets.PROD_EIP }}" \
+            -var="environment=prod" \
+            -out=/tmp/prod.tfplan 2>&1 | tee /tmp/plan.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Report drift
+        if: steps.plan.outputs.exit_code == '2'
+        run: |
+          echo "::error::Infrastructure drift detected on prod! Review the plan output above."
+          exit 1

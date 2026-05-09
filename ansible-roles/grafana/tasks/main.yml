@@ -108,7 +108,7 @@
 - name: Deploy Nginx dashboards
   ansible.builtin.copy:
     src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}"
+    dest: /var/lib/grafana/dashboards/{{ item }}
     owner: grafana
     group: grafana
     mode: "0644"
@@ -177,15 +177,17 @@
   register: grafana_password_result
   when:
     - grafana_admin_password | default('') | length > 0
-    - not grafana_password_flag.stat.exists
+    - not (grafana_password_flag.stat.exists | default(false))
 
 - name: Fallback to CLI if API auth failed (password already changed)
-  ansible.builtin.shell: grafana-cli admin reset-admin-password {{ grafana_admin_password }}
+  ansible.builtin.shell:
+    cmd: grafana-cli admin reset-admin-password --stdin
+    stdin: "{{ grafana_admin_password }}"
   no_log: true
   changed_when: true
   when:
     - grafana_admin_password | default('') | length > 0
-    - not grafana_password_flag.stat.exists
+    - not (grafana_password_flag.stat.exists | default(false))
     - grafana_password_result is defined and grafana_password_result.status == 401
 
 - name: Mark Grafana admin password as set
@@ -197,11 +199,12 @@
     group: grafana
   when:
     - grafana_admin_password | default('') | length > 0
-    - not grafana_password_flag.stat.exists
+    - not (grafana_password_flag.stat.exists | default(false))
 
 - name: Warn if Grafana password reset failed
   ansible.builtin.debug:
-    msg: "WARNING: Grafana password reset failed — {{ grafana_password_reset.stdout | default('') }}"
+    msg: "WARNING: Grafana CLI password reset failed"
   when:
     - grafana_admin_password | default('') | length > 0
-    - grafana_password_reset is defined and grafana_password_reset is failed
+    - not (grafana_password_flag.stat.exists | default(false))
+    - grafana_password_result is defined and grafana_password_result.status == 401

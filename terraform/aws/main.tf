@@ -1,5 +1,13 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.1"
+
+  backend "remote" {
+    organization = "Dreamseed"
+    workspaces {
+      prefix = "dreamseed-"
+    }
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -42,7 +50,6 @@ variable "instance_type" {
 variable "ssh_public_key_path" {
   description = "Path to SSH public key"
   type        = string
-  default     = "~/.ssh/Vitali.pub"
 }
 
 variable "elastic_ip_allocation_id" {
