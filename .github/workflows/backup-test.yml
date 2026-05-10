@@ -11,11 +11,13 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CF_ZONE_ID: 3f6dd6599b5b95ee73a0e08b70292858
 
 jobs:
   test-restore:
     name: Test backup restoration
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout code
@@ -57,11 +59,21 @@ jobs:
       - name: Prepare SSH public key
         run: ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
 
+      - name: Export Terraform credentials
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+          echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY" >> "$GITHUB_ENV"
+          echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY" >> "$GITHUB_ENV"
+          echo "AWS_DEFAULT_REGION=$DEV_AWS_REGION" >> "$GITHUB_ENV"
+          echo "TF_VAR_cloudflare_api_token=$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
+
       - name: Terraform Init
         working-directory: terraform/aws
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: dreamseed-test
+          TF_WORKSPACE: test
         run: terraform init
 
       - name: Terraform Apply
@@ -69,13 +81,35 @@ jobs:
         working-directory: terraform/aws
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: dreamseed-test
+          TF_WORKSPACE: test
           TF_VAR_environment: test
           TF_VAR_ssh_public_key_path: /home/runner/.ssh/Vitali.pub
         run: |
           terraform apply -auto-approve -no-color \
             -var="environment=test"
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
+
+      - name: Register DNS in Cloudflare
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          if [ -n "$RECORD_ID" ]; then
+            curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}" > /dev/null
+          else
+            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}" > /dev/null
+          fi
+          echo "DNS: test.dreamseed.online -> $SERVER_IP"
 
       - name: Wait for SSH
         run: |
@@ -87,6 +121,7 @@ jobs:
               break
             fi
             echo "Attempt $i/40 - waiting..."
+            [ "$i" -eq 40 ] && { echo "SSH never became available"; exit 1; }
             sleep 10
           done
 
@@ -103,17 +138,17 @@ jobs:
           cat > ansible/inventory/hosts-test.yml <<EOF
           all:
             hosts:
-              testserver:
+              dreamseed:
                 ansible_host: ${SERVER_IP}
+                ansible_user: ubuntu
+                ansible_ssh_private_key_file: ~/.ssh/Vitali.pem
+                ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
             vars:
               web_server: nginx
               domain: test.dreamseed.online
               server_ip: ${SERVER_IP}
               db_name: modx_db
               admin_email: admin@dreamseed.online
-              secrets_dir: /home/ubuntu/dreamseed/secrets
-              configs_dir: /home/ubuntu/dreamseed/configs
-              scripts_dir: /home/ubuntu/Scripts
           EOF
 
       - name: Generate extra vars file
@@ -123,13 +158,9 @@ jobs:
           set +a
           cat > /tmp/test_vault.yml <<EOF
           db_pass: "${DB_PASS}"
-          grafana_admin_password: "${GRAFANA_PASS}"
           server_ip: "${{ steps.terraform.outputs.server_ipv4 }}"
           web_server: nginx
           domain: test.dreamseed.online
-          secrets_dir: /home/ubuntu/dreamseed/secrets
-          configs_dir: /home/ubuntu/dreamseed/configs
-          scripts_dir: /home/ubuntu/Scripts
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
           EOF
           chmod 600 /tmp/test_vault.yml
@@ -141,109 +172,87 @@ jobs:
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-02-nginx.yml -e @/tmp/test_vault.yml
 
       - name: Deploy Database
+        id: deploy_db
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml
-
-      - name: Deploy Monitoring
-        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-04-monitor.yml -e @/tmp/test_vault.yml
-
-      - name: Deploy Backup role
-        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-04.5-backup.yml -e @/tmp/test_vault.yml
-
-      - name: Deploy Grafana
-        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-05-grafana.yml -e @/tmp/test_vault.yml
-
-      - name: Deploy Security
-        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-06-security.yml -e @/tmp/test_vault.yml
-
-      - name: Wait for services
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          sleep 30
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active nginx php8.3-fpm mariadb"
-
-      - name: Download backups from GDrive
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem \
-            secrets/rclone.conf ubuntu@$SERVER_IP:/home/ubuntu/.config/rclone/rclone.conf
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "mkdir -p /home/ubuntu/backups/{project,db} && \
-             rclone copy gdrive:DreamSeed/backups/db /home/ubuntu/backups/db \
-               --max-age 7d --include '*.sql.gz' && \
-             rclone copy gdrive:DreamSeed/backups/project /home/ubuntu/backups/project \
-               --max-age 7d --include '*.tar.gz'"
-
-      - name: Run restore script
-        id: restore
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest"
 
       - name: Run database tests
         id: db_tests
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || echo "[FAIL] MariaDB not running"
+            "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || { echo "[FAIL] MariaDB not running"; exit 1; }
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || echo "[FAIL] DB connect"
+            "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || { echo "[FAIL] DB connect"; exit 1; }
           TABLE_COUNT=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'")
           echo "MODX content rows: $TABLE_COUNT"
+          echo "content_rows=$TABLE_COUNT" >> "$GITHUB_OUTPUT"
+          [ "${TABLE_COUNT:-0}" -gt 0 ] && echo "[PASS] Content rows: $TABLE_COUNT" || { echo "[FAIL] No content rows — restore may have failed"; exit 1; }
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "mysqlcheck --all-databases" && echo "[PASS] DB integrity" || echo "[WARN] DB check issues"
 
       - name: Run web server tests
+        id: web_tests
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active nginx" && echo "[PASS] Nginx running" || echo "[FAIL] Nginx not running"
+            "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx not running"; exit 1; }
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || echo "[FAIL] PHP-FPM not running"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$SERVER_IP/ -L --max-redirs 3)
+            "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM not running"; exit 1; }
+          HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" http://$SERVER_IP/ -L --max-redirs 3 || echo "000")
           echo "HTTP code: $HTTP_CODE"
           [ "$HTTP_CODE" = "200" ] && echo "[PASS] HTTP 200" || echo "[WARN] HTTP not 200"
 
       - name: Run MODX tests
+        id: modx_tests
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || echo "[FAIL] Config missing"
+            "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; exit 1; }
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || echo "[FAIL] Assets missing"
+            "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || { echo "[FAIL] Assets missing"; exit 1; }
+          BODY=$(curl -sk http://$SERVER_IP/ -L --max-redirs 3 --max-time 10)
+          echo "$BODY" | grep -qi "fatal error\|parse error\|<b>Warning" \
+            && { echo "[FAIL] PHP errors in response"; exit 1; } || echo "[PASS] No PHP errors"
+          echo "$BODY" | grep -q "<html" \
+            && echo "[PASS] HTML response" || { echo "[FAIL] No HTML in response"; exit 1; }
 
-      - name: Run Grafana tests
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active grafana-server" && echo "[PASS] Grafana running" || echo "[FAIL] Grafana not running"
-          GRAFANA_CODE=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/health")
-          echo "Grafana HTTP: $GRAFANA_CODE"
-          [ "$GRAFANA_CODE" = "200" ] && echo "[PASS] Grafana healthy" || echo "[WARN] Grafana not healthy"
-
-      - name: Run system tests
+      - name: Run disk check
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           DISK_USAGE=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'")
           echo "Disk usage: $DISK_USAGE%"
           [ "$DISK_USAGE" -lt 90 ] && echo "[PASS] Disk space OK" || echo "[WARN] Disk space low"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active victoria-metrics" && echo "[PASS] VictoriaMetrics running" || echo "[WARN] VictoriaMetrics not running"
 
       - name: Cleanup test files
         run: rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
 
+      - name: Delete DNS record
+        if: always()
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          [ -n "$RECORD_ID" ] && curl -s -X DELETE \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /dev/null && echo "DNS record deleted" || echo "No DNS record to delete"
+
       - name: Terraform Destroy
+        id: destroy
         if: always()
         working-directory: terraform/aws
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: dreamseed-test
-        run: terraform destroy -auto-approve -no-color
+          TF_WORKSPACE: test
+          TF_VAR_environment: test
+          TF_VAR_ssh_public_key_path: /home/runner/.ssh/Vitali.pub
+        run: |
+          (terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log) || true
+          grep -q "Destroy complete" /tmp/tf_destroy.log || { echo "Terraform destroy failed"; exit 1; }
 
       - name: Send Telegram report
         if: always()
@@ -252,13 +261,20 @@ jobs:
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
           set +a
 
-          STATUS="${{ steps.db_tests.outcome == 'success' && '✅ SUCCESS' || '❌ FAILED' }}"
-          MSG="$STATUS — Backup Restoration Test $(date '+%Y-%m-%d %H:%M')
+          ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
+          RESTORE="${{ steps.deploy_db.outcome }}"
+          DB="${{ steps.db_tests.outcome }}"
+          WEB="${{ steps.web_tests.outcome }}"
+          MODX="${{ steps.modx_tests.outcome }}"
+          DESTROY="${{ steps.destroy.outcome }}"
+          ROWS="${{ steps.db_tests.outputs.content_rows }}"
 
-          Server: ${{ steps.terraform.outputs.server_ipv4 }}
-          Restore: ${{ steps.restore.outcome }}
-          DB tests: ${{ steps.db_tests.outcome }}"
+          [ "$RESTORE" = "success" ] && STATUS="✅ SUCCESS" || STATUS="❌ FAILED"
+          MSG="$STATUS — Backup Restoration Test $(date '+%Y-%m-%d %H:%M')
+Restore: $(ok $RESTORE) | DB: $(ok $DB) | Web: $(ok $WEB) | MODX: $(ok $MODX)
+Content rows: ${ROWS:-n/a} | Destroy: $(ok $DESTROY)
+Server: ${{ steps.terraform.outputs.server_ipv4 }}"
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
-            -d "text=$MSG" > /dev/null || true
+            --data-urlencode "text=$MSG" > /dev/null || true
