@@ -61,21 +61,15 @@ jobs:
         working-directory: terraform/aws
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_WORKSPACE: dreamseed-test
         run: terraform init
-
-      - name: Terraform Workspace
-        working-directory: terraform/aws
-        env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-        run: |
-          terraform workspace new dreamseed-test 2>/dev/null || true
-          terraform workspace select dreamseed-test
 
       - name: Terraform Apply
         id: terraform
         working-directory: terraform/aws
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_WORKSPACE: dreamseed-test
           TF_VAR_environment: test
           TF_VAR_ssh_public_key_path: /home/runner/.ssh/Vitali.pub
         run: |
@@ -248,6 +242,7 @@ jobs:
         working-directory: terraform/aws
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_WORKSPACE: dreamseed-test
         run: terraform destroy -auto-approve -no-color
 
       - name: Send Telegram report
