@@ -70,7 +70,7 @@
   ansible.builtin.apt:
     name: python3-certbot-dns-cloudflare
     state: present
-  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
+  when: not ssl_skip_certbot | default(false) and cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
 - name: Deploy CloudFlare credentials file
   become: true
@@ -79,7 +79,7 @@
     content: |
       dns_cloudflare_api_token = {{ cloudflare_api_token }}
     mode: "0600"
-  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
+  when: not ssl_skip_certbot | default(false) and cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
 - name: Obtain SSL certificate via DNS CloudFlare
   become: true
@@ -94,7 +94,7 @@
     --agree-tos
     -m {{ admin_email }}
     --rsa-key-size 4096
-  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
+  when: not ssl_skip_certbot | default(false) and cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
   register: ssl_certbot_result
   changed_when: false
   failed_when: false
@@ -122,7 +122,7 @@
     --agree-tos
     -m {{ admin_email }}
     --rsa-key-size 4096
-  when: ssl_dns_ready and not ssl_cert_file.stat.exists and not ssl_restored | default(false) and (cloudflare_api_token is not defined or cloudflare_api_token | length == 0)
+  when: not ssl_skip_certbot | default(false) and ssl_dns_ready and not ssl_cert_file.stat.exists and not ssl_restored | default(false) and (cloudflare_api_token is not defined or cloudflare_api_token | length == 0)
   register: ssl_certbot_result
   changed_when: false
   failed_when: false

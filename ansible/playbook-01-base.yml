@@ -7,7 +7,6 @@
   pre_tasks:
     - name: Wait for SSH
       ansible.builtin.wait_for_connection:
-        delay: 5
         timeout: 120
 
     - name: Wait for apt locks

@@ -348,7 +348,11 @@ step_start() {
     local bar icon
     bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
     icon=$(step_icon "$name")
-    printf "\n  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC}" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$name"
+    if [[ "$TTY_MODE" == "false" ]]; then
+        printf "\n  %s %d/%d %s %-36s\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$icon" "$name"
+    else
+        printf "\n  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC}" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$name"
+    fi
 }
 
 step_ok() {
@@ -358,14 +362,23 @@ step_ok() {
     icon=$(step_icon "${STEP_LABEL:-}")
     STEP_DURATIONS+=("$elapsed")
     STEP_NAMES+=("${STEP_LABEL:-}")
-    printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC} ${GREEN}✓${NC} ${YELLOW}%s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}" "$(format_time $elapsed)"
+    if [[ "$TTY_MODE" == "false" ]]; then
+        printf "  %s %d/%d %s %-36s  ✓ %s\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$icon" "${STEP_LABEL:-}" "$(format_time $elapsed)"
+    else
+        printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC} ${GREEN}✓${NC} ${YELLOW}%s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}" "$(format_time $elapsed)"
+    fi
 }
 
 step_fail() {
     local bar
     bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
-    printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${RED}✗${NC} ${BOLD}%-36s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}"
-    echo -e "${RED}Error: $1${NC}"
+    if [[ "$TTY_MODE" == "false" ]]; then
+        printf "  %s %d/%d ✗ %s\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}"
+        echo "::error title=${STEP_LABEL:-Deploy}::$1"
+    else
+        printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${RED}✗${NC} ${BOLD}%-36s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}"
+        echo -e "${RED}Error: $1${NC}"
+    fi
     exit 1
 }
 
@@ -424,17 +437,69 @@ run_ansible() {
     local args=("$@")
 
     if [[ "$TTY_MODE" == "false" ]]; then
-        local status_file
+        local status_file tmp_output
         status_file=$(mktemp)
+        tmp_output=$(mktemp)
         echo "0" > "$status_file"
+
+        echo "::group::${STEP_LABEL:-Ansible}"
+
+        local task_num=0 task_name="" task_pending=false
+        local counts_ok=0 counts_changed=0 counts_skipped=0 counts_failed=0
+        local lines_read=0
+
+        _ci_print_task() { printf "  [%2d] %-58s %s\n" "$task_num" "$task_name" "$1"; }
+
+        _ci_parse_lines() {
+            local line
+            while IFS= read -r line; do
+                if [[ "$line" =~ ^TASK[[:space:]]\[(.+)\] ]]; then
+                    task_name="${BASH_REMATCH[1]}"
+                    ((task_num++)) || true; task_pending=true
+                elif [[ "$task_pending" == "true" ]]; then
+                    case "$line" in
+                        changed:*)        _ci_print_task "✎ changed"; ((counts_changed++)) || true; task_pending=false ;;
+                        ok:*)             _ci_print_task "· ok";      ((counts_ok++))      || true; task_pending=false ;;
+                        failed:*|fatal:*) _ci_print_task "✗ FAILED";  ((counts_failed++))  || true; task_pending=false ;;
+                        skipping:*)       _ci_print_task "– skipped";  ((counts_skipped++)) || true; task_pending=false ;;
+                    esac
+                fi
+            done
+        }
+
         ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
         ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
         ANSIBLE_FORCE_COLOR=0 \
         ANSIBLE_NOCOLOR=1 \
-        "$ANSIBLE_PLAYBOOK" "${args[@]}" 2>&1 | tee -a "$LOG" || echo "$?" > "$status_file"
+        "$ANSIBLE_PLAYBOOK" "${args[@]}" > "$tmp_output" 2>&1 &
+        local ansible_pid=$!
+
+        while kill -0 "$ansible_pid" 2>/dev/null; do
+            local new_count
+            new_count=$(wc -l < "$tmp_output" 2>/dev/null || echo 0)
+            if [[ $new_count -gt $lines_read ]]; then
+                _ci_parse_lines < <(tail -n +"$(( lines_read + 1 ))" "$tmp_output")
+                lines_read=$new_count
+            fi
+            sleep 0.2
+        done
+
+        local final_count
+        final_count=$(wc -l < "$tmp_output" 2>/dev/null || echo 0)
+        if [[ $final_count -gt $lines_read ]]; then
+            _ci_parse_lines < <(tail -n +"$(( lines_read + 1 ))" "$tmp_output")
+        fi
+
+        wait "$ansible_pid" || echo "$?" > "$status_file"
+
+        printf "\n  Tasks: %d  —  ok: %d  changed: %d  skipped: %d  failed: %d\n" \
+            "$task_num" "$counts_ok" "$counts_changed" "$counts_skipped" "$counts_failed"
+        echo "::endgroup::"
+
+        sed 's/\x1b\[[0-9;]*[mGKHF]//g; s/\r//g' "$tmp_output" >> "$LOG"
         local status
         status=$(cat "$status_file")
-        rm -f "$status_file"
+        rm -f "$status_file" "$tmp_output"
         return "$status"
     fi
 

@@ -9,6 +9,9 @@ concurrency:
   group: drift-detection
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   drift-prod-aws:
     name: Detect drift — AWS prod

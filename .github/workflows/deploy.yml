@@ -50,10 +50,18 @@ jobs:
         with:
           terraform_version: latest
 
+      - name: Cache pip packages
+        if: inputs.action == 'deploy'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('ansible/requirements-deploy.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+
       - name: Setup Ansible
         if: inputs.action == 'deploy'
         run: |
-          pip install ansible PyMySQL --quiet
+          pip install -r ansible/requirements-deploy.txt --quiet
           ansible-galaxy collection install community.mysql ansible.posix
 
       - name: Reconstruct secrets

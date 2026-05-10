@@ -32,6 +32,14 @@ backup_cron_enabled: true
 cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 
 # ========================
+#  SSL
+# ========================
+# All environments are behind Cloudflare proxy (Full SSL mode) — self-signed on origin is sufficient.
+# Set to false to enable Let's Encrypt certbot (DNS-01 via Cloudflare or webroot).
+# To use a custom certificate instead, place it in secrets/ssl/letsencrypt/live/<domain>/.
+ssl_skip_certbot: true
+
+# ========================
 #  Monitoring (Grafana + VictoriaMetrics)
 # ========================
 grafana_version: "13.0.1"
