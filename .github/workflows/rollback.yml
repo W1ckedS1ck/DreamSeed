@@ -24,10 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: latest
-
       - name: Reconstruct secrets
         env:
           ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
@@ -45,30 +41,29 @@ jobs:
           echo "$SSH_KEY" > ~/.ssh/Vitali.pem
           chmod 600 ~/.ssh/Vitali.pem
 
-      - name: Get server IP from Terraform state
+      - name: Get server IP
         id: server-ip
-        env:
-          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
+          set -a
+          source secrets/.env
+          set +a
+
           ENV="${{ inputs.environment }}"
 
-          # Determine provider
           case "$ENV" in
-            prod|dev-aws)
-              PROVIDER="aws"
+            prod)
+              IP="$PROD_EIP"
+              ;;
+            dev-aws)
+              IP="$DEV_AWS_EIP"
               ;;
             dev-hetz)
-              PROVIDER="hetzner"
+              IP="$DEV_HETZ_EIP"
               ;;
           esac
 
-          cd "terraform/$PROVIDER"
-          terraform init -backend=true -upgrade=false > /dev/null 2>&1
-
-          IP=$(terraform output -raw server_ipv4 2>/dev/null || echo "")
-
           if [ -z "$IP" ]; then
-            echo "ERROR: Could not get server IP from Terraform state"
+            echo "ERROR: Could not find IP for environment $ENV"
             exit 1
           fi
 
