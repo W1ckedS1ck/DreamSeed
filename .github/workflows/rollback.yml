@@ -1,0 +1,101 @@
+name: Rollback Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [prod, dev-aws, dev-hetz]
+
+concurrency:
+  group: rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  rollback:
+    name: Rollback ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: latest
+
+      - name: Reconstruct secrets
+        env:
+          ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT_PASS: ${{ secrets.VAULT_PASSWORD }}
+        run: |
+          mkdir -p secrets
+          echo "$ENV_FILE_B64" | base64 -d > secrets/.env
+          chmod 600 secrets/.env
+
+          echo -n "$VAULT_PASS" > ~/.vault_pass_dreamseed
+          chmod 600 ~/.vault_pass_dreamseed
+
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/Vitali.pem
+          chmod 600 ~/.ssh/Vitali.pem
+
+      - name: Get server IP from Terraform state
+        id: server-ip
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        run: |
+          ENV="${{ inputs.environment }}"
+
+          # Determine provider
+          case "$ENV" in
+            prod|dev-aws)
+              PROVIDER="aws"
+              ;;
+            dev-hetz)
+              PROVIDER="hetzner"
+              ;;
+          esac
+
+          cd "terraform/$PROVIDER"
+          terraform init -backend=true -upgrade=false > /dev/null 2>&1
+
+          IP=$(terraform output -raw server_ipv4 2>/dev/null || echo "")
+
+          if [ -z "$IP" ]; then
+            echo "ERROR: Could not get server IP from Terraform state"
+            exit 1
+          fi
+
+          echo "ip=$IP" >> $GITHUB_OUTPUT
+          echo "Found server IP: $IP"
+
+      - name: Restore latest backup
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              -i ~/.ssh/Vitali.pem \
+              ubuntu@${{ steps.server-ip.outputs.ip }} \
+              "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest"
+
+      - name: Send completion notification
+        if: always()
+        run: |
+          set -a
+          source secrets/.env
+          set +a
+
+          STATUS="$([[ $? -eq 0 ]] && echo '✅ SUCCESS' || echo '❌ FAILED')"
+          MSG="$STATUS — Rollback of ${{ inputs.environment }}
+          Restore script completed.
+          Check site and services manually."
+
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            -d "text=$MSG" \
+            -d "parse_mode=Markdown" > /dev/null || true

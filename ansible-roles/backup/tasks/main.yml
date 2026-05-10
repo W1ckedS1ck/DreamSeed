@@ -22,10 +22,9 @@
     - smart_backup.sh
     - upload_backups_to_gdrive.sh
     - RESTORE_ALL.sh
+    - send_report.sh
     - test_tg.sh
     - common_functions.sh
-    - daily_report.sh
-    - weekly_report.sh
 
 - name: Upload Telegram bot script
   ansible.builtin.copy:
@@ -92,7 +91,7 @@
     name: "DreamSeed daily report"
     minute: "30"
     hour: "15"
-    job: "{{ scripts_dir_remote }}/daily_report.sh"
+    job: "{{ scripts_dir_remote }}/send_report.sh daily"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
@@ -102,6 +101,6 @@
     minute: "30"
     hour: "18"
     weekday: "0"
-    job: "{{ scripts_dir_remote }}/weekly_report.sh"
+    job: "{{ scripts_dir_remote }}/send_report.sh weekly"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
