@@ -7,7 +7,7 @@ source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
 # Parse mode
-MODE="${1:-interactive}"  # interactive or auto-latest
+MODE="${1:-interactive}"  # interactive or --auto-latest
 
 # ====== Settings ======
 if systemctl is-active --quiet nginx 2>/dev/null; then
@@ -112,7 +112,7 @@ select_backup() {
 }
 
 # ====== INTERACTIVE MODE ======
-if [ "$MODE" = "interactive" ]; then
+if [ "$MODE" != "--auto-latest" ]; then
     # ====== Header ======
     print_header "Restore DreamSeed"
 
@@ -355,7 +355,7 @@ fi
 sudo mkdir -p "$PROJECT_DIR/core/cache/logs"
 sudo rm -rf "$PROJECT_DIR/core/cache"/*
 sudo chown -R www-data:www-data "$PROJECT_DIR/core/cache"
-sudo chmod -R 755 "$PROJECT_DIR/core/cache"
+sudo chmod -R 775 "$PROJECT_DIR/core/cache"
 echo -e "${GREEN}✓ Cache cleared${NC}"
 echo ""
 
