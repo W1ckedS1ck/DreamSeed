@@ -64,6 +64,9 @@ jobs:
           set -a
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
           set +a
+          echo "::add-mask::$DEV_AWS_ACCESS_KEY"
+          echo "::add-mask::$DEV_AWS_SECRET_KEY"
+          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY" >> "$GITHUB_ENV"
           echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY" >> "$GITHUB_ENV"
           echo "AWS_DEFAULT_REGION=$DEV_AWS_REGION" >> "$GITHUB_ENV"
