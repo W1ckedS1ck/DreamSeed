@@ -270,10 +270,11 @@ jobs:
           ROWS="${{ steps.db_tests.outputs.content_rows }}"
 
           [ "$RESTORE" = "success" ] && STATUS="✅ SUCCESS" || STATUS="❌ FAILED"
-          MSG="$STATUS — Backup Restoration Test $(date '+%Y-%m-%d %H:%M')
-Restore: $(ok $RESTORE) | DB: $(ok $DB) | Web: $(ok $WEB) | MODX: $(ok $MODX)
-Content rows: ${ROWS:-n/a} | Destroy: $(ok $DESTROY)
-Server: ${{ steps.terraform.outputs.server_ipv4 }}"
+          MSG=$(printf '%s\n%s\n%s\n%s' \
+            "$STATUS — Backup Restoration Test $(date '+%Y-%m-%d %H:%M')" \
+            "Restore: $(ok $RESTORE) | DB: $(ok $DB) | Web: $(ok $WEB) | MODX: $(ok $MODX)" \
+            "Content rows: ${ROWS:-n/a} | Destroy: $(ok $DESTROY)" \
+            "Server: ${{ steps.terraform.outputs.server_ipv4 }}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
