@@ -214,11 +214,43 @@ jobs:
             "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; exit 1; }
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || { echo "[FAIL] Assets missing"; exit 1; }
-          BODY=$(curl -sk http://$SERVER_IP/ -L --max-redirs 3 --max-time 10)
+          BODY=$(curl -sk \
+            --resolve "test.dreamseed.online:80:$SERVER_IP" \
+            --resolve "test.dreamseed.online:443:$SERVER_IP" \
+            http://test.dreamseed.online/ -L --max-redirs 3 --max-time 10 || true)
           echo "$BODY" | grep -qi "fatal error\|parse error\|<b>Warning" \
             && { echo "[FAIL] PHP errors in response"; exit 1; } || echo "[PASS] No PHP errors"
-          echo "$BODY" | grep -q "<html" \
+          echo "$BODY" | grep -qi "<html" \
             && echo "[PASS] HTML response" || { echo "[FAIL] No HTML in response"; exit 1; }
+
+      - name: DAST scan (nuclei)
+        id: dast
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "$SERVER_IP test.dreamseed.online" | sudo tee -a /etc/hosts > /dev/null
+
+          NUCLEI_VER=$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'][1:])")
+          wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VER}/nuclei_${NUCLEI_VER}_linux_amd64.zip"
+          unzip -q nuclei_*.zip nuclei && chmod +x ./nuclei
+          ./nuclei -update-templates -silent
+
+          ./nuclei \
+            -u "https://test.dreamseed.online/" \
+            -tags "misconfig,exposure,headers,tech" \
+            -severity "low,medium,high,critical" \
+            -silent -json-export /tmp/nuclei.json || true
+
+          COUNT=$(wc -l < /tmp/nuclei.json 2>/dev/null || echo 0)
+          echo "dast_count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "DAST findings: $COUNT"
+          cat > /tmp/show_findings.py << 'PYEOF'
+          import json
+          for line in open('/tmp/nuclei.json'):
+              f = json.loads(line)
+              print(f"  [{f['info']['severity'].upper()}] {f['template-id']}: {f['matched-at']}")
+          PYEOF
+          [ "$COUNT" -gt 0 ] && python3 /tmp/show_findings.py || true
 
       - name: Run disk check
         run: |
@@ -271,12 +303,14 @@ jobs:
           MODX="${{ steps.modx_tests.outcome }}"
           DESTROY="${{ steps.destroy.outcome }}"
           ROWS="${{ steps.db_tests.outputs.content_rows }}"
+          DAST_COUNT="${{ steps.dast.outputs.dast_count }}"
 
           [ "$RESTORE" = "success" ] && STATUS="✅ SUCCESS" || STATUS="❌ FAILED"
-          MSG=$(printf '%s\n%s\n%s\n%s' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s' \
             "$STATUS — Backup Restoration Test $(date '+%Y-%m-%d %H:%M')" \
             "Restore: $(ok $RESTORE) | DB: $(ok $DB) | Web: $(ok $WEB) | MODX: $(ok $MODX)" \
             "Content rows: ${ROWS:-n/a} | Destroy: $(ok $DESTROY)" \
+            "DAST: ${DAST_COUNT:-?} findings" \
             "Server: ${{ steps.terraform.outputs.server_ipv4 }}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
