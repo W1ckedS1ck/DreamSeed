@@ -297,6 +297,7 @@ jobs:
           set +a
 
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
+          ok_dast() { [ -z "$1" ] && echo "❓" || { [ "$1" -eq 0 ] && echo "✅" || echo "❌"; }; }
           RESTORE="${{ steps.deploy_db.outcome }}"
           DB="${{ steps.db_tests.outcome }}"
           WEB="${{ steps.web_tests.outcome }}"
@@ -306,12 +307,12 @@ jobs:
           DAST_COUNT="${{ steps.dast.outputs.dast_count }}"
 
           [ "$RESTORE" = "success" ] && STATUS="✅ SUCCESS" || STATUS="❌ FAILED"
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s' \
-            "$STATUS — Backup Restoration Test $(date '+%Y-%m-%d %H:%M')" \
-            "Restore: $(ok $RESTORE) | DB: $(ok $DB) | Web: $(ok $WEB) | MODX: $(ok $MODX)" \
-            "Content rows: ${ROWS:-n/a} | Destroy: $(ok $DESTROY)" \
-            "DAST: ${DAST_COUNT:-?} findings" \
-            "Server: ${{ steps.terraform.outputs.server_ipv4 }}")
+          MSG=$(printf '%s\n%s\n\n%s\n%s\n%s' \
+            "$STATUS — Backup Restoration Test" \
+            "📅 $(date '+%Y-%m-%d %H:%M')" \
+            "Restore $(ok $RESTORE) · DB $(ok $DB) · Web $(ok $WEB) · MODX $(ok $MODX)" \
+            "Rows: ${ROWS:-n/a} · DAST: $(ok_dast $DAST_COUNT) ${DAST_COUNT:-?} · Destroy $(ok $DESTROY)" \
+            "🖥 ${{ steps.terraform.outputs.server_ipv4 }}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
