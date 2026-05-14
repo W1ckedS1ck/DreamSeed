@@ -51,9 +51,11 @@ format_name() {
 }
 
 send_tg() {
+    local thread_arg=()
+    [[ -n "$TG_THREAD_ID" ]] && thread_arg=(-d "message_thread_id=$TG_THREAD_ID")
     curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
          -d chat_id="$TG_CHAT_ID" \
-         -d "message_thread_id=$TG_THREAD_ID" \
+         "${thread_arg[@]}" \
          -d parse_mode="MarkdownV2" \
          -d text="$1" >/dev/null 2>&1
 }

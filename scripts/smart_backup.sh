@@ -83,9 +83,9 @@ LAST_PROJECT_DATE=$([ -n "$LAST_PROJECT_FILE" ] && basename "$LAST_PROJECT_FILE"
 DB_STATUS=""
 DB_PATH=""
 
-mysqldump "$DB_NAME" 2>/dev/null | gzip > "$DB_BACKUP"
+mysqldump "$DB_NAME" | gzip > "$DB_BACKUP"
 
-if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+if [ "${PIPESTATUS[0]}" -eq 0 ] && [ -s "$DB_BACKUP" ]; then
     DB_STATUS="✅ Database backed up"
     DB_PATH="$DB_BACKUP"
     rotate_files "$BACKUP_DIR/db/db_${DB_NAME}_*.sql.gz" "$DB_KEEP"

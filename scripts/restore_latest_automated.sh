@@ -68,7 +68,12 @@ SERVICES_STOPPED=1
 
 # Restore project
 echo "Extracting project files..."
-sudo rm -rf "$PROJECT_DIR"
+if [[ "$PROJECT_DIR" == /var/www/* ]]; then
+    sudo rm -rf "$PROJECT_DIR"
+else
+    echo "ERROR: safety check failed — refused to delete \$PROJECT_DIR: $PROJECT_DIR" >&2
+    exit 1
+fi
 sudo mkdir -p "$PROJECT_DIR"
 sudo tar -xzf "$LATEST_PROJECT" -C "$(dirname "$PROJECT_DIR")"
 

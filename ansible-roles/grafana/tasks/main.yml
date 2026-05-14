@@ -134,16 +134,12 @@
     state: started
     enabled: true
 
-- name: Give Grafana time to initialize
-  ansible.builtin.command: sleep 8
-  changed_when: false
-
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 10
+  retries: 14
   delay: 2
 
 - name: Check if Grafana admin password needs reset

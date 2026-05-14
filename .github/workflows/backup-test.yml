@@ -11,7 +11,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  CF_ZONE_ID: 3f6dd6599b5b95ee73a0e08b70292858
+  CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
 
 jobs:
   test-restore:
@@ -28,7 +28,7 @@ jobs:
         with:
           terraform_version: latest
 
-      - name: Reconstruct secrets
+      - name: Setup environment
         env:
           ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
           VAULT_PASS: ${{ secrets.VAULT_PASSWORD }}
@@ -51,26 +51,25 @@ jobs:
             chmod 600 secrets/rclone.conf
           fi
 
-      - name: Install Ansible
-        run: |
-          pip install -r ansible/requirements-deploy.txt --quiet
-          ansible-galaxy collection install community.mysql ansible.posix
+          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
 
-      - name: Prepare SSH public key
-        run: ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
-
-      - name: Export Terraform credentials
-        run: |
           set -a
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
           set +a
           echo "::add-mask::$DEV_AWS_ACCESS_KEY"
           echo "::add-mask::$DEV_AWS_SECRET_KEY"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+          echo "::add-mask::$DB_PASS"
+          echo "::add-mask::$TG_TOKEN"
           echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY" >> "$GITHUB_ENV"
           echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY" >> "$GITHUB_ENV"
           echo "AWS_DEFAULT_REGION=$DEV_AWS_REGION" >> "$GITHUB_ENV"
           echo "TF_VAR_cloudflare_api_token=$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Install Ansible
+        run: |
+          pip install -r ansible/requirements-deploy.txt --quiet
+          ansible-galaxy collection install community.mysql ansible.posix
 
       - name: Terraform Init
         working-directory: terraform/aws
@@ -92,12 +91,13 @@ jobs:
             -var="environment=test"
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
 
-      - name: Register DNS in Cloudflare
+      - name: Provision & wait
         run: |
           set -a
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
           set +a
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+
           RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
@@ -114,9 +114,6 @@ jobs:
           fi
           echo "DNS: test.dreamseed.online -> $SERVER_IP"
 
-      - name: Wait for SSH
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "Waiting for SSH on $SERVER_IP..."
           for i in $(seq 1 40); do
             if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP "exit 0" 2>/dev/null; then
@@ -128,16 +125,17 @@ jobs:
             sleep 10
           done
 
-      - name: Wait for cloud-init
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "sudo cloud-init status --wait" || true
           sleep 15
 
-      - name: Generate inventory
+      - name: Generate config
         run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+
           cat > ansible/inventory/hosts-test.yml <<EOF
           all:
             hosts:
@@ -154,11 +152,6 @@ jobs:
               admin_email: admin@dreamseed.online
           EOF
 
-      - name: Generate extra vars file
-        run: |
-          set -a
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
-          set +a
           cat > /tmp/test_vault.yml <<EOF
           db_pass: "${DB_PASS}"
           server_ip: "${{ steps.terraform.outputs.server_ipv4 }}"
@@ -258,28 +251,28 @@ jobs:
           DISK_USAGE=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'")
           echo "Disk usage: $DISK_USAGE%"
-          [ "$DISK_USAGE" -lt 90 ] && echo "[PASS] Disk space OK" || echo "[WARN] Disk space low"
+          [ "${DISK_USAGE:-100}" -lt 90 ] && echo "[PASS] Disk space OK" || echo "[WARN] Disk space low"
 
       - name: Security audit (lynis)
         id: lynis
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           SCORE=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "sudo apt-get install -y lynis > /dev/null 2>&1; \
-             sudo lynis audit system --quiet --no-colors --report-file /tmp/lynis.dat || true; \
-             grep 'hardening_index' /tmp/lynis.dat | cut -d= -f2" 2>/dev/null || echo "?")
+            "cd /tmp && rm -rf lynis && git clone --depth 1 https://github.com/CISOfy/lynis && \
+             cd lynis && sudo chown -R root:root . && \
+             sudo ./lynis audit system --quick --no-colors 2>/dev/null | \
+             grep -i 'hardening index' | grep -oE '[0-9]+' | head -1" 2>/dev/null || echo "?")
+          [ -z "$SCORE" ] && SCORE="?"
           echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
           echo "Hardening index: $SCORE"
 
-      - name: Cleanup test files
-        run: rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
-
-      - name: Delete DNS record
+      - name: Cleanup
         if: always()
         run: |
           set -a
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
           set +a
+          rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
           RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")

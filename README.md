@@ -44,7 +44,7 @@ The experiment runs until summer 2026, after which full anonymous results are pu
 The developer writes features; I make sure they reach the world. I designed and built the entire infrastructure layer from scratch — everything below the application:
 
 - **Cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud
-- **Server automation** — 20+ idempotent Ansible roles covering the full server lifecycle
+- **Server automation** — 15+ idempotent Ansible roles covering the full server lifecycle
 - **Deployment pipeline** — single `./deploy.sh` command takes the platform from zero to live
 - **Security** — SSH hardening, Fail2ban with a MODX-specific admin login filter, Ansible Vault for secrets, cloud-native firewalls
 - **Observability** — Prometheus + VictoriaMetrics + Grafana stack deployed automatically; Telegram alerts for the team
@@ -59,7 +59,7 @@ The developer writes features; I make sure they reach the world. I designed and 
 | Layer | Tools |
 |---|---|
 | **Infrastructure** | Terraform · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud |
-| **Configuration** | Ansible (20+ custom roles) |
+| **Configuration** | Ansible (15+ custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt via `ssl_skip_certbot: false` |
 | **Monitoring** | Prometheus · VictoriaMetrics · Grafana · Node/Apache/Nginx/MySQL exporters |
@@ -142,14 +142,16 @@ DreamSeed/
 │   ├── playbook-04.5-backup.yml  # Backup cron + Telegram bot
 │   ├── playbook-05-grafana.yml   # Grafana dashboards
 │   └── playbook-06-security.yml  # Hardening
-├── ansible-roles/            # 20+ reusable roles (nginx, mariadb, ssl, …)
-├── scripts/                  # Backup, restore, Telegram bot, daily/weekly reports
-├── configs/                  # Fail2ban jails (incl. MODX admin filter), Grafana dashboards
+├── ansible-roles/            # 15 reusable roles (nginx, mariadb, ssl, …)
+├── scripts/                  # Backup, restore, Telegram bot, daily/weekly reports, secrets upload
+├── configs/                  # Fail2ban jails (incl. MODX admin filter)
 ├── secrets/                  # Ansible Vault encrypted secrets (gitignored)
 └── .github/workflows/
     ├── ci.yml                # Full lint + security + validation pipeline
     ├── deploy.yml            # One-button deploy via GitHub Actions (no local machine needed)
-    └── drift-detection.yml   # Daily terraform plan against prod — alerts on infrastructure drift
+    ├── drift-detection.yml   # Daily terraform plan against prod — alerts on infrastructure drift
+    ├── backup-test.yml       # Automated backup/restore verification (daily)
+    └── rollback.yml          # Emergency rollback to previous backup
 ```
 
 ---
@@ -171,10 +173,13 @@ Grafana dashboards auto-wired to VictoriaMetrics with Node, Nginx/Apache, and My
 ### 💾 Real Backups, Tested Restores
 Daily MariaDB + file backups with rotation to Google Drive via rclone. `RESTORE_ALL.sh` gives one-command disaster recovery — validated in a full backup drill before going to production.
 
-### 🧪 CI Pipeline — 7 Parallel Jobs + Drift Detection
+### 🧪 CI Pipeline — 7 Parallel Jobs + Additional Workflows
 ShellCheck · ruff · ansible-lint · tflint · tfsec · gitleaks · terraform validate
 
-A separate **Drift Detection** workflow runs on a daily schedule, executing `terraform plan` against production state in Terraform Cloud. Any deviation between live AWS infrastructure and declared state fails the job with a `::error` annotation.
+Additional workflows:
+- **Drift Detection** — daily `terraform plan` against prod (Terraform Cloud)
+- **Backup Test** — daily automated backup/restore verification
+- **Rollback** — emergency rollback to previous backup
 
 ### 🛑 Production Safeguards
 Any `deploy.sh prod` run — whether deploying or destroying — requires manual confirmation before touching production.

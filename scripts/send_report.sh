@@ -88,7 +88,7 @@ if [ "$REPORT_TYPE" = "daily" ]; then
 📅 $(date '+%d.%m.%Y %H:%M')
 ============================"
 
-    send_tg "$(escape_md2 "$MSG")"
+    send_tg "$MSG"
 
 # ====== WEEKLY REPORT ======
 elif [ "$REPORT_TYPE" = "weekly" ]; then
@@ -143,7 +143,7 @@ elif [ "$REPORT_TYPE" = "weekly" ]; then
 📅 $(date '+%d.%m.%Y %H:%M')
 ============================"
 
-    send_tg "$(escape_md2 "$MSG")"
+    send_tg "$MSG"
 
 else
     echo "Usage: $0 {daily|weekly}"

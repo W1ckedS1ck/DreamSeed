@@ -4,27 +4,12 @@ import sys
 import os
 from email.message import EmailMessage
 from email.utils import make_msgid, formatdate
-from pathlib import Path
 
-
-def load_env(env_path: Path) -> None:
-    """Simple .env loader without third-party dependencies."""
-    if not env_path.exists():
-        print(f"[ERROR] File {env_path} not found!", file=sys.stderr)
-        sys.exit(1)
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            # Strip surrounding quotes if present
-            value = value.strip().strip('"').strip("'")
-            os.environ.setdefault(key.strip(), value)
+from env_loader import load_env
 
 
 # --- Load secrets from .env ---
-load_env(Path(__file__).parent / ".env")
+load_env()
 
 SMTP_SERVER = os.environ["SMTP_SERVER"]
 SMTP_PORT = int(os.environ["SMTP_PORT"])
