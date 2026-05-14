@@ -102,7 +102,7 @@ jobs:
           [[ -n "${{ inputs.server_ip }}" ]] && IP_FLAG="-i ${{ inputs.server_ip }}"
 
           # shellcheck disable=SC2086
-          ./deploy.sh "${{ inputs.environment }}" $WEB_FLAG $IP_FLAG
+          ./deploy.sh "${{ inputs.environment }}" $WEB_FLAG $IP_FLAG -p
 
       - name: Destroy
         if: inputs.action == 'destroy'
