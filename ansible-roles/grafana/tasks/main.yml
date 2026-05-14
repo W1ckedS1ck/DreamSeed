@@ -175,4 +175,6 @@
   ansible.builtin.debug:
     msg: "WARNING: Grafana CLI password reset failed"
   when:
-    - grafana_cli_result is defined and grafana_cli_result.rc != 0
+    - grafana_cli_result is defined
+    - grafana_cli_result is not skipped
+    - grafana_cli_result.rc != 0
