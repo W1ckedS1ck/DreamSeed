@@ -154,6 +154,8 @@ export_tf_env() {
         [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && \
             export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
     fi
+    [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && export TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN"
+    [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]] && export TF_VAR_cloudflare_zone_id="$CLOUDFLARE_ZONE_ID"
     if [[ "$TF_PROVIDER" == "hetzner" ]]; then
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
     fi
