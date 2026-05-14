@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@2.1.1
+        uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: '.'
           severity: error
