@@ -119,7 +119,7 @@ jobs:
       - name: Install Infracost CLI v2
         run: |
           curl -fsSL https://raw.githubusercontent.com/infracost/cli/master/scripts/install.sh | sh
-          echo "INFRACOST_API_KEY=${{ secrets.INFRACOST_API_KEY }}" >> "$GITHUB_ENV"
+          echo "INFRACOST_CLI_AUTHENTICATION_TOKEN=${{ secrets.INFRACOST_API_KEY }}" >> "$GITHUB_ENV"
       - name: Generate dummy SSH key for AWS
         run: |
           mkdir -p /tmp/dummy-ssh
