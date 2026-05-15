@@ -116,49 +116,31 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Infracost
-        uses: infracost/actions/setup@v3
-        with:
-          api-key: ${{ secrets.INFRACOST_API_KEY }}
-      - name: Generate dummy SSH key for AWS
+      - name: Install Infracost CLI
         run: |
-          mkdir -p /tmp/dummy-ssh
-          ssh-keygen -t rsa -b 2048 -f /tmp/dummy-ssh/id_rsa -N "" -q
-      - name: Run Infracost breakdown on all providers
+          curl -fsSL https://raw.githubusercontent.com/infracost/cli/master/scripts/install.sh | sh
+      - name: Run Infracost scan on all providers
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_CLI_AUTHENTICATION_TOKEN }}
         run: |
           infracost_jsons=()
-          infracost --version
           for dir in terraform/*/; do
             provider=$(basename "$dir")
             echo "=== Infracost: $provider ==="
-            outfile="/tmp/infracost-${provider}.json"
-            varargs=""
-            case "$provider" in
-              aws)
-                varargs="--terraform-var=ssh_public_key_path=/tmp/dummy-ssh/id_rsa"
-                ;;
-              hetzner)
-                varargs="--terraform-var=hcloud_token=dummy"
-                ;;
-            esac
-            # shellcheck disable=SC2086
-            infracost breakdown --path="$dir" \
-              --terraform-force-cli=false \
-              $varargs \
-              --format=json --out-file="$outfile"
-            infracost_jsons+=("$outfile")
+            (
+              cd "$dir"
+              infracost scan . 2>/dev/null
+              infracost inspect --json > "/tmp/infracost-${provider}.json"
+            )
+            infracost_jsons+=("/tmp/infracost-${provider}.json")
           done
           echo "json_paths=${infracost_jsons[*]}" >> "$GITHUB_ENV"
-      - name: Combine Infracost outputs
+      - name: Combine and post Infracost comment
         if: github.event_name == 'pull_request'
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_CLI_AUTHENTICATION_TOKEN }}
         run: |
-          # shellcheck disable=SC2086
-          infracost output --path ${{ env.json_paths }} \
-            --format=json --out-file=/tmp/infracost-combined.json
-      - name: Post Infracost comment
-        if: github.event_name == 'pull_request'
-        run: |
-          infracost comment github --path=/tmp/infracost-combined.json \
+          infracost comment github --path /tmp/infracost-aws.json \
             --repo=$GITHUB_REPOSITORY \
             --github-token=${{ github.token }} \
             --pull-request=${{ github.event.pull_request.number }} \
