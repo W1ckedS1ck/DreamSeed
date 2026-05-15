@@ -40,8 +40,8 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]     # 24.04 LTS
-#   values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-resolute-26.04-amd64-server-*"]   # 26.04 LTS
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"] # 24.04 LTS
+    #   values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-resolute-26.04-amd64-server-*"]   # 26.04 LTS
   }
 
   filter {
@@ -85,9 +85,20 @@ variable "cloudflare_api_token" {
   default     = ""
 }
 
+locals {
+  environment_tag = var.environment == "prod" ? "Prod" : "Dev"
+  service_tag     = "DreamSeed"
+}
+
 resource "aws_key_pair" "deploy" {
   key_name   = "dreamseed-key-${var.environment}"
   public_key = file(pathexpand(var.ssh_public_key_path))
+
+  tags = {
+    Name        = "dreamseed-key-${var.environment}"
+    Environment = local.environment_tag
+    Service     = local.service_tag
+  }
 }
 
 resource "aws_security_group" "web" {
@@ -128,15 +139,17 @@ resource "aws_security_group" "web" {
 
   tags = {
     Name        = "dreamseed-sg-${var.environment}"
-    Environment = var.environment
+    Environment = local.environment_tag
+    Service     = local.service_tag
   }
 }
 
 resource "aws_instance" "web" {
-  ami             = data.aws_ami.ubuntu.id
-  instance_type   = var.instance_type
-  key_name        = aws_key_pair.deploy.key_name
-  security_groups = [aws_security_group.web.name]
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.instance_type
+  key_name                    = aws_key_pair.deploy.key_name
+  security_groups             = [aws_security_group.web.name]
+  associate_public_ip_address = false
 
   root_block_device {
     volume_size = 30
@@ -161,7 +174,8 @@ resource "aws_instance" "web" {
 
   tags = {
     Name        = "dreamseed-${var.environment}"
-    Environment = var.environment
+    Environment = local.environment_tag
+    Service     = local.service_tag
   }
 }
 
@@ -170,7 +184,8 @@ resource "aws_eip" "dynamic" {
   domain = "vpc"
   tags = {
     Name        = "dreamseed-dynamic-${var.environment}"
-    Environment = var.environment
+    Environment = local.environment_tag
+    Service     = local.service_tag
   }
 }
 
