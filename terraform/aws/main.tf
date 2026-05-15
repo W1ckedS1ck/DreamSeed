@@ -155,6 +155,11 @@ resource "aws_instance" "web" {
     volume_size = 30
     volume_type = "gp3"
     encrypted   = true
+    tags = {
+      Name        = "dreamseed-${var.environment}-root"
+      Environment = local.environment_tag
+      Service     = local.service_tag
+    }
   }
 
   user_data = <<-EOF
