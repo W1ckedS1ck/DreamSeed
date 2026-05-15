@@ -127,7 +127,7 @@ jobs:
             provider=$(basename "$dir")
             echo "=== Infracost: $provider ==="
             outfile="/tmp/infracost-${provider}.json"
-            infracost scan "$dir" --format=json --out-file="$outfile"
+            infracost scan "$dir" --output json > "$outfile"
             infracost_jsons+=("$outfile")
           done
           echo "json_paths=${infracost_jsons[*]}" >> "$GITHUB_ENV"
