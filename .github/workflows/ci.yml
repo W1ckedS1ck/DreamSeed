@@ -120,24 +120,37 @@ jobs:
         uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
-      - name: Generate dummy SSH key for AWS plan
+      - name: Generate dummy SSH key for AWS
         run: |
           mkdir -p /tmp/dummy-ssh
           ssh-keygen -t rsa -b 2048 -f /tmp/dummy-ssh/id_rsa -N "" -q
-      - name: Run Infracost on AWS
+      - name: Run Infracost on all Terraform providers
         run: |
-          infracost breakdown --path=terraform/aws \
-            --terraform-plan-flags="-var=ssh_public_key_path=/tmp/dummy-ssh/id_rsa -var=environment=ci -var=domain= -var=elastic_ip_allocation_id= -var=cloudflare_api_token= -var=cloudflare_zone_id=" \
-            --format=json --out-file=/tmp/infracost-aws.json
-      - name: Run Infracost on Hetzner
-        run: |
-          infracost breakdown --path=terraform/hetzner \
-            --terraform-plan-flags="-var=hcloud_token=dummy_token -var=environment=ci" \
-            --format=json --out-file=/tmp/infracost-hetzner.json
+          infracost_jsons=()
+          for dir in terraform/*/; do
+            provider=$(basename "$dir")
+            flags="-var=environment=ci"
+            case "$provider" in
+              aws)
+                flags="$flags -var=ssh_public_key_path=/tmp/dummy-ssh/id_rsa -var=domain= -var=elastic_ip_allocation_id= -var=cloudflare_api_token= -var=cloudflare_zone_id="
+                ;;
+              hetzner)
+                flags="$flags -var=hcloud_token=dummy_token"
+                ;;
+            esac
+            echo "=== Infracost: $provider ==="
+            outfile="/tmp/infracost-${provider}.json"
+            infracost breakdown --path="$dir" \
+              --terraform-plan-flags="$flags" \
+              --format=json --out-file="$outfile"
+            infracost_jsons+=("$outfile")
+          done
+          echo "json_paths=${infracost_jsons[*]}" >> "$GITHUB_ENV"
       - name: Combine Infracost outputs
         if: github.event_name == 'pull_request'
         run: |
-          infracost output --path /tmp/infracost-aws.json --path /tmp/infracost-hetzner.json \
+          # shellcheck disable=SC2086
+          infracost output --path ${{ env.json_paths }} \
             --format=json --out-file=/tmp/infracost-combined.json
       - name: Post Infracost comment
         if: github.event_name == 'pull_request'
