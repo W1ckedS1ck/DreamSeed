@@ -119,11 +119,11 @@ jobs:
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: latest
-      - name: Setup Infracost
-        uses: infracost/actions/setup@v3
-        with:
-          api-key: ${{ secrets.INFRACOST_API_KEY }}
-      - name: Run Infracost scan on all Terraform providers
+      - name: Install Infracost CLI v2
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/infracost/cli/master/scripts/install.sh | sh
+          echo "INFRACOST_API_KEY=${{ secrets.INFRACOST_API_KEY }}" >> "$GITHUB_ENV"
+      - name: Run Infracost scan on all providers
         run: |
           infracost_jsons=()
           for dir in terraform/*/; do
