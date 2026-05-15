@@ -28,14 +28,13 @@
       - "php{{ php_version }}-curl"
       - "php{{ php_version }}-mbstring"
       - "php{{ php_version }}-xml"
-      - "php{{ php_version }}-opcache"
       - mariadb-server
       - certbot
       - fail2ban
       - jq
       - rclone
       - unzip
-      - dnsutils
+      - bind9-dnsutils
       - python3-pymysql
     state: present
   environment:
