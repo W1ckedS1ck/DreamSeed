@@ -116,9 +116,6 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: latest
       - name: Install Infracost CLI v2
         run: |
           curl -fsSL https://raw.githubusercontent.com/infracost/cli/master/scripts/install.sh | sh
@@ -130,7 +127,7 @@ jobs:
             provider=$(basename "$dir")
             echo "=== Infracost: $provider ==="
             outfile="/tmp/infracost-${provider}.json"
-            infracost scan --path="$dir" --format=json --out-file="$outfile"
+            infracost scan "$dir" --format=json --out-file="$outfile"
             infracost_jsons+=("$outfile")
           done
           echo "json_paths=${infracost_jsons[*]}" >> "$GITHUB_ENV"
