@@ -106,3 +106,36 @@ jobs:
             terraform -chdir="$dir" init -backend=false -upgrade
             terraform -chdir="$dir" validate
           done
+
+  infracost:
+    name: Infracost
+    runs-on: ubuntu-latest
+    needs: [terraform-validate]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: latest
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+      - name: Generate dummy SSH key for AWS plan
+        run: |
+          mkdir -p /tmp/dummy-ssh
+          ssh-keygen -t rsa -b 2048 -f /tmp/dummy-ssh/id_rsa -N "" -q
+      - name: Run Infracost on AWS
+        run: |
+          infracost breakdown --path=terraform/aws \
+            --terraform-plan-flags="-var=ssh_public_key_path=/tmp/dummy-ssh/id_rsa -var=environment=ci -var=domain= -var=elastic_ip_allocation_id= -var=cloudflare_api_token= -var=cloudflare_zone_id=" \
+            --format=json --out-file=/tmp/infracost-aws.json
+      - name: Run Infracost on Hetzner
+        run: |
+          infracost breakdown --path=terraform/hetzner \
+            --terraform-plan-flags="-var=hcloud_token=dummy_token -var=environment=ci" \
+            --format=json --out-file=/tmp/infracost-hetzner.json
+      - name: Post Infracost comment
+        if: github.event_name == 'pull_request'
+        uses: infracost/actions/comment@v3
+        with:
+          path: /tmp/infracost-aws.json /tmp/infracost-hetzner.json
