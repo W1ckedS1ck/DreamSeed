@@ -134,8 +134,17 @@ jobs:
           infracost breakdown --path=terraform/hetzner \
             --terraform-plan-flags="-var=hcloud_token=dummy_token -var=environment=ci" \
             --format=json --out-file=/tmp/infracost-hetzner.json
+      - name: Combine Infracost outputs
+        if: github.event_name == 'pull_request'
+        run: |
+          infracost output --path /tmp/infracost-aws.json --path /tmp/infracost-hetzner.json \
+            --format=json --out-file=/tmp/infracost-combined.json
       - name: Post Infracost comment
         if: github.event_name == 'pull_request'
-        uses: infracost/actions/comment@v3
-        with:
-          path: /tmp/infracost-aws.json /tmp/infracost-hetzner.json
+        run: |
+          infracost comment github --path=/tmp/infracost-combined.json \
+            --repo=$GITHUB_REPOSITORY \
+            --github-token=${{ github.token }} \
+            --pull-request=${{ github.event.pull_request.number }} \
+            --behavior=update \
+            --tag=head
