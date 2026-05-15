@@ -132,8 +132,19 @@ jobs:
             provider=$(basename "$dir")
             echo "=== Infracost: $provider ==="
             outfile="/tmp/infracost-${provider}.json"
+            varargs=""
+            case "$provider" in
+              aws)
+                varargs="--terraform-var=ssh_public_key_path=/tmp/dummy-ssh/id_rsa"
+                ;;
+              hetzner)
+                varargs="--terraform-var=hcloud_token=dummy"
+                ;;
+            esac
+            # shellcheck disable=SC2086
             infracost breakdown --path="$dir" \
               --terraform-force-cli=false \
+              $varargs \
               --format=json --out-file="$outfile"
             infracost_jsons+=("$outfile")
           done
