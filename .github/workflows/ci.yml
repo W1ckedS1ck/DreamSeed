@@ -116,10 +116,10 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
-      - name: Install Infracost CLI v2
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/infracost/cli/master/scripts/install.sh | sh
-          echo "INFRACOST_CLI_AUTHENTICATION_TOKEN=${{ secrets.INFRACOST_API_KEY }}" >> "$GITHUB_ENV"
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
       - name: Generate dummy SSH key for AWS
         run: |
           mkdir -p /tmp/dummy-ssh
@@ -127,23 +127,14 @@ jobs:
       - name: Run Infracost breakdown on all providers
         run: |
           infracost_jsons=()
-          echo "=== Infracost version ==="
           infracost --version
           for dir in terraform/*/; do
             provider=$(basename "$dir")
             echo "=== Infracost: $provider ==="
             outfile="/tmp/infracost-${provider}.json"
-            varargs=""
-            case "$provider" in
-              aws)
-                varargs="--terraform-var=ssh_public_key_path=/tmp/dummy-ssh/id_rsa --terraform-var=environment=ci --terraform-var=domain= --terraform-var=elastic_ip_allocation_id= --terraform-var=cloudflare_api_token= --terraform-var=cloudflare_zone_id="
-                ;;
-              hetzner)
-                varargs="--terraform-var=hcloud_token=dummy --terraform-var=environment=ci"
-                ;;
-            esac
-            # shellcheck disable=SC2086
-            infracost breakdown --path="$dir" $varargs --format=json --out-file="$outfile"
+            infracost breakdown --path="$dir" \
+              --terraform-force-cli=false \
+              --format=json --out-file="$outfile"
             infracost_jsons+=("$outfile")
           done
           echo "json_paths=${infracost_jsons[*]}" >> "$GITHUB_ENV"
