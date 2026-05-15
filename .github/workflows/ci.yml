@@ -123,13 +123,14 @@ jobs:
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_CLI_AUTHENTICATION_TOKEN }}
         run: |
+          set +e
           infracost_jsons=()
           for dir in terraform/*/; do
             provider=$(basename "$dir")
             echo "=== Infracost: $provider ==="
             (
               cd "$dir"
-              infracost scan . 2>/dev/null
+              infracost scan .
               infracost inspect --json > "/tmp/infracost-${provider}.json"
             )
             infracost_jsons+=("/tmp/infracost-${provider}.json")
