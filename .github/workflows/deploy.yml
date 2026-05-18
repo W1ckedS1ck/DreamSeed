@@ -8,14 +8,24 @@ on:
         required: true
         type: choice
         options: [prod, dev-aws, dev-hetz]
+      action:
+        description: 'Action'
+        required: true
+        type: choice
+        options: [deploy, destroy]
+        default: deploy
       web_server:
-        description: 'Web server'
+        description: 'Web server (deploy only)'
         required: true
         type: choice
         options: [nginx, apache]
         default: nginx
       server_ip:
-        description: 'Skip Terraform — reconfigure existing server IP (leave empty for full deploy)'
+        description: 'Skip Terraform — reconfigure existing server IP (deploy only)'
+        required: false
+        type: string
+      confirm:
+        description: 'Destroy confirmation — type "destroy prod" to destroy prod, "destroy dev" for dev'
         required: false
         type: string
 
@@ -28,7 +38,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.environment }} (${{ inputs.web_server }})
+    name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -39,6 +49,7 @@ jobs:
           terraform_version: latest
 
       - name: Setup Ansible
+        if: inputs.action == 'deploy'
         run: |
           pip install ansible PyMySQL --quiet
           ansible-galaxy collection install community.mysql ansible.posix
@@ -67,6 +78,7 @@ jobs:
           fi
 
       - name: Deploy
+        if: inputs.action == 'deploy'
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
@@ -81,3 +93,31 @@ jobs:
 
           # shellcheck disable=SC2086
           ./deploy.sh "${{ inputs.environment }}" $WEB_FLAG $IP_FLAG
+
+      - name: Destroy
+        if: inputs.action == 'destroy'
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          DESTROY_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
+          export SSH_PUBLIC_KEY_PATH=~/.ssh/Vitali.pub
+
+          ENV="${{ inputs.environment }}"
+
+          # Prod requires typing "destroy prod"
+          if [[ "$ENV" == "prod" ]]; then
+            if [[ "$DESTROY_CONFIRM" != "destroy prod" ]]; then
+              echo "ERROR: To destroy prod you must set confirm = 'destroy prod'"
+              exit 1
+            fi
+          else
+            # Dev envs require typing "destroy dev"
+            if [[ "$DESTROY_CONFIRM" != "destroy dev" ]]; then
+              echo "ERROR: To destroy a dev environment you must set confirm = 'destroy dev'"
+              exit 1
+            fi
+          fi
+
+          export CI_DESTROY_CONFIRM="$DESTROY_CONFIRM"
+          ./deploy.sh "$ENV" -n -x

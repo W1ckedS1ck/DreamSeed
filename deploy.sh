@@ -525,7 +525,10 @@ terraform_select_workspace() {
 }
 
 terraform_destroy() {
-    if [[ "$TARGET" == "prod" ]]; then
+    if [[ "$TTY_MODE" == "false" ]]; then
+        # CI: confirmation already validated by the workflow step via CI_DESTROY_CONFIRM
+        echo "CI destroy confirmed for: $TARGET (CI_DESTROY_CONFIRM=${CI_DESTROY_CONFIRM:-})"
+    elif [[ "$TARGET" == "prod" ]]; then
 echo -e "\n${RED}╭──────────────────────────────────────────────────╮${NC}"
     printf "${RED}│${NC}  ${BOLD}%-48s${NC}${RED}│${NC}\n" "⚠  PRODUCTION DESTROY REQUESTED  ⚠"
     echo -e "${RED}│${NC}                                                  ${RED}│${NC}"
@@ -556,14 +559,24 @@ echo -e "\n${RED}╭────────────────────
 
     export_tf_env
 
+    local current_ws
+    current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
+    if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
+        run_with_spinner "Terraform init ($TARGET)" \
+            bash -c "cd '$TF_DIR' && '$TERRAFORM' init -reconfigure -input=false -no-color 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"
+    fi
+
     ( cd "$TF_DIR" && terraform_select_workspace ) >> "$TF_LOG" 2>&1
     if ( cd "$TF_DIR" && "$TERRAFORM" show -no-color 2>/dev/null ) | grep -q "No state"; then
         echo -e "${YELLOW}No resources to destroy${NC}"; return 0
     fi
-    local tf_destroy_extra_vars=""
-    [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}'"
-    run_with_spinner "Destroying resources ($TARGET)" \
-        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} >> '$TF_LOG' 2>&1"
+    local tf_destroy_var_arg=""
+    [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+    echo "  ━━━━━━━━ ✕ Destroying resources ($TARGET)"
+    # TFC exits 1 when there is nothing to destroy — use || true and check log instead
+    # shellcheck disable=SC2086
+    ( cd "$TF_DIR" && "$TERRAFORM" destroy -auto-approve -no-color $tf_destroy_var_arg 2>&1 | tee -a "$TF_LOG" ) || true
+    grep -q "Destroy complete" "$TF_LOG" || step_fail "Terraform destroy failed (check $TF_LOG)"
     
     local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
     rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
