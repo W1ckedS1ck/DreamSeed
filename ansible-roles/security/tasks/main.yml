@@ -138,4 +138,21 @@
     - {path: "{{ web_root }}/core/logs", mode: "0755"}
     - {path: "{{ web_root }}/core/model", mode: "0750"}
     - {path: "{{ web_root }}/core/components", mode: "0750"}
-  when: modx_config_file.stat.exists
+  when: modx_config_file.stat.exists and not (dev_write_perms | default(false))
+
+# --- Developer Write Permissions ---
+- name: Add ubuntu user to www-data group
+  become: true
+  ansible.builtin.user:
+    name: ubuntu
+    groups: www-data
+    append: true
+  when: dev_write_perms | default(false)
+
+- name: Allow group write access to web root for developers
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      find "{{ web_root }}" -type d -exec chmod g+rwxs {} +
+      find "{{ web_root }}" -type f -exec chmod g+rw {} +
+  when: dev_write_perms | default(false)
