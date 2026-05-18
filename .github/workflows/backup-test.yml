@@ -56,15 +56,14 @@ jobs:
           set -a
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
           set +a
-          echo "::add-mask::$DEV_AWS_ACCESS_KEY"
-          echo "::add-mask::$DEV_AWS_SECRET_KEY"
+          echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
-          echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY" >> "$GITHUB_ENV"
-          echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY" >> "$GITHUB_ENV"
-          echo "AWS_DEFAULT_REGION=$DEV_AWS_REGION" >> "$GITHUB_ENV"
-          echo "TF_VAR_cloudflare_api_token=$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
+          echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/Vitali.pub)" >> "$GITHUB_ENV"
+          echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=" >> "$GITHUB_ENV"
 
       - name: Install Ansible
         run: |
@@ -72,20 +71,21 @@ jobs:
           ansible-galaxy collection install community.mysql ansible.posix
 
       - name: Terraform Init
-        working-directory: terraform/aws
+        working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: test
-        run: terraform init
+          TF_WORKSPACE: test-hetzner
+        run: |
+          terraform init
+          terraform workspace new test-hetzner 2>/dev/null || terraform workspace select test-hetzner
 
       - name: Terraform Apply
         id: terraform
-        working-directory: terraform/aws
+        working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: test
+          TF_WORKSPACE: test-hetzner
           TF_VAR_environment: test
-          TF_VAR_ssh_public_key_path: /home/runner/.ssh/Vitali.pub
         run: |
           terraform apply -auto-approve -no-color \
             -var="environment=test"
@@ -115,19 +115,20 @@ jobs:
           echo "DNS: test.dreamseed.online -> $SERVER_IP"
 
           echo "Waiting for SSH on $SERVER_IP..."
-          for i in $(seq 1 40); do
+          for i in $(seq 1 30); do
             if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP "exit 0" 2>/dev/null; then
               echo "SSH is ready"
               break
             fi
-            echo "Attempt $i/40 - waiting..."
-            [ "$i" -eq 40 ] && { echo "SSH never became available"; exit 1; }
-            sleep 10
+            echo "Attempt $i/30 - waiting..."
+            [ "$i" -eq 30 ] && { echo "SSH never became available"; exit 1; }
+            sleep 5
           done
 
+          echo "Waiting for user_data (apt upgrade) to finish..."
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "sudo cloud-init status --wait" || true
-          sleep 15
+            "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
+          sleep 5
 
       - name: Generate config
         run: |
@@ -261,8 +262,8 @@ jobs:
             "cd /tmp && rm -rf lynis && git clone --depth 1 https://github.com/CISOfy/lynis && \
              cd lynis && sudo chown -R root:root . && \
              sudo ./lynis audit system --quick --no-colors 2>/dev/null | \
-             grep -i 'hardening index' | grep -oE '[0-9]+' | head -1" 2>/dev/null || echo "?")
-          [ -z "$SCORE" ] && SCORE="?"
+             awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" 2>/dev/null || true)
+          SCORE="${SCORE:-?}"
           echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
           echo "Hardening index: $SCORE"
 
@@ -283,15 +284,24 @@ jobs:
       - name: Terraform Destroy
         id: destroy
         if: always()
-        working-directory: terraform/aws
+        working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: test
+          TF_WORKSPACE: test-hetzner
           TF_VAR_environment: test
-          TF_VAR_ssh_public_key_path: /home/runner/.ssh/Vitali.pub
         run: |
           (terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log) || true
           grep -q "Destroy complete" /tmp/tf_destroy.log || { echo "Terraform destroy failed"; exit 1; }
+          # Delete CI SSH key if it was created
+          HCLOUD_TOKEN=$(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed 2>/dev/null | grep HCLOUD_TOKEN | cut -d= -f2)
+          if [ -n "$HCLOUD_TOKEN" ]; then
+            KEY_ID=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+              "https://api.hetzner.cloud/v1/ssh_keys?name=dreamseed-ci-test" \
+              | python3 -c "import sys,json; r=json.load(sys.stdin)['ssh_keys']; print(r[0]['id'] if r else '')" 2>/dev/null)
+            [ -n "$KEY_ID" ] && curl -sf -X DELETE \
+              "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID" \
+              -H "Authorization: Bearer $HCLOUD_TOKEN" > /dev/null && echo "CI SSH key deleted"
+          fi
 
       - name: Send Telegram report
         if: always()

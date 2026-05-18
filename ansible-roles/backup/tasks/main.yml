@@ -25,6 +25,7 @@
     - send_report.sh
     - test_tg.sh
     - common_functions.sh
+    - env_loader.py
 
 - name: Upload Telegram bot script
   ansible.builtin.copy:

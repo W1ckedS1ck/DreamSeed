@@ -19,9 +19,9 @@ jobs:
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
       TF_WORKSPACE: prod
-      AWS_ACCESS_KEY_ID: ${{ secrets.PROD_ACCESS_KEY }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROD_SECRET_KEY }}
-      AWS_DEFAULT_REGION: ${{ secrets.PROD_REGION }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.DEV_AWS_REGION }}
 
     steps:
       - uses: actions/checkout@v6
@@ -31,7 +31,7 @@ jobs:
           terraform_version: latest
 
       - name: Write prod SSH public key
-        run: echo "${{ secrets.PROD_SSH_PUBLIC_KEY }}" > /tmp/prod.pub
+        run: echo "${{ secrets.DEV_AWS_SSH_PUBLIC_KEY }}" > /tmp/prod.pub
 
       - name: Terraform Init
         working-directory: terraform/aws
@@ -43,7 +43,7 @@ jobs:
         run: |
           terraform plan -detailed-exitcode -no-color \
             -var="ssh_public_key_path=/tmp/prod.pub" \
-            -var="elastic_ip_allocation_id=${{ secrets.PROD_EIP }}" \
+            -var="elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" \
             -var="environment=prod" \
             -out=/tmp/prod.tfplan 2>&1 | tee /tmp/plan.log
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"

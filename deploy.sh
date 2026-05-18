@@ -110,7 +110,7 @@ resolve_target() {
             TF_PROVIDER="aws"
             DEPLOY_DOMAIN="dreamseed.online"
             TF_WORKSPACE="prod"
-            TARGET_PREFIX="PROD"
+            TARGET_PREFIX="DEV_AWS"
             ;;
         dev-aws)
             TF_PROVIDER="aws"

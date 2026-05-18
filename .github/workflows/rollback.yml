@@ -54,7 +54,7 @@ jobs:
           ENV="${{ inputs.environment }}"
 
           case "$ENV" in
-            prod)     IP="$PROD_EIP"     ;;
+            prod)     IP="$DEV_AWS_EIP"  ;;
             dev-aws)  IP="$DEV_AWS_EIP"  ;;
             dev-hetz) IP="$DEV_HETZ_EIP" ;;
           esac

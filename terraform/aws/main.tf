@@ -11,11 +11,11 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.0"
+      version = "~> 5.0"
     }
   }
 }
@@ -205,12 +205,13 @@ resource "aws_eip_association" "web" {
   instance_id   = aws_instance.web.id
 }
 
-resource "cloudflare_record" "dynamic" {
+resource "cloudflare_dns_record" "dynamic" {
   count   = var.domain != "" ? 1 : 0
   zone_id = var.cloudflare_zone_id
   name    = var.domain
-  value   = var.domain != "" ? aws_eip.dynamic[0].public_ip : data.aws_eip.reserved[0].public_ip
+  content = var.domain != "" ? aws_eip.dynamic[0].public_ip : data.aws_eip.reserved[0].public_ip
   type    = "A"
+  ttl     = 1
   proxied = true
 }
 
