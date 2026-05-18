@@ -52,9 +52,9 @@
     mode: "0644"
   notify: Reload systemd and restart bot
 
-- name: Upload .env secrets
-  ansible.builtin.copy:
-    src: "{{ secrets_dir }}/.env"
+- name: Render server .env (whitelist only — no cloud credentials)
+  ansible.builtin.template:
+    src: server.env.j2
     dest: "{{ scripts_dir_remote }}/.env"
     owner: ubuntu
     group: ubuntu

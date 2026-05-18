@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${LOG_DIR:-$SCRIPT_DIR/logs}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/Vitali.pem}"
 PHP_VERSION="${PHP_VERSION:-8.3}"
+VAULT_PASSWORD_FILE="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
 
 # Executable paths
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
@@ -33,10 +34,10 @@ DEPLOY_DOMAIN=""
 ENV_FILE=""
 TF_DIR=""
 SKIP_TERRAFORM=false
-DRY_RUN=false
 EXISTING_IP=""
 DESTROY_MODE=false
 VAULT_TMP=""
+ENV_DECRYPTED_TMP=""
 SERVER_IP=""
 
 DEPLOY_START=$(date +%s)
@@ -118,12 +119,6 @@ resolve_target() {
             TF_WORKSPACE="dev-hetz"
             TARGET_PREFIX="DEV_HETZ"
             ;;
-        dev-cloud)
-            TF_PROVIDER="cloudV2"
-            DEPLOY_DOMAIN="cloud.vitalikuts.online"
-            TF_WORKSPACE="dev-cloud"
-            TARGET_PREFIX="CLOUDV2"
-            ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/${TF_PROVIDER}"
 }
@@ -145,10 +140,28 @@ apply_target_vars() {
     fi
 }
 
+# Export provider-specific TF_VAR_* / AWS_* env vars for Terraform
+export_tf_env() {
+    if [[ "$TF_PROVIDER" == "aws" ]]; then
+        export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY:-}"
+        export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_KEY:-}"
+        export AWS_DEFAULT_REGION="${AWS_REGION:-us-west-1}"
+        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && \
+            export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
+    fi
+    if [[ "$TF_PROVIDER" == "hetzner" ]]; then
+        export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
+    fi
+    export TF_VAR_environment="$TARGET"
+    export TF_TOKEN_app_terraform_io="${TF_API_TOKEN:-}"
+    export TF_WORKSPACE="$TF_WORKSPACE"
+}
+
 # --- Helper functions ---
 
 cleanup() {
     [[ -n "${VAULT_TMP:-}" && -f "${VAULT_TMP:-}" ]] && rm -f "$VAULT_TMP"
+    [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
 }
 
 trap 'cleanup; echo -e "\n${YELLOW}Interrupted! Exiting...${NC}"; exit 130' INT TERM
@@ -164,7 +177,6 @@ TARGETS:
     prod               AWS        · dreamseed.online        · secrets/.env
     dev-aws            AWS        · aws.vitalikuts.online   · secrets/.env
     dev-hetz           Hetzner    · hetz.vitalikuts.online  · secrets/.env
-    dev-cloud          Cloud.ru   · cloud.vitalikuts.online · secrets/.env
 
 WEB SERVER (required):
     -n                 Nginx
@@ -172,7 +184,6 @@ WEB SERVER (required):
 
 OPTIONS:
     -i IP              Use existing server (skip Terraform)
-    -d, --dry-run      Dry-run (check only, no changes)
     -x, --destroy      Destroy resources
     -h                 Show this help
 
@@ -181,9 +192,7 @@ EXAMPLES:
     \$0 prod -a                  Deploy prod (AWS + Apache)
     \$0 dev-aws -n               Deploy dev on AWS (Nginx)
     \$0 dev-hetz -n              Deploy dev on Hetzner (Nginx)
-    \$0 dev-cloud -n             Deploy dev on Cloud.ru (Nginx)
     \$0 prod -n -i 1.2.3.4       Ansible-only on existing server
-    \$0 prod -n -d               Dry-run
     \$0 prod -x                  Destroy prod resources
 EOF
     exit 1
@@ -197,7 +206,6 @@ parse_args() {
             prod|dev-aws|dev-hetz) TARGET="$1"; shift ;;
             -n) WEB_SERVER="nginx"; shift ;;
             -a) WEB_SERVER="apache"; shift ;;
-            -d|--dry-run) DRY_RUN=true; shift ;;
             -i|--ip) EXISTING_IP="$2"; SKIP_TERRAFORM=true; shift 2 ;;
             -x|--destroy) DESTROY_MODE=true; shift ;;
             -h|--help) usage ;;
@@ -253,15 +261,49 @@ validate_env_file() {
     done < "$env_file"
 }
 
+# If ENV_FILE is ansible-vault encrypted, decrypt to a tmp file (0600) and
+# echo the tmp path. Otherwise echo the original path. Tmp file is removed
+# by cleanup() via trap.
+resolve_env_file() {
+    local env_file="$1"
+    if [[ ! -f "$env_file" ]]; then
+        echo -e "${RED}Error: env file not found: $env_file${NC}" >&2
+        exit 1
+    fi
+    if head -c 16 "$env_file" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
+        if [[ ! -f "$VAULT_PASSWORD_FILE" ]]; then
+            echo -e "${RED}Error: $env_file is vault-encrypted but password file not found: $VAULT_PASSWORD_FILE${NC}" >&2
+            echo -e "${YELLOW}Hint: echo -n 'your-password' > $VAULT_PASSWORD_FILE && chmod 600 $VAULT_PASSWORD_FILE${NC}" >&2
+            exit 1
+        fi
+        ENV_DECRYPTED_TMP=$(mktemp)
+        chmod 600 "$ENV_DECRYPTED_TMP"
+        if ! ansible-vault view "$env_file" --vault-password-file "$VAULT_PASSWORD_FILE" > "$ENV_DECRYPTED_TMP" 2>/dev/null; then
+            echo -e "${RED}Error: failed to decrypt $env_file (wrong password?)${NC}" >&2
+            exit 1
+        fi
+        printf '%s' "$ENV_DECRYPTED_TMP"
+    else
+        printf '%s' "$env_file"
+    fi
+}
+
 preflight_checks() {
+    local env_to_source
+    env_to_source=$(resolve_env_file "$ENV_FILE")
+    validate_env_file "$env_to_source"
+    set -a; source "$env_to_source"; set +a
+    apply_target_vars
+
+    # Override SSH_KEY if SSH_PRIVATE_KEY_PATH is set in .env
+    if [[ -n "${SSH_PRIVATE_KEY_PATH:-}" ]]; then
+        SSH_KEY="$SSH_PRIVATE_KEY_PATH"
+    fi
+
     if [[ ! -f "$SSH_KEY" ]]; then
         echo -e "${RED}Error: SSH key not found: $SSH_KEY${NC}"
         exit 1
     fi
-
-    validate_env_file "$ENV_FILE"
-    set -a; source "$ENV_FILE"; set +a
-    apply_target_vars
 
     if [[ "$DESTROY_MODE" == "false" ]]; then
         [[ -z "${DB_PASS:-}" ]]     && { echo -e "${RED}Error: DB_PASS not set in $ENV_FILE${NC}"; exit 1; }
@@ -273,15 +315,13 @@ preflight_checks() {
             echo -e "${RED}Error: AWS_ACCESS_KEY and AWS_SECRET_KEY required${NC}"; exit 1
         fi
         : "${AWS_REGION:=us-west-1}"
+        if [[ -z "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
+            echo -e "${RED}Error: SSH_PUBLIC_KEY_PATH not set in $ENV_FILE${NC}"; exit 1
+        fi
     fi
 
     if [[ "$TF_PROVIDER" == "hetzner" ]]; then
         [[ -z "${HCLOUD_TOKEN:-}" ]] && { echo -e "${RED}Error: HCLOUD_TOKEN not set in $ENV_FILE${NC}"; exit 1; }
-    fi
-
-    if [[ "$TF_PROVIDER" == "cloudV2" ]]; then
-        [[ -z "${CLOUDV2_AUTH_KEY_ID:-}" ]] && { echo -e "${RED}Error: CLOUDV2_AUTH_KEY_ID not set in $ENV_FILE${NC}"; exit 1; }
-        [[ -z "${CLOUDV2_AUTH_SECRET:-}" ]] && { echo -e "${RED}Error: CLOUDV2_AUTH_SECRET not set in $ENV_FILE${NC}"; exit 1; }
     fi
 
     if [[ "$SKIP_TERRAFORM" == "false" ]] && [[ ! -f "$TF_DIR/main.tf" ]]; then
@@ -451,9 +491,11 @@ run_ansible() {
 }
 
 terraform_select_workspace() {
-    ( cd "$TF_DIR" && \
-        "$TERRAFORM" workspace select "$TF_WORKSPACE" 2>/dev/null || \
-        "$TERRAFORM" workspace new "$TF_WORKSPACE" ) >> "$TF_LOG" 2>&1
+    local ws="$TF_WORKSPACE"
+    # TF_WORKSPACE env var blocks workspace select/new — unset it inside the subshell.
+    ( cd "$TF_DIR" && unset TF_WORKSPACE && \
+        "$TERRAFORM" workspace select "$ws" 2>/dev/null || \
+        "$TERRAFORM" workspace new "$ws" ) >> "$TF_LOG" 2>&1
 }
 
 terraform_destroy() {
@@ -486,21 +528,7 @@ echo -e "\n${RED}╭────────────────────
         [[ ! "${answer:-}" =~ ^[Yy]$ ]] && { echo -e "${RED}Aborted.${NC}"; exit 1; }
     fi
 
-    if [[ "$TF_PROVIDER" == "aws" ]]; then
-        export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY:-}"
-        export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_KEY:-}"
-        export AWS_DEFAULT_REGION="${AWS_REGION:-us-west-1}"
-        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
-    fi
-    if [[ "$TF_PROVIDER" == "hetzner" ]]; then
-        export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
-    fi
-    if [[ "$TF_PROVIDER" == "cloudV2" ]]; then
-        export TF_VAR_project_id="$CLOUDV2_PROJECT_ID"
-        export TF_VAR_auth_key_id="$CLOUDV2_AUTH_KEY_ID"
-        export TF_VAR_auth_secret="$CLOUDV2_AUTH_SECRET"
-    fi
-    export TF_VAR_environment="$TARGET"
+    export_tf_env
 
     ( cd "$TF_DIR" && terraform_select_workspace ) >> "$TF_LOG" 2>&1
     if ( cd "$TF_DIR" && "$TERRAFORM" show -no-color 2>/dev/null ) | grep -q "No state"; then
@@ -563,15 +591,8 @@ check_services() {
 
 rotate_logs() {
     local max_logs="${MAX_LOG_FILES:-10}"
-    local count
-    count=$(find "$LOG_DIR" -name "*.log" -type f | wc -l)
-    if [[ $count -gt $max_logs ]]; then
-        find "$LOG_DIR" -name "*.log" -type f -exec stat -f '%m %N' {} + \
-            | sort -n \
-            | head -n $((count - max_logs)) \
-            | awk '{print $2}' \
-            | xargs rm -f
-    fi
+    # shellcheck disable=SC2012  # log filenames are timestamped, no spaces/newlines
+    ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +"$((max_logs + 1))" | xargs rm -f 2>/dev/null || true
 }
 
 # --- Main ---
@@ -580,27 +601,17 @@ main() {
     parse_args "$@"
     resolve_target
 
-    if [[ "$WEB_SERVER" == "nginx" ]]; then
-        playbooks=(
-            "playbook-01-base.yml:Base packages"
-            "playbook-02-nginx.yml:Web server (Nginx/PHP)"
-            "playbook-03-db.yml:Database & Restore"
-            "playbook-04-monitor.yml:Monitoring (Exporters+VM)"
-            "playbook-04.5-backup.yml:Backup & Telegram bot"
-            "playbook-05-grafana.yml:Grafana"
-            "playbook-06-security.yml:Security hardening"
-        )
-    else
-        playbooks=(
-            "playbook-01-base.yml:Base packages"
-            "playbook-02-web.yml:Web server (Apache/PHP)"
-            "playbook-03-db.yml:Database & Restore"
-            "playbook-04-monitor.yml:Monitoring (Exporters+VM)"
-            "playbook-04.5-backup.yml:Backup & Telegram bot"
-            "playbook-05-grafana.yml:Grafana"
-            "playbook-06-security.yml:Security hardening"
-        )
-    fi
+    local web_playbook="playbook-02-nginx.yml:Web server (Nginx/PHP)"
+    [[ "$WEB_SERVER" == "apache" ]] && web_playbook="playbook-02-apache.yml:Web server (Apache/PHP)"
+    playbooks=(
+        "playbook-01-base.yml:Base packages"
+        "$web_playbook"
+        "playbook-03-db.yml:Database & Restore"
+        "playbook-04-monitor.yml:Monitoring (Exporters+VM)"
+        "playbook-04.5-backup.yml:Backup & Telegram bot"
+        "playbook-05-grafana.yml:Grafana"
+        "playbook-06-security.yml:Security hardening"
+    )
 
     preflight_checks
     calculate_steps
@@ -619,62 +630,43 @@ main() {
     printf "${CYAN}│${NC}  Domain      ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$DEPLOY_DOMAIN"
     printf "${CYAN}│${NC}  Provider    ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$TF_PROVIDER"
     printf "${CYAN}│${NC}  Web server  ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$WEB_SERVER"
-    [[ "$DRY_RUN" == "true" ]] && \
-    printf "${CYAN}│${NC}  ${YELLOW}%-56s${NC}${CYAN}│${NC}\n" "DRY-RUN MODE"
     echo -e "${CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
 
     if [[ "$TARGET" == "prod" && "$DESTROY_MODE" == "false" ]]; then
         echo -e "\n${YELLOW}⚠  Deploying to PRODUCTION (${DEPLOY_DOMAIN})${NC}"
-        read -rp "  Continue? [y/N] " confirm
-        [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo -e "${RED}Aborted.${NC}"; exit 1; }
+        if [[ "${CI:-}" == "true" ]]; then
+            echo -e "  ${GREEN}CI mode — confirmation skipped${NC}"
+        else
+            read -rp "  Continue? [y/N] " confirm
+            [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo -e "${RED}Aborted.${NC}"; exit 1; }
+        fi
     fi
 
     rotate_logs
 
     if [[ "$SKIP_TERRAFORM" == "false" ]]; then
-        if [[ "$DRY_RUN" == "true" ]]; then
-            step_start "Terraform plan (dry-run)"
-            ( cd "$TF_DIR" && terraform_select_workspace && \
-                "$TERRAFORM" plan -no-color >> "$TF_LOG" 2>&1 ) || {
-                log_error_details "$TF_LOG"
-                step_fail "Terraform plan failed"
-            }
-            step_ok
-            echo -e "\n${YELLOW}Dry-run complete. To also check Ansible: $0 $TARGET -${WEB_SERVER:0:1} -d -i <IP>${NC}"
-            echo -e "  Time: $(format_time $(( $(date +%s) - DEPLOY_START )))"
-            exit 0
-        fi
-
         step_start "Terraform init + apply"
-        ( cd "$TF_DIR" && "$TERRAFORM" init -upgrade=false -input=false -no-color >> "$TF_LOG" 2>&1 ) || {
-            log_error_details "$TF_LOG"
-            step_fail "Terraform init failed"
-        }
+        export_tf_env
 
-        if [[ "$TF_PROVIDER" == "aws" ]]; then
-            export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
-            export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
-            export AWS_DEFAULT_REGION="${AWS_REGION:-us-west-1}"
-            [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && \
-                export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
-        fi
-        export TF_VAR_environment="$TARGET"
-        if [[ "$TF_PROVIDER" == "hetzner" ]]; then
-            export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
-        fi
-        if [[ "$TF_PROVIDER" == "cloudV2" ]]; then
-            export TF_VAR_project_id="$CLOUDV2_PROJECT_ID"
-            export TF_VAR_auth_key_id="$CLOUDV2_AUTH_KEY_ID"
-            export TF_VAR_auth_secret="$CLOUDV2_AUTH_SECRET"
+        local current_ws
+        current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
+        if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
+            ( cd "$TF_DIR" && "$TERRAFORM" init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1 ) || {
+                log_error_details "$TF_LOG"
+                step_fail "Terraform init failed"
+            }
         fi
 
         ( cd "$TF_DIR" && terraform_select_workspace ) || \
             step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
 
+        local tf_apply_extra_vars=""
+        [[ "$TF_PROVIDER" == "aws" ]] && tf_apply_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-}'"
+
         local tf_ok=false
         for tf_attempt in 1 2; do
             if run_with_spinner "Terraform apply" \
-                bash -c "cd '$TF_DIR' && '$TERRAFORM' apply -auto-approve -no-color >> '$TF_LOG' 2>&1"; then
+                bash -c "cd '$TF_DIR' && '$TERRAFORM' apply -auto-approve -no-color $tf_apply_extra_vars >> '$TF_LOG' 2>&1"; then
                 tf_ok=true; break
             fi
             [[ $tf_attempt -lt 2 ]] && {
@@ -690,15 +682,11 @@ main() {
 
         ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
 
-        # Backup tfstate locally with rotation (keep 5)
         local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$tfstate_backup_dir"
         cp "$TF_DIR/terraform.tfstate" "$tfstate_backup_dir/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
-        local tfstate_count
-        tfstate_count=$(ls -1t "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | wc -l)
-        if [[ $tfstate_count -gt 5 ]]; then
-            ls -1t "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate | tail -n +6 | xargs rm -f
-        fi
+        # shellcheck disable=SC2012  # tfstate filenames are timestamped, no spaces/newlines
+        ls -1t "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
 
         step_ok
     else
@@ -707,7 +695,6 @@ main() {
         step_ok
     fi
 
-    # AWS takes longer to boot
     if [[ "$TF_PROVIDER" == "aws" ]]; then
         SSH_ATTEMPTS="$AWS_SSH_ATTEMPTS"
         SSH_RETRY_INTERVAL="$AWS_SSH_RETRY_INTERVAL"
@@ -769,10 +756,11 @@ INVEOF
             echo "cloudflare_api_token: \"$(yaml_escape "${CLOUDFLARE_API_TOKEN}")\""
         [[ -n "${GRAFANA_PASS:-}" ]] && \
             echo "grafana_admin_password: \"$(yaml_escape "${GRAFANA_PASS}")\""
+        [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && \
+            echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
     } > "$VAULT_TMP"
 
     local base_args=("-i" "$INVENTORY_FILE" "--extra-vars" "@${VAULT_TMP}")
-    [[ "$DRY_RUN" == "true" ]] && base_args+=("--check")
 
     for entry in "${playbooks[@]}"; do
         local pb="${entry%%:*}"
@@ -786,24 +774,18 @@ INVEOF
         fi
     done
 
-    if [[ "$DRY_RUN" == "false" ]]; then
-        local checks_start=$(date +%s)
-        check_services
-        local checks_elapsed=$(( $(date +%s) - checks_start ))
-        STEP_DURATIONS+=("$checks_elapsed")
-        STEP_NAMES+=("Post-deploy checks")
-    fi
+    local checks_start=$(date +%s)
+    check_services
+    local checks_elapsed=$(( $(date +%s) - checks_start ))
+    STEP_DURATIONS+=("$checks_elapsed")
+    STEP_NAMES+=("Post-deploy checks")
 
     local total_time=$(( $(date +%s) - DEPLOY_START ))
 
     print_summary
 
     echo -e "\n${GREEN}╭──────────────────────────────────────────────────────────╮${NC}"
-    if [[ "$DRY_RUN" == "true" ]]; then
-        printf "${GREEN}│${NC}  ${BOLD}%-56s${NC}${GREEN}│${NC}\n" "✓ Dry-run complete"
-    else
-        printf "${GREEN}│${NC}  ${BOLD}%-56s${NC}${GREEN}│${NC}\n" "✓ Deployment Successful!"
-    fi
+    printf "${GREEN}│${NC}  ${BOLD}%-56s${NC}${GREEN}│${NC}\n" "✓ Deployment Successful!"
     echo -e "${GREEN}├──────────────────────────────────────────────────────────┤${NC}"
     printf "${GREEN}│${NC}  Server   ${BOLD}%-47s${NC}${GREEN}│${NC}\n" "$SERVER_IP"
     printf "${GREEN}│${NC}  Site     ${BOLD}%-47s${NC}${GREEN}│${NC}\n" "https://${DEPLOY_DOMAIN}"
