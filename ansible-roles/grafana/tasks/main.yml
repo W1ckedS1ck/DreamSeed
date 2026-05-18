@@ -139,7 +139,7 @@
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 15
+  retries: 14
   delay: 2
 
 - name: Check if Grafana admin password needs reset
@@ -149,26 +149,7 @@
   when:
     - grafana_admin_password | default('') | length > 0
 
-- name: Reset Grafana admin password
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{grafana_port }}/api/admin/users/1/password"
-    method: PUT
-    user: admin
-    password: admin
-    force_basic_auth: true
-    body:
-      password: "{{ grafana_admin_password }}"
-    body_format: json
-    headers:
-      Content-Type: application/json
-    status_code: [200, 401]
-  no_log: true
-  register: grafana_password_result
-  when:
-    - grafana_admin_password | default('') | length > 0
-    - not (grafana_password_flag.stat.exists | default(false))
-
-- name: Fallback to CLI if API auth failed (password already changed)
+- name: Reset Grafana admin password via CLI
   ansible.builtin.shell:
     cmd: grafana-cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
@@ -178,7 +159,6 @@
   when:
     - grafana_admin_password | default('') | length > 0
     - not (grafana_password_flag.stat.exists | default(false))
-    - grafana_password_result is defined and grafana_password_result.status == 401
 
 - name: Mark Grafana admin password as set
   ansible.builtin.copy:

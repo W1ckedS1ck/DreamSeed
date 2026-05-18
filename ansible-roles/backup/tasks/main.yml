@@ -104,3 +104,15 @@
     job: "{{ scripts_dir_remote }}/send_report.sh weekly"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup daily session cleanup cron
+  ansible.builtin.cron:
+    name: "DreamSeed session cleanup"
+    minute: "0"
+    hour: "4"
+    job: >
+      mysql -u root modx_db -e
+      "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
+      2>/dev/null || true
+    user: root
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"

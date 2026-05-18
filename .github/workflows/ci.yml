@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: '.'
           severity: error
@@ -62,7 +62,7 @@ jobs:
         run: tflint --init
       - name: Run TFLint
         run: |
-          for dir in terraform/aws terraform/hetzner; do
+          for dir in terraform/*/; do
             echo "=== Linting $dir ==="
             tflint --chdir="$dir"
           done
@@ -101,7 +101,7 @@ jobs:
           terraform_version: latest
       - name: Validate all providers
         run: |
-          for dir in terraform/aws terraform/hetzner; do
+          for dir in terraform/*/; do
             echo "=== Validating $dir ==="
             terraform -chdir="$dir" init -backend=false -upgrade
             terraform -chdir="$dir" validate

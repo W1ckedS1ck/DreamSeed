@@ -36,6 +36,7 @@ TF_DIR=""
 SKIP_TERRAFORM=false
 EXISTING_IP=""
 DESTROY_MODE=false
+PARALLEL_MODE=false
 VAULT_TMP=""
 ENV_DECRYPTED_TMP=""
 SERVER_IP=""
@@ -44,6 +45,7 @@ DEPLOY_START=$(date +%s)
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/deploy_$(date +%Y%m%d_%H%M%S).log"
 TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
+DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
 
 STEP_NUM=0
 TOTAL_STEPS=0
@@ -152,6 +154,8 @@ export_tf_env() {
         [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && \
             export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
     fi
+    [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && export TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN"
+    [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]] && export TF_VAR_cloudflare_zone_id="$CLOUDFLARE_ZONE_ID"
     if [[ "$TF_PROVIDER" == "hetzner" ]]; then
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
     fi
@@ -188,6 +192,7 @@ WEB SERVER (required):
 OPTIONS:
     -i IP              Use existing server (skip Terraform)
     -x, --destroy      Destroy resources
+    -p, --parallel     Parallel playbook execution (3 phases)
     -h                 Show this help
 
 EXAMPLES:
@@ -211,6 +216,7 @@ parse_args() {
             -a) WEB_SERVER="apache"; shift ;;
             -i|--ip) EXISTING_IP="$2"; SKIP_TERRAFORM=true; shift 2 ;;
             -x|--destroy) DESTROY_MODE=true; shift ;;
+            -p|--parallel) PARALLEL_MODE=true; shift ;;
             -h|--help) usage ;;
             *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
         esac
@@ -291,11 +297,26 @@ resolve_env_file() {
     fi
 }
 
+write_deploy_history() {
+    local status="$1" error_msg="${2:-}"
+    local ts duration
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    duration=$(( $(date +%s) - DEPLOY_START ))
+    printf "%s | %-7s | %-8s | %-6s | %-15s | %5ss | v%s" \
+        "$ts" "$status" "$TARGET" "${WEB_SERVER:-N/A}" "${SERVER_IP:-N/A}" "$duration" "$VERSION" \
+        >> "$DEPLOY_HISTORY"
+    [[ -n "$error_msg" ]] && printf " | %s" "$error_msg" >> "$DEPLOY_HISTORY"
+    echo >> "$DEPLOY_HISTORY"
+}
+
 preflight_checks() {
     local env_to_source
     env_to_source=$(resolve_env_file "$ENV_FILE")
     validate_env_file "$env_to_source"
+    local _saved_opts
+    _saved_opts="$(set +o)"
     set -a; source "$env_to_source"; set +a
+    eval "$_saved_opts"
     apply_target_vars
 
     # Override SSH_KEY if SSH_PRIVATE_KEY_PATH is set in .env
@@ -337,7 +358,11 @@ calculate_steps() {
     if [[ "$DESTROY_MODE" == "true" ]]; then TOTAL_STEPS=1; return; fi
     [[ "$SKIP_TERRAFORM" == "false" ]] && ((TOTAL_STEPS++)) || true
     ((TOTAL_STEPS += 2))  # SSH, cloud-init
-    TOTAL_STEPS=$((TOTAL_STEPS + ${#playbooks[@]}))
+    if [[ "$PARALLEL_MODE" == "true" ]]; then
+        TOTAL_STEPS=$((TOTAL_STEPS + 4))  # base, phase2, phase3, grafana
+    else
+        TOTAL_STEPS=$((TOTAL_STEPS + ${#playbooks[@]}))
+    fi
 }
 
 step_start() {
@@ -348,7 +373,11 @@ step_start() {
     local bar icon
     bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
     icon=$(step_icon "$name")
-    printf "\n  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC}" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$name"
+    if [[ "$TTY_MODE" == "false" ]]; then
+        printf "\n  %s %d/%d %s %-36s\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$icon" "$name"
+    else
+        printf "\n  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC}" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$name"
+    fi
 }
 
 step_ok() {
@@ -358,14 +387,24 @@ step_ok() {
     icon=$(step_icon "${STEP_LABEL:-}")
     STEP_DURATIONS+=("$elapsed")
     STEP_NAMES+=("${STEP_LABEL:-}")
-    printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC} ${GREEN}✓${NC} ${YELLOW}%s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}" "$(format_time $elapsed)"
+    if [[ "$TTY_MODE" == "false" ]]; then
+        printf "  %s %d/%d %s %-36s  ✓ %s\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "$icon" "${STEP_LABEL:-}" "$(format_time $elapsed)"
+    else
+        printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${icon} ${BOLD}%-36s${NC} ${GREEN}✓${NC} ${YELLOW}%s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}" "$(format_time $elapsed)"
+    fi
 }
 
 step_fail() {
     local bar
     bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
-    printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${RED}✗${NC} ${BOLD}%-36s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}"
-    echo -e "${RED}Error: $1${NC}"
+    if [[ "$TTY_MODE" == "false" ]]; then
+        printf "  %s %d/%d ✗ %s\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}"
+        echo "::error title=${STEP_LABEL:-Deploy}::$1"
+    else
+        printf "\r\033[K  ${DIM}%s${NC} ${CYAN}%d/%d${NC} ${RED}✗${NC} ${BOLD}%-36s${NC}\n" "$bar" "$STEP_NUM" "$TOTAL_STEPS" "${STEP_LABEL:-}"
+        echo -e "${RED}Error: $1${NC}"
+    fi
+    [[ -n "${DEPLOY_HISTORY:-}" ]] && write_deploy_history "FAILURE" "$1" 2>/dev/null || true
     exit 1
 }
 
@@ -424,17 +463,68 @@ run_ansible() {
     local args=("$@")
 
     if [[ "$TTY_MODE" == "false" ]]; then
-        local status_file
+        local status_file tmp_output
         status_file=$(mktemp)
-        echo "0" > "$status_file"
+        tmp_output=$(mktemp)
+
+        echo "::group::${STEP_LABEL:-Ansible}"
+
+        local task_num=0 task_name="" task_pending=false
+        local counts_ok=0 counts_changed=0 counts_skipped=0 counts_failed=0
+        local lines_read=0
+
+        _ci_print_task() { printf "  [%2d] %-58s %s\n" "$task_num" "$task_name" "$1"; }
+
+        _ci_parse_lines() {
+            local line
+            while IFS= read -r line; do
+                if [[ "$line" =~ ^TASK[[:space:]]\[(.+)\] ]]; then
+                    task_name="${BASH_REMATCH[1]}"
+                    ((task_num++)) || true; task_pending=true
+                elif [[ "$task_pending" == "true" ]]; then
+                    case "$line" in
+                        changed:*)        _ci_print_task "✎ changed"; ((counts_changed++)) || true; task_pending=false ;;
+                        ok:*)             _ci_print_task "· ok";      ((counts_ok++))      || true; task_pending=false ;;
+                        failed:*|fatal:*) _ci_print_task "✗ FAILED";  ((counts_failed++))  || true; task_pending=false ;;
+                        skipping:*)       _ci_print_task "– skipped";  ((counts_skipped++)) || true; task_pending=false ;;
+                    esac
+                fi
+            done
+        }
+
         ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
         ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
         ANSIBLE_FORCE_COLOR=0 \
         ANSIBLE_NOCOLOR=1 \
-        "$ANSIBLE_PLAYBOOK" "${args[@]}" 2>&1 | tee -a "$LOG" || echo "$?" > "$status_file"
+        "$ANSIBLE_PLAYBOOK" "${args[@]}" > "$tmp_output" 2>&1 &
+        local ansible_pid=$!
+
+        while kill -0 "$ansible_pid" 2>/dev/null; do
+            local new_count
+            new_count=$(wc -l < "$tmp_output" 2>/dev/null || echo 0)
+            if [[ $new_count -gt $lines_read ]]; then
+                _ci_parse_lines < <(tail -n +"$(( lines_read + 1 ))" "$tmp_output")
+                lines_read=$new_count
+            fi
+            sleep 0.2
+        done
+
+        local final_count
+        final_count=$(wc -l < "$tmp_output" 2>/dev/null || echo 0)
+        if [[ $final_count -gt $lines_read ]]; then
+            _ci_parse_lines < <(tail -n +"$(( lines_read + 1 ))" "$tmp_output")
+        fi
+
+        wait "$ansible_pid"; echo "$?" > "$status_file"
+
+        printf "\n  Tasks: %d  —  ok: %d  changed: %d  skipped: %d  failed: %d\n" \
+            "$task_num" "$counts_ok" "$counts_changed" "$counts_skipped" "$counts_failed"
+        echo "::endgroup::"
+
+        sed 's/\x1b\[[0-9;]*[mGKHF]//g; s/\r//g' "$tmp_output" >> "$LOG"
         local status
         status=$(cat "$status_file")
-        rm -f "$status_file"
+        rm -f "$status_file" "$tmp_output"
         return "$status"
     fi
 
@@ -449,7 +539,6 @@ run_ansible() {
     local name_width=$(( term_width - 28 ))
     local status_file
     status_file=$(mktemp)
-    echo "0" > "$status_file"
 
     _render_task_line() {
         local short_name="${task_name:0:$name_width}"
@@ -506,7 +595,7 @@ run_ansible() {
         sleep 0.15
     done
 
-    wait "$ansible_pid" || echo "$?" > "$status_file"
+    wait "$ansible_pid"; echo "$?" > "$status_file"
     local status
     status=$(cat "$status_file")
     sed 's/\x1b\[[0-9;]*[mGKHF]//g; s/\r//g' "$tmp_output" >> "$LOG"
@@ -516,12 +605,88 @@ run_ansible() {
     return "$status"
 }
 
+run_parallel_phase() {
+    local phase_name="$1"; shift
+    local entries=("$@")
+    local pids=() results_dir result_files=()
+    results_dir=$(mktemp -d)
+
+    for entry in "${entries[@]}"; do
+        local pb="${entry%%:*}" label="${entry##*:}" pb_path="$SCRIPT_DIR/ansible/$pb"
+        local status_f="$results_dir/${pb//\//_}.status"
+        local log_f="$results_dir/${pb//\//_}.log"
+        result_files+=("$status_f" "$log_f")
+
+        if [[ "$TTY_MODE" == "false" ]]; then
+            echo "::group::${label}"
+        else
+            printf "  ${CYAN}→${NC} %s\n" "$label"
+        fi
+
+        (
+            ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
+            ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
+            ANSIBLE_FORCE_COLOR=0 \
+            ANSIBLE_NOCOLOR=1 \
+            "$ANSIBLE_PLAYBOOK" "$pb_path" "${base_args[@]}" > "$log_f" 2>&1
+            echo "$?" > "$status_f"
+        ) &
+        pids+=("$!")
+    done
+
+    for pid in "${pids[@]}"; do wait "$pid"; done
+
+    local phase_ok=true
+    local idx=0
+    for entry in "${entries[@]}"; do
+        local label="${entry##*:}"
+        local status_f="${result_files[$(( idx * 2 ))]}"
+        local log_f="${result_files[$(( idx * 2 + 1 ))]}"
+        local status
+        status=$(cat "$status_f" 2>/dev/null || echo "1")
+
+        sed 's/\x1b\[[0-9;]*[mGKHF]//g; s/\r//g' "$log_f" >> "$LOG"
+
+        if [[ "$TTY_MODE" == "false" ]]; then
+            echo "::endgroup::"
+        fi
+
+        if [[ "$status" == "0" ]]; then
+            if [[ "$TTY_MODE" == "false" ]]; then
+                printf "  ✓ %s\n" "$label"
+            else
+                printf "  ${GREEN}✓${NC} %s\n" "$label"
+            fi
+        else
+            if [[ "$TTY_MODE" == "false" ]]; then
+                printf "  ✗ %s\n" "$label"
+            else
+                printf "  ${RED}✗${NC} %s\n" "$label"
+            fi
+            log_error_details "$log_f"
+            phase_ok=false
+        fi
+        ((idx++)) || true
+    done
+
+    rm -rf "$results_dir"
+    $phase_ok || step_fail "$phase_name failed"
+}
+
 terraform_select_workspace() {
     local ws="$TF_WORKSPACE"
     # TF_WORKSPACE env var blocks workspace select/new — unset it inside the subshell.
     ( cd "$TF_DIR" && unset TF_WORKSPACE && \
         "$TERRAFORM" workspace select "$ws" 2>/dev/null || \
         "$TERRAFORM" workspace new "$ws" ) >> "$TF_LOG" 2>&1
+}
+
+terraform_init_if_needed() {
+    local current_ws
+    current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
+    if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
+        ( cd "$TF_DIR" && "$TERRAFORM" init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1 )
+    fi
 }
 
 terraform_destroy() {
@@ -559,12 +724,11 @@ echo -e "\n${RED}╭────────────────────
 
     export_tf_env
 
-    local current_ws
-    current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
-    if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
-        run_with_spinner "Terraform init ($TARGET)" \
-            bash -c "cd '$TF_DIR' && '$TERRAFORM' init -reconfigure -input=false -no-color 2>&1 | tee -a '$TF_LOG'; exit \${PIPESTATUS[0]}"
-    fi
+    terraform_init_if_needed || {
+        log_error_details "$TF_LOG"
+        echo -e "  ${RED}✗${NC} Terraform init failed  ${YELLOW}($TF_LOG)${NC}"
+        return 1
+    }
 
     ( cd "$TF_DIR" && terraform_select_workspace ) >> "$TF_LOG" 2>&1
     if ( cd "$TF_DIR" && "$TERRAFORM" show -no-color 2>/dev/null ) | grep -q "No state"; then
@@ -574,9 +738,13 @@ echo -e "\n${RED}╭────────────────────
     [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
     echo "  ━━━━━━━━ ✕ Destroying resources ($TARGET)"
     # TFC exits 1 when there is nothing to destroy — use || true and check log instead
+    local destroy_out
+    destroy_out=$(mktemp)
     # shellcheck disable=SC2086
-    ( cd "$TF_DIR" && "$TERRAFORM" destroy -auto-approve -no-color $tf_destroy_var_arg 2>&1 | tee -a "$TF_LOG" ) || true
-    grep -q "Destroy complete" "$TF_LOG" || step_fail "Terraform destroy failed (check $TF_LOG)"
+    ( cd "$TF_DIR" && "$TERRAFORM" destroy -auto-approve -no-color $tf_destroy_var_arg 2>&1 | tee -a "$destroy_out" ) || true
+    grep -q "Destroy complete" "$destroy_out" || step_fail "Terraform destroy failed (check $TF_LOG)"
+    cat "$destroy_out" >> "$TF_LOG"
+    rm -f "$destroy_out"
     
     local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
     rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
@@ -666,6 +834,7 @@ main() {
         step_start "Terraform destroy ($TARGET)"
         terraform_destroy
         step_ok
+        write_deploy_history "DESTROYED"
         exit 0
     fi
 
@@ -676,6 +845,7 @@ main() {
     printf "${CYAN}│${NC}  Domain      ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$DEPLOY_DOMAIN"
     printf "${CYAN}│${NC}  Provider    ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$TF_PROVIDER"
     printf "${CYAN}│${NC}  Web server  ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$WEB_SERVER"
+    printf "${CYAN}│${NC}  Mode        ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$([[ "$PARALLEL_MODE" == "true" ]] && echo "parallel" || echo "sequential")"
     echo -e "${CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
 
     if [[ "$TARGET" == "prod" && "$DESTROY_MODE" == "false" ]]; then
@@ -694,14 +864,10 @@ main() {
         step_start "Terraform init + apply"
         export_tf_env
 
-        local current_ws
-        current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
-        if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
-            ( cd "$TF_DIR" && "$TERRAFORM" init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1 ) || {
-                log_error_details "$TF_LOG"
-                step_fail "Terraform init failed"
-            }
-        fi
+        terraform_init_if_needed || {
+            log_error_details "$TF_LOG"
+            step_fail "Terraform init failed"
+        }
 
         ( cd "$TF_DIR" && terraform_select_workspace ) || \
             step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
@@ -807,9 +973,24 @@ INVEOF
             echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
     } > "$VAULT_TMP"
 
-    local base_args=("-i" "$INVENTORY_FILE" "--extra-vars" "@${VAULT_TMP}")
+    base_args=("-i" "$INVENTORY_FILE" "--extra-vars" "@${VAULT_TMP}")
 
-    for entry in "${playbooks[@]}"; do
+    if [[ "$PARALLEL_MODE" == "true" ]]; then
+        echo -e "\n  ${CYAN}▸ Parallel execution${NC}"
+
+        step_start "Ansible: Base packages"
+        run_ansible "$SCRIPT_DIR/ansible/playbook-01-base.yml" "${base_args[@]}" && step_ok || step_fail "Base packages failed"
+
+        local phase2=("$web_playbook" "playbook-03-db.yml:Database & Restore" "playbook-06-security.yml:Security hardening")
+        run_parallel_phase "Phase 2 (Web/DB/Security)" "${phase2[@]}"
+
+        local phase3=("playbook-04-monitor.yml:Monitoring" "playbook-04.5-backup.yml:Backup & Telegram bot")
+        run_parallel_phase "Phase 3 (Monitoring/Backup)" "${phase3[@]}"
+
+        step_start "Ansible: Grafana"
+        run_ansible "$SCRIPT_DIR/ansible/playbook-05-grafana.yml" "${base_args[@]}" && step_ok || step_fail "Grafana failed"
+    else
+        for entry in "${playbooks[@]}"; do
         local pb="${entry%%:*}"
         local label="${entry##*:}"
         step_start "Ansible: $label"
@@ -820,6 +1001,7 @@ INVEOF
             step_fail "$label failed"
         fi
     done
+    fi
 
     local checks_start=$(date +%s)
     check_services
@@ -830,6 +1012,8 @@ INVEOF
     local total_time=$(( $(date +%s) - DEPLOY_START ))
 
     print_summary
+
+    write_deploy_history "SUCCESS"
 
     echo -e "\n${GREEN}╭──────────────────────────────────────────────────────────╮${NC}"
     printf "${GREEN}│${NC}  ${BOLD}%-56s${NC}${GREEN}│${NC}\n" "✓ Deployment Successful!"

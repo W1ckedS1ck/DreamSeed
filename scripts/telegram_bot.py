@@ -7,6 +7,8 @@ import time
 import subprocess
 import requests
 
+from env_loader import load_env
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s',
@@ -17,17 +19,7 @@ log = logging.getLogger('dreamseed-bot')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(SCRIPT_DIR, '.env')
 
-def load_env():
-    if os.path.exists(ENV_FILE):
-        with open(ENV_FILE) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    value = value.strip('"').strip("'")
-                    os.environ.setdefault(key, value)
-
-load_env()
+load_env(ENV_FILE)
 
 TG_TOKEN = os.environ.get('TG_TOKEN', '')
 TG_CHAT_ID = os.environ.get('TG_CHAT_ID', '')
