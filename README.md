@@ -145,7 +145,10 @@ DreamSeed/
 ├── scripts/                  # Backup, restore, Telegram bot, daily/weekly reports
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter), Grafana dashboards
 ├── secrets/                  # Ansible Vault encrypted secrets (gitignored)
-└── .github/workflows/ci.yml  # Full lint + security + validation pipeline
+└── .github/workflows/
+    ├── ci.yml                # Full lint + security + validation pipeline
+    ├── deploy.yml            # One-button deploy via GitHub Actions (no local machine needed)
+    └── drift-detection.yml   # Daily terraform plan against prod — alerts on infrastructure drift
 ```
 
 ---

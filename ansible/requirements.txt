@@ -1,1 +1,1 @@
-ansible-lint>=24.0,<27
+ansible-lint
