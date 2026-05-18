@@ -24,7 +24,7 @@ env:
 
 jobs:
   test-restore:
-    name: Test backup restoration (${{ env.TARGET }})
+    name: Test backup restoration (${{ inputs.environment || 'hetzner' }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
