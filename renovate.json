@@ -7,7 +7,9 @@
   "labels": ["dependencies"],
   "enabledManagers": ["github-actions", "terraform"],
   "terraform": {
-    "fileMatch": ["terraform/.*\\.tf$"],
+    "managerFilePatterns": [
+      "/terraform/.*\\.tf$/"
+    ],
     "versioning": "semver"
   },
   "packageRules": [
