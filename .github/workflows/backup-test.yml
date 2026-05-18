@@ -93,14 +93,14 @@ jobs:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
           terraform init -input=false -no-color
-          terraform workspace select test-hetzner -no-color 2>/dev/null || terraform workspace new test-hetzner -no-color
+          terraform workspace select test -no-color 2>/dev/null || terraform workspace new test -no-color
 
       - name: Terraform Apply
         id: terraform
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: test-hetzner
+          TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
           terraform apply -auto-approve -no-color \
@@ -303,7 +303,7 @@ jobs:
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: test-hetzner
+          TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
           (terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log) || true
