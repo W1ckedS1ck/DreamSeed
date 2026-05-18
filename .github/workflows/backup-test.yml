@@ -92,8 +92,8 @@ jobs:
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
-          terraform init
-          terraform workspace new test-hetzner 2>/dev/null || terraform workspace select test-hetzner
+          terraform init -input=false -no-color
+          terraform workspace select test-hetzner -no-color 2>/dev/null || terraform workspace new test-hetzner -no-color
 
       - name: Terraform Apply
         id: terraform
