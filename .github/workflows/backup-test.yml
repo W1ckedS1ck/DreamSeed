@@ -278,9 +278,8 @@ jobs:
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           SCORE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "cd /tmp && rm -rf lynis && git clone --depth 1 https://github.com/CISOfy/lynis && \
-             cd lynis && sudo chown -R root:root && \
-             sudo ./lynis audit system --quick --no-colors 2>/dev/null | \
+            "sudo apt-get install -y lynis -qq && \
+             sudo lynis audit system --quick --no-colors 2>/dev/null | \
              awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" 2>/dev/null || true)
           SCORE="${SCORE:-?}"
           echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
@@ -341,17 +340,13 @@ jobs:
           LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
 
           [ "$RESTORE" = "success" ] && STATUS="✅" || STATUS="❌"
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 Backup Restoration Test $STATUS" \
-            "📅 $(date '+%Y-%m-%d %H:%M') · 🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
+            "📅 $(date '+%Y-%m-%d %H:%M') 🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
-            "📦 Restore    $(ok $RESTORE)" \
-            "🗄 DB         $(ok $DB)  ${ROWS:-?} rows" \
-            "🌐 Web        $(ok $WEB)" \
-            "🧩 MODX       $(ok $MODX)" \
-            "🔍 DAST       $(ok_dast $DAST_COUNT)  ${DAST_COUNT:-?}" \
-            "🛡 Hardening  ${LYNIS_SCORE:-?}/100" \
-            "🔥 Destroy    $(ok $DESTROY)")
+            "Restore $(ok $RESTORE) | DB $(ok $DB) (${ROWS:-?} rows) | Web $(ok $WEB)" \
+            "MODX $(ok $MODX) | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?}) | 🛡 ${LYNIS_SCORE:-?}/100" \
+            "🔥 Destroy $(ok $DESTROY)")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
