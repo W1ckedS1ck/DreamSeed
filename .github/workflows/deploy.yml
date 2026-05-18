@@ -68,8 +68,11 @@ jobs:
 
       - name: Deploy
         env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
+          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
+          export SSH_PUBLIC_KEY_PATH=~/.ssh/Vitali.pub
+
           WEB_FLAG="-n"
           [[ "${{ inputs.web_server }}" == "apache" ]] && WEB_FLAG="-a"
 

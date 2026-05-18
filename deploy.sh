@@ -58,6 +58,9 @@ CYAN=$'\033[0;36m'
 BOLD=$'\033[1m'
 DIM=$'\033[2m'
 NC=$'\033[0m'
+# Disable spinner/colors when not running in an interactive terminal (e.g. CI)
+[[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; CYAN=''; BOLD=''; DIM=''; NC=''; }
+TTY_MODE=$([[ -t 1 ]] && echo true || echo false)
 
 # --- Helpers ---
 yaml_escape() {
@@ -391,10 +394,17 @@ print_summary() {
 
 run_with_spinner() {
     local label="$1"; shift
-    local spins=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-    local i=0
     local icon
     icon=$(step_icon "$label")
+    if [[ "$TTY_MODE" == "false" ]]; then
+        local bar
+        bar=$(progress_bar "$STEP_NUM" "$TOTAL_STEPS")
+        echo "  $bar $STEP_NUM/$TOTAL_STEPS $icon $label"
+        "$@"
+        return
+    fi
+    local spins=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local i=0
     "$@" &
     local pid=$!
     while kill -0 "$pid" 2>/dev/null; do
@@ -412,6 +422,22 @@ run_with_spinner() {
 
 run_ansible() {
     local args=("$@")
+
+    if [[ "$TTY_MODE" == "false" ]]; then
+        local status_file
+        status_file=$(mktemp)
+        echo "0" > "$status_file"
+        ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
+        ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
+        ANSIBLE_FORCE_COLOR=0 \
+        ANSIBLE_NOCOLOR=1 \
+        "$ANSIBLE_PLAYBOOK" "${args[@]}" 2>&1 | tee -a "$LOG" || echo "$?" > "$status_file"
+        local status
+        status=$(cat "$status_file")
+        rm -f "$status_file"
+        return "$status"
+    fi
+
     local task_num=0
     local task_name=""
     local task_status=""
@@ -534,8 +560,10 @@ echo -e "\n${RED}╭────────────────────
     if ( cd "$TF_DIR" && "$TERRAFORM" show -no-color 2>/dev/null ) | grep -q "No state"; then
         echo -e "${YELLOW}No resources to destroy${NC}"; return 0
     fi
+    local tf_destroy_extra_vars=""
+    [[ "$TF_PROVIDER" == "aws" ]] && tf_destroy_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}'"
     run_with_spinner "Destroying resources ($TARGET)" \
-        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color >> '$TF_LOG' 2>&1"
+        bash -c "cd '$TF_DIR' && '$TERRAFORM' destroy -auto-approve -no-color ${tf_destroy_extra_vars} >> '$TF_LOG' 2>&1"
     
     local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
     rm -f "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
@@ -684,7 +712,8 @@ main() {
 
         local tfstate_backup_dir="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$tfstate_backup_dir"
-        cp "$TF_DIR/terraform.tfstate" "$tfstate_backup_dir/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+        [[ -f "$TF_DIR/terraform.tfstate" ]] && \
+            cp "$TF_DIR/terraform.tfstate" "$tfstate_backup_dir/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
         # shellcheck disable=SC2012  # tfstate filenames are timestamped, no spaces/newlines
         ls -1t "$tfstate_backup_dir/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
 
