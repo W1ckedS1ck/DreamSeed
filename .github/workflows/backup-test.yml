@@ -4,24 +4,41 @@ on:
   schedule:
     - cron: "0 10 * * 1"
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Target cloud provider
+        type: choice
+        options:
+          - hetzner
+          - aws
+        default: hetzner
 
 concurrency:
   group: backup-test
   cancel-in-progress: false
 
 env:
+  TARGET: ${{ inputs.environment || 'hetzner' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
 
 jobs:
   test-restore:
-    name: Test backup restoration
+    name: Test backup restoration (${{ env.TARGET }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Validate target
+        run: |
+          if [ "$TARGET" = "aws" ]; then
+            echo "::error::AWS target not implemented yet — use 'hetzner'"
+            exit 1
+          fi
+          echo "Target: $TARGET"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
