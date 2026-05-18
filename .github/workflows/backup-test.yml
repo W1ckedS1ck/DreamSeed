@@ -141,7 +141,10 @@ jobs:
             sleep 5
           done
 
-          echo "Waiting for user_data (apt upgrade) to finish..."
+          echo "Waiting for cloud-init to finish..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "timeout 300 cloud-init status --wait" 2>/dev/null || echo "cloud-init wait timed out, continuing..."
+          echo "Waiting for apt lock to release..."
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
           sleep 5
