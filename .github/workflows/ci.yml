@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -13,9 +17,9 @@ jobs:
     name: ShellCheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: '.'
           severity: error
@@ -26,7 +30,7 @@ jobs:
     name: Python Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run ruff
         uses: chartboost/ruff-action@v1
 
@@ -34,64 +38,72 @@ jobs:
     name: Ansible Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: pip
+          cache-dependency-path: ansible/requirements.txt
       - name: Run ansible-lint
         working-directory: ansible
         run: |
-          pip install ansible-lint --quiet
+          pip install -r requirements.txt --quiet
           ansible-lint .
 
   tflint:
     name: Terraform Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: actions/checkout@v6
+      - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
       - name: Init TFLint
         run: tflint --init
       - name: Run TFLint
         run: |
-          for dir in terraform/aws terraform/hetzner; do
+          for dir in terraform/*/; do
             echo "=== Linting $dir ==="
             tflint --chdir="$dir"
           done
 
-  tfsec:
+  trivy:
     name: Terraform Security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Run tfsec
-        uses: aquasecurity/tfsec-action@v1.0.3
+      - uses: actions/checkout@v6
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
-          working_directory: terraform
+          scan-type: config
+          scan-ref: terraform
+          exit-code: '1'
+          severity: HIGH,CRITICAL
 
   gitleaks:
     name: Secret Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Secret Scan
+        run: |
+          curl -sL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --verbose
 
   terraform-validate:
     name: Terraform Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: latest
       - name: Validate all providers
         run: |
-          for dir in terraform/aws terraform/hetzner; do
+          for dir in terraform/*/; do
             echo "=== Validating $dir ==="
             terraform -chdir="$dir" init -backend=false -upgrade
             terraform -chdir="$dir" validate
           done
-          # cloudV2 uses a private registry (cloud.ru) not accessible from CI

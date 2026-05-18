@@ -1,0 +1,354 @@
+name: Backup Restoration Test
+
+on:
+  schedule:
+    - cron: "0 10 * * 1"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target cloud provider
+        type: choice
+        options:
+          - hetzner
+          - aws
+        default: hetzner
+
+concurrency:
+  group: backup-test
+  cancel-in-progress: false
+
+env:
+  TARGET: ${{ inputs.environment || 'hetzner' }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+
+jobs:
+  test-restore:
+    name: Test backup restoration (${{ inputs.environment || 'hetzner' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate target
+        run: |
+          if [ "$TARGET" = "aws" ]; then
+            echo "::error::AWS target not implemented yet — use 'hetzner'"
+            exit 1
+          fi
+          echo "Target: $TARGET"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: latest
+
+      - name: Setup environment
+        env:
+          ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
+          VAULT_PASS: ${{ secrets.VAULT_PASSWORD }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
+        run: |
+          mkdir -p secrets
+          echo "$ENV_FILE_B64" | base64 -d > secrets/.env
+          chmod 600 secrets/.env
+
+          echo -n "$VAULT_PASS" > ~/.vault_pass_dreamseed
+          chmod 600 ~/.vault_pass_dreamseed
+
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/Vitali.pem
+          chmod 600 ~/.ssh/Vitali.pem
+
+          if [ -n "$RCLONE_CONF_B64" ]; then
+            echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf
+            chmod 600 secrets/rclone.conf
+          fi
+
+          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
+
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+          echo "::add-mask::$HCLOUD_TOKEN"
+          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+          echo "::add-mask::$DB_PASS"
+          echo "::add-mask::$TG_TOKEN"
+          echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/Vitali.pub)" >> "$GITHUB_ENV"
+          echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
+
+      - name: Install Ansible
+        run: |
+          pip install -r ansible/requirements-deploy.txt --quiet
+          ansible-galaxy collection install community.mysql ansible.posix
+
+      - name: Terraform Init
+        working-directory: terraform/hetzner
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_WORKSPACE: test
+        run: |
+          terraform init -input=false -no-color
+
+      - name: Terraform Apply
+        id: terraform
+        working-directory: terraform/hetzner
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_WORKSPACE: test
+          TF_VAR_environment: test
+        run: |
+          terraform apply -auto-approve -no-color \
+            -var="environment=test"
+          echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
+
+      - name: Provision & wait
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+
+          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          if [ -n "$RECORD_ID" ]; then
+            curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}" > /dev/null
+          else
+            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}" > /dev/null
+          fi
+          echo "DNS: test.dreamseed.online -> $SERVER_IP"
+
+          echo "Waiting for SSH on $SERVER_IP..."
+          for i in $(seq 1 30); do
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP "exit 0" 2>/dev/null; then
+              echo "SSH is ready"
+              break
+            fi
+            echo "Attempt $i/30 - waiting..."
+            [ "$i" -eq 30 ] && { echo "SSH never became available"; exit 1; }
+            sleep 5
+          done
+
+          echo "Waiting for cloud-init to finish..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "timeout 300 cloud-init status --wait" 2>/dev/null || echo "cloud-init wait timed out, continuing..."
+          echo "Waiting for apt lock to release..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
+          sleep 5
+
+      - name: Generate config
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+
+          cat > ansible/inventory/hosts-test.yml <<EOF
+          all:
+            hosts:
+              dreamseed:
+                ansible_host: ${SERVER_IP}
+                ansible_user: ubuntu
+                ansible_ssh_private_key_file: ~/.ssh/Vitali.pem
+                ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+            vars:
+              web_server: nginx
+              domain: test.dreamseed.online
+              server_ip: ${SERVER_IP}
+              db_name: modx_db
+              admin_email: admin@dreamseed.online
+          EOF
+
+          cat > /tmp/test_vault.yml <<EOF
+          db_pass: "${DB_PASS}"
+          server_ip: "${{ steps.terraform.outputs.server_ipv4 }}"
+          web_server: nginx
+          domain: test.dreamseed.online
+          cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
+          EOF
+          chmod 600 /tmp/test_vault.yml
+
+      - name: Deploy Base packages
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml
+
+      - name: Deploy Nginx
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-02-nginx.yml -e @/tmp/test_vault.yml
+
+      - name: Deploy Database
+        id: deploy_db
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml
+
+      - name: Run database tests
+        id: db_tests
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || { echo "[FAIL] MariaDB not running"; exit 1; }
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || { echo "[FAIL] DB connect"; exit 1; }
+          TABLE_COUNT=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'")
+          echo "MODX content rows: $TABLE_COUNT"
+          echo "content_rows=$TABLE_COUNT" >> "$GITHUB_OUTPUT"
+          [ "${TABLE_COUNT:-0}" -gt 0 ] && echo "[PASS] Content rows: $TABLE_COUNT" || { echo "[FAIL] No content rows — restore may have failed"; exit 1; }
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "mysqlcheck --all-databases" && echo "[PASS] DB integrity" || echo "[WARN] DB check issues"
+
+      - name: Run web server tests
+        id: web_tests
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx not running"; exit 1; }
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM not running"; exit 1; }
+          HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" http://$SERVER_IP/ -L --max-redirs 3 || echo "000")
+          echo "HTTP code: $HTTP_CODE"
+          [ "$HTTP_CODE" = "200" ] && echo "[PASS] HTTP 200" || echo "[WARN] HTTP not 200"
+
+      - name: Run MODX tests
+        id: modx_tests
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; exit 1; }
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || { echo "[FAIL] Assets missing"; exit 1; }
+          BODY=$(curl -sk \
+            --resolve "test.dreamseed.online:80:$SERVER_IP" \
+            --resolve "test.dreamseed.online:443:$SERVER_IP" \
+            http://test.dreamseed.online/ -L --max-redirs 3 --max-time 10 || true)
+          echo "$BODY" | grep -qi "fatal error\|parse error\|<b>Warning" \
+            && { echo "[FAIL] PHP errors in response"; exit 1; } || echo "[PASS] No PHP errors"
+          echo "$BODY" | grep -qi "<html" \
+            && echo "[PASS] HTML response" || { echo "[FAIL] No HTML in response"; exit 1; }
+
+      - name: DAST scan (nuclei)
+        id: dast
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "$SERVER_IP test.dreamseed.online" | sudo tee -a /etc/hosts > /dev/null
+
+          NUCLEI_VER=$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'][1:])")
+          wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VER}/nuclei_${NUCLEI_VER}_linux_amd64.zip"
+          unzip -q nuclei_*.zip nuclei && chmod +x ./nuclei
+          ./nuclei -update-templates -silent
+
+          ./nuclei \
+            -u "https://test.dreamseed.online/" \
+            -tags "misconfig,exposure,headers,tech" \
+            -severity "low,medium,high,critical" \
+            -silent -json-export /tmp/nuclei.json || true
+
+          COUNT=$(wc -l < /tmp/nuclei.json 2>/dev/null || echo 0)
+          echo "dast_count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "DAST findings: $COUNT"
+          cat > /tmp/show_findings.py << 'PYEOF'
+          import json
+          for line in open('/tmp/nuclei.json'):
+              f = json.loads(line)
+              print(f"  [{f['info']['severity'].upper()}] {f['template-id']}: {f['matched-at']}")
+          PYEOF
+          [ "$COUNT" -gt 0 ] && python3 /tmp/show_findings.py || true
+
+      - name: Run disk check
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          DISK_USAGE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
+          echo "Disk usage: $DISK_USAGE%"
+          [ "${DISK_USAGE:-100}" -lt 90 ] && echo "[PASS] Disk space OK" || echo "[WARN] Disk space low"
+
+      - name: Security audit (lynis)
+        id: lynis
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          SCORE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "sudo apt-get install -y lynis -qq && \
+             sudo lynis audit system --quick --no-colors 2>/dev/null | \
+             awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" 2>/dev/null || true)
+          SCORE="${SCORE:-?}"
+          echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
+          echo "Hardening index: $SCORE"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+          rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
+          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          [ -n "$RECORD_ID" ] && curl -s -X DELETE \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /dev/null && echo "DNS record deleted" || echo "No DNS record to delete"
+
+      - name: Terraform Destroy
+        id: destroy
+        if: always()
+        working-directory: terraform/hetzner
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_WORKSPACE: test
+          TF_VAR_environment: test
+        run: |
+          (terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log) || true
+          grep -q "Destroy complete" /tmp/tf_destroy.log || { echo "Terraform destroy failed"; exit 1; }
+          # Delete CI SSH key if it was created
+          HCLOUD_TOKEN=$(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed 2>/dev/null | grep HCLOUD_TOKEN | cut -d= -f2)
+          if [ -n "$HCLOUD_TOKEN" ]; then
+            KEY_ID=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+              "https://api.hetzner.cloud/v1/ssh_keys?name=dreamseed-ci-test" \
+              | python3 -c "import sys,json; r=json.load(sys.stdin)['ssh_keys']; print(r[0]['id'] if r else '')" 2>/dev/null)
+            [ -n "$KEY_ID" ] && curl -sf -X DELETE \
+              "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID" \
+              -H "Authorization: Bearer $HCLOUD_TOKEN" > /dev/null && echo "CI SSH key deleted"
+          fi
+
+      - name: Send Telegram report
+        if: always()
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+
+          ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
+          ok_dast() { [ -z "$1" ] && echo "❓" || { [ "$1" -eq 0 ] && echo "✅" || echo "❌"; }; }
+          RESTORE="${{ steps.deploy_db.outcome }}"
+          DB="${{ steps.db_tests.outcome }}"
+          WEB="${{ steps.web_tests.outcome }}"
+          MODX="${{ steps.modx_tests.outcome }}"
+          DESTROY="${{ steps.destroy.outcome }}"
+          ROWS="${{ steps.db_tests.outputs.content_rows }}"
+          DAST_COUNT="${{ steps.dast.outputs.dast_count }}"
+          LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
+
+          [ "$RESTORE" = "success" ] && STATUS="✅" || STATUS="❌"
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "📦 Backup Restoration Test $STATUS" \
+            "📅 $(date '+%Y-%m-%d %H:%M')" \
+            "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
+            "" \
+            "Restore $(ok $RESTORE) | DB $(ok $DB) (${ROWS:-?} rows) | Web $(ok $WEB)" \
+            "MODX $(ok $MODX) | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?}) | Destroy $(ok $DESTROY)" \
+            "🛡 Hardening ${LYNIS_SCORE:-?}/100")
+
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=$MSG" > /dev/null || true

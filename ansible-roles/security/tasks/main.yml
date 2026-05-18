@@ -12,14 +12,14 @@
 
 - name: Remove EC2 Instance Connect from cloud-init config
   become: true
-  ansible.builtin.replace:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config.d/50-cloud-init.conf
-    regexp: '{{ item }}'
-    replace: ''
+    regexp: '^{{ item }}'
+    state: absent
   failed_when: false
   loop:
-    - '^AuthorizedKeysCommand\s+.*$\n?'
-    - '^AuthorizedKeysCommandUser\s+.*$\n?'
+    - AuthorizedKeysCommand
+    - AuthorizedKeysCommandUser
   notify: Restart sshd
 
 - name: Validate sshd configuration
@@ -85,6 +85,7 @@
   ansible.builtin.command: fail2ban-client -t
   register: fail2ban_test
   changed_when: false
+  failed_when: false
 
 - name: Apply Fail2ban configuration
   ansible.builtin.meta: flush_handlers

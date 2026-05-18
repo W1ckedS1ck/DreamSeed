@@ -2,3 +2,4 @@
 collections:
   - name: community.mysql
     version: ">=3.0.0"
+  - name: ansible.posix

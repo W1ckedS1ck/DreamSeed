@@ -22,10 +22,10 @@
     - smart_backup.sh
     - upload_backups_to_gdrive.sh
     - RESTORE_ALL.sh
+    - send_report.sh
     - test_tg.sh
     - common_functions.sh
-    - daily_report.sh
-    - weekly_report.sh
+    - env_loader.py
 
 - name: Upload Telegram bot script
   ansible.builtin.copy:
@@ -52,9 +52,9 @@
     mode: "0644"
   notify: Reload systemd and restart bot
 
-- name: Upload .env secrets
-  ansible.builtin.copy:
-    src: "{{ secrets_dir }}/.env"
+- name: Render server .env (whitelist only — no cloud credentials)
+  ansible.builtin.template:
+    src: server.env.j2
     dest: "{{ scripts_dir_remote }}/.env"
     owner: ubuntu
     group: ubuntu
@@ -92,7 +92,7 @@
     name: "DreamSeed daily report"
     minute: "30"
     hour: "15"
-    job: "{{ scripts_dir_remote }}/daily_report.sh"
+    job: "{{ scripts_dir_remote }}/send_report.sh daily"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
@@ -102,6 +102,18 @@
     minute: "30"
     hour: "18"
     weekday: "0"
-    job: "{{ scripts_dir_remote }}/weekly_report.sh"
+    job: "{{ scripts_dir_remote }}/send_report.sh weekly"
     user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup daily session cleanup cron
+  ansible.builtin.cron:
+    name: "DreamSeed session cleanup"
+    minute: "0"
+    hour: "4"
+    job: >
+      mysql -u root modx_db -e
+      "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
+      2>/dev/null || true
+    user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"

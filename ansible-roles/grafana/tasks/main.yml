@@ -80,43 +80,32 @@
     mode: "0644"
   notify: Restart Grafana
 
-- name: Deploy common Grafana dashboards
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}
-    owner: grafana
-    group: grafana
-    mode: "0644"
-  loop:
-    - "node-exporter-full.json"
-    - "mysql-database.json"
-    - "victoria-metrics-single-node.json"
+- name: Sync Grafana dashboards
+  ansible.posix.synchronize:
+    src: "{{ role_path }}/files/"
+    dest: /var/lib/grafana/dashboards/
+    checksum: yes
+    rsync_path: "sudo rsync"
+    rsync_opts: "{{ _web_excludes + ['--include=*.json', '--exclude=*'] }}"
+  become: false
+  vars:
+    _web_excludes: "{{ ['--exclude=apache-exporter.json'] if web_server == 'nginx' else ['--exclude=nginx.json', '--exclude=nginx-prometheus.json'] }}"
   notify: Restart Grafana
 
-- name: Deploy Apache dashboards
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}
+- name: Fix Grafana dashboard directory ownership and permissions
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
     owner: grafana
     group: grafana
-    mode: "0644"
-  loop:
-    - "apache-exporter.json"
-  notify: Restart Grafana
-  when: web_server == "apache"
+    mode: "0755"
+    recurse: true
+  become: true
 
-- name: Deploy Nginx dashboards
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}"
-    owner: grafana
-    group: grafana
-    mode: "0644"
-  loop:
-    - "nginx.json"
-    - "nginx-prometheus.json"
-  notify: Restart Grafana
-  when: web_server == "nginx"
+- name: Fix Grafana dashboard file permissions
+  ansible.builtin.shell:
+    cmd: find /var/lib/grafana/dashboards -type f -name "*.json" -exec chmod 0644 {} +
+  changed_when: false
+  become: true
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
@@ -150,7 +139,7 @@
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 15
+  retries: 14
   delay: 2
 
 - name: Check if Grafana admin password needs reset
@@ -160,33 +149,16 @@
   when:
     - grafana_admin_password | default('') | length > 0
 
-- name: Reset Grafana admin password
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{grafana_port }}/api/admin/users/1/password"
-    method: PUT
-    user: admin
-    password: admin
-    force_basic_auth: true
-    body:
-      password: "{{ grafana_admin_password }}"
-    body_format: json
-    headers:
-      Content-Type: application/json
-    status_code: [200, 401]
-  no_log: true
-  register: grafana_password_result
-  when:
-    - grafana_admin_password | default('') | length > 0
-    - not grafana_password_flag.stat.exists
-
-- name: Fallback to CLI if API auth failed (password already changed)
-  ansible.builtin.shell: grafana-cli admin reset-admin-password {{ grafana_admin_password }}
+- name: Reset Grafana admin password via CLI
+  ansible.builtin.shell:
+    cmd: grafana-cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
+    stdin: "{{ grafana_admin_password }}"
   no_log: true
   changed_when: true
+  register: grafana_cli_result
   when:
     - grafana_admin_password | default('') | length > 0
-    - not grafana_password_flag.stat.exists
-    - grafana_password_result is defined and grafana_password_result.status == 401
+    - not (grafana_password_flag.stat.exists | default(false))
 
 - name: Mark Grafana admin password as set
   ansible.builtin.copy:
@@ -197,11 +169,12 @@
     group: grafana
   when:
     - grafana_admin_password | default('') | length > 0
-    - not grafana_password_flag.stat.exists
+    - not (grafana_password_flag.stat.exists | default(false))
 
 - name: Warn if Grafana password reset failed
   ansible.builtin.debug:
-    msg: "WARNING: Grafana password reset failed — {{ grafana_password_reset.stdout | default('') }}"
+    msg: "WARNING: Grafana CLI password reset failed"
   when:
-    - grafana_admin_password | default('') | length > 0
-    - grafana_password_reset is defined and grafana_password_reset is failed
+    - grafana_cli_result is defined
+    - grafana_cli_result is not skipped
+    - grafana_cli_result.rc != 0

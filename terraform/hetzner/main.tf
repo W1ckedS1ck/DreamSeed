@@ -1,11 +1,19 @@
 terraform {
+  required_version = ">= 1.1"
+
+  backend "remote" {
+    organization = "Dreamseed"
+    workspaces {
+      prefix = "dreamseed-"
+    }
+  }
+
   required_providers {
     hcloud = {
       source  = "hetznercloud/hcloud"
-      version = "~> 1.0"
+      version = "~> 1.63"
     }
   }
-  required_version = ">= 0.14"
 }
 
 provider "hcloud" {
@@ -19,13 +27,19 @@ variable "hcloud_token" {
 
 variable "ssh_key_name" {
   type        = string
-  description = "Name of the SSH key in Hetzner Cloud"
+  description = "Name of an existing SSH key in Hetzner Cloud. Empty = create from ssh_public_key"
   default     = "Vitali"
+}
+
+variable "ssh_public_key" {
+  type        = string
+  description = "Public key content (used when ssh_key_name is empty)"
+  default     = ""
 }
 
 variable "primary_ip_name" {
   type        = string
-  description = "Name of the existing Primary IP in Hetzner Cloud"
+  description = "Name of the existing Primary IP in Hetzner Cloud. Empty = dynamic IP"
   default     = "primary_ip-1"
 }
 
@@ -35,8 +49,20 @@ variable "environment" {
   default     = "prod"
 }
 
+locals {
+  use_dynamic_ip = var.primary_ip_name == ""
+  use_existing_key = var.ssh_key_name != ""
+}
+
 data "hcloud_ssh_key" "default" {
-  name = var.ssh_key_name
+  count = local.use_existing_key ? 1 : 0
+  name  = var.ssh_key_name
+}
+
+resource "hcloud_ssh_key" "ci_key" {
+  count      = local.use_existing_key ? 0 : 1
+  name       = "dreamseed-ci-${var.environment}"
+  public_key = var.ssh_public_key
 }
 
 resource "hcloud_firewall" "web" {
@@ -65,7 +91,8 @@ resource "hcloud_firewall" "web" {
 }
 
 data "hcloud_primary_ip" "main" {
-  name = var.primary_ip_name
+  count = local.use_dynamic_ip ? 0 : 1
+  name  = var.primary_ip_name
 }
 
 resource "hcloud_server" "main" {
@@ -73,13 +100,12 @@ resource "hcloud_server" "main" {
   server_type  = "cx23"
   image        = "ubuntu-24.04"
   location     = "nbg1"
-  ssh_keys     = [data.hcloud_ssh_key.default.id]
+  ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
   firewall_ids = [hcloud_firewall.web.id]
 
   public_net {
     ipv4_enabled = true
-    ipv4         = data.hcloud_primary_ip.main.id
-    # ipv6_enabled = true
+    ipv4         = local.use_dynamic_ip ? null : data.hcloud_primary_ip.main[0].id
   }
 
   user_data = <<-EOF

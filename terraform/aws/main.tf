@@ -1,8 +1,20 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.1"
+
+  backend "remote" {
+    organization = "Dreamseed"
+    workspaces {
+      prefix = "dreamseed-"
+    }
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
       version = "~> 5.0"
     }
   }
@@ -10,6 +22,10 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
 
 variable "aws_region" {
@@ -20,11 +36,12 @@ variable "aws_region" {
 
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"]
+  owners      = ["099720109477", "839968031152"]
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"] # 24.04 LTS
+    #   values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-resolute-26.04-amd64-server-*"]   # 26.04 LTS
   }
 
   filter {
@@ -42,7 +59,6 @@ variable "instance_type" {
 variable "ssh_public_key_path" {
   description = "Path to SSH public key"
   type        = string
-  default     = "~/.ssh/Vitali.pub"
 }
 
 variable "elastic_ip_allocation_id" {
@@ -57,9 +73,32 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "domain" {
+  description = "Domain name for the deployment (e.g., dreamseed.online, test.dreamseed.online)"
+  type        = string
+  default     = ""
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for DNS management"
+  type        = string
+  default     = ""
+}
+
+locals {
+  environment_tag = var.environment == "prod" ? "Prod" : "Dev"
+  service_tag     = "DreamSeed"
+}
+
 resource "aws_key_pair" "deploy" {
   key_name   = "dreamseed-key-${var.environment}"
   public_key = file(pathexpand(var.ssh_public_key_path))
+
+  tags = {
+    Name        = "dreamseed-key-${var.environment}"
+    Environment = local.environment_tag
+    Service     = local.service_tag
+  }
 }
 
 resource "aws_security_group" "web" {
@@ -100,20 +139,27 @@ resource "aws_security_group" "web" {
 
   tags = {
     Name        = "dreamseed-sg-${var.environment}"
-    Environment = var.environment
+    Environment = local.environment_tag
+    Service     = local.service_tag
   }
 }
 
 resource "aws_instance" "web" {
-  ami             = data.aws_ami.ubuntu.id
-  instance_type   = var.instance_type
-  key_name        = aws_key_pair.deploy.key_name
-  security_groups = [aws_security_group.web.name]
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.instance_type
+  key_name                    = aws_key_pair.deploy.key_name
+  security_groups             = [aws_security_group.web.name]
+  associate_public_ip_address = false
 
   root_block_device {
     volume_size = 30
     volume_type = "gp3"
     encrypted   = true
+    tags = {
+      Name        = "dreamseed-${var.environment}-root"
+      Environment = local.environment_tag
+      Service     = local.service_tag
+    }
   }
 
   user_data = <<-EOF
@@ -133,7 +179,18 @@ resource "aws_instance" "web" {
 
   tags = {
     Name        = "dreamseed-${var.environment}"
-    Environment = var.environment
+    Environment = local.environment_tag
+    Service     = local.service_tag
+  }
+}
+
+resource "aws_eip" "dynamic" {
+  count  = var.domain != "" && var.elastic_ip_allocation_id == "" ? 1 : 0
+  domain = "vpc"
+  tags = {
+    Name        = "dreamseed-dynamic-${var.environment}"
+    Environment = local.environment_tag
+    Service     = local.service_tag
   }
 }
 
@@ -143,14 +200,30 @@ data "aws_eip" "reserved" {
 }
 
 resource "aws_eip_association" "web" {
-  count         = var.elastic_ip_allocation_id != "" ? 1 : 0
-  allocation_id = data.aws_eip.reserved[0].id
+  count         = var.elastic_ip_allocation_id != "" || var.domain != "" ? 1 : 0
+  allocation_id = var.domain != "" ? aws_eip.dynamic[0].id : data.aws_eip.reserved[0].id
   instance_id   = aws_instance.web.id
+}
+
+resource "cloudflare_dns_record" "dynamic" {
+  count   = var.domain != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = var.domain
+  content = var.domain != "" ? aws_eip.dynamic[0].public_ip : data.aws_eip.reserved[0].public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = true
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare zone ID for DNS management"
+  type        = string
+  default     = ""
 }
 
 output "server_ipv4" {
   description = "Public IP address of the instance"
-  value       = var.elastic_ip_allocation_id != "" ? data.aws_eip.reserved[0].public_ip : aws_instance.web.public_ip
+  value       = var.domain != "" ? aws_eip.dynamic[0].public_ip : (var.elastic_ip_allocation_id != "" ? data.aws_eip.reserved[0].public_ip : aws_instance.web.public_ip)
 }
 
 output "instance_id" {
