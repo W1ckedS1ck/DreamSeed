@@ -142,10 +142,10 @@ jobs:
           done
 
           echo "Waiting for cloud-init to finish..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "timeout 300 cloud-init status --wait" 2>/dev/null || echo "cloud-init wait timed out, continuing..."
           echo "Waiting for apt lock to release..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
           sleep 5
 
@@ -195,25 +195,25 @@ jobs:
         id: db_tests
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || { echo "[FAIL] MariaDB not running"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || { echo "[FAIL] DB connect"; exit 1; }
-          TABLE_COUNT=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          TABLE_COUNT=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'")
           echo "MODX content rows: $TABLE_COUNT"
           echo "content_rows=$TABLE_COUNT" >> "$GITHUB_OUTPUT"
           [ "${TABLE_COUNT:-0}" -gt 0 ] && echo "[PASS] Content rows: $TABLE_COUNT" || { echo "[FAIL] No content rows — restore may have failed"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "mysqlcheck --all-databases" && echo "[PASS] DB integrity" || echo "[WARN] DB check issues"
 
       - name: Run web server tests
         id: web_tests
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx not running"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM not running"; exit 1; }
           HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" http://$SERVER_IP/ -L --max-redirs 3 || echo "000")
           echo "HTTP code: $HTTP_CODE"
@@ -223,9 +223,9 @@ jobs:
         id: modx_tests
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || { echo "[FAIL] Assets missing"; exit 1; }
           BODY=$(curl -sk \
             --resolve "test.dreamseed.online:80:$SERVER_IP" \
@@ -268,8 +268,8 @@ jobs:
       - name: Run disk check
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          DISK_USAGE=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'")
+          DISK_USAGE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
           echo "Disk usage: $DISK_USAGE%"
           [ "${DISK_USAGE:-100}" -lt 90 ] && echo "[PASS] Disk space OK" || echo "[WARN] Disk space low"
 
@@ -277,9 +277,9 @@ jobs:
         id: lynis
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          SCORE=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+          SCORE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "cd /tmp && rm -rf lynis && git clone --depth 1 https://github.com/CISOfy/lynis && \
-             cd lynis && sudo chown -R root:root . && \
+             cd lynis && sudo chown -R root:root && \
              sudo ./lynis audit system --quick --no-colors 2>/dev/null | \
              awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" 2>/dev/null || true)
           SCORE="${SCORE:-?}"
