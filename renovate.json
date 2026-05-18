@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":separateMajorMinor",
+    ":combinePatchMinorUpdates"
+  ],
+  "schedule": ["before 9am on monday"],
+  "labels": ["dependencies"],
+  "enabledManagers": ["github-actions", "terraform"],
+  "terraform": {
+    "fileMatch": ["terraform/.*\\.tf$"],
+    "versioning": "semver"
+  },
+  "packageRules": [
+    {
+      "description": "Group all non-major Terraform provider updates",
+      "matchManagers": ["terraform"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Terraform providers",
+      "labels": ["terraform", "update"]
+    },
+    {
+      "description": "Major Terraform updates — separate PRs with review label",
+      "matchManagers": ["terraform"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["terraform", "major-update", "needs-review"]
+    },
+  ]
+}
