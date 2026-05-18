@@ -26,7 +26,6 @@
     - common_functions.sh
     - daily_report.sh
     - weekly_report.sh
-    - bot_handler.sh
 
 - name: Upload Telegram bot script
   ansible.builtin.copy:
@@ -51,6 +50,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Reload systemd and restart bot
 
 - name: Upload .env secrets
   ansible.builtin.copy:
@@ -60,28 +60,15 @@
     group: ubuntu
     mode: "0600"
 
-- name: Reload systemd and enable bot service
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Enable bot service
   ansible.builtin.systemd:
-    daemon_reload: yes
     name: telegram-bot
     enabled: yes
     state: started
 
-- name: Upload loadtest script as template
-  ansible.builtin.template:
-    src: "{{ scripts_dir }}/loadtest.sh.j2"
-    dest: "{{ scripts_dir_remote }}/loadtest.sh"
-    owner: ubuntu
-    group: ubuntu
-    mode: "0755"
-
-- name: Upload test mail script
-  ansible.builtin.copy:
-    src: "{{ scripts_dir }}/test_mail.py"
-    dest: "{{ scripts_dir_remote }}/test_mail.py"
-    owner: ubuntu
-    group: ubuntu
-    mode: "0644"
 
 - name: Setup hourly backup cron
   ansible.builtin.cron:

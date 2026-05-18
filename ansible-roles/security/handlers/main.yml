@@ -10,3 +10,7 @@
   ansible.builtin.systemd:
     name: fail2ban
     state: restarted
+
+- name: Reload sysctl
+  become: true
+  ansible.builtin.command: sysctl --system

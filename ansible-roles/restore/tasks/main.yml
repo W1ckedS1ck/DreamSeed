@@ -1,15 +1,27 @@
 ---
+- name: Check if rclone config exists
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/rclone.conf"
+  register: rclone_config_stat
+  delegate_to: localhost
+
 - name: Create rclone config directory
   ansible.builtin.file:
     path: "/home/ubuntu/.config/rclone"
     state: directory
+    owner: ubuntu
+    group: ubuntu
     mode: "0700"
+  when: rclone_config_stat.stat.exists
 
 - name: Upload rclone config
   ansible.builtin.copy:
     src: "{{ secrets_dir }}/rclone.conf"
     dest: "/home/ubuntu/.config/rclone/rclone.conf"
+    owner: ubuntu
+    group: ubuntu
     mode: "0600"
+  when: rclone_config_stat.stat.exists
 
 # ========================
 #  Restore Project
@@ -27,12 +39,24 @@
     executable: /bin/bash
   register: restore_latest_project
   changed_when: false
-  when: not restore_site_exists.stat.exists
+  when:
+    - not restore_site_exists.stat.exists
+    - rclone_config_stat.stat.exists
 
 - name: Fail if no project backup found
   ansible.builtin.fail:
     msg: "No project backups found on Google Drive"
-  when: not restore_site_exists.stat.exists and (restore_latest_project.stdout | trim == "")
+  when:
+    - not restore_site_exists.stat.exists
+    - rclone_config_stat.stat.exists
+    - restore_latest_project.stdout | trim == ""
+
+- name: Skip restore (no rclone config)
+  ansible.builtin.debug:
+    msg: "⊘ rclone.conf not found — skipping restore from Google Drive"
+  when:
+    - not restore_site_exists.stat.exists
+    - not rclone_config_stat.stat.exists
 
 - name: Download project backup
   ansible.builtin.shell:
@@ -40,7 +64,9 @@
       set -o pipefail
       rclone copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /tmp/
     executable: /bin/bash
-  when: not restore_site_exists.stat.exists
+  when:
+    - not restore_site_exists.stat.exists
+    - rclone_config_stat.stat.exists
   changed_when: false
 
 - name: Verify project archive integrity
@@ -49,21 +75,12 @@
       set -o pipefail
       tar -tzf "/tmp/{{ restore_latest_project.stdout | trim }}" > /dev/null 2>&1
     executable: /bin/bash
-  when: not restore_site_exists.stat.exists
+  when:
+    - not restore_site_exists.stat.exists
+    - rclone_config_stat.stat.exists
   register: restore_archive_check
   changed_when: false
   failed_when: restore_archive_check.rc != 0
-
-- name: Verify .htaccess exists in archive
-  ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      tar -tzf "/tmp/{{ restore_latest_project.stdout | trim }}" | grep -c '.htaccess' && exit 0 || exit 0
-    executable: /bin/bash
-  when: not restore_site_exists.stat.exists
-  register: restore_htaccess_check
-  changed_when: false
-  failed_when: false
 
 - name: Extract project
   become: true
@@ -79,16 +96,11 @@
   changed_when: false
 
 - name: Verify project extraction
-  become: true
-  ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      test -f {{ web_root }}/index.php && test -s {{ web_root }}/.htaccess
-    executable: /bin/bash
+  ansible.builtin.stat:
+    path: "{{ web_root }}/index.php"
+  register: restore_index_check
   when: not restore_site_exists.stat.exists
-  register: restore_extract_check
-  changed_when: false
-  failed_when: restore_extract_check.rc != 0
+  failed_when: not restore_index_check.stat.exists or restore_index_check.stat.size == 0
 
 - name: Cleanup project archive
   ansible.builtin.file:
@@ -131,12 +143,17 @@
     executable: /bin/bash
   register: restore_latest_db
   changed_when: false
-  when: restore_db_needs_restore
+  when:
+    - restore_db_needs_restore
+    - rclone_config_stat.stat.exists
 
 - name: Fail if no DB backup found
   ansible.builtin.fail:
     msg: "No DB backups found on Google Drive"
-  when: restore_db_needs_restore and (restore_latest_db.stdout | trim == "")
+  when:
+    - restore_db_needs_restore
+    - rclone_config_stat.stat.exists
+    - restore_latest_db.stdout | trim == ""
 
 - name: Download DB backup
   ansible.builtin.shell:
@@ -144,7 +161,9 @@
       set -o pipefail
       rclone copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /tmp/
     executable: /bin/bash
-  when: restore_db_needs_restore
+  when:
+    - restore_db_needs_restore
+    - rclone_config_stat.stat.exists
   changed_when: false
 
 - name: Restore database

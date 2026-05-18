@@ -1,6 +1,5 @@
 ---
 - name: Add Grafana GPG key
-  become: true
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
@@ -10,60 +9,48 @@
     creates: /usr/share/keyrings/grafana.gpg
   failed_when: false
 
-- name: Test Grafana repository accessibility
-  become: true
-  ansible.builtin.shell:
-    cmd: curl -s -o /dev/null -w "%{http_code}" https://apt.grafana.com/dists/stable/InRelease
-  register: grafana_repo_test
-  changed_when: false
-  failed_when: false
-
-- name: Set grafana_available fact
-  ansible.builtin.set_fact:
-    grafana_available: "{{ grafana_repo_test.stdout == '200' }}"
-
-- name: Show Grafana repository status
-  ansible.builtin.debug:
-    msg: "⚠️ Grafana repository unavailable (HTTP {{ grafana_repo_test.stdout }}), skipping Grafana installation"
-  when: not grafana_available
-
 - name: Add Grafana repository
-  become: true
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main"
     filename: grafana
     state: present
-  when: grafana_available
 
 - name: Install Grafana
-  become: true
   ansible.builtin.apt:
-    name: grafana
+    name: grafana={{ grafana_version }}
     state: present
-    update_cache: true
   environment:
     DEBIAN_FRONTEND: noninteractive
-  when: grafana_available
 
 - name: Configure Grafana
-  become: true
-  ansible.builtin.lineinfile:
-    path: /etc/grafana/grafana.ini
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-  loop:
-    - {regexp: '^;?http_addr =', line: 'http_addr = 127.0.0.1'}
-    - {regexp: '^;?http_port =', line: 'http_port = {{ grafana_port }}'}
-    - {regexp: '^;?domain =', line: 'domain = {{ domain }}'}
-    - {regexp: '^;?root_url =', line: 'root_url = https://{{ domain }}/grafana'}
-    - {regexp: '^;?serve_from_sub_path =', line: 'serve_from_sub_path = true'}
-    - {regexp: '^;?admin_user =', line: 'admin_user = admin'}
-    - {regexp: '^;?admin_password =', line: 'admin_password = {{ grafana_admin_password }}'}
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: "0640"
   notify: Restart Grafana
-  when: grafana_available
+
+- name: Create Grafana systemd override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/grafana-server.service.d
+    state: directory
+    mode: "0755"
+
+- name: Set Grafana systemd memory limits
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/grafana-server.service.d/memory.conf
+    content: |
+      [Service]
+      Environment="GOMEMLIMIT=400MiB"
+      MemoryMax=480M
+      MemoryHigh=400M
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Grafana
 
 - name: Create Grafana directories
-  become: true
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -74,10 +61,8 @@
     - /etc/grafana/provisioning/datasources
     - /etc/grafana/provisioning/dashboards
     - /var/lib/grafana/dashboards
-  when: grafana_available
 
 - name: Deploy Grafana datasource
-  become: true
   ansible.builtin.template:
     src: grafana-datasource.yaml.j2
     dest: /etc/grafana/provisioning/datasources/victoria.yaml
@@ -85,10 +70,8 @@
     group: grafana
     mode: "0644"
   notify: Restart Grafana
-  when: grafana_available
 
 - name: Deploy Grafana dashboard provisioner
-  become: true
   ansible.builtin.template:
     src: grafana-dashboards.yaml.j2
     dest: /etc/grafana/provisioning/dashboards/dashboards.yaml
@@ -96,10 +79,8 @@
     group: grafana
     mode: "0644"
   notify: Restart Grafana
-  when: grafana_available
 
 - name: Deploy common Grafana dashboards
-  become: true
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: /var/lib/grafana/dashboards/{{ item }}
@@ -111,10 +92,8 @@
     - "mysql-database.json"
     - "victoria-metrics-single-node.json"
   notify: Restart Grafana
-  when: grafana_available
 
 - name: Deploy Apache dashboards
-  become: true
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: /var/lib/grafana/dashboards/{{ item }}
@@ -124,13 +103,12 @@
   loop:
     - "apache-exporter.json"
   notify: Restart Grafana
-  when: grafana_available and web_server == "apache"
+  when: web_server == "apache"
 
 - name: Deploy Nginx dashboards
-  become: true
   ansible.builtin.copy:
     src: "{{ item }}"
-    dest: /var/lib/grafana/dashboards/{{ item }}
+    dest: /var/lib/grafana/dashboards/{{ item }}"
     owner: grafana
     group: grafana
     mode: "0644"
@@ -138,20 +116,17 @@
     - "nginx.json"
     - "nginx-prometheus.json"
   notify: Restart Grafana
-  when: grafana_available and web_server == "nginx"
+  when: web_server == "nginx"
 
 - name: Create Grafana alerting provisioning directory
-  become: true
   ansible.builtin.file:
     path: /etc/grafana/provisioning/alerting
     state: directory
     owner: grafana
     group: grafana
     mode: "0755"
-  when: grafana_available
 
 - name: Deploy Grafana alerts
-  become: true
   ansible.builtin.template:
     src: grafana-alerts.yaml.j2
     dest: /etc/grafana/provisioning/alerting/alerts.yaml
@@ -159,21 +134,74 @@
     group: grafana
     mode: "0640"
   notify: Restart Grafana
-  when: grafana_available and grafana_telegram_token | default('') | length > 0
+  when: grafana_telegram_token | default('') | length > 0
+
+- name: Flush handlers
+  meta: flush_handlers
 
 - name: Enable Grafana
-  become: true
   ansible.builtin.systemd:
     name: grafana-server
     state: started
     enabled: true
-  when: grafana_available
 
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
-    url: http://127.0.0.1:{{ grafana_port }}/api/health
+    url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 30
+  retries: 15
   delay: 2
-  when: grafana_available
+
+- name: Check if Grafana admin password needs reset
+  ansible.builtin.stat:
+    path: /etc/grafana/.admin_password_set
+  register: grafana_password_flag
+  when:
+    - grafana_admin_password | default('') | length > 0
+
+- name: Reset Grafana admin password
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{grafana_port }}/api/admin/users/1/password"
+    method: PUT
+    user: admin
+    password: admin
+    force_basic_auth: true
+    body:
+      password: "{{ grafana_admin_password }}"
+    body_format: json
+    headers:
+      Content-Type: application/json
+    status_code: [200, 401]
+  no_log: true
+  register: grafana_password_result
+  when:
+    - grafana_admin_password | default('') | length > 0
+    - not grafana_password_flag.stat.exists
+
+- name: Fallback to CLI if API auth failed (password already changed)
+  ansible.builtin.shell: grafana-cli admin reset-admin-password {{ grafana_admin_password }}
+  no_log: true
+  changed_when: true
+  when:
+    - grafana_admin_password | default('') | length > 0
+    - not grafana_password_flag.stat.exists
+    - grafana_password_result is defined and grafana_password_result.status == 401
+
+- name: Mark Grafana admin password as set
+  ansible.builtin.copy:
+    dest: /etc/grafana/.admin_password_set
+    content: ""
+    mode: "0600"
+    owner: grafana
+    group: grafana
+  when:
+    - grafana_admin_password | default('') | length > 0
+    - not grafana_password_flag.stat.exists
+
+- name: Warn if Grafana password reset failed
+  ansible.builtin.debug:
+    msg: "WARNING: Grafana password reset failed — {{ grafana_password_reset.stdout | default('') }}"
+  when:
+    - grafana_admin_password | default('') | length > 0
+    - grafana_password_reset is defined and grafana_password_reset is failed

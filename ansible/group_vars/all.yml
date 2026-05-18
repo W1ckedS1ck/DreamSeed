@@ -1,32 +1,62 @@
 ---
+# ========================
+#  General
+# ========================
 domain: "vitalikuts.online"
 domain_www: true
 admin_email: "hello@dreamseed.online"
-
 web_server: "nginx"
+server_ip: "{{ ansible_host }}"
 
+# ========================
+#  Database
+# ========================
 db_name: "modx_db"
 db_user: "modx_user"
 db_pass: "{{ lookup('env', 'DB_PASS') }}"
 
+# ========================
+#  PHP
+# ========================
 php_version: "8.3"  # fallback; overridden by auto-detection in packages_common
 
+# ========================
+#  Backup
+# ========================
 backup_cron_enabled: true
 
-# Cloudflare DNS for SSL
+# ========================
+#  Cloudflare
+# ========================
 cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 
-# Grafana credentials (from secrets/.env)
+# ========================
+#  Monitoring (Grafana + VictoriaMetrics)
+# ========================
+grafana_version: "12.4.3"
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') }}"
+grafana_secret_key: "{{ lookup('env', 'GRAFANA_SECRET_KEY') | default('') }}"
 grafana_port: 3000
-
-# Telegram for Grafana alerts
+monitoring_node_version: "1.11.1"
+monitoring_apache_version: "1.0.12"
+monitoring_mysql_version: "0.19.0"
+monitoring_vm_version: "1.142.0"
+vm_retention: 3
 grafana_telegram_token: "{{ lookup('env', 'TG_TOKEN') }}"
 grafana_telegram_chat_id: "{{ lookup('env', 'TG_CHAT_ID') }}"
 
-# Directories
+# ========================
+#  Directories
+# ========================
 web_root: "/var/www/html"
 backup_dir: "/home/ubuntu/backups"
 scripts_dir_remote: "/home/ubuntu/Scripts"
 scripts_dir: "{{ playbook_dir }}/../scripts"
 secrets_dir: "{{ playbook_dir }}/../secrets"
+configs_dir: "{{ playbook_dir }}/../configs"
+
+# ========================
+#  Security
+# ========================
+additional_ssh_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHnlra4vLtdXHPRNmOqtzrHlYh5oqAaGM24jTxM/yUft 2024@DESKTOP-6ADBQSM"

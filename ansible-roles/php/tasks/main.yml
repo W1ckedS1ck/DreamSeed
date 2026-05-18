@@ -15,6 +15,9 @@
     mode: "0644"
   notify: Restart PHP-FPM
 
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
 - name: Ensure PHP-FPM is running
   become: true
   ansible.builtin.systemd:

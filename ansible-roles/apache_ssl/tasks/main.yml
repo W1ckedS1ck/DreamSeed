@@ -20,11 +20,5 @@
   ansible.builtin.command: apache2ctl -t
   changed_when: false
 
-- name: Reload Apache with SSL
-  become: true
-  ansible.builtin.systemd:
-    name: apache2
-    state: reloaded
-
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers

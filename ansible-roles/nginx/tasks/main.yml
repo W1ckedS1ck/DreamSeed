@@ -1,4 +1,12 @@
 ---
+- name: Stop Apache if running
+  become: true
+  ansible.builtin.systemd:
+    name: apache2
+    state: stopped
+    enabled: false
+  failed_when: false
+
 - name: Ensure nginx is running
   become: true
   ansible.builtin.systemd:

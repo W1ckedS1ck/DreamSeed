@@ -14,6 +14,7 @@ terraform/*.tfstate*
 
 # Ansible
 *.retry
+ansible/inventory/hosts-*.yml
 
 # Logs and temporary files
 logs/
@@ -31,6 +32,9 @@ __pycache__/
 
 # Project instructions (internal)
 CLAUDE.md
+
+# Documentation (local snapshots)
+Docs/
 
 # Systemd service files (contain environment variables)
 *.service

@@ -10,8 +10,44 @@ NC=$'\033[0m'
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
-    source "$env_file"
-    OWNER="${OWNER:-}"  # Telegram usernames for mentions, comma-separated
+    while IFS='=' read -r key value; do
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+        value="${value#\"}" ; value="${value%\"}"
+        value="${value#\'}" ; value="${value%\'}"
+        export "$key=$value"
+    done < "$env_file"
+    OWNER="${OWNER:-}"
+}
+
+detect_env() {
+    local h
+    h=$(hostname)
+    case "$h" in
+        *-prod|*prod-*)  echo "" ;;
+        *)               echo "-preprod" ;;
+    esac
+}
+
+format_env_display() {
+    local env="$1"
+    if [ -z "$env" ]; then
+        echo "prod"
+    else
+        echo "$env"
+    fi
+}
+
+format_env_escaped() {
+    local env="$1"
+    if [ -z "$env" ]; then
+        echo "*PROD*"
+    else
+        echo "***$(escape_md2 "$env")***"
+    fi
+}
+
+format_name() {
+    basename "$1" | sed 's/DreamSeed_//; s/db_modx_db_//; s/.tar.gz//; s/.sql.gz//; s/_/ /'
 }
 
 send_tg() {

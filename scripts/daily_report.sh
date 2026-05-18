@@ -12,12 +12,8 @@ load_env "$SCRIPT_DIR/.env"
 BACKUP_DIR="/home/ubuntu/backups"
 RCLONE_REMOTE="gdrive"
 
-HOSTNAME=$(hostname)
-case "$HOSTNAME" in
-    *-prod|*prod-*)  ENV="" ;;
-    *)               ENV="-preprod" ;;
-esac
-ENV_DISPLAY="${ENV:--preprod}"
+ENV=$(detect_env)
+ENV_DISPLAY=$(format_env_display "$ENV")
 REMOTE_BASE="DreamSeed/backups"
 
 PROJ_FILES=$(ls -1t "$BACKUP_DIR"/project/DreamSeed_*.tar.gz 2>/dev/null | head -24)
@@ -28,10 +24,6 @@ DB_COUNT=$(ls -1 "$BACKUP_DIR"/db/db_*.sql.gz 2>/dev/null | wc -l)
 
 CLOUD_PROJ=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
 CLOUD_DB=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
-
-format_name() {
-    basename "$1" | sed 's/DreamSeed_//; s/db_modx_db_//; s/.tar.gz//; s/.sql.gz//; s/_/ /'
-}
 
 PROJ_1_SIZE=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null | cut -f1)
 PROJ_2_SIZE=$(du -h "$(echo "$PROJ_FILES" | sed -n '2p')" 2>/dev/null | cut -f1)

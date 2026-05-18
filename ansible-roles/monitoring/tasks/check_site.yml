@@ -1,6 +1,5 @@
 ---
 - name: Upload check_site.sh
-  become: true
   ansible.builtin.template:
     src: check_site.sh.j2
     dest: /usr/local/bin/check_site.sh

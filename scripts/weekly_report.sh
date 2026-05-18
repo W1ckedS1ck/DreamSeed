@@ -12,12 +12,8 @@ load_env "$SCRIPT_DIR/.env"
 BACKUP_DIR="/home/ubuntu/backups"
 RCLONE_REMOTE="gdrive"
 
-HOSTNAME=$(hostname)
-case "$HOSTNAME" in
-    *-prod|*prod-*)  ENV="" ;;
-    *)               ENV="-preprod" ;;
-esac
-ENV_DISPLAY="${ENV:--preprod}"
+ENV=$(detect_env)
+ENV_DISPLAY=$(format_env_display "$ENV")
 REMOTE_BASE="DreamSeed/backups"
 
 HOURS_168=168
@@ -36,9 +32,6 @@ else
     SUCCESS_RATE="$((TOTAL_ACTUAL * 100 / TOTAL_EXPECTED))%"
 fi
 
-format_name() {
-    basename "$1" | sed 's/DreamSeed_//; s/db_modx_db_//; s/.tar.gz//; s/.sql.gz//; s/_/ /'
-}
 
 LAST_PROJ=$(format_name "$(ls -1t "$BACKUP_DIR"/project/DreamSeed_*.tar.gz 2>/dev/null | head -1)")
 LAST_DB=$(format_name "$(ls -1t "$BACKUP_DIR"/db/db_*.sql.gz 2>/dev/null | head -1)")
