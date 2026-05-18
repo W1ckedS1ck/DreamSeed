@@ -338,18 +338,17 @@ jobs:
           LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
 
           [ "$RESTORE" = "success" ] && STATUS="✅" || STATUS="❌"
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
-            "📦 *Backup Restoration Test* $STATUS" \
-            "" \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "📦 Backup Restoration Test $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M') · 🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
-            "├ 📦 Restore ──── $(ok $RESTORE)" \
-            "├ 🗄 DB ───────── $(ok $DB)  ${ROWS:-?} rows" \
-            "├ 🌐 Web ──────── $(ok $WEB)" \
-            "├ 🧩 MODX ─────── $(ok $MODX)" \
-            "├ 🔍 DAST ─────── $(ok_dast $DAST_COUNT)  ${DAST_COUNT:-?}" \
-            "├ 🛡 Hardening ── ${LYNIS_SCORE:-?}/100" \
-            "└ 🔥 Destroy ──── $(ok $DESTROY)")
+            "📦 Restore    $(ok $RESTORE)" \
+            "🗄 DB         $(ok $DB)  ${ROWS:-?} rows" \
+            "🌐 Web        $(ok $WEB)" \
+            "🧩 MODX       $(ok $MODX)" \
+            "🔍 DAST       $(ok_dast $DAST_COUNT)  ${DAST_COUNT:-?}" \
+            "🛡 Hardening  ${LYNIS_SCORE:-?}/100" \
+            "🔥 Destroy    $(ok $DESTROY)")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
