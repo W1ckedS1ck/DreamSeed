@@ -6,6 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
+# Parse mode
+MODE="${1:-interactive}"  # interactive or --auto-latest
+
 # ====== Settings ======
 if systemctl is-active --quiet nginx 2>/dev/null; then
     WEB_SERVICE="nginx"
@@ -30,15 +33,20 @@ BACKUP_DIR="/home/ubuntu/backups"
 
 ENV=$(detect_env)
 ENV_DISPLAY=$(format_env_display "$ENV")
+ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 
 START_TIME=$(date +%s)
 
 SERVICES_STOPPED=0
 cleanup_trap() {
     if [ "$SERVICES_STOPPED" -eq 1 ]; then
-        echo ""
-        echo -e "${RED}Interrupted! Restarting services...${NC}"
-        sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>/dev/null
+        if [ "$MODE" = "interactive" ]; then
+            echo ""
+            echo -e "${RED}Interrupted! Restarting services...${NC}"
+        else
+            echo "Restarting services..."
+        fi
+        sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>/dev/null || true
     fi
 }
 trap cleanup_trap EXIT INT TERM
@@ -103,66 +111,94 @@ select_backup() {
     fi
 }
 
-# ====== Header ======
-print_header "Restore DreamSeed"
+# ====== INTERACTIVE MODE ======
+if [ "$MODE" != "--auto-latest" ]; then
+    # ====== Header ======
+    print_header "Restore DreamSeed"
 
-# ================================================
-# STEP 1: What to restore?
-# ================================================
-show_menu
-read -r -p "Your choice: " MENU_CHOICE
-echo ""
+    # ================================================
+    # STEP 1: What to restore?
+    # ================================================
+    show_menu
+    read -r -p "Your choice: " MENU_CHOICE
+    echo ""
 
-case "$MENU_CHOICE" in
-    1) RESTORE_PROJECT=1; RESTORE_DB=0 ;;
-    2) RESTORE_PROJECT=0; RESTORE_DB=1 ;;
-    3) RESTORE_PROJECT=1; RESTORE_DB=1 ;;
-    4) echo -e "${YELLOW}Exit.${NC}"; exit 0 ;;
-    *) echo -e "${RED}Invalid choice!${NC}"; exit 1 ;;
-esac
+    case "$MENU_CHOICE" in
+        1) RESTORE_PROJECT=1; RESTORE_DB=0 ;;
+        2) RESTORE_PROJECT=0; RESTORE_DB=1 ;;
+        3) RESTORE_PROJECT=1; RESTORE_DB=1 ;;
+        4) echo -e "${YELLOW}Exit.${NC}"; exit 0 ;;
+        *) echo -e "${RED}Invalid choice!${NC}"; exit 1 ;;
+    esac
 
-# ================================================
-# STEP 2: Select backup files
-# ================================================
-if [ "$RESTORE_PROJECT" -eq 1 ]; then
-    select_backup "project" "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+    # ================================================
+    # STEP 2: Select backup files
+    # ================================================
+    if [ "$RESTORE_PROJECT" -eq 1 ]; then
+        select_backup "project" "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+    fi
+
+    if [ "$RESTORE_DB" -eq 1 ]; then
+        select_backup "db" "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
+    fi
+
+    echo ""
+
+    # Nothing to restore
+    if [ -z "$SELECTED_PROJECT" ] && [ -z "$SELECTED_DB" ]; then
+        echo -e "${RED}Nothing selected. Exiting.${NC}"
+        exit 0
+    fi
+
+    # ================================================
+    # STEP 3: Confirmation
+    # ================================================
+    echo ""
+    echo -e "${RED}⚠️  WARNING! The following will be performed:${NC}"
+    [ -n "$SELECTED_PROJECT" ] && echo -e "  - Replace project files: ${CYAN}$(basename "$SELECTED_PROJECT")${NC}"
+    [ -n "$SELECTED_DB" ]      && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
+    echo -e "  - Stop $WEB_SERVICE and PHP-FPM"
+    echo -e "  - Clear MODX cache"
+    echo ""
+    read -r -p "Continue? (yes/no): " CONFIRM
+
+    if [ "$CONFIRM" != "yes" ]; then
+        echo -e "${RED}Aborted.${NC}"
+        exit 0
+    fi
+
+    echo ""
+
+# ====== AUTO MODE (--auto-latest) ======
+else
+    RESTORE_PROJECT=1
+    RESTORE_DB=1
+
+    SELECTED_PROJECT=$(ls -1t "$BACKUP_DIR/project/DreamSeed_"*.tar.gz 2>/dev/null | head -n1)
+    SELECTED_DB=$(ls -1t "$BACKUP_DIR/db/db_"*.sql.gz 2>/dev/null | head -n1)
+
+    if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
+        echo "ERROR: Latest backups not found"
+        echo "Project: $SELECTED_PROJECT"
+        echo "DB: $SELECTED_DB"
+        exit 1
+    fi
+
+    echo "Restoring from latest backups..."
+    echo "Project: $(basename "$SELECTED_PROJECT")"
+    echo "DB: $(basename "$SELECTED_DB")"
+    echo ""
 fi
-
-if [ "$RESTORE_DB" -eq 1 ]; then
-    select_backup "db" "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
-fi
-
-echo ""
-
-# Nothing to restore
-if [ -z "$SELECTED_PROJECT" ] && [ -z "$SELECTED_DB" ]; then
-    echo -e "${RED}Nothing selected. Exiting.${NC}"
-    exit 0
-fi
-
-# ================================================
-# STEP 3: Confirmation
-# ================================================
-echo ""
-echo -e "${RED}⚠️  WARNING! The following will be performed:${NC}"
-[ -n "$SELECTED_PROJECT" ] && echo -e "  - Replace project files: ${CYAN}$(basename "$SELECTED_PROJECT")${NC}"
-[ -n "$SELECTED_DB" ]      && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
-echo -e "  - Stop $WEB_SERVICE and PHP-FPM"
-echo -e "  - Clear MODX cache"
-echo ""
-read -r -p "Continue? (yes/no): " CONFIRM
-
-if [ "$CONFIRM" != "yes" ]; then
-    echo -e "${RED}Aborted.${NC}"
-    exit 0
-fi
-
-echo ""
 
 # ================================================
 # STEP 4: Validate archives
 # ================================================
-echo -e "${YELLOW}[0] Validating archive integrity...${NC}"
+if [ "$MODE" = "interactive" ]; then
+    echo -e "${YELLOW}[0] Validating archive integrity...${NC}"
+else
+    echo "Validating archive integrity..."
+fi
+
 if [ -n "$SELECTED_PROJECT" ]; then
     if ! sudo tar -tzf "$SELECTED_PROJECT" >/dev/null 2>&1; then
         echo -e "${RED}✗ Project archive corrupted: $(basename "$SELECTED_PROJECT")${NC}"
@@ -182,7 +218,12 @@ echo ""
 # ================================================
 # STEP 5: Stop services
 # ================================================
-echo -e "${YELLOW}[1] Stopping services...${NC}"
+if [ "$MODE" = "interactive" ]; then
+    echo -e "${YELLOW}[1] Stopping services...${NC}"
+else
+    echo "Stopping services..."
+fi
+
 if ! sudo systemctl stop "$PHP_FPM" "$WEB_SERVICE" 2>/dev/null; then
     echo -e "${RED}✗ Failed to stop services!${NC}"
     exit 1
@@ -197,7 +238,11 @@ echo ""
 PROJECT_STATUS="⏭️ Skipped"
 
 if [ -n "$SELECTED_PROJECT" ]; then
-    echo -e "${YELLOW}[2] Restoring project...${NC}"
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[2] Restoring project...${NC}"
+    else
+        echo "Restoring project..."
+    fi
 
     TEMP_EXTRACT=$(sudo mktemp -d "$(dirname "$PROJECT_DIR")/restore_XXXXXX")
     sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"
@@ -216,7 +261,9 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo -e "${RED}✗ Project restore failed!${NC}"
     fi
 else
-    echo -e "${YELLOW}[2] Skipping project restore.${NC}"
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[2] Skipping project restore.${NC}"
+    fi
 fi
 echo ""
 
@@ -226,7 +273,11 @@ echo ""
 DB_STATUS="⏭️ Skipped"
 
 if [ -n "$SELECTED_DB" ]; then
-    echo -e "${YELLOW}[3] Restoring database...${NC}"
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[3] Restoring database...${NC}"
+    else
+        echo "Restoring database..."
+    fi
 
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM modx_site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)
@@ -252,7 +303,6 @@ if [ -n "$SELECTED_DB" ]; then
             [ $DIFF -gt 0 ] && DIFF_STR=" (+$DIFF)"
             [ $DIFF -lt 0 ] && DIFF_STR=" ($DIFF)"
 
-            # Rollback detection
             ROLLBACK_STR=""
             if [ -n "$LAST_EDIT_BEFORE" ] && [ "$LAST_EDIT_BEFORE" != "NULL" ] && \
                [ -n "$LAST_EDIT_AFTER" ] && [ "$LAST_EDIT_AFTER" != "NULL" ]; then
@@ -270,7 +320,9 @@ if [ -n "$SELECTED_DB" ]; then
                         else
                             ROLLBACK_STR=" ⚠️ Rollback"
                         fi
-                        echo -e "${YELLOW}⚠️  Warning: restored data is older than current!${NC}"
+                        if [ "$MODE" = "interactive" ]; then
+                            echo -e "${YELLOW}⚠️  Warning: restored data is older than current!${NC}"
+                        fi
                     fi
                 fi
             fi
@@ -285,31 +337,43 @@ if [ -n "$SELECTED_DB" ]; then
         rm -f "$TEMP_SQL"
     fi
 else
-    echo -e "${YELLOW}[3] Skipping database restore.${NC}"
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[3] Skipping database restore.${NC}"
+    fi
 fi
 echo ""
 
 # ================================================
 # STEP 8: Clear cache and permissions
 # ================================================
-echo -e "${YELLOW}[4] Clearing cache and setting permissions...${NC}"
+if [ "$MODE" = "interactive" ]; then
+    echo -e "${YELLOW}[4] Clearing cache and setting permissions...${NC}"
+else
+    echo "Clearing cache..."
+fi
+
 sudo mkdir -p "$PROJECT_DIR/core/cache/logs"
 sudo rm -rf "$PROJECT_DIR/core/cache"/*
 sudo chown -R www-data:www-data "$PROJECT_DIR/core/cache"
-sudo chmod -R 755 "$PROJECT_DIR/core/cache"
+sudo chmod -R 775 "$PROJECT_DIR/core/cache"
 echo -e "${GREEN}✓ Cache cleared${NC}"
 echo ""
 
 # ================================================
 # STEP 9: Start services
 # ================================================
-echo -e "${YELLOW}[5] Starting services...${NC}"
+if [ "$MODE" = "interactive" ]; then
+    echo -e "${YELLOW}[5] Starting services...${NC}"
+else
+    echo "Starting services..."
+fi
+
 SERVICES_STOPPED=0
 sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>/dev/null
 sleep 3
 
 HTTP_CODE=$(curl -sk "$SITE_URL" -o /dev/null -w "%{http_code}")
-if [ "$HTTP_CODE" = "200" ]; then
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
     SITE_STATUS="✅ HTTP $HTTP_CODE"
     echo -e "${GREEN}✓ Site is up (HTTP $HTTP_CODE)${NC}"
 else
@@ -323,14 +387,14 @@ echo ""
 # ================================================
 ELAPSED=$(( $(date +%s) - START_TIME ))
 
-print_header "Restore complete (${ELAPSED}s)"
+if [ "$MODE" = "interactive" ]; then
+    print_header "Restore complete (${ELAPSED}s)"
+    echo -e "  Project: $PROJECT_STATUS"
+    echo -e "  DB:      $DB_STATUS"
+    echo -e "  Site:    $SITE_STATUS"
+    echo ""
+fi
 
-echo -e "  Project: $PROJECT_STATUS"
-echo -e "  DB:      $DB_STATUS"
-echo -e "  Site:    $SITE_STATUS"
-echo ""
-
-# Telegram
 MSG="🔄 *[$ENV_DISPLAY] DreamSeed Restore*
 
 📝 *Project:* $(escape_md2 "$PROJECT_STATUS")

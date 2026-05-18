@@ -81,14 +81,21 @@ def cmd_status():
         db_files = sorted([f for f in os.listdir(f'{BACKUP_DIR}/db') if f.startswith('db_')], key=lambda x: os.path.getmtime(f'{BACKUP_DIR}/db/{x}'), reverse=True)
 
         remote_base = GDRIVE_BASE
+        env_suffix = "" if env == "prod" else f"-{env}"
         try:
-            cloud_proj_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/project-{env}/', '--files-only', '--format', 'tps'], text=True).strip()
-            cloud_proj_files = [line.split(';') for line in cloud_proj_out.split('\n') if line]
+            cloud_proj_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/project{env_suffix}/', '--files-only', '--format', 'tps'], text=True).strip()
+            cloud_proj_files = sorted(
+                [line.split(';') for line in cloud_proj_out.split('\n') if line],
+                key=lambda x: x[0], reverse=True
+            )
         except Exception:
             cloud_proj_files = []
         try:
-            cloud_db_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/db-{env}/', '--files-only', '--format', 'tps'], text=True).strip()
-            cloud_db_files = [line.split(';') for line in cloud_db_out.split('\n') if line]
+            cloud_db_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/db{env_suffix}/', '--files-only', '--format', 'tps'], text=True).strip()
+            cloud_db_files = sorted(
+                [line.split(';') for line in cloud_db_out.split('\n') if line],
+                key=lambda x: x[0], reverse=True
+            )
         except Exception:
             cloud_db_files = []
 

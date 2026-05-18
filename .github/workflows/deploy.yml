@@ -40,6 +40,8 @@ jobs:
   deploy:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment == 'prod' && 'production' || '' }}
 
     steps:
       - uses: actions/checkout@v6
