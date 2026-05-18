@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: error
+          ignore_paths: >-
+            .git
+
+  ansible-lint:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ansible-lint
+        working-directory: ansible
+        run: |
+          pip install ansible-lint --quiet
+          ansible-lint .
+
+  tflint:
+    name: Terraform Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+      - name: Init TFLint
+        run: tflint --init
+      - name: Run TFLint
+        run: |
+          for dir in terraform/aws terraform/hetzner terraform/cloudV2; do
+            echo "=== Linting $dir ==="
+            tflint --chdir="$dir"
+          done
+
+  tfsec:
+    name: Terraform Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform
+
+  gitleaks:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+      - name: Validate all providers
+        run: |
+          for dir in terraform/aws terraform/hetzner; do
+            echo "=== Validating $dir ==="
+            terraform -chdir="$dir" init -backend=false -upgrade
+            terraform -chdir="$dir" validate
+          done
+          # cloudV2 uses a private registry (cloud.ru) not accessible from CI
