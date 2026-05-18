@@ -91,7 +91,6 @@ jobs:
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-          TF_WORKSPACE: test-hetzner
         run: |
           terraform init
           terraform workspace new test-hetzner 2>/dev/null || terraform workspace select test-hetzner
