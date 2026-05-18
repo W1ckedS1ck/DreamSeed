@@ -12,7 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: infracost/actions@v3
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
-          path: terraform/aws
+
+      - run: infracost breakdown --path=terraform/aws --format=json --out-file=/tmp/base.json
+
+      - uses: actions/checkout@v4
+
+      - run: infracost diff --path=terraform/aws --format=json --compare-to=/tmp/base.json --out-file=/tmp/diff.json
+
+      - run: infracost comment github --path=/tmp/diff.json --repo=${{ github.repository }} --github-token=${{ github.token }} --pull-request=${{ github.event.pull_request.number }} --behavior=update
