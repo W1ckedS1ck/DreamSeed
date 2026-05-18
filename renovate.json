@@ -25,6 +25,6 @@
       "matchManagers": ["terraform"],
       "matchUpdateTypes": ["major"],
       "labels": ["terraform", "major-update", "needs-review"]
-    },
+    }
   ]
 }
