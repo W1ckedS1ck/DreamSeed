@@ -277,9 +277,10 @@ jobs:
         id: lynis
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "sudo apt-get install -y lynis -qq 2>/dev/null" >/dev/null 2>&1 || true
           SCORE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "sudo apt-get install -y lynis -qq && \
-             sudo lynis audit system --quick --no-colors 2>/dev/null | \
+            "sudo lynis audit system --quick --no-colors 2>/dev/null | \
              awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" 2>/dev/null || true)
           SCORE="${SCORE:-?}"
           echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
