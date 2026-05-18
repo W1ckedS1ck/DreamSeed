@@ -85,6 +85,7 @@
   ansible.builtin.command: fail2ban-client -t
   register: fail2ban_test
   changed_when: false
+  failed_when: false
 
 - name: Apply Fail2ban configuration
   ansible.builtin.meta: flush_handlers

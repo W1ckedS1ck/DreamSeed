@@ -4,10 +4,6 @@
     path: /usr/local/bin/nginx-prometheus-exporter
   register: monitoring_nginx_bin
 
-- name: Set Nginx Exporter desired version
-  ansible.builtin.set_fact:
-    monitoring_nginx_version: "1.5.1"
-
 - name: Get current Nginx Exporter version
   ansible.builtin.command: /usr/local/bin/nginx-prometheus-exporter --version
   changed_when: false

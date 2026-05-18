@@ -612,7 +612,8 @@ run_parallel_phase() {
     results_dir=$(mktemp -d)
 
     for entry in "${entries[@]}"; do
-        local pb="${entry%%:*}" label="${entry##*:}" pb_path="$SCRIPT_DIR/ansible/$pb"
+        local pb="${entry%%:*}" label="${entry##*:}"
+        local pb_path="$SCRIPT_DIR/ansible/$pb"
         local status_f="$results_dir/${pb//\//_}.status"
         local log_f="$results_dir/${pb//\//_}.log"
         result_files+=("$status_f" "$log_f")
