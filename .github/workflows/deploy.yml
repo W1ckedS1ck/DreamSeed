@@ -88,21 +88,26 @@ jobs:
           fi
 
       - name: Deploy
-        if: inputs.action == 'deploy'
-        env:
-          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        id: deploy
         run: |
-          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
-          export SSH_PUBLIC_KEY_PATH=~/.ssh/Vitali.pub
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+
+          ENV="${{ inputs.environment }}"
+          WEB_SRV="${{ inputs.web_server }}"
+          SERVER_IP="${{ inputs.server_ip }}"
+
+          [[ -z "$ENV" ]] && { echo "Missing environment"; exit 1; }
 
           WEB_FLAG="-n"
-          [[ "${{ inputs.web_server }}" == "apache" ]] && WEB_FLAG="-a"
+          [[ "$WEB_SRV" == "apache" ]] && WEB_FLAG="-a"
 
           IP_FLAG=""
-          [[ -n "${{ inputs.server_ip }}" ]] && IP_FLAG="-i ${{ inputs.server_ip }}"
+          [[ -n "$SERVER_IP" ]] && IP_FLAG="-i $SERVER_IP"
 
           # shellcheck disable=SC2086
-          ./deploy.sh "${{ inputs.environment }}" $WEB_FLAG $IP_FLAG -p
+          ./deploy.sh "$ENV" $WEB_FLAG $IP_FLAG -p
 
       - name: Destroy
         if: inputs.action == 'destroy'
@@ -131,3 +136,9 @@ jobs:
 
           export CI_DESTROY_CONFIRM="$DESTROY_CONFIRM"
           ./deploy.sh "$ENV" -n -x
+
+  cost-estimate:
+    name: Cost estimate
+    needs: deploy
+    if: inputs.action != 'destroy' && success()
+    uses: ./.github/workflows/infracost.yml
