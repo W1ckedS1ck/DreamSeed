@@ -5,6 +5,7 @@
 ![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 ![Backup Test](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/backup-test.yml/badge.svg)
 ![Drift Detection](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/drift-detection.yml/badge.svg)
+![Infracost](https://img.shields.io/badge/Infracost-011F26?logo=infracost)
 
 ![Terraform](https://img.shields.io/badge/Terraform-1.1%2B-7B42BC?logo=terraform)
 ![Ansible](https://img.shields.io/badge/Ansible-2.20%2B-EE0000?logo=ansible)
