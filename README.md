@@ -1,13 +1,22 @@
 # 🌱 DreamSeed
 
 ![CI](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg)
+![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 ![Backup Test](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/backup-test.yml/badge.svg)
 ![Drift Detection](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/drift-detection.yml/badge.svg)
+
 ![Terraform](https://img.shields.io/badge/Terraform-1.1%2B-7B42BC?logo=terraform)
 ![Ansible](https://img.shields.io/badge/Ansible-2.15%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazon-aws)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu)
+![MariaDB](https://img.shields.io/badge/MariaDB-10.11-003545?logo=mariadb)
+![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php)
+![Grafana](https://img.shields.io/badge/Grafana-10-F46800?logo=grafana)
+![Cloudflare](https://img.shields.io/badge/Cloudflare-DNS-F38020?logo=cloudflare)
+![GitHub last commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
+![GitHub issues](https://img.shields.io/github/issues/W1ckedS1ck/DreamSeed)
 
 > **Infrastructure powering a global social experiment about human dreams.**
 > Built and owned by the Co-founder & CTO — from empty cloud account to production-ready platform in under 15 minutes.
