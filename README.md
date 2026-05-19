@@ -123,6 +123,9 @@ Terraform provisions the infrastructure; Ansible configures it. `deploy.sh` orch
 
 # Reconfigure an existing server (skip provisioning)
 ./deploy.sh prod -n -i 1.2.3.4
+
+# Tail the latest deploy log (or terraform log with --logs tf)
+./deploy.sh --logs
 ```
 
 ### Destroy

@@ -194,6 +194,7 @@ OPTIONS:
     -x, --destroy      Destroy resources
     -p, --parallel     Parallel playbook execution (3 phases)
     -h                 Show this help
+    --logs [tf]        Tail latest deploy log (or terraform log)
 
 EXAMPLES:
     \$0 prod -n                  Deploy prod (AWS + Nginx)
@@ -203,11 +204,23 @@ EXAMPLES:
     \$0 prod -n -i 1.2.3.4       Ansible-only on existing server
     \$0 prod -x                  Destroy prod resources
 EOF
-    exit 1
 }
 
 parse_args() {
-    if [[ $# -eq 0 ]]; then usage; fi
+    if [[ $# -eq 0 ]]; then usage; exit 1; fi
+
+    if [[ "$1" == "--logs" ]]; then
+        local prefix="deploy"
+        [[ "${2:-}" == "tf" || "${2:-}" == "terraform" ]] && prefix="terraform"
+        local latest
+        latest=$(ls -t "$LOG_DIR/${prefix}_"*.log 2>/dev/null | head -1)
+        if [[ -z "$latest" ]]; then
+            echo -e "${RED}No ${prefix} logs found in $LOG_DIR${NC}"
+            exit 1
+        fi
+        tail -f "$latest"
+        exit 0
+    fi
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -217,19 +230,19 @@ parse_args() {
             -i|--ip) EXISTING_IP="$2"; SKIP_TERRAFORM=true; shift 2 ;;
             -x|--destroy) DESTROY_MODE=true; shift ;;
             -p|--parallel) PARALLEL_MODE=true; shift ;;
-            -h|--help) usage ;;
-            *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
+            -h|--help) usage; exit 0 ;;
+            *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
         esac
     done
 
     if [[ -z "$TARGET" ]]; then
         echo -e "${RED}Error: target required. Choose: prod | dev-aws | dev-hetz${NC}"
-        usage
+        usage; exit 1
     fi
 
     if [[ -z "$WEB_SERVER" ]] && [[ "$DESTROY_MODE" == "false" ]]; then
         echo -e "${RED}Error: web server required. Use -n (Nginx) or -a (Apache)${NC}"
-        usage
+        usage; exit 1
     fi
 }
 
@@ -315,7 +328,9 @@ preflight_checks() {
     validate_env_file "$env_to_source"
     local _saved_opts
     _saved_opts="$(set +o)"
-    set -a; source "$env_to_source"; set +a
+    set -a
+    source "$env_to_source"
+    set +a
     eval "$_saved_opts"
     apply_target_vars
 
@@ -425,7 +440,7 @@ print_summary() {
         name="${STEP_NAMES[$i]}"
         dur="${STEP_DURATIONS[$i]}"
         icon=$(step_icon "$name")
-        printf "  ${icon}  %-35s ${YELLOW}%s${NC}\n" "$name" "$(format_time $dur)"
+        printf "  ${icon}  %-35s ${YELLOW}%s${NC}\n" "$name" "$(format_time "$dur")"
     done
     echo -e "  ${DIM}────────────────────────────────────────────────────${NC}"
     local total_time=$(( $(date +%s) - DEPLOY_START ))
@@ -679,8 +694,8 @@ terraform_select_workspace() {
     local ws="$TF_WORKSPACE"
     # TF_WORKSPACE env var blocks workspace select/new — unset it inside the subshell.
     ( cd "$TF_DIR" && unset TF_WORKSPACE && \
-        "$TERRAFORM" workspace select "$ws" 2>/dev/null || \
-        "$TERRAFORM" workspace new "$ws" ) >> "$TF_LOG" 2>&1
+        ( "$TERRAFORM" workspace select "$ws" 2>/dev/null || \
+          "$TERRAFORM" workspace new "$ws" ) ) >> "$TF_LOG" 2>&1
 }
 
 terraform_init_if_needed() {
@@ -914,7 +929,7 @@ main() {
         fi
         printf "."; sleep "$SSH_RETRY_INTERVAL"
     done
-    $ssh_ready && step_ok || step_fail "SSH connection failed"
+    if $ssh_ready; then step_ok; else step_fail "SSH connection failed"; fi
 
     step_start "Wait for Cloud-init"
     local ci_timeout=300
@@ -966,7 +981,7 @@ INVEOF
         echo -e "\n  ${CYAN}▸ Parallel execution${NC}"
 
         step_start "Ansible: Base packages"
-        run_ansible "$SCRIPT_DIR/ansible/playbook-01-base.yml" "${base_args[@]}" && step_ok || step_fail "Base packages failed"
+        if run_ansible "$SCRIPT_DIR/ansible/playbook-01-base.yml" "${base_args[@]}"; then step_ok; else step_fail "Base packages failed"; fi
 
         local phase2=("$web_playbook" "playbook-03-db.yml:Database & Restore" "playbook-06-security.yml:Security hardening")
         run_parallel_phase "Phase 2 (Web/DB/Security)" "${phase2[@]}"
@@ -975,7 +990,7 @@ INVEOF
         run_parallel_phase "Phase 3 (Monitoring/Backup)" "${phase3[@]}"
 
         step_start "Ansible: Grafana"
-        run_ansible "$SCRIPT_DIR/ansible/playbook-05-grafana.yml" "${base_args[@]}" && step_ok || step_fail "Grafana failed"
+        if run_ansible "$SCRIPT_DIR/ansible/playbook-05-grafana.yml" "${base_args[@]}"; then step_ok; else step_fail "Grafana failed"; fi
     else
         for entry in "${playbooks[@]}"; do
         local pb="${entry%%:*}"
@@ -990,7 +1005,8 @@ INVEOF
     done
     fi
 
-    local checks_start=$(date +%s)
+    local checks_start
+    checks_start=$(date +%s)
     check_services
     local checks_elapsed=$(( $(date +%s) - checks_start ))
     STEP_DURATIONS+=("$checks_elapsed")
