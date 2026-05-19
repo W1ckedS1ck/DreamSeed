@@ -28,7 +28,7 @@ try:
 except ValueError:
     TG_THREAD_ID = None
 
-BACKUP_DIR = '/home/ubuntu/backups'
+BACKUP_DIR = os.environ.get('BACKUP_DIR', '/home/ubuntu/backups')
 RCLONE_REMOTE = 'gdrive'
 GDRIVE_BASE = os.environ.get('GDRIVE_BASE', 'DreamSeed/backups')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')

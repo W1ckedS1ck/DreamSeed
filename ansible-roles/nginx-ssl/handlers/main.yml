@@ -5,8 +5,4 @@
     name: nginx
     state: reloaded
 
-- name: Restart Nginx
-  become: true
-  ansible.builtin.systemd:
-    name: nginx
-    state: restarted
+

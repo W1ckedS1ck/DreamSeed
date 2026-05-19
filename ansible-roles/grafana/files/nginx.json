@@ -81,9 +81,6 @@
       "type": "row"
     },
     {
-      "aliasColors": {
-        "172.31.0.131:9273": "dark-green"
-      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
@@ -580,9 +577,6 @@
       "type": "row"
     },
     {
-      "aliasColors": {
-        "172.31.11.8:9273": "semi-dark-yellow"
-      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
@@ -1147,10 +1141,6 @@
       "type": "row"
     },
     {
-      "aliasColors": {
-        "172.31.0.131:9273": "super-light-purple",
-        "{__name__=\"nginx_accepts\", env=\"prod\", exported_env=\"DEV\", instance=\"172.31.0.131:9273\", job=\"telegraf\", port=\"80\", server=\"localhost\"}": "purple"
-      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
@@ -1437,10 +1427,6 @@
       "type": "stat"
     },
     {
-      "aliasColors": {
-        "172.31.0.131:9273": "rgb(219, 237, 9)",
-        "{__name__=\"nginx_handled\", env=\"prod\", exported_env=\"DEV\", instance=\"172.31.0.131:9273\", job=\"telegraf\", port=\"80\", server=\"localhost\"}": "rgb(208, 240, 17)"
-      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
@@ -1553,10 +1539,6 @@
       }
     },
     {
-      "aliasColors": {
-        "172.31.0.131:9273": "rgb(250, 0, 225)",
-        "{__name__=\"nginx_requests\", env=\"prod\", exported_env=\"DEV\", instance=\"172.31.0.131:9273\", job=\"telegraf\", port=\"80\", server=\"localhost\"}": "orange"
-      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,

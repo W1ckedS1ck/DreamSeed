@@ -12,7 +12,7 @@ load_env "$SCRIPT_DIR/.env"
 REPORT_TYPE="${1:-daily}"  # daily or weekly
 
 # ====== Settings ======
-BACKUP_DIR="/home/ubuntu/backups"
+BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 RCLONE_REMOTE="gdrive"
 LOCAL_PROJ_KEEP=5
 LOCAL_DB_KEEP=15

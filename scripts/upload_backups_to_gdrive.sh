@@ -13,7 +13,7 @@ load_env "$SCRIPT_DIR/.env"
 START_TIME=$(date +%s)
 
 # ====== Settings ======
-LOCAL_BACKUP_DIR="/home/ubuntu/backups"
+LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 PROJECT_DIR="$LOCAL_BACKUP_DIR/project"
 DB_DIR="$LOCAL_BACKUP_DIR/db"
 
@@ -24,11 +24,8 @@ ENV_DISPLAY=$(format_env_display "$ENV")
 ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 REMOTE_BASE="DreamSeed/backups"
 
-MAX_PROJECT_BACKUPS=10
-MAX_DB_BACKUPS=20
-
-LOCAL_PROJECT_KEEP=5
-LOCAL_DB_KEEP=15
+MAX_PROJECT_BACKUPS="${CLOUD_PROJECT_KEEP:-10}"
+MAX_DB_BACKUPS="${CLOUD_DB_KEEP:-20}"
 
 
 HAS_ERROR=0

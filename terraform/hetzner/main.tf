@@ -49,6 +49,18 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "server_type" {
+  description = "Hetzner server type (cx23, cx33, etc.)"
+  type        = string
+  default     = "cx23"
+}
+
+variable "location" {
+  description = "Hetzner datacenter location (nbg1, fsn1, hel1, etc.)"
+  type        = string
+  default     = "nbg1"
+}
+
 locals {
   use_dynamic_ip = var.primary_ip_name == ""
   use_existing_key = var.ssh_key_name != ""
@@ -97,9 +109,9 @@ data "hcloud_primary_ip" "main" {
 
 resource "hcloud_server" "main" {
   name         = "dreamseed-${var.environment}"
-  server_type  = "cx23"
+  server_type  = var.server_type
   image        = "ubuntu-24.04"
-  location     = "nbg1"
+  location     = var.location
   ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
   firewall_ids = [hcloud_firewall.web.id]
 

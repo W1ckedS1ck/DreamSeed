@@ -7,12 +7,12 @@ source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
 # ====== Settings ======
-PROJECT_DIR="/var/www/html"
-BACKUP_DIR="/home/ubuntu/backups"
+PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
+BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 HASH_FILE="$BACKUP_DIR/.project_hash"
 
-PROJECT_KEEP=5
-DB_KEEP=15
+PROJECT_KEEP="${PROJECT_KEEP:-5}"
+DB_KEEP="${DB_KEEP:-15}"
 
 DATE=$(date +%F_%H-%M)
 PROJECT_BACKUP="$BACKUP_DIR/project/DreamSeed_$DATE.tar.gz"

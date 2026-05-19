@@ -28,8 +28,8 @@ else
 fi
 SITE_URL="https://${SITE_DOMAIN:-localhost}"
 
-PROJECT_DIR="/var/www/html"
-BACKUP_DIR="/home/ubuntu/backups"
+PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
+BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 
 ENV=$(detect_env)
 ENV_DISPLAY=$(format_env_display "$ENV")

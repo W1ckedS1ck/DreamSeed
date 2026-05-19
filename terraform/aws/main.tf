@@ -13,19 +13,12 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
-    cloudflare = {
-      source  = "cloudflare/cloudflare"
-      version = "~> 5.0"
-    }
+
   }
 }
 
 provider "aws" {
   region = var.aws_region
-}
-
-provider "cloudflare" {
-  api_token = var.cloudflare_api_token
 }
 
 variable "aws_region" {
@@ -71,18 +64,6 @@ variable "environment" {
   description = "Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts"
   type        = string
   default     = "prod"
-}
-
-variable "domain" {
-  description = "Domain name for the deployment (e.g., dreamseed.online, test.dreamseed.online)"
-  type        = string
-  default     = ""
-}
-
-variable "cloudflare_api_token" {
-  description = "Cloudflare API token for DNS management"
-  type        = string
-  default     = ""
 }
 
 locals {
@@ -184,49 +165,18 @@ resource "aws_instance" "web" {
   }
 }
 
-resource "aws_eip" "dynamic" {
-  count  = var.domain != "" && var.elastic_ip_allocation_id == "" ? 1 : 0
-  domain = "vpc"
-  tags = {
-    Name        = "dreamseed-dynamic-${var.environment}"
-    Environment = local.environment_tag
-    Service     = local.service_tag
-  }
-}
-
 data "aws_eip" "reserved" {
   count = var.elastic_ip_allocation_id != "" ? 1 : 0
   id    = var.elastic_ip_allocation_id
 }
 
 resource "aws_eip_association" "web" {
-  count         = var.elastic_ip_allocation_id != "" || var.domain != "" ? 1 : 0
-  allocation_id = var.domain != "" ? aws_eip.dynamic[0].id : data.aws_eip.reserved[0].id
+  count         = var.elastic_ip_allocation_id != "" ? 1 : 0
+  allocation_id = data.aws_eip.reserved[0].id
   instance_id   = aws_instance.web.id
-}
-
-resource "cloudflare_dns_record" "dynamic" {
-  count   = var.domain != "" ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = var.domain
-  content = var.domain != "" ? aws_eip.dynamic[0].public_ip : data.aws_eip.reserved[0].public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = true
-}
-
-variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID for DNS management"
-  type        = string
-  default     = ""
 }
 
 output "server_ipv4" {
   description = "Public IP address of the instance"
-  value       = var.domain != "" ? aws_eip.dynamic[0].public_ip : (var.elastic_ip_allocation_id != "" ? data.aws_eip.reserved[0].public_ip : aws_instance.web.public_ip)
-}
-
-output "instance_id" {
-  description = "Instance ID"
-  value       = aws_instance.web.id
+  value       = var.elastic_ip_allocation_id != "" ? data.aws_eip.reserved[0].public_ip : aws_instance.web.public_ip
 }

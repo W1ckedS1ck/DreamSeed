@@ -111,6 +111,67 @@
 - name: Apply sysctl hardening
   ansible.builtin.meta: flush_handlers
 
+# --- Lynis Hardening ---
+- name: Install hardening diagnostic packages
+  become: true
+  ansible.builtin.apt:
+    name:
+      - debsums
+      - apt-show-versions
+    state: present
+
+- name: Install libpam-tmpdir for private /tmp
+  become: true
+  ansible.builtin.apt:
+    name: libpam-tmpdir
+    state: present
+
+- name: Install PAM password strength checking
+  become: true
+  ansible.builtin.apt:
+    name: libpam-passwdqc
+    state: present
+
+- name: Disable core dumps (limits)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-disable-core.conf
+    content: "* hard core 0\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Disable core dumps (sysctl)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-disable-core.conf
+    content: "fs.suid_dumpable = 0\n"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: Set password max age (90 days)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MAX_DAYS'
+    line: "PASS_MAX_DAYS\t90"
+
+- name: Set password min age (1 day)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MIN_DAYS'
+    line: "PASS_MIN_DAYS\t1"
+
+- name: Set password warn age (14 days)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_WARN_AGE'
+    line: "PASS_WARN_AGE\t14"
+
 # --- MODX Security ---
 - name: Check if MODX config exists
   become: true

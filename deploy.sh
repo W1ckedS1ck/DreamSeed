@@ -6,7 +6,7 @@ VERSION="1.0.1"
 # --- Configuration ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${LOG_DIR:-$SCRIPT_DIR/logs}"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/Vitali.pem}"
+SSH_KEY=""
 PHP_VERSION="${PHP_VERSION:-8.3}"
 VAULT_PASSWORD_FILE="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
 
@@ -154,10 +154,10 @@ export_tf_env() {
         [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && \
             export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
     fi
-    [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && export TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN"
-    [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]] && export TF_VAR_cloudflare_zone_id="$CLOUDFLARE_ZONE_ID"
     if [[ "$TF_PROVIDER" == "hetzner" ]]; then
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
+        [[ -n "${HETZNER_SERVER_TYPE:-}" ]] && export TF_VAR_server_type="$HETZNER_SERVER_TYPE"
+        [[ -n "${HETZNER_LOCATION:-}" ]] && export TF_VAR_location="$HETZNER_LOCATION"
     fi
     export TF_VAR_environment="$TARGET"
     export TF_TOKEN_app_terraform_io="${TF_API_TOKEN:-}"
@@ -319,9 +319,10 @@ preflight_checks() {
     eval "$_saved_opts"
     apply_target_vars
 
-    # Override SSH_KEY if SSH_PRIVATE_KEY_PATH is set in .env
-    if [[ -n "${SSH_PRIVATE_KEY_PATH:-}" ]]; then
-        SSH_KEY="$SSH_PRIVATE_KEY_PATH"
+    SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
+    if [[ -z "$SSH_KEY" ]]; then
+        echo -e "${RED}Error: SSH_PRIVATE_KEY_PATH not set in $ENV_FILE${NC}"
+        exit 1
     fi
 
     if [[ ! -f "$SSH_KEY" ]]; then
@@ -772,35 +773,20 @@ check_services() {
     [[ "$WEB_SERVER" == "apache" ]] && web_svc="apache2"
     local services=("$web_svc" "php${PHP_VERSION}-fpm" "mariadb" "victoria-metrics" "grafana-server")
 
-    local result_dir
-    result_dir=$(mktemp -d)
-    local pids=()
-
-    for svc in "${services[@]}"; do
-        {
-            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-                -i "$SSH_KEY" "ubuntu@$SERVER_IP" "systemctl is-active $svc" &>/dev/null; then
-                echo "ok" > "$result_dir/$svc"
-            else
-                echo "fail" > "$result_dir/$svc"
-            fi
-        } &
-        pids+=($!)
-    done
-
-    for pid in "${pids[@]}"; do wait "$pid"; done
-
     local all_ok=true
-    for svc in "${services[@]}"; do
-        if [[ "$(cat "$result_dir/$svc")" == "ok" ]]; then
+    while IFS= read -r line; do
+        local svc="${line%%:*}"
+        local status="${line#*: }"
+        if [[ "$status" == "active" ]]; then
             echo -e "  ${GREEN}✓${NC} $svc"
         else
             echo -e "  ${RED}✗${NC} $svc"
             all_ok=false
         fi
-    done
+    done < <(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "for s in ${services[*]}; do echo \"\$s: \$(systemctl is-active \"\$s\" 2>/dev/null || echo inactive)\"; done")
 
-    rm -rf "$result_dir"
     $all_ok && echo -e "  ${GREEN}All services OK${NC}" || echo -e "  ${RED}Some services failed${NC}"
 }
 
