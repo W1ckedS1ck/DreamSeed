@@ -178,7 +178,20 @@ else
     SELECTED_DB=$(ls -1t "$BACKUP_DIR/db/db_"*.sql.gz 2>/dev/null | head -n1)
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
-        echo "ERROR: Latest backups not found"
+        echo "Local backups not found, trying Google Drive..."
+        mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db"
+
+        rclone copy "gdrive:DreamSeed/backups/project/" "$BACKUP_DIR/project/" \
+            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3
+        rclone copy "gdrive:DreamSeed/backups/db/" "$BACKUP_DIR/db/" \
+            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3
+
+        SELECTED_PROJECT=$(ls -1t "$BACKUP_DIR/project/DreamSeed_"*.tar.gz 2>/dev/null | head -n1)
+        SELECTED_DB=$(ls -1t "$BACKUP_DIR/db/db_"*.sql.gz 2>/dev/null | head -n1)
+    fi
+
+    if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
+        echo "ERROR: Latest backups not found (local or GDrive)"
         echo "Project: $SELECTED_PROJECT"
         echo "DB: $SELECTED_DB"
         exit 1
