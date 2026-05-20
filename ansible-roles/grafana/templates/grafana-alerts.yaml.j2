@@ -398,14 +398,14 @@ groups:
               from: 86400
               to: 0
             model:
-              expr: 'time() - max_over_time(cron_last_run_backup[1d])'
+              expr: '(time() - max_over_time(cron_last_run_backup[1d])) / 60'
               instant: true
               refId: A
           - refId: B
             datasourceUid: '__expr__'
             queryType: ''
             relativeTimeRange:
-              from: 7200
+              from: 86400
               to: 0
             model:
               type: threshold
@@ -413,7 +413,7 @@ groups:
               expression: A
               conditions:
                 - evaluator:
-                    params: [7200]
+                    params: [120]
                     type: gt
                   operator:
                     type: and
