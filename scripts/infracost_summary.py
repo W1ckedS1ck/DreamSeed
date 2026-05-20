@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Print Infracost breakdown summary."""
 import json
-import sys
 
 with open('/tmp/base.json') as f:
     data = json.load(f)
