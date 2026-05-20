@@ -80,10 +80,10 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rm -rf {{ web_root }}
-          mkdir -p {{ web_root }}
+          rm -rf "{{ web_root }}"
+          mkdir -p "{{ web_root }}"
           tar -xzf "/tmp/{{ restore_latest_project.stdout | trim }}" -C /var/www/
-          chown -R www-data:www-data {{ web_root }}
+          chown -R www-data:www-data "{{ web_root }}"
         executable: /bin/bash
       changed_when: false
 

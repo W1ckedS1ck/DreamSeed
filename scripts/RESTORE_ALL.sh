@@ -33,7 +33,6 @@ BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 
 ENV=$(detect_env)
 ENV_DISPLAY=$(format_env_display "$ENV")
-ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 
 START_TIME=$(date +%s)
 
@@ -70,10 +69,9 @@ show_menu() {
 }
 
 select_backup() {
-    local type="$1"
-    local dir="$2"
-    local pattern="$3"
-    local result_var="$4"
+    local dir="$1"
+    local pattern="$2"
+    local result_var="$3"
 
     local files=()
     mapfile -t files < <(ls -1t "$dir"/$pattern 2>/dev/null)
@@ -135,11 +133,11 @@ if [ "$MODE" != "--auto-latest" ]; then
     # STEP 2: Select backup files
     # ================================================
     if [ "$RESTORE_PROJECT" -eq 1 ]; then
-        select_backup "project" "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+        select_backup "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
     fi
 
     if [ "$RESTORE_DB" -eq 1 ]; then
-        select_backup "db" "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
+        select_backup "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
     fi
 
     echo ""

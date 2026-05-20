@@ -28,7 +28,7 @@ variable "hcloud_token" {
 variable "ssh_key_name" {
   type        = string
   description = "Name of an existing SSH key in Hetzner Cloud. Empty = create from ssh_public_key"
-  default     = "Vitali"
+  default     = ""
 }
 
 variable "ssh_public_key" {
@@ -40,7 +40,7 @@ variable "ssh_public_key" {
 variable "primary_ip_name" {
   type        = string
   description = "Name of the existing Primary IP in Hetzner Cloud. Empty = dynamic IP"
-  default     = "primary_ip-1"
+  default     = ""
 }
 
 variable "environment" {
@@ -62,7 +62,7 @@ variable "location" {
 }
 
 locals {
-  use_dynamic_ip = var.primary_ip_name == ""
+  use_dynamic_ip   = var.primary_ip_name == ""
   use_existing_key = var.ssh_key_name != ""
 }
 

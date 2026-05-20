@@ -80,16 +80,19 @@
     mode: "0644"
   notify: Restart Grafana
 
-- name: Sync Grafana dashboards
+- name: Sync Grafana dashboards  # noqa: jinja[invalid]
   ansible.posix.synchronize:
     src: "{{ role_path }}/files/"
     dest: /var/lib/grafana/dashboards/
-    checksum: yes
+    checksum: true
     rsync_path: "sudo rsync"
-    rsync_opts: "{{ _web_excludes + ['--include=*.json', '--exclude=*'] }}"
+    rsync_opts: "{{ web_excludes + common_rsync_opts }}"
   become: false
   vars:
-    _web_excludes: "{{ ['--exclude=apache-exporter.json'] if web_server == 'nginx' else ['--exclude=nginx.json', '--exclude=nginx-prometheus.json'] }}"
+    web_excludes: "{{ ['--exclude=apache-exporter.json'] if web_server == 'nginx' else ['--exclude=nginx.json', '--exclude=nginx-prometheus.json'] }}"
+    common_rsync_opts:
+      - "--include=*.json"
+      - "--exclude=*"
   notify: Restart Grafana
 
 - name: Fix Grafana dashboard directory ownership and permissions
@@ -126,7 +129,7 @@
   when: grafana_telegram_token | default('') | length > 0
 
 - name: Flush handlers
-  meta: flush_handlers
+  ansible.builtin.meta: flush_handlers
 
 - name: Enable Grafana
   ansible.builtin.systemd:
@@ -150,7 +153,7 @@
     - grafana_admin_password | default('') | length > 0
 
 - name: Reset Grafana admin password via CLI
-  ansible.builtin.shell:
+  ansible.builtin.command:
     cmd: grafana-cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
   no_log: true

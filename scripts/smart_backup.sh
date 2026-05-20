@@ -17,7 +17,6 @@ DB_KEEP="${DB_KEEP:-15}"
 DATE=$(date +%F_%H-%M)
 PROJECT_BACKUP="$BACKUP_DIR/project/DreamSeed_$DATE.tar.gz"
 DB_BACKUP="$BACKUP_DIR/db/db_${DB_NAME}_$DATE.sql.gz"
-START_TIME=$(date +%s)
 
 rotate_files() {
     local pattern="$1"
@@ -33,7 +32,6 @@ rotate_files() {
 mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db"
 
 ENV=$(detect_env)
-ENV_DISPLAY=$(format_env_display "$ENV")
 ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 
 # ====== Lock against parallel runs ======
@@ -46,7 +44,6 @@ fi
 
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
-PROJECT_PATH=""
 
 CURRENT_HASH=$(sudo find "$PROJECT_DIR" -type f \
     ! -path "*/core/cache/*" \
@@ -67,7 +64,6 @@ else
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP"
         echo "$CURRENT_HASH" > "$HASH_FILE"
         PROJECT_STATUS="✅ Project backed up"
-        PROJECT_PATH="$PROJECT_BACKUP"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"
     else
         rm -f "$PROJECT_BACKUP"
@@ -75,19 +71,14 @@ else
     fi
 fi
 
-LAST_PROJECT_FILE=$(ls -1t "$BACKUP_DIR/project/DreamSeed_"*.tar.gz 2>/dev/null | head -n1)
-LAST_PROJECT_DATE=$([ -n "$LAST_PROJECT_FILE" ] && basename "$LAST_PROJECT_FILE" | sed 's/DreamSeed_\(.*\)\.tar\.gz/\1/' || echo "")
-
 # ====== Database backup (always) ======
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
-DB_PATH=""
 
 mysqldump "$DB_NAME" | gzip > "$DB_BACKUP"
 
 if [ "${PIPESTATUS[0]}" -eq 0 ] && [ -s "$DB_BACKUP" ]; then
     DB_STATUS="✅ Database backed up"
-    DB_PATH="$DB_BACKUP"
     rotate_files "$BACKUP_DIR/db/db_${DB_NAME}_*.sql.gz" "$DB_KEEP"
 else
     rm -f "$DB_BACKUP"

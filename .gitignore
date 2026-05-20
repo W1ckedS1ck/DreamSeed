@@ -1,6 +1,9 @@
 # Claude local state (not for git)
 .claude/
 
+# Opencode local state (not for git)
+.opencode/
+
 # Secrets (never commit)
 secrets/
 .env

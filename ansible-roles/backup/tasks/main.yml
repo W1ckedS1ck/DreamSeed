@@ -61,7 +61,7 @@
     mode: "0600"
 
 - name: Flush handlers
-  meta: flush_handlers
+  ansible.builtin.meta: flush_handlers
 
 - name: Enable bot service
   ansible.builtin.systemd:

@@ -1,10 +1,15 @@
 #!/bin/bash
 # Shared functions for DreamSeed scripts. Source this file, do not execute directly.
 
+# shellcheck disable=SC2034  # color vars are consumed by sourcing scripts
 GREEN=$'\033[0;32m'
+# shellcheck disable=SC2034
 YELLOW=$'\033[1;33m'
+# shellcheck disable=SC2034
 RED=$'\033[0;31m'
+# shellcheck disable=SC2034
 CYAN=$'\033[0;36m'
+# shellcheck disable=SC2034
 NC=$'\033[0m'
 
 load_env() {

@@ -158,6 +158,17 @@ export_tf_env() {
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
         [[ -n "${HETZNER_SERVER_TYPE:-}" ]] && export TF_VAR_server_type="$HETZNER_SERVER_TYPE"
         [[ -n "${HETZNER_LOCATION:-}" ]] && export TF_VAR_location="$HETZNER_LOCATION"
+        [[ -n "${HETZNER_SSH_KEY_NAME:-}" ]] && export TF_VAR_ssh_key_name="$HETZNER_SSH_KEY_NAME"
+        [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && export TF_VAR_primary_ip_name="$HETZNER_PRIMARY_IP_NAME"
+        # If no existing key referenced, upload public key contents so TF can create one
+        if [[ -z "${HETZNER_SSH_KEY_NAME:-}" && -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
+            local _pk_path _pk_content
+            _pk_path="$(eval echo "$SSH_PUBLIC_KEY_PATH")"
+            if [[ -r "$_pk_path" ]]; then
+                _pk_content="$(<"$_pk_path")"
+                export TF_VAR_ssh_public_key="$_pk_content"
+            fi
+        fi
     fi
     export TF_VAR_environment="$TARGET"
     export TF_TOKEN_app_terraform_io="${TF_API_TOKEN:-}"
@@ -808,7 +819,9 @@ check_services() {
 rotate_logs() {
     local max_logs="${MAX_LOG_FILES:-10}"
     # shellcheck disable=SC2012  # log filenames are timestamped, no spaces/newlines
-    ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +"$((max_logs + 1))" | xargs rm -f 2>/dev/null || true
+    ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +"$((max_logs + 1))" | xargs rm -f 2>/dev/null || true
+    # shellcheck disable=SC2012
+    ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +"$((max_logs + 1))" | xargs rm -f 2>/dev/null || true
 }
 
 # --- Main ---
