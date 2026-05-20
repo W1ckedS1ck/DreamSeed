@@ -10,7 +10,6 @@
       max_heap_table_size=32M
       innodb_buffer_pool_size=512M
       innodb_log_file_size=100M
-      innodb_snapshot_isolation=ON
     dest: /etc/mysql/conf.d/99-optimizations.cnf
     mode: "0644"
   notify: Restart MariaDB

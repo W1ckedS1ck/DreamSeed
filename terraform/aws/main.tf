@@ -130,7 +130,7 @@ resource "aws_instance" "web" {
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.deploy.key_name
   security_groups             = [aws_security_group.web.name]
-  associate_public_ip_address = false
+  associate_public_ip_address = var.elastic_ip_allocation_id == ""
 
   root_block_device {
     volume_size = 30

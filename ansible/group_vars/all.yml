@@ -69,5 +69,4 @@ configs_dir: "{{ playbook_dir }}/../configs"
 #  Security
 # ========================
 dev_write_perms: false
-additional_ssh_keys:
-  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHnlra4vLtdXHPRNmOqtzrHlYh5oqAaGM24jTxM/yUft 2024@DESKTOP-6ADBQSM"
+additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per line)

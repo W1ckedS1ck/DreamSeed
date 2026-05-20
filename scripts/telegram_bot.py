@@ -145,12 +145,12 @@ def main():
 
     while True:
         try:
-            params = {'timeout': 1}
+            params = {'timeout': 30}
             if last_update is not None:
                 params['offset'] = last_update
 
             updates = requests.get(f'https://api.telegram.org/bot{TG_TOKEN}/getUpdates',
-                               params=params).json()
+                               params=params, timeout=35).json()
 
             if updates.get('ok') and updates.get('result'):
                 for up in updates.get('result', []):
@@ -175,10 +175,10 @@ def main():
                         requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
                                   json=send_kwargs)
 
+        except requests.exceptions.Timeout:
+            continue
         except Exception as e:
             log.error("Main loop error: %s", e)
-
-        time.sleep(1)
 
 if __name__ == '__main__':
     main()
