@@ -395,10 +395,10 @@ groups:
             datasourceUid: VictoriaMetrics
             queryType: ''
             relativeTimeRange:
-              from: 7200
+              from: 86400
               to: 0
             model:
-              expr: 'time() - cron_last_run_backup'
+              expr: 'time() - max_over_time(cron_last_run_backup[1d])'
               instant: true
               refId: A
           - refId: B
