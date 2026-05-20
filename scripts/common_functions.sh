@@ -29,7 +29,14 @@ detect_env() {
     h=$(hostname)
     case "$h" in
         *-prod|*prod-*)  echo "" ;;
-        *)               echo "-preprod" ;;
+        *-preprod|*preprod-*) echo "-preprod" ;;
+        *)
+            if [[ -f /etc/dreamseed.env ]]; then
+                grep -q "^ENV=prod" /etc/dreamseed.env 2>/dev/null && echo "" || echo "-preprod"
+            else
+                echo "-preprod"
+            fi
+            ;;
     esac
 }
 

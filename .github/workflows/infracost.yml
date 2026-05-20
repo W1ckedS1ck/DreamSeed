@@ -24,6 +24,22 @@ jobs:
 
       - run: infracost breakdown --path=terraform/aws --path=terraform/hetzner --format=json --out-file=/tmp/base.json
 
+      - name: Print breakdown cost
+        run: |
+          echo "--- Monthly Cost Breakdown ---"
+          python3 -c "
+import json
+with open('/tmp/base.json') as f:
+    data = json.load(f)
+total = data.get('totalMonthlyCost', 'N/A')
+for p in data.get('projects', []):
+    name = p.get('name', '?').split('/')[-1]
+    cost = p.get('breakdown', {}).get('totalMonthlyCost', 'N/A')
+    print(f'  {name}: \${cost}/mo')
+print(f'  Total: \${total}/mo')
+"
+          echo "-----------------------------"
+
       - uses: actions/checkout@v4
 
       - run: infracost diff --path=terraform/aws --path=terraform/hetzner --format=json --compare-to=/tmp/base.json --out-file=/tmp/diff.json

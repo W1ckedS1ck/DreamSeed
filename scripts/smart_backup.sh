@@ -42,6 +42,10 @@ if ! flock -n 9; then
     exit 1
 fi
 
+# Cron heartbeat — always fires, even if backup fails
+echo "cron_last_run_backup $(date +%s)" | \
+    curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
+
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
 

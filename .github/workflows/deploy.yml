@@ -147,3 +147,4 @@ jobs:
     needs: deploy
     if: inputs.action != 'destroy' && success()
     uses: ./.github/workflows/infracost.yml
+    secrets: inherit

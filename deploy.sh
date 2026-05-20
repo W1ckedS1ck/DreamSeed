@@ -110,7 +110,7 @@ resolve_target() {
             TF_PROVIDER="aws"
             DEPLOY_DOMAIN="dreamseed.online"
             TF_WORKSPACE="prod"
-            TARGET_PREFIX="DEV_AWS"
+            TARGET_PREFIX="PROD_AWS"
             ;;
         dev-aws)
             TF_PROVIDER="aws"
@@ -813,6 +813,17 @@ check_services() {
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "for s in ${services[*]}; do echo \"\$s: \$(systemctl is-active \"\$s\" 2>/dev/null || echo inactive)\"; done")
 
+    local http_code
+    http_code=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://${DEPLOY_DOMAIN}/" 2>/dev/null || echo "000")
+    if [[ "$http_code" == "200" ]] || [[ "$http_code" == "301" ]]; then
+        echo -e "  ${GREEN}✓${NC} HTTP $http_code ${DEPLOY_DOMAIN}"
+    else
+        echo -e "  ${RED}✗${NC} HTTP $http_code ${DEPLOY_DOMAIN}"
+        all_ok=false
+    fi
+
     $all_ok && echo -e "  ${GREEN}All services OK${NC}" || echo -e "  ${RED}Some services failed${NC}"
 }
 
@@ -986,6 +997,8 @@ INVEOF
             echo "grafana_admin_password: \"$(yaml_escape "${GRAFANA_PASS}")\""
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && \
             echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
+        [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && \
+            echo "additional_ssh_keys: [\"$(yaml_escape "${ADDITIONAL_SSH_KEYS}")\"]"
     } > "$VAULT_TMP"
 
     base_args=("-i" "$INVENTORY_FILE" "--extra-vars" "@${VAULT_TMP}")

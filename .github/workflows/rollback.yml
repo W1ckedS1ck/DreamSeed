@@ -8,6 +8,10 @@ on:
         required: true
         type: choice
         options: [prod, dev-aws, dev-hetz]
+      confirm:
+        description: 'Prod confirmation — type "rollback prod"'
+        required: false
+        type: string
 
 concurrency:
   group: rollback-${{ inputs.environment }}
@@ -86,6 +90,15 @@ jobs:
 
           echo "ip=$IP" >> $GITHUB_OUTPUT
           echo "Found server IP: $IP"
+
+      - name: Validate prod confirmation
+        if: inputs.environment == 'prod'
+        run: |
+          if [[ "${{ inputs.confirm }}" != "rollback prod" ]]; then
+            echo "::error::To rollback prod you must set confirm = 'rollback prod'"
+            exit 1
+          fi
+          echo "Prod rollback confirmed"
 
       - name: Restore latest backup
         id: restore

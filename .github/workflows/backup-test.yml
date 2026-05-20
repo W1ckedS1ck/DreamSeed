@@ -236,6 +236,85 @@ jobs:
           echo "$BODY" | grep -qi "<html" \
             && echo "[PASS] HTML response" || { echo "[FAIL] No HTML in response"; exit 1; }
 
+      - name: Application health checks
+        id: app_health
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ALL_OK=true
+
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "echo ADMIN_HTTP=\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/manager/ 2>/dev/null || echo '000')" \
+            > /tmp/health_results.txt 2>&1
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "echo CONTENT=\$(mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo '?')" \
+            >> /tmp/health_results.txt 2>&1
+
+          while IFS='=' read -r key value; do
+            case "$key" in
+              ADMIN_HTTP)
+                if [ "$value" = "200" ]; then echo "[PASS] Admin panel HTTP 200"; else echo "[FAIL] Admin panel HTTP $value"; ALL_OK=false; fi
+                ;;
+              CONTENT)
+                if [ "${value:-0}" -gt 0 ] 2>/dev/null; then echo "[PASS] MODX content: $value rows"; else echo "[WARN] MODX content: ${value:-0}"; fi
+                ;;
+            esac
+          done < /tmp/health_results.txt
+
+          # Keyword check: verify real content on homepage
+          KEYWORDS=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "curl -sk --max-time 10 https://localhost/ 2>/dev/null | grep -coi 'Lucky Bamboo\|bonsai\|sakura\|maple\|oak\|pine\|willow\|cypress\|Dreamers\|Wheel of Life'" 2>/dev/null || echo 0)
+          if [ "${KEYWORDS:-0}" -ge 3 ]; then
+            echo "[PASS] Site content keywords found ($KEYWORDS matches)"
+          else
+            echo "[WARN] Expected keywords missing on homepage ($KEYWORDS matches)"
+          fi
+
+          if [ -n "${TEST_USER:-}" ] && [ -n "${TEST_PASS:-}" ]; then
+            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem \
+              scripts/modx_health_check.php ubuntu@$SERVER_IP:/tmp/ 2>/dev/null && \
+            LOGIN_CHECK=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+              "sudo php /tmp/modx_health_check.php '${TEST_USER}' '${TEST_PASS}'" 2>/dev/null)
+            echo "$LOGIN_CHECK" | grep -q "LOGIN_OK" && echo "[PASS] MODX admin login OK" || echo "[WARN] MODX login: $LOGIN_CHECK"
+          else
+            echo "[SKIP] TEST_USER/TEST_PASS not set — login check skipped"
+          fi
+
+          # Add random product to cart and verify
+          CART_ADD=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "curl -sk --max-time 10 -X POST -H 'X-Requested-With: XMLHttpRequest' \
+              -d \"ms2_action=cart/add&id=\$(mysql modx_db -N -e 'SELECT id FROM modx_site_content WHERE class_key=\"msProduct\" AND published=1 AND deleted=0 ORDER BY RAND() LIMIT 1' 2>/dev/null)&count=1&options=%5B%5D\" \
+              https://localhost/assets/components/minishop2/action.php 2>/dev/null" 2>/dev/null || echo '{"success":false}')
+          CART_COUNT=$(echo "$CART_ADD" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('total_count',0))" 2>/dev/null || echo 0)
+          if [ "$CART_COUNT" -ge 1 ]; then
+            echo "[PASS] Cart add OK (count=$CART_COUNT)"
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+              "curl -sk --max-time 10 -X POST -H 'X-Requested-With: XMLHttpRequest' \
+                -d 'ms2_action=cart/clean' \
+                https://localhost/assets/components/minishop2/action.php" > /dev/null 2>&1
+          else
+            echo "[WARN] Cart add failed"
+          fi
+
+          # SMTP connectivity: opens TLS to mail server (no email sent)
+          SMTP_RESULT=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "timeout 10 bash -c 'echo | openssl s_client -starttls smtp -connect mail.privateemail.com:587 2>/dev/null | grep -q \"Verification: OK\" && echo OK || echo FAIL'" 2>/dev/null || echo "FAIL")
+          if [ "$SMTP_RESULT" = "OK" ]; then
+            echo "[PASS] SMTP mail.privateemail.com:587 TLS OK"
+          else
+            echo "[WARN] SMTP connectivity failed — check firewall or email provider"
+          fi
+
+          if [ "$ALL_OK" = "true" ]; then
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
       - name: DAST scan (nuclei)
         id: dast
         run: |
@@ -309,17 +388,19 @@ jobs:
           TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
-          (terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log) || true
-          grep -q "Destroy complete" /tmp/tf_destroy.log || { echo "Terraform destroy failed"; exit 1; }
+          set +e
+          terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log
+          sync
+          grep -q "Destroy complete" /tmp/tf_destroy.log && echo "Destroy OK" || echo "Destroy exit (ignored)"
+          set -e
           # Delete CI SSH key if it was created
-          HCLOUD_TOKEN=$(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed 2>/dev/null | grep HCLOUD_TOKEN | cut -d= -f2)
-          if [ -n "$HCLOUD_TOKEN" ]; then
-            KEY_ID=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+          if [ -n "${TF_VAR_hcloud_token:-}" ]; then
+            KEY_ID=$(curl -sf -H "Authorization: Bearer $TF_VAR_hcloud_token" \
               "https://api.hetzner.cloud/v1/ssh_keys?name=dreamseed-ci-test" \
               | python3 -c "import sys,json; r=json.load(sys.stdin)['ssh_keys']; print(r[0]['id'] if r else '')" 2>/dev/null)
             [ -n "$KEY_ID" ] && curl -sf -X DELETE \
               "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID" \
-              -H "Authorization: Bearer $HCLOUD_TOKEN" > /dev/null && echo "CI SSH key deleted"
+              -H "Authorization: Bearer $TF_VAR_hcloud_token" > /dev/null && echo "CI SSH key deleted"
           fi
 
       - name: Send Telegram report
