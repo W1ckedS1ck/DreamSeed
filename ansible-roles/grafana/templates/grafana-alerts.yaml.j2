@@ -385,8 +385,8 @@ groups:
           summary: >-
             {% raw %}VictoriaMetrics is down on {{ $labels.instance }}{% endraw %}
 
-      - uid: dreamseed-backup-stale
-        title: Backup Stale
+      - uid: dreamseed-cron-backup
+        title: Backup Cron Not Running
         condition: B
         labels:
           env: {{ domain }}
