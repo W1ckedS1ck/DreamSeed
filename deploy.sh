@@ -1003,7 +1003,7 @@ INVEOF
         run_parallel_phase "Phase 3 (Monitoring/Backup)" "${phase3[@]}"
 
         step_start "Ansible: Grafana"
-        if run_ansible "$SCRIPT_DIR/ansible/playbook-05-grafana.yml" "${base_args[@]}"; then step_ok; else step_fail "Grafana failed"; fi
+        if run_ansible "$SCRIPT_DIR/ansible/playbook-05-grafana.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Grafana failed"; fi
     else
         for entry in "${playbooks[@]}"; do
         local pb="${entry%%:*}"

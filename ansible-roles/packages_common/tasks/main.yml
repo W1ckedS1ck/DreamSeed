@@ -39,6 +39,7 @@
       - unzip
       - bind9-dnsutils
       - python3-pymysql
+      - rsync
     state: present
   environment:
     DEBIAN_FRONTEND: noninteractive
