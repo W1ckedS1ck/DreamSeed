@@ -994,7 +994,7 @@ INVEOF
         echo -e "\n  ${CYAN}▸ Parallel execution${NC}"
 
         step_start "Ansible: Base packages"
-        if run_ansible "$SCRIPT_DIR/ansible/playbook-01-base.yml" "${base_args[@]}"; then step_ok; else step_fail "Base packages failed"; fi
+        if run_ansible "$SCRIPT_DIR/ansible/playbook-01-base.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Base packages failed"; fi
 
         local phase2=("$web_playbook" "playbook-03-db.yml:Database & Restore" "playbook-06-security.yml:Security hardening")
         run_parallel_phase "Phase 2 (Web/DB/Security)" "${phase2[@]}"

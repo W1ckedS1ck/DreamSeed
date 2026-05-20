@@ -92,6 +92,7 @@ jobs:
           fi
 
       - name: Deploy
+        if: inputs.action == 'deploy'
         id: deploy
         run: |
           set -a
