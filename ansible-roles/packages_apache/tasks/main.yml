@@ -4,7 +4,6 @@
   ansible.builtin.apt:
     name:
       - apache2
-      - libapache2-mod-brotli
     state: present
   environment:
     DEBIAN_FRONTEND: noninteractive
