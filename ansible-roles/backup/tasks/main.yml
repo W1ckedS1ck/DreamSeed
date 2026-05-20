@@ -117,3 +117,11 @@
       2>/dev/null || true
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Push initial cron heartbeat to VictoriaMetrics
+  become: true
+  ansible.builtin.shell: |
+    echo "cron_last_run_backup $(date +%s)" | \
+      curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
+  changed_when: false
+  failed_when: false
