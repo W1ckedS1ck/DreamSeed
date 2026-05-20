@@ -80,19 +80,34 @@
     mode: "0644"
   notify: Restart Grafana
 
-- name: Sync Grafana dashboards  # noqa: jinja[invalid]
-  ansible.posix.synchronize:
-    src: "{{ role_path }}/files/"
-    dest: /var/lib/grafana/dashboards/
-    checksum: true
-    rsync_path: "sudo rsync"
-    rsync_opts: "{{ web_excludes + common_rsync_opts }}"
-  become: false
-  vars:
-    web_excludes: "{{ ['--exclude=apache-exporter.json'] if web_server == 'nginx' else ['--exclude=nginx.json', '--exclude=nginx-prometheus.json'] }}"
-    common_rsync_opts:
-      - "--include=*.json"
-      - "--exclude=*"
+- name: Copy common Grafana dashboards
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/{{ item }}"
+    dest: /var/lib/grafana/dashboards/{{ item }}
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  loop:
+    - mysql-database.json
+    - node-exporter-full.json
+    - victoria-metrics-single-node.json
+  notify: Restart Grafana
+
+- name: Copy web-server-specific Grafana dashboards
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/{{ item }}"
+    dest: /var/lib/grafana/dashboards/{{ item }}
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  loop: "{{ ['apache-exporter.json'] if web_server == 'apache' else ['nginx.json', 'nginx-prometheus.json'] }}"
+  notify: Restart Grafana
+
+- name: Remove dashboard files for disabled web server
+  ansible.builtin.file:
+    path: "/var/lib/grafana/dashboards/{{ item }}"
+    state: absent
+  loop: "{{ ['nginx.json', 'nginx-prometheus.json'] if (web_server == 'apache') else ['apache-exporter.json'] }}"
   notify: Restart Grafana
 
 - name: Fix Grafana dashboard directory ownership and permissions
