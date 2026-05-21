@@ -7,6 +7,7 @@
 ![Drift Detection](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/drift-detection.yml/badge.svg)
 
 ![Terraform](https://img.shields.io/badge/Terraform-1.1%2B-7B42BC?logo=terraform)
+![OpenTofu](https://img.shields.io/badge/OpenTofu-1.6%2B-FDA726?logo=opentofu)
 ![Ansible](https://img.shields.io/badge/Ansible-2.15%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)

@@ -158,8 +158,16 @@ def main():
 
                     if 'message' in up:
                         msg = up['message']
+                        chat_id = str(msg['chat']['id'])
+
+                        if 'edited_message' in up:
+                            continue
+
+                        if chat_id != TG_CHAT_ID:
+                            log.warning("Ignored message from unauthorized chat: %s", chat_id)
+                            continue
+
                         text = msg.get('text', '').split('@')[0]
-                        chat_id = msg['chat']['id']
 
                         if text in ['/status', f'/status@{BOT_USERNAME}']:
                             response = cmd_status()
@@ -168,7 +176,7 @@ def main():
                         else:
                             response = "Use /status or /backups"
 
-                        send_kwargs = {'chat_id': TG_CHAT_ID or chat_id, 'text': response, 'parse_mode': 'Markdown'}
+                        send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'Markdown'}
                         if TG_THREAD_ID:
                             send_kwargs['message_thread_id'] = TG_THREAD_ID
 
