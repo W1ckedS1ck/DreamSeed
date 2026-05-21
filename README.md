@@ -22,7 +22,7 @@
 ![GitHub issues](https://img.shields.io/github/issues/W1ckedS1ck/DreamSeed)
 ![GitHub repo size](https://img.shields.io/github/repo-size/W1ckedS1ck/DreamSeed)
 ![GitHub code size](https://img.shields.io/github/languages/code-size/W1ckedS1ck/DreamSeed)
-![Shell](https://img.shields.io/badge/Shell-57%25-4EAA25?logo=gnu-bash)
+![License](https://img.shields.io/badge/License-Reference%20Only-ff69b4)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, under 10 minutes.
