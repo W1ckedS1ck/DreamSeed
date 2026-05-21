@@ -299,6 +299,15 @@ jobs:
             echo "[WARN] Cart add failed"
           fi
 
+          # mysqlcheck: verify database table integrity
+          DB_CHECK=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "mysqlcheck --all-databases 2>/dev/null | grep -q 'OK' && echo OK || echo FAIL" 2>/dev/null || echo "FAIL")
+          if [ "$DB_CHECK" = "OK" ]; then
+            echo "[PASS] Database tables OK"
+          else
+            echo "[WARN] Database check found issues"
+          fi
+
           # SMTP connectivity: opens TLS to mail server (no email sent)
           SMTP_RESULT=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "timeout 10 bash -c 'echo | openssl s_client -starttls smtp -connect mail.privateemail.com:587 2>/dev/null | grep -q \"Verification: OK\" && echo OK || echo FAIL'" 2>/dev/null || echo "FAIL")

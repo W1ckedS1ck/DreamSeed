@@ -14,7 +14,7 @@ jobs:
   cost-estimate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.ref || 'main' }}
 
@@ -27,7 +27,7 @@ jobs:
       - name: Print breakdown cost
         run: python3 scripts/infracost_summary.py
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - run: infracost diff --path=terraform/aws --path=terraform/hetzner --format=json --compare-to=/tmp/base.json --out-file=/tmp/diff.json
 
