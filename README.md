@@ -17,7 +17,6 @@
 ![Grafana](https://img.shields.io/badge/Grafana-13-F46800?logo=grafana)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-DNS-F38020?logo=cloudflare)
 ![Trivy](https://img.shields.io/badge/Trivy-Security-5C4EE5?logo=trivy)
-![Infracost](https://img.shields.io/badge/Infracost-011F26?logo=infracost)
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 ![GitHub issues](https://img.shields.io/github/issues/W1ckedS1ck/DreamSeed)
