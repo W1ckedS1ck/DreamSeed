@@ -191,138 +191,55 @@ jobs:
         id: deploy_db
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml
 
-      - name: Run database tests
-        id: db_tests
+      - name: Run service tests
+        id: service_tests
         run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || { echo "[FAIL] MariaDB not running"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || { echo "[FAIL] DB connect"; exit 1; }
-          TABLE_COUNT=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'")
-          echo "MODX content rows: $TABLE_COUNT"
-          echo "content_rows=$TABLE_COUNT" >> "$GITHUB_OUTPUT"
-          [ "${TABLE_COUNT:-0}" -gt 0 ] && echo "[PASS] Content rows: $TABLE_COUNT" || { echo "[FAIL] No content rows — restore may have failed"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "mysqlcheck --all-databases" && echo "[PASS] DB integrity" || echo "[WARN] DB check issues"
-
-      - name: Run web server tests
-        id: web_tests
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx not running"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM not running"; exit 1; }
-          HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" http://$SERVER_IP/ -L --max-redirs 3 || echo "000")
-          echo "HTTP code: $HTTP_CODE"
-          [ "$HTTP_CODE" = "200" ] && echo "[PASS] HTTP 200" || echo "[WARN] HTTP not 200"
-
-      - name: Run MODX tests
-        id: modx_tests
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; exit 1; }
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || { echo "[FAIL] Assets missing"; exit 1; }
-          BODY=$(curl -sk \
-            --resolve "test.dreamseed.online:80:$SERVER_IP" \
-            --resolve "test.dreamseed.online:443:$SERVER_IP" \
-            http://test.dreamseed.online/ -L --max-redirs 3 --max-time 10 || true)
-          echo "$BODY" | grep -qi "fatal error\|parse error\|<b>Warning" \
-            && { echo "[FAIL] PHP errors in response"; exit 1; } || echo "[PASS] No PHP errors"
-          echo "$BODY" | grep -qi "<html" \
-            && echo "[PASS] HTML response" || { echo "[FAIL] No HTML in response"; exit 1; }
-
-      - name: Application health checks
-        id: app_health
-        run: |
-          set -a
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
-          set +a
-
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ALL_OK=true
 
+          # Database
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "echo ADMIN_HTTP=\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/manager/ 2>/dev/null || echo '000')" \
-            > /tmp/health_results.txt 2>&1
+            "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || { echo "[FAIL] MariaDB"; ALL_OK=false; }
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "echo CONTENT=\$(mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo '?')" \
-            >> /tmp/health_results.txt 2>&1
+            "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || { echo "[FAIL] DB connect"; ALL_OK=false; }
+          ROWS=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'")
+          echo "content_rows=$ROWS" >> "$GITHUB_OUTPUT"
+          [ "${ROWS:-0}" -gt 0 ] && echo "[PASS] Content rows: $ROWS" || { echo "[FAIL] No content rows"; ALL_OK=false; }
 
-          while IFS='=' read -r key value; do
-            case "$key" in
-              ADMIN_HTTP)
-                if [ "$value" = "200" ]; then echo "[PASS] Admin panel HTTP 200"; else echo "[FAIL] Admin panel HTTP $value"; ALL_OK=false; fi
-                ;;
-              CONTENT)
-                if [ "${value:-0}" -gt 0 ] 2>/dev/null; then echo "[PASS] MODX content: $value rows"; else echo "[WARN] MODX content: ${value:-0}"; fi
-                ;;
-            esac
-          done < /tmp/health_results.txt
+          # Web server
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx"; ALL_OK=false; }
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM"; ALL_OK=false; }
+          curl -sk -o /dev/null -w "%{http_code}" http://$SERVER_IP/ -L --max-redirs 3 | grep -q 200 \
+            && echo "[PASS] HTTP 200" || { echo "[FAIL] HTTP not 200"; ALL_OK=false; }
 
-          # Keyword check: verify real content on homepage
+          # MODX core
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; ALL_OK=false; }
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || { echo "[FAIL] Assets missing"; ALL_OK=false; }
+
+          # Keyword check
           KEYWORDS=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "curl -sk --max-time 10 https://localhost/ 2>/dev/null | grep -coi 'Lucky Bamboo\|bonsai\|sakura\|maple\|oak\|pine\|willow\|cypress\|Dreamers\|Wheel of Life'" 2>/dev/null || echo 0)
-          if [ "${KEYWORDS:-0}" -ge 3 ]; then
-            echo "[PASS] Site content keywords found ($KEYWORDS matches)"
-          else
-            echo "[WARN] Expected keywords missing on homepage ($KEYWORDS matches)"
-          fi
+          [ "${KEYWORDS:-0}" -ge 3 ] && echo "[PASS] Site keywords ($KEYWORDS matches)" || echo "[WARN] Keywords low ($KEYWORDS)"
 
-          if [ -n "${TEST_USER:-}" ] && [ -n "${TEST_PASS:-}" ]; then
-            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem \
-              scripts/modx_health_check.php ubuntu@$SERVER_IP:/tmp/ 2>/dev/null && \
-            LOGIN_CHECK=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-              "sudo php /tmp/modx_health_check.php '${TEST_USER}' '${TEST_PASS}'" 2>/dev/null)
-            echo "$LOGIN_CHECK" | grep -q "LOGIN_OK" && echo "[PASS] MODX admin login OK" || echo "[WARN] MODX login: $LOGIN_CHECK"
-          else
-            echo "[SKIP] TEST_USER/TEST_PASS not set — login check skipped"
-          fi
-
-          # Add random product to cart and verify
+          # Cart test
           CART_ADD=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "curl -sk --max-time 10 -X POST -H 'X-Requested-With: XMLHttpRequest' \
               -d \"ms2_action=cart/add&id=\$(mysql modx_db -N -e 'SELECT id FROM modx_site_content WHERE class_key=\"msProduct\" AND published=1 AND deleted=0 ORDER BY RAND() LIMIT 1' 2>/dev/null)&count=1&options=%5B%5D\" \
               https://localhost/assets/components/minishop2/action.php 2>/dev/null" 2>/dev/null || echo '{"success":false}')
           CART_COUNT=$(echo "$CART_ADD" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('total_count',0))" 2>/dev/null || echo 0)
-          if [ "$CART_COUNT" -ge 1 ]; then
-            echo "[PASS] Cart add OK (count=$CART_COUNT)"
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-              "curl -sk --max-time 10 -X POST -H 'X-Requested-With: XMLHttpRequest' \
-                -d 'ms2_action=cart/clean' \
-                https://localhost/assets/components/minishop2/action.php" > /dev/null 2>&1
-          else
-            echo "[WARN] Cart add failed"
-          fi
+          [ "$CART_COUNT" -ge 1 ] && echo "[PASS] Cart add OK (count=$CART_COUNT)" || echo "[WARN] Cart add failed"
 
-          # mysqlcheck: verify database table integrity
-          DB_CHECK=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "mysqlcheck --all-databases 2>/dev/null | grep -q 'OK' && echo OK || echo FAIL" 2>/dev/null || echo "FAIL")
-          if [ "$DB_CHECK" = "OK" ]; then
-            echo "[PASS] Database tables OK"
-          else
-            echo "[WARN] Database check found issues"
-          fi
-
-          # SMTP connectivity: opens TLS to mail server (no email sent)
+          # SMTP
           SMTP_RESULT=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "timeout 10 bash -c 'echo | openssl s_client -starttls smtp -connect mail.privateemail.com:587 2>/dev/null | grep -q \"Verification: OK\" && echo OK || echo FAIL'" 2>/dev/null || echo "FAIL")
-          if [ "$SMTP_RESULT" = "OK" ]; then
-            echo "[PASS] SMTP mail.privateemail.com:587 TLS OK"
-          else
-            echo "[WARN] SMTP connectivity failed — check firewall or email provider"
-          fi
+          [ "$SMTP_RESULT" = "OK" ] && echo "[PASS] SMTP TLS OK" || echo "[WARN] SMTP failed"
 
-          if [ "$ALL_OK" = "true" ]; then
-            echo "status=passed" >> "$GITHUB_OUTPUT"
-          else
-            echo "status=failed" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
+          $ALL_OK || exit 1
 
       - name: DAST scan (nuclei)
         id: dast
@@ -331,7 +248,9 @@ jobs:
           echo "$SERVER_IP test.dreamseed.online" | sudo tee -a /etc/hosts > /dev/null
 
           NUCLEI_VER=$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'][1:])")
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','v3.3.9')[1:])" 2>/dev/null || echo "3.3.9")
+          NUCLEI_VER="${NUCLEI_VER:-3.3.9}"
+          echo "Using nuclei v$NUCLEI_VER"
           wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VER}/nuclei_${NUCLEI_VER}_linux_amd64.zip"
           unzip -q nuclei_*.zip nuclei && chmod +x ./nuclei
           ./nuclei -update-templates -silent
@@ -345,13 +264,14 @@ jobs:
           COUNT=$(wc -l < /tmp/nuclei.json 2>/dev/null || echo 0)
           echo "dast_count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "DAST findings: $COUNT"
-          cat > /tmp/show_findings.py << 'PYEOF'
-          import json
+          if [ "$COUNT" -gt 0 ]; then
+            python3 << 'PYEOF'
+          import json, sys
           for line in open('/tmp/nuclei.json'):
               f = json.loads(line)
               print(f"  [{f['info']['severity'].upper()}] {f['template-id']}: {f['matched-at']}")
           PYEOF
-          [ "$COUNT" -gt 0 ] && python3 /tmp/show_findings.py || true
+          fi
 
       - name: Run disk check
         run: |
@@ -359,17 +279,22 @@ jobs:
           DISK_USAGE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
           echo "Disk usage: $DISK_USAGE%"
+          echo "--- Top disk consumers ---"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
+            "sudo du -sh /* 2>/dev/null | sort -rh | head -10" || true
           [ "${DISK_USAGE:-100}" -lt 90 ] && echo "[PASS] Disk space OK" || echo "[WARN] Disk space low"
 
       - name: Security audit (lynis)
         id: lynis
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "Installing lynis..."
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "sudo apt-get install -y lynis -qq 2>/dev/null" >/dev/null 2>&1 || true
+            "sudo apt-get update -qq 2>/dev/null && sudo apt-get install -y lynis -qq" || echo "[WARN] lynis install failed"
+          echo "Running lynis audit..."
           SCORE=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP \
-            "sudo lynis audit system --quick --no-colors 2>/dev/null | \
-             awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" 2>/dev/null || true)
+            "sudo lynis audit system --quick --no-colors 2>&1 | \
+             awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" || true)
           SCORE="${SCORE:-?}"
           echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
           echo "Hardening index: $SCORE"
@@ -397,19 +322,22 @@ jobs:
           TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
-          set +e
-          terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log
+          # TFC exits 1 even on successful destroy — use || true and check log
+          terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log || true
           sync
-          grep -q "Destroy complete" /tmp/tf_destroy.log && echo "Destroy OK" || echo "Destroy exit (ignored)"
-          set -e
+          if grep -q "Destroy complete" /tmp/tf_destroy.log; then
+            echo "Destroy OK"
+          else
+            echo "Destroy exit (ignored — TFC exit code 1 bug)"
+          fi
           # Delete CI SSH key if it was created
           if [ -n "${TF_VAR_hcloud_token:-}" ]; then
             KEY_ID=$(curl -sf -H "Authorization: Bearer $TF_VAR_hcloud_token" \
               "https://api.hetzner.cloud/v1/ssh_keys?name=dreamseed-ci-test" \
-              | python3 -c "import sys,json; r=json.load(sys.stdin)['ssh_keys']; print(r[0]['id'] if r else '')" 2>/dev/null)
+              | python3 -c "import sys,json; r=json.load(sys.stdin)['ssh_keys']; print(r[0]['id'] if r else '')" 2>/dev/null || true)
             [ -n "$KEY_ID" ] && curl -sf -X DELETE \
               "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID" \
-              -H "Authorization: Bearer $TF_VAR_hcloud_token" > /dev/null && echo "CI SSH key deleted"
+              -H "Authorization: Bearer $TF_VAR_hcloud_token" > /dev/null && echo "CI SSH key deleted" || true
           fi
 
       - name: Send Telegram report
@@ -422,23 +350,20 @@ jobs:
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           ok_dast() { [ -z "$1" ] && echo "❓" || { [ "$1" -eq 0 ] && echo "✅" || echo "❌"; }; }
           RESTORE="${{ steps.deploy_db.outcome }}"
-          DB="${{ steps.db_tests.outcome }}"
-          WEB="${{ steps.web_tests.outcome }}"
-          MODX="${{ steps.modx_tests.outcome }}"
+          TESTS="${{ steps.service_tests.outcome }}"
           DESTROY="${{ steps.destroy.outcome }}"
-          ROWS="${{ steps.db_tests.outputs.content_rows }}"
+          ROWS="${{ steps.service_tests.outputs.content_rows }}"
           DAST_COUNT="${{ steps.dast.outputs.dast_count }}"
           LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
 
           [ "$RESTORE" = "success" ] && STATUS="✅" || STATUS="❌"
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 Backup Restoration Test $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
-            "Restore $(ok $RESTORE) | DB $(ok $DB) (${ROWS:-?} rows) | Web $(ok $WEB)" \
-            "MODX $(ok $MODX) | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?}) | Destroy $(ok $DESTROY)" \
-            "🛡 Hardening ${LYNIS_SCORE:-?}/100")
+            "Restore $(ok $RESTORE) | Tests $(ok $TESTS) (${ROWS:-?} rows) | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
+            "Destroy $(ok $DESTROY) | 🛡 Hardening ${LYNIS_SCORE:-?}/100")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \

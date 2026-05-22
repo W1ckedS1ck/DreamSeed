@@ -4,13 +4,24 @@
     "config:recommended"
   ],
   "schedule": ["before 9am on monday"],
-  "labels": ["dependencies"],
-  "enabledManagers": ["github-actions", "terraform"],
+  "labels": ["dependencies", "renovate"],
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy"],
   "terraform": {
     "managerFilePatterns": [
-      "/terraform/.*\\.tf$/"
+      "//terraform/.*\\.tf$//"
     ],
     "versioning": "semver"
+  },
+  "pip_requirements": {
+    "managerFilePatterns": [
+      "/ansible/requirements\\.txt$/",
+      "/ansible/requirements-deploy\\.txt$/"
+    ]
+  },
+  "ansible-galaxy": {
+    "managerFilePatterns": [
+      "/ansible/requirements\\.yml$/"
+    ]
   },
   "packageRules": [
     {

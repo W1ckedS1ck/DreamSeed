@@ -12,7 +12,17 @@ VAULT_PASSWORD_FILE="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
 
 # Executable paths
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
-TERRAFORM="${TERRAFORM:-terraform}"
+TERRAFORM="${TERRAFORM:-}"
+if [[ -z "$TERRAFORM" ]]; then
+    if command -v tofu &>/dev/null; then
+        TERRAFORM="tofu"
+    elif command -v terraform &>/dev/null; then
+        TERRAFORM="terraform"
+    else
+        echo -e "\n${RED}Error: neither tofu nor terraform found in PATH${NC}"
+        exit 1
+    fi
+fi
 
 export LC_ALL=C.UTF-8
 
@@ -848,9 +858,9 @@ main() {
         "$web_playbook"
         "playbook-03-db.yml:Database & Restore"
         "playbook-04-monitor.yml:Monitoring (Exporters+VM)"
-        "playbook-04.5-backup.yml:Backup & Telegram bot"
-        "playbook-05-grafana.yml:Grafana"
-        "playbook-06-security.yml:Security hardening"
+        "playbook-05-backup.yml:Backup & Telegram bot"
+        "playbook-06-grafana.yml:Grafana"
+        "playbook-07-security.yml:Security hardening"
     )
 
     preflight_checks
@@ -1009,14 +1019,14 @@ INVEOF
         step_start "Ansible: Base packages"
         if run_ansible "$SCRIPT_DIR/ansible/playbook-01-base.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Base packages failed"; fi
 
-        local phase2=("$web_playbook" "playbook-03-db.yml:Database & Restore" "playbook-06-security.yml:Security hardening")
+        local phase2=("$web_playbook" "playbook-03-db.yml:Database & Restore" "playbook-07-security.yml:Security hardening")
         run_parallel_phase "Phase 2 (Web/DB/Security)" "${phase2[@]}"
 
-        local phase3=("playbook-04-monitor.yml:Monitoring" "playbook-04.5-backup.yml:Backup & Telegram bot")
+        local phase3=("playbook-04-monitor.yml:Monitoring" "playbook-05-backup.yml:Backup & Telegram bot")
         run_parallel_phase "Phase 3 (Monitoring/Backup)" "${phase3[@]}"
 
         step_start "Ansible: Grafana"
-        if run_ansible "$SCRIPT_DIR/ansible/playbook-05-grafana.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Grafana failed"; fi
+        if run_ansible "$SCRIPT_DIR/ansible/playbook-06-grafana.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Grafana failed"; fi
     else
         for entry in "${playbooks[@]}"; do
         local pb="${entry%%:*}"

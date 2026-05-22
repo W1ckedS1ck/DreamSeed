@@ -4,25 +4,16 @@
 ![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg)
 ![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 ![Backup Test](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/backup-test.yml/badge.svg)
-![Drift Detection](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/drift-detection.yml/badge.svg)
+![Gitleaks](https://img.shields.io/badge/Gitleaks-passed-00C853?logo=gitleaks)
 
 ![Terraform](https://img.shields.io/badge/Terraform-1.1%2B-7B42BC?logo=terraform)
+![OpenTofu](https://img.shields.io/badge/OpenTofu-1.6%2B-FDA726?logo=opentofu)
 ![Ansible](https://img.shields.io/badge/Ansible-2.15%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu)
-![MariaDB](https://img.shields.io/badge/MariaDB-10.11-003545?logo=mariadb)
-![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php)
-![Grafana](https://img.shields.io/badge/Grafana-13-F46800?logo=grafana)
-![Cloudflare](https://img.shields.io/badge/Cloudflare-DNS-F38020?logo=cloudflare)
-![Trivy](https://img.shields.io/badge/Trivy-Security-5C4EE5?logo=trivy)
-![Infracost](https://img.shields.io/badge/Infracost-011F26?logo=infracost)
+![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
+![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
-![GitHub last commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
-![GitHub issues](https://img.shields.io/github/issues/W1ckedS1ck/DreamSeed)
-![GitHub repo size](https://img.shields.io/github/repo-size/W1ckedS1ck/DreamSeed)
-![GitHub code size](https://img.shields.io/github/languages/code-size/W1ckedS1ck/DreamSeed)
-![License](https://img.shields.io/badge/License-Reference%20Only-ff69b4)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, under 10 minutes.
@@ -45,8 +36,8 @@
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | 1 hour → Google Drive, 15/5 versions retained |
 | Uptime coverage | 8 Grafana alert rules → Telegram in under 2 min |
-| CI checks per push | 7 parallel jobs (lint → security → validate) |
-| Cloud cost | Tracked via Infracost on every PR and deploy |
+| CI checks per push | 8 parallel jobs (lint → security → validate) |
+| Cloud cost | Tracked via Infracost GitHub App on every PR |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
 ---
@@ -61,7 +52,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
 - **Observability** — VictoriaMetrics + Grafana stack with 8 alert rules for CPU, RAM, Disk, MySQL, Nginx, site availability, cron health, and VM health. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 15/5 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 7 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, tflint, Trivy, gitleaks, terraform validate. Plus deploy, backup-test, drift-detection, rollback, and cost-estimation workflows
+- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, tflint, Trivy, gitleaks, terraform validate, OpenTofu validate. Plus deploy, backup-test, drift-detection, rollback workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -89,7 +80,7 @@ Real problems encountered and solved in production:
 | **Monitoring** | VictoriaMetrics · Grafana · Node/Nginx/MySQL exporters · 8 alert rules → Telegram |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ruff · ansible-lint · tflint · Trivy · gitleaks · Infracost |
+| **CI/CD** | GitHub Actions (5 workflows) · ShellCheck · ruff · ansible-lint · tflint · Trivy · gitleaks · pre-commit · OpenTofu · Renovate |
 
 ---
 
@@ -166,7 +157,7 @@ DreamSeed/
 │   ├── playbook-02-apache.yml    # Apache + PHP
 │   ├── playbook-03-db.yml        # MariaDB + restore logic
 │   ├── playbook-04-monitor.yml   # VictoriaMetrics + exporters
-│   ├── playbook-05-backup.yml  # Backup cron + Telegram bot
+│   ├── playbook-05-backup.yml   # Backup cron + Telegram bot
 │   ├── playbook-06-grafana.yml   # Grafana dashboards + alerts
 │   └── playbook-07-security.yml  # Hardening
 ├── ansible-roles/            # 15 reusable roles (nginx, mariadb, ssl, …)
@@ -178,8 +169,7 @@ DreamSeed/
     ├── deploy.yml            # One-button deploy via GitHub Actions
     ├── drift-detection.yml   # Daily terraform plan against prod
     ├── backup-test.yml       # Full backup/restore verification with app health checks
-    ├── rollback.yml          # Emergency rollback with prod confirmation
-    └── infracost.yml         # Cost estimation per PR/deploy
+    └── rollback.yml          # Emergency rollback with prod confirmation
 ```
 
 ---
@@ -214,18 +204,17 @@ Grafana dashboards, datasources, **and 8 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 8 Workflows
+### 🧪 CI/CD Pipeline — 5 Workflows + Renovate + Infracost App
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 7 parallel checks | Every PR + push to main |
+| **CI** — 8 parallel checks | Every PR + push to main |
 | **Deploy** — single-click deploy | Manual dispatch (prod, dev-aws, dev-hetz) |
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
-| **Infracost** — cost estimate | Each PR + deploy |
 
-CI checks: ShellCheck · ruff · ansible-lint · tflint · **Trivy** (security) · **gitleaks** (secrets) · terraform validate.
+CI checks: ShellCheck · ruff · ansible-lint · tflint · **Trivy** · **gitleaks** · terraform validate · **OpenTofu validate**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
 
 ### 🛑 Production Safeguards
 - **Deploy:** manual `[y/N]` confirmation before touching production

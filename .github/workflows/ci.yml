@@ -50,48 +50,6 @@ jobs:
           pip install -r requirements.txt --quiet
           ansible-lint .
 
-  tflint:
-    name: Terraform Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: terraform-linters/setup-tflint@v6
-        with:
-          tflint_version: latest
-      - name: Init TFLint
-        run: tflint --init
-      - name: Run TFLint
-        run: |
-          for dir in terraform/*/; do
-            echo "=== Linting $dir ==="
-            tflint --chdir="$dir"
-          done
-
-  trivy:
-    name: Terraform Security
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Run Trivy
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: config
-          scan-ref: terraform
-          exit-code: '1'
-          severity: HIGH,CRITICAL
-
-  gitleaks:
-    name: Secret Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Secret Scan
-        run: |
-          curl -sL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | sudo tar -xz -C /usr/local/bin gitleaks
-          gitleaks detect --source . --verbose
-
   terraform-validate:
     name: Terraform Validate
     runs-on: ubuntu-latest
@@ -107,3 +65,37 @@ jobs:
             terraform -chdir="$dir" init -backend=false -upgrade
             terraform -chdir="$dir" validate
           done
+
+  tofu-validate:
+    name: OpenTofu Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: latest
+      - name: Validate all providers
+        run: |
+          for dir in terraform/*/; do
+            echo "=== Validating $dir ==="
+            tofu -chdir="$dir" init -backend=false -upgrade
+            tofu -chdir="$dir" validate
+          done
+
+  pre-commit:
+    name: Pre-commit Hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Install pre-commit
+        run: pip install pre-commit --quiet
+      - name: Install gitleaks
+        run: |
+          curl -sL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz | sudo tar -xz -C /usr/local/bin gitleaks
+      - name: Run pre-commit
+        env:
+          SKIP: shellcheck,ruff,ruff-format,ansible-lint,tflint
+        run: pre-commit run --all-files

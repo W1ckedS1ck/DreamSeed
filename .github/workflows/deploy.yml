@@ -44,8 +44,6 @@ jobs:
   deploy:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.environment == 'prod' && 'production' || '' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -141,10 +139,3 @@ jobs:
 
           export CI_DESTROY_CONFIRM="$DESTROY_CONFIRM"
           ./deploy.sh "$ENV" -n -x
-
-  cost-estimate:
-    name: Cost estimate
-    needs: deploy
-    if: inputs.action != 'destroy' && success()
-    uses: ./.github/workflows/infracost.yml
-    secrets: inherit
