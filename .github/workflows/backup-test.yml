@@ -32,6 +32,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Record start time
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+        id: start_time
+
       - name: Validate target
         run: |
           if [ "$TARGET" = "aws" ]; then
@@ -400,9 +404,12 @@ jobs:
           LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
 
           [ "$RESTORE" = "success" ] && STATUS="✅" || STATUS="❌"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
+          MINS=$(( ELAPSED / 60 ))
+          SECS=$(( ELAPSED % 60 ))
           MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 Backup Restoration Test $STATUS" \
-            "📅 $(date '+%Y-%m-%d %H:%M')" \
+            "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
             "Restore $(ok $RESTORE) | Tests $(ok $TESTS) (${ROWS:-?} rows) | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
