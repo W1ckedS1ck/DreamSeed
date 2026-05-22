@@ -206,6 +206,15 @@
   become: true
   ansible.builtin.file:
     path: /etc/ssl/private/nginx-selfsigned.key
+    owner: root
+    group: ssl-cert
     mode: "0640"
-    group: "root"
+  when: not ssl_has_cert
+
+- name: Add web server user to ssl-cert group
+  become: true
+  ansible.builtin.user:
+    name: www-data
+    groups: ssl-cert
+    append: true
   when: not ssl_has_cert
