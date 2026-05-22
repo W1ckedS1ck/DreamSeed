@@ -141,10 +141,3 @@ jobs:
 
           export CI_DESTROY_CONFIRM="$DESTROY_CONFIRM"
           ./deploy.sh "$ENV" -n -x
-
-  cost-estimate:
-    name: Cost estimate
-    needs: deploy
-    if: inputs.action != 'destroy' && success()
-    uses: ./.github/workflows/infracost.yml
-    secrets: inherit

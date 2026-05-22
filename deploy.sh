@@ -12,7 +12,17 @@ VAULT_PASSWORD_FILE="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
 
 # Executable paths
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
-TERRAFORM="${TERRAFORM:-terraform}"
+TERRAFORM="${TERRAFORM:-}"
+if [[ -z "$TERRAFORM" ]]; then
+    if command -v tofu &>/dev/null; then
+        TERRAFORM="tofu"
+    elif command -v terraform &>/dev/null; then
+        TERRAFORM="terraform"
+    else
+        echo -e "\n${RED}Error: neither tofu nor terraform found in PATH${NC}"
+        exit 1
+    fi
+fi
 
 export LC_ALL=C.UTF-8
 
