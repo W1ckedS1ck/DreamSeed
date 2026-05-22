@@ -12,7 +12,17 @@ VAULT_PASSWORD_FILE="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
 
 # Executable paths
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
-TERRAFORM="${TERRAFORM:-terraform}"
+TERRAFORM="${TERRAFORM:-}"
+if [[ -z "$TERRAFORM" ]]; then
+    if command -v tofu &>/dev/null; then
+        TERRAFORM="tofu"
+    elif command -v terraform &>/dev/null; then
+        TERRAFORM="terraform"
+    else
+        echo -e "\n${RED}Error: neither tofu nor terraform found in PATH${NC}"
+        exit 1
+    fi
+fi
 
 export LC_ALL=C.UTF-8
 
@@ -37,6 +47,7 @@ SKIP_TERRAFORM=false
 EXISTING_IP=""
 DESTROY_MODE=false
 PARALLEL_MODE=false
+DRY_RUN=false
 VAULT_TMP=""
 ENV_DECRYPTED_TMP=""
 SERVER_IP=""
@@ -204,6 +215,7 @@ OPTIONS:
     -i IP              Use existing server (skip Terraform)
     -x, --destroy      Destroy resources
     -p, --parallel     Parallel playbook execution (3 phases)
+    -d, --dry-run      Show what would be deployed, no changes
     -h                 Show this help
     --logs [tf]        Tail latest deploy log (or terraform log)
 
@@ -214,6 +226,7 @@ EXAMPLES:
     \$0 dev-hetz -n              Deploy dev on Hetzner (Nginx)
     \$0 prod -n -i 1.2.3.4       Ansible-only on existing server
     \$0 prod -x                  Destroy prod resources
+    \$0 prod -n --dry-run        Preview prod deploy without changes
 EOF
 }
 
@@ -241,6 +254,7 @@ parse_args() {
             -i|--ip) EXISTING_IP="$2"; SKIP_TERRAFORM=true; shift 2 ;;
             -x|--destroy) DESTROY_MODE=true; shift ;;
             -p|--parallel) PARALLEL_MODE=true; shift ;;
+            -d|--dry-run) DRY_RUN=true; shift ;;
             -h|--help) usage; exit 0 ;;
             *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
         esac
@@ -848,13 +862,25 @@ main() {
         "$web_playbook"
         "playbook-03-db.yml:Database & Restore"
         "playbook-04-monitor.yml:Monitoring (Exporters+VM)"
-        "playbook-04.5-backup.yml:Backup & Telegram bot"
-        "playbook-05-grafana.yml:Grafana"
-        "playbook-06-security.yml:Security hardening"
+        "playbook-05-backup.yml:Backup & Telegram bot"
+        "playbook-06-grafana.yml:Grafana"
+        "playbook-07-security.yml:Security hardening"
     )
 
     preflight_checks
     calculate_steps
+
+    if [[ "$DRY_RUN" == "true" && "$DESTROY_MODE" == "true" ]]; then
+        echo -e "\n  ${YELLOW}══════════════════ DRY RUN ══════════════════${NC}"
+        echo -e "  ${BOLD}Action:${NC}      Destroy $TARGET"
+        echo -e "  ${BOLD}Provider:${NC}    $TF_PROVIDER"
+        echo -e ""
+        echo -e "  ${YELLOW}Would destroy:${NC} server, firewall, DNS, key pair"
+        echo -e "  ${YELLOW}No changes were made. Use without --dry-run to destroy.${NC}"
+        echo -e "  ${YELLOW}════════════════════════════════════════════════${NC}\n"
+        write_deploy_history "DRY-RUN"
+        exit 0
+    fi
 
     if [[ "$DESTROY_MODE" == "true" ]]; then
         step_start "Terraform destroy ($TARGET)"
@@ -873,6 +899,28 @@ main() {
     printf "${CYAN}│${NC}  Web server  ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$WEB_SERVER"
     printf "${CYAN}│${NC}  Mode        ${BOLD}%-44s${NC}${CYAN}│${NC}\n" "$([[ "$PARALLEL_MODE" == "true" ]] && echo "parallel" || echo "sequential")"
     echo -e "${CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        echo -e "\n  ${YELLOW}══════════════════ DRY RUN ══════════════════${NC}"
+        echo -e "  ${BOLD}Target:${NC}      $TARGET"
+        echo -e "  ${BOLD}Domain:${NC}      $DEPLOY_DOMAIN"
+        echo -e "  ${BOLD}Provider:${NC}    $TF_PROVIDER"
+        echo -e "  ${BOLD}Web server:${NC}  $WEB_SERVER"
+        echo -e "  ${BOLD}Mode:${NC}        $([[ "$PARALLEL_MODE" == "true" ]] && echo "parallel" || echo "sequential")"
+        echo -e "  ${BOLD}Provision:${NC}   $([[ "$SKIP_TERRAFORM" == "true" ]] && echo "skip (existing IP: $EXISTING_IP)" || echo "new server")"
+        echo -e ""
+        echo -e "  ${BOLD}Ansible playbooks:${NC}"
+        for entry in "${playbooks[@]}"; do
+            local pb="${entry%%:*}"
+            local label="${entry##*:}"
+            printf "    ${CYAN}→${NC} %s (%s)\n" "$label" "$pb"
+        done
+        echo -e ""
+        echo -e "  ${YELLOW}No changes were made. Use without --dry-run to deploy.${NC}"
+        echo -e "  ${YELLOW}═══════════════════════════════════════════${NC}\n"
+        write_deploy_history "DRY-RUN"
+        exit 0
+    fi
 
     if [[ "$TARGET" == "prod" && "$DESTROY_MODE" == "false" ]]; then
         echo -e "\n${YELLOW}⚠  Deploying to PRODUCTION (${DEPLOY_DOMAIN})${NC}"
@@ -1009,14 +1057,14 @@ INVEOF
         step_start "Ansible: Base packages"
         if run_ansible "$SCRIPT_DIR/ansible/playbook-01-base.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Base packages failed"; fi
 
-        local phase2=("$web_playbook" "playbook-03-db.yml:Database & Restore" "playbook-06-security.yml:Security hardening")
+        local phase2=("$web_playbook" "playbook-03-db.yml:Database & Restore" "playbook-07-security.yml:Security hardening")
         run_parallel_phase "Phase 2 (Web/DB/Security)" "${phase2[@]}"
 
-        local phase3=("playbook-04-monitor.yml:Monitoring" "playbook-04.5-backup.yml:Backup & Telegram bot")
+        local phase3=("playbook-04-monitor.yml:Monitoring" "playbook-05-backup.yml:Backup & Telegram bot")
         run_parallel_phase "Phase 3 (Monitoring/Backup)" "${phase3[@]}"
 
         step_start "Ansible: Grafana"
-        if run_ansible "$SCRIPT_DIR/ansible/playbook-05-grafana.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Grafana failed"; fi
+        if run_ansible "$SCRIPT_DIR/ansible/playbook-06-grafana.yml" "${base_args[@]}"; then step_ok; else log_error_details "$LOG"; step_fail "Grafana failed"; fi
     else
         for entry in "${playbooks[@]}"; do
         local pb="${entry%%:*}"
