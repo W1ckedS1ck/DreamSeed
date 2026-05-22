@@ -195,6 +195,12 @@ jobs:
         id: deploy_db
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml
 
+      - name: Deploy Monitoring
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-04-monitor.yml -e @/tmp/test_vault.yml
+
+      - name: Deploy Security
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-07-security.yml -e @/tmp/test_vault.yml
+
       - name: Run service tests
         id: service_tests
         run: |
@@ -242,6 +248,26 @@ jobs:
           SMTP_RESULT=$(ssh ubuntu@$SERVER_IP \
             "timeout 10 bash -c 'echo | openssl s_client -starttls smtp -connect mail.privateemail.com:587 2>/dev/null | grep -q \"Verification: OK\" && echo OK || echo FAIL'" 2>/dev/null || echo "FAIL")
           [ "$SMTP_RESULT" = "OK" ] && echo "[PASS] SMTP TLS OK" || echo "[WARN] SMTP failed"
+
+          # Monitoring — VictoriaMetrics health
+          VM_HEALTH=$(ssh ubuntu@$SERVER_IP \
+            "curl -sf http://127.0.0.1:8428/health 2>/dev/null && echo OK || echo FAIL")
+          [ "$VM_HEALTH" = "OK" ] && echo "[PASS] VictoriaMetrics health" || echo "[WARN] VM health: $VM_HEALTH"
+
+          # Monitoring — node_exporter metrics
+          NE_CHECK=$(ssh ubuntu@$SERVER_IP \
+            "curl -sf http://127.0.0.1:9100/metrics 2>/dev/null | grep -q 'node_cpu' && echo OK || echo FAIL")
+          [ "$NE_CHECK" = "OK" ] && echo "[PASS] Node Exporter metrics" || echo "[WARN] Node Exporter: $NE_CHECK"
+
+          # Security — fail2ban running
+          F2B_STATUS=$(ssh ubuntu@$SERVER_IP \
+            "systemctl is-active fail2ban" 2>/dev/null || echo "inactive")
+          [ "$F2B_STATUS" = "active" ] && echo "[PASS] fail2ban running" || echo "[WARN] fail2ban: $F2B_STATUS"
+
+          # Security — SSH hardening in place
+          SSH_HARDENING=$(ssh ubuntu@$SERVER_IP \
+            "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_config.d/99-hardening.conf 2>/dev/null && echo OK || echo FAIL")
+          [ "$SSH_HARDENING" = "OK" ] && echo "[PASS] SSH hardening" || echo "[WARN] SSH hardening: $SSH_HARDENING"
 
           $ALL_OK || exit 1
 
