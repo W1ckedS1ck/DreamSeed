@@ -46,7 +46,7 @@
 | Backup frequency (RPO) | 1 hour → Google Drive, 15/5 versions retained |
 | Uptime coverage | 8 Grafana alert rules → Telegram in under 2 min |
 | CI checks per push | 7 parallel jobs (lint → security → validate) |
-| Cloud cost | Tracked via Infracost on every PR and deploy |
+| Cloud cost | Tracked via Infracost GitHub App on every PR |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
 ---
@@ -89,7 +89,7 @@ Real problems encountered and solved in production:
 | **Monitoring** | VictoriaMetrics · Grafana · Node/Nginx/MySQL exporters · 8 alert rules → Telegram |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ruff · ansible-lint · tflint · Trivy · gitleaks · Infracost |
+| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ruff · ansible-lint · tflint · Trivy · gitleaks · Infracost App |
 
 ---
 
@@ -178,8 +178,7 @@ DreamSeed/
     ├── deploy.yml            # One-button deploy via GitHub Actions
     ├── drift-detection.yml   # Daily terraform plan against prod
     ├── backup-test.yml       # Full backup/restore verification with app health checks
-    ├── rollback.yml          # Emergency rollback with prod confirmation
-    └── infracost.yml         # Cost estimation per PR/deploy
+    └── rollback.yml          # Emergency rollback with prod confirmation
 ```
 
 ---
@@ -223,7 +222,7 @@ Grafana dashboards, datasources, **and 8 alert rules** deployed automatically �
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
-| **Infracost** — cost estimate | Each PR + deploy |
+| **Infracost** — cost estimate | Each PR + deploy (GitHub App) |
 
 CI checks: ShellCheck · ruff · ansible-lint · tflint · **Trivy** (security) · **gitleaks** (secrets) · terraform validate.
 
