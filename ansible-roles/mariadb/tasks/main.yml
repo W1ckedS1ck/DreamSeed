@@ -4,6 +4,10 @@
   ansible.builtin.copy:
     content: |
       [mysqld]
+      bind-address = 127.0.0.1
+      character-set-server = utf8mb4
+      collation-server = utf8mb4_unicode_ci
+      innodb_flush_method = O_DIRECT
       # Performance optimizations from MySQLTuner
       skip-name-resolve=ON
       tmp_table_size=32M
@@ -23,6 +27,29 @@
 
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
+
+- name: Remove anonymous users
+  become: true
+  community.mysql.mysql_user:
+    name: ""
+    host_all: true
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Remove test database
+  become: true
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Remove remote root access
+  become: true
+  community.mysql.mysql_user:
+    name: root
+    host: "'127.0.0.1'"
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
 
 - name: Create database
   become: true

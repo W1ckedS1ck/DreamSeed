@@ -81,6 +81,9 @@ yaml_escape() {
     val="${val//\\/\\\\}"
     val="${val//\"/\\\"}"
     val="${val//$'\n'/\\n}"
+    val="${val//!/\\!}"
+    val="${val//'#'/\\#}"
+    val="${val//:/\\:}"
     printf '%s' "$val"
 }
 
@@ -121,7 +124,7 @@ resolve_target() {
             TF_PROVIDER="aws"
             DEPLOY_DOMAIN="dreamseed.online"
             TF_WORKSPACE="prod"
-            TARGET_PREFIX="PROD_AWS"
+            TARGET_PREFIX="PROD"
             ;;
         dev-aws)
             TF_PROVIDER="aws"
@@ -191,6 +194,7 @@ export_tf_env() {
 cleanup() {
     [[ -n "${VAULT_TMP:-}" && -f "${VAULT_TMP:-}" ]] && rm -f "$VAULT_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
+    [[ -n "${LOCK_FILE:-}" && -d "${LOCK_FILE:-}" ]] && rmdir "$LOCK_FILE"
 }
 
 trap 'cleanup; echo -e "\n${YELLOW}Interrupted! Exiting...${NC}"; exit 130' INT TERM
@@ -351,12 +355,14 @@ preflight_checks() {
     local env_to_source
     env_to_source=$(resolve_env_file "$ENV_FILE")
     validate_env_file "$env_to_source"
-    local _saved_opts
+    local _saved_opts _saved_tf_token
     _saved_opts="$(set +o)"
+    _saved_tf_token="${TF_API_TOKEN:-}"
     set -a
     source "$env_to_source"
     set +a
     eval "$_saved_opts"
+    [[ -n "$_saved_tf_token" ]] && export TF_API_TOKEN="$_saved_tf_token"
     apply_target_vars
 
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
@@ -727,7 +733,7 @@ terraform_init_if_needed() {
     local current_ws
     current_ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
     if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$current_ws" != "$TF_WORKSPACE" ]]; then
-        ( cd "$TF_DIR" && "$TERRAFORM" init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1 )
+        ( cd "$TF_DIR" && "$TERRAFORM" init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1 ) || return 1
     fi
 }
 
@@ -855,6 +861,12 @@ main() {
     parse_args "$@"
     resolve_target
 
+    LOCK_FILE="/tmp/deploy-${TARGET}.lock"
+    if ! mkdir "$LOCK_FILE" 2>/dev/null; then
+        echo -e "${RED}Error: Deploy already running for target '${TARGET}' (lock: $LOCK_FILE)${NC}"
+        exit 1
+    fi
+
     local web_playbook="playbook-02-nginx.yml:Web server (Nginx/PHP)"
     [[ "$WEB_SERVER" == "apache" ]] && web_playbook="playbook-02-apache.yml:Web server (Apache/PHP)"
     playbooks=(
@@ -884,7 +896,7 @@ main() {
 
     if [[ "$DESTROY_MODE" == "true" ]]; then
         step_start "Terraform destroy ($TARGET)"
-        terraform_destroy
+        terraform_destroy || step_fail "Terraform destroy failed"
         step_ok
         write_deploy_history "DESTROYED"
         exit 0
@@ -1045,8 +1057,12 @@ INVEOF
             echo "grafana_admin_password: \"$(yaml_escape "${GRAFANA_PASS}")\""
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && \
             echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
-        [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && \
-            echo "additional_ssh_keys: [\"$(yaml_escape "${ADDITIONAL_SSH_KEYS}")\"]"
+        [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && {
+            echo "additional_ssh_keys:"
+            while IFS= read -r key; do
+                [[ -n "$key" ]] && echo "  - \"$(yaml_escape "$key")\""
+            done <<< "$ADDITIONAL_SSH_KEYS"
+        }
     } > "$VAULT_TMP"
 
     base_args=("-i" "$INVENTORY_FILE" "--extra-vars" "@${VAULT_TMP}")

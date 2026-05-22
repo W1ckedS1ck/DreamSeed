@@ -97,6 +97,9 @@ jobs:
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
           set +a
 
+          # Set after sourcing .env — deploy.sh preserves it
+          export TF_API_TOKEN="${{ secrets.TF_API_TOKEN }}"
+
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
           SERVER_IP="${{ inputs.server_ip }}"

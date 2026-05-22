@@ -341,6 +341,49 @@ groups:
         annotations:
           summary: "Website {{ domain }} is not responding (HTTP != 200)"
 
+      - uid: dreamseed-modx-core
+        title: MODX Core Missing
+        condition: B
+        labels:
+          env: {{ domain }}
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: 'modx_core_ok'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "MODX core files missing on {{ domain }}"
+
       - uid: dreamseed-victoria-down
         title: VictoriaMetrics Down
         condition: B

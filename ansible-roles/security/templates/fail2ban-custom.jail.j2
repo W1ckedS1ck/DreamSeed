@@ -84,3 +84,13 @@ port     = http,https
 maxretry = 6
 bantime  = 1h
 {% endif %}
+
+# ============================================================
+# Recidive — persistent offenders get 1 week ban
+# ============================================================
+[recidive]
+enabled  = true
+logpath  = /var/log/fail2ban.log
+maxretry = 3
+findtime = 86400
+bantime  = 604800

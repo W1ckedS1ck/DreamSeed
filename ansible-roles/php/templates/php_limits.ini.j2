@@ -7,8 +7,11 @@ max_execution_time = {{ php_max_execution_time | default(300) }}
 max_input_time = {{ php_max_input_time | default(300) }}
 disable_functions = {{ php_disable_functions | default('eval,shell_exec,system,passthru,proc_open,popen,pcntl_exec,phpinfo') }}
 expose_php = Off
+allow_url_include = Off
+cgi.fix_pathinfo = 0
 
 [Session]
+session.cookie_secure = On
 session.cookie_httponly = On
 session.cookie_samesite = Lax
 session.use_strict_mode = On

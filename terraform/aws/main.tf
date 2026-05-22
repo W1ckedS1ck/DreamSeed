@@ -1,32 +1,3 @@
-terraform {
-  required_version = ">= 1.1"
-
-  backend "remote" {
-    organization = "Dreamseed"
-    workspaces {
-      prefix = "dreamseed-"
-    }
-  }
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.0"
-    }
-
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-west-1"
-}
-
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477", "839968031152"]
@@ -41,34 +12,6 @@ data "aws_ami" "ubuntu" {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.small"
-}
-
-variable "ssh_public_key_path" {
-  description = "Path to SSH public key"
-  type        = string
-}
-
-variable "elastic_ip_allocation_id" {
-  description = "Allocation ID of an existing Elastic IP to associate. Leave empty to skip EIP association."
-  type        = string
-  default     = ""
-}
-
-variable "environment" {
-  description = "Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts"
-  type        = string
-  default     = "prod"
-}
-
-locals {
-  environment_tag = var.environment == "prod" ? "Prod" : "Dev"
-  service_tag     = "DreamSeed"
 }
 
 resource "aws_key_pair" "deploy" {
@@ -174,9 +117,4 @@ resource "aws_eip_association" "web" {
   count         = var.elastic_ip_allocation_id != "" ? 1 : 0
   allocation_id = data.aws_eip.reserved[0].id
   instance_id   = aws_instance.web.id
-}
-
-output "server_ipv4" {
-  description = "Public IP address of the instance"
-  value       = var.elastic_ip_allocation_id != "" ? data.aws_eip.reserved[0].public_ip : aws_instance.web.public_ip
 }

@@ -11,6 +11,13 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         echo "site_up{instance=\"{{ domain }}\"} 0"
     fi
 
+    # MODX core check
+    if [ -f /var/www/html/manager/config.core.php ] && [ -f /var/www/html/core/model/modx/modx.class.php ]; then
+        echo "modx_core_ok{instance=\"{{ domain }}\"} 1"
+    else
+        echo "modx_core_ok{instance=\"{{ domain }}\"} 0"
+    fi
+
     # VictoriaMetrics check
     if curl -sf --max-time 5 "http://127.0.0.1:8428/health" | grep -q "OK"; then
         echo "victoria_up{instance=\"localhost:8428\"} 1"
