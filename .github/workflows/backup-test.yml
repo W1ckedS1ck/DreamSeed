@@ -269,6 +269,19 @@ jobs:
             "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_config.d/99-hardening.conf 2>/dev/null && echo OK || echo FAIL")
           [ "$SSH_HARDENING" = "OK" ] && echo "[PASS] SSH hardening" || echo "[WARN] SSH hardening: $SSH_HARDENING"
 
+          # Database — table count
+          TBL_COUNT=$(ssh ubuntu@$SERVER_IP \
+            "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"'" 2>/dev/null || echo 0)
+          [ "${TBL_COUNT:-0}" -ge 50 ] && echo "[PASS] DB tables: $TBL_COUNT" || echo "[WARN] DB tables: ${TBL_COUNT:-0} (expected 50+)"
+
+          # Monitoring — check_site timer and service
+          CS_TIMER=$(ssh ubuntu@$SERVER_IP \
+            "systemctl is-active check-site.timer" 2>/dev/null || echo "inactive")
+          [ "$CS_TIMER" = "active" ] && echo "[PASS] check_site.timer" || echo "[WARN] check_site.timer: $CS_TIMER"
+          CS_SERVICE=$(ssh ubuntu@$SERVER_IP \
+            "systemctl is-active check-site.service" 2>/dev/null || echo "inactive")
+          [ "$CS_SERVICE" = "active" ] && echo "[PASS] check_site.service" || echo "[WARN] check_site: $CS_SERVICE"
+
           $ALL_OK || exit 1
 
       - name: DAST scan (nuclei)
