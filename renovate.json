@@ -7,20 +7,20 @@
   "labels": ["dependencies", "renovate"],
   "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy"],
   "terraform": {
-    "fileMatch": [
-      "/terraform/.*\\.tf$/"
+    "managerFilePatterns": [
+      "//terraform/.*\\.tf$//"
     ],
     "versioning": "semver"
   },
   "pip_requirements": {
-    "fileMatch": [
-      "ansible/requirements\\.txt$",
-      "ansible/requirements-deploy\\.txt$"
+    "managerFilePatterns": [
+      "/ansible/requirements\\.txt$/",
+      "/ansible/requirements-deploy\\.txt$/"
     ]
   },
   "ansible-galaxy": {
-    "fileMatch": [
-      "ansible/requirements\\.yml$"
+    "managerFilePatterns": [
+      "/ansible/requirements\\.yml$/"
     ]
   },
   "packageRules": [
