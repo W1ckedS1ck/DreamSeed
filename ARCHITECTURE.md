@@ -134,7 +134,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                 │  :3000       │
                                 │              │
                                 │ 6 dashboards │
-                                │ 8 alert rules│
+                                 │ 9 alert rules│
                                 └──────┬──────┘
                                        │
                                        │ Telegram contact point
@@ -151,6 +151,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 | Disk <10% | 5m | Cleanup / resize |
 | MySQL down | instantaneous | Check mariadb |
 | Nginx down | instantaneous | Check nginx.service |
+| MODX Core Missing | instantaneous | Check /manager/ & core files |
 | Site down | instantaneous | Check HTTP 200 |
 | VM down | instantaneous | Check victoria-metrics |
 | Backup stale | >120min since last | Check smart_backup.sh |
@@ -227,7 +228,7 @@ DreamSeed/
 ├── ansible/
 │   ├── playbook-01-base.yml ... playbook-07-security.yml
 │   └── group_vars/all.yml
-├── ansible-roles/         # 16 custom roles
+├── ansible-roles/         # 15 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks
 ├── .github/workflows/     # 5 workflows + Renovate + Infracost App
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup

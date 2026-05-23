@@ -51,7 +51,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
-- **Observability** — VictoriaMetrics + Grafana stack with 8 alert rules for CPU, RAM, Disk, MySQL, Nginx, site availability, cron health, and VM health. All provisioned automatically, no manual setup
+- **Observability** — VictoriaMetrics + Grafana stack with 9 alert rules for CPU, RAM, Disk, MySQL, Nginx, MODX Core, site availability, cron health, and VM health. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 15/5 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
 - **CI/CD** — 7 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, Terraform checks (lint+validate), OpenTofu validate, Trivy, gitleaks. Plus deploy, backup-test, drift-detection, rollback workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
@@ -78,7 +78,7 @@ Real problems encountered and solved in production:
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · Node/Nginx/MySQL exporters · 8 alert rules → Telegram |
+| **Monitoring** | VictoriaMetrics · Grafana · Node/Nginx/MySQL exporters · 9 alert rules → Telegram |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
 | **CI/CD** | GitHub Actions (5 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · OpenTofu · Trivy · gitleaks · Renovate |
@@ -189,7 +189,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 - Full sysctl hardening (ICMP redirects, martian logging, core dumps disabled)
 
 ### 📊 Full Observability — Auto-Provisioned
-Grafana dashboards, datasources, **and 8 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
+Grafana dashboards, datasources, **and 9 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 - **Node Exporter** (`:9100`) — CPU, RAM, Disk, network
 - **Nginx Prometheus Exporter** (`:9113`) — requests, connections, status
