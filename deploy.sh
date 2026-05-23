@@ -197,7 +197,8 @@ cleanup() {
     [[ -n "${LOCK_FILE:-}" && -d "${LOCK_FILE:-}" ]] && rmdir "$LOCK_FILE"
 }
 
-trap 'cleanup; echo -e "\n${YELLOW}Interrupted! Exiting...${NC}"; exit 130' INT TERM
+trap cleanup EXIT
+trap 'echo -e "\n${YELLOW}Interrupted! Exiting...${NC}"; exit 130' INT TERM
 trap cleanup ERR
 
 usage() {
@@ -718,7 +719,9 @@ run_parallel_phase() {
     done
 
     rm -rf "$results_dir"
-    $phase_ok || step_fail "$phase_name failed"
+    if [[ "$phase_ok" != "true" ]]; then
+        step_fail "$phase_name failed"
+    fi
 }
 
 terraform_select_workspace() {
@@ -739,8 +742,11 @@ terraform_init_if_needed() {
 
 terraform_destroy() {
     if [[ "$TTY_MODE" == "false" ]]; then
-        # CI: confirmation already validated by the workflow step via CI_DESTROY_CONFIRM
-        echo "CI destroy confirmed for: $TARGET (CI_DESTROY_CONFIRM=${CI_DESTROY_CONFIRM:-})"
+        [[ "${CI_DESTROY_CONFIRM:-}" == "yes" ]] || {
+            echo "Error: CI destroy requires CI_DESTROY_CONFIRM=yes"
+            exit 1
+        }
+        echo "CI destroy confirmed for: $TARGET"
     elif [[ "$TARGET" == "prod" ]]; then
 echo -e "\n${RED}╭──────────────────────────────────────────────────╮${NC}"
     printf "${RED}│${NC}  ${BOLD}%-48s${NC}${RED}│${NC}\n" "⚠  PRODUCTION DESTROY REQUESTED  ⚠"
@@ -844,7 +850,11 @@ check_services() {
         all_ok=false
     fi
 
-    $all_ok && echo -e "  ${GREEN}All services OK${NC}" || echo -e "  ${RED}Some services failed${NC}"
+    if [[ "$all_ok" == "true" ]]; then
+        echo -e "  ${GREEN}All services OK${NC}"
+    else
+        echo -e "  ${RED}Some services failed${NC}"
+    fi
 }
 
 rotate_logs() {
@@ -959,7 +969,7 @@ main() {
             step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
 
         local tf_apply_extra_vars=""
-        [[ "$TF_PROVIDER" == "aws" ]] && tf_apply_extra_vars="-var='ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-}'"
+        [[ "$TF_PROVIDER" == "aws" ]] && tf_apply_extra_vars="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
 
         local tf_ok=false
         for tf_attempt in 1 2; do
@@ -1048,6 +1058,11 @@ INVEOF
         echo "server_ip: \"${SERVER_IP}\""
         echo "web_server: \"${WEB_SERVER}\""
         echo "domain: \"${DEPLOY_DOMAIN}\""
+        if [[ "$TARGET" == "prod" ]]; then
+            echo "domain_www: true"
+        else
+            echo "domain_www: false"
+        fi
         echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
         echo "configs_dir: \"${SCRIPT_DIR}/configs\""
         echo "scripts_dir: \"${SCRIPT_DIR}/scripts\""

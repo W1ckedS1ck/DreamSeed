@@ -10,3 +10,4 @@
     name: "Check site availability"
     minute: "*"
     job: "/usr/local/bin/check_site.sh"
+    state: "{{ monitoring_cron_enabled | ternary('present', 'absent') }}"

@@ -4,6 +4,7 @@
     path: "{{ secrets_dir }}/rclone.conf"
   register: rclone_config_stat
   delegate_to: localhost
+  delegate_facts: true
 
 - name: Create rclone config directory
   ansible.builtin.file:

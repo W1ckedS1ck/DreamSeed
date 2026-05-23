@@ -1,8 +1,4 @@
 ---
-- name: Set MySQL Exporter desired version
-  ansible.builtin.set_fact:
-    monitoring_mysql_version: "{{ monitoring_mysql_version }}"
-
 - name: Check if MySQL Exporter is installed
   ansible.builtin.stat:
     path: /usr/local/bin/mysqld_exporter

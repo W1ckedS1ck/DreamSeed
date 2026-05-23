@@ -160,9 +160,6 @@ def main():
                         msg = up['message']
                         chat_id = str(msg['chat']['id'])
 
-                        if 'edited_message' in up:
-                            continue
-
                         if chat_id != TG_CHAT_ID:
                             log.warning("Ignored message from unauthorized chat: %s", chat_id)
                             continue

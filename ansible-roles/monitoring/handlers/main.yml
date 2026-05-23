@@ -1,25 +1,30 @@
 ---
 - name: Restart Node Exporter
+  become: true
   ansible.builtin.systemd:
     name: node_exporter
     state: restarted
 
 - name: Restart Apache Exporter
+  become: true
   ansible.builtin.systemd:
     name: apache_exporter
     state: restarted
 
 - name: Restart Nginx Exporter
+  become: true
   ansible.builtin.systemd:
     name: nginx_exporter
     state: restarted
 
 - name: Restart MySQL Exporter
+  become: true
   ansible.builtin.systemd:
     name: mysqld_exporter
     state: restarted
 
 - name: Restart VictoriaMetrics
+  become: true
   ansible.builtin.systemd:
     name: victoria-metrics
     state: restarted

@@ -1,8 +1,4 @@
 ---
-- name: Set VictoriaMetrics desired version
-  ansible.builtin.set_fact:
-    monitoring_vm_version: "{{ monitoring_vm_version }}"
-
 - name: Check if VictoriaMetrics is installed
   ansible.builtin.stat:
     path: /usr/local/bin/victoria-metrics

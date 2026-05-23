@@ -255,7 +255,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo "Restoring project..."
     fi
 
-    TEMP_EXTRACT=$(sudo mktemp -d "$(dirname "$PROJECT_DIR")/restore_XXXXXX")
+    TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
     sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"
 
     if [ $? -eq 0 ]; then

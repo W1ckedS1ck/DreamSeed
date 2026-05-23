@@ -12,9 +12,6 @@ enable_gzip = true
 [security]
 admin_user = admin
 admin_password = {{ grafana_admin_password }}
-{% if grafana_secret_key is defined and grafana_secret_key | length > 0 %}
-secret_key = {{ grafana_secret_key }}
-{% endif %}
 
 [users]
 viewers_can_edit = false

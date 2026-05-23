@@ -1,6 +1,7 @@
 ---
 - name: Check if local SSL backup exists
   delegate_to: localhost
+  delegate_facts: true
   become: false
   ansible.builtin.stat:
     path: "{{ secrets_dir }}/ssl/letsencrypt/live/{{ domain }}/fullchain.pem"
@@ -29,57 +30,23 @@
     path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
   register: ssl_cert_file
 
-# --- DNS check before certbot (only for webroot) ---
-- name: Check DNS resolution via Google DNS
-  ansible.builtin.command: "dig +short {{ domain }} @8.8.8.8"
-  delegate_to: localhost
-  become: false
-  register: ssl_dns_check
-  changed_when: false
-  failed_when: false
-  when: not ssl_restored | default(false) and not ssl_cert_file.stat.exists and (cloudflare_api_token is not defined or cloudflare_api_token | length == 0)
-
-- name: Wait for DNS propagation
-  ansible.builtin.command: "dig +short {{ domain }} @8.8.8.8"
-  delegate_to: localhost
-  become: false
-  register: ssl_dns_recheck
-  changed_when: false
-  retries: 12
-  delay: 10
-  until: server_ip in ssl_dns_recheck.stdout
-  when:
-    - not ssl_restored | default(false)
-    - not ssl_cert_file.stat.exists
-    - server_ip not in (ssl_dns_check.stdout | default(''))
-    - (cloudflare_api_token is not defined or cloudflare_api_token | length == 0)
-  failed_when: false
-
-- name: Determine DNS status
-  ansible.builtin.set_fact:
-    ssl_dns_ready: >-
-      {{ ssl_restored | default(false) or
-         ssl_cert_file.stat.exists or
-         (cloudflare_api_token is defined and cloudflare_api_token | length > 0) or
-         server_ip in (ssl_dns_check.stdout | default('')) or
-         server_ip in (ssl_dns_recheck.stdout | default('')) }}
-
 # --- Certbot DNS Challenge (CloudFlare) ---
 - name: Install CloudFlare DNS certbot plugin
   become: true
   ansible.builtin.apt:
     name: python3-certbot-dns-cloudflare
     state: present
-  when: not ssl_skip_certbot | default(false) and cloudflare_api_token is defined and cloudflare_api_token | length > 0
+  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
 - name: Deploy CloudFlare credentials file
   become: true
+  no_log: true
   ansible.builtin.copy:
     dest: /etc/letsencrypt/cloudflare.ini
     content: |
       dns_cloudflare_api_token = {{ cloudflare_api_token }}
     mode: "0600"
-  when: not ssl_skip_certbot | default(false) and cloudflare_api_token is defined and cloudflare_api_token | length > 0
+  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
 - name: Obtain SSL certificate via DNS CloudFlare
   become: true
@@ -88,41 +55,13 @@
     --dns-cloudflare
     --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
     {{ '--staging' if ssl_staging | default(false) else '' }}
-    -d {{ domain }}
-    -d www.{{ domain }}
+    -d {{ domain }}{% if domain_www | default(true) %}
+    -d www.{{ domain }}{% endif %}
     --non-interactive
     --agree-tos
     -m {{ admin_email }}
     --rsa-key-size 4096
-  when: not ssl_skip_certbot | default(false) and cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
-  register: ssl_certbot_result
-  changed_when: false
-  failed_when: false
-
-# --- Certbot webroot (fallback) ---
-- name: Ensure webroot exists for certbot
-  become: true
-  ansible.builtin.file:
-    path: "{{ web_root }}/.well-known/acme-challenge"
-    state: directory
-    owner: www-data
-    group: www-data
-    mode: "0755"
-  when: ssl_dns_ready and not ssl_cert_file.stat.exists and not ssl_restored | default(false) and (cloudflare_api_token is not defined or cloudflare_api_token | length == 0)
-
-- name: Obtain SSL certificate via certbot webroot
-  become: true
-  ansible.builtin.command: >
-    certbot certonly --webroot
-    {{ '--staging' if ssl_staging | default(false) else '' }}
-    -w {{ web_root }}
-    -d {{ domain }}
-    -d www.{{ domain }}
-    --non-interactive
-    --agree-tos
-    -m {{ admin_email }}
-    --rsa-key-size 4096
-  when: not ssl_skip_certbot | default(false) and ssl_dns_ready and not ssl_cert_file.stat.exists and not ssl_restored | default(false) and (cloudflare_api_token is not defined or cloudflare_api_token | length == 0)
+  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
   register: ssl_certbot_result
   changed_when: false
   failed_when: false

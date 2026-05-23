@@ -42,3 +42,9 @@ Docs/
 # Systemd service files (contain environment variables)
 *.service
 node_modules
+
+# Ansible fact cache and collections
+.ansible/
+
+# Linter cache
+.ruff_cache/

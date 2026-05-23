@@ -22,4 +22,4 @@ def load_env(env_path: str = "") -> None:
                 continue
             key, _, value = line.partition("=")
             value = value.strip().strip('"').strip("'")
-            os.environ.setdefault(key.strip(), value)
+            os.environ[key.strip()] = value

@@ -47,7 +47,7 @@
   become: true
   community.mysql.mysql_user:
     name: root
-    host: "'127.0.0.1'"
+    host: "127.0.0.1"
     state: absent
     login_unix_socket: /run/mysqld/mysqld.sock
 

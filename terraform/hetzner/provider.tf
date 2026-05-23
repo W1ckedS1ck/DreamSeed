@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.1"
 
   backend "remote" {
-    organization = "Dreamseed"
+    organization = "DreamSeed"
     workspaces {
       prefix = "dreamseed-"
     }

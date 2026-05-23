@@ -41,18 +41,19 @@ if ! flock -n 9; then
     echo "Backup already running (lock: $LOCK_FILE)" >&2
     exit 1
 fi
+trap 'exec 9>&-' EXIT
 
 # Cron heartbeat — always fires, even if backup fails
-echo "cron_last_run_backup $(date +%s)" | \
+echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
     curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
 
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
 
-CURRENT_HASH=$(sudo find "$PROJECT_DIR" -type f \
+CURRENT_HASH=$(set -o pipefail; sudo find "$PROJECT_DIR" -type f \
     ! -path "*/core/cache/*" \
     ! -path "*/core/backup/*" \
-    -print0 | xargs -0 sudo md5sum | sort | md5sum | awk '{print $1}')
+    -print0 | xargs -0 sudo md5sum | sort | md5sum | awk '{print $1}') || CURRENT_HASH=""
 
 PREVIOUS_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
 
@@ -105,6 +106,6 @@ $(escape_md2 "$DB_STATUS")"
 fi
 
 if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
-    echo "backup_last_success_timestamp $(date +%s)" | \
+    echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
 fi

@@ -28,8 +28,8 @@ detect_env() {
     local h
     h=$(hostname)
     case "$h" in
-        *-prod|*prod-*)  echo "" ;;
         *-preprod|*preprod-*) echo "-preprod" ;;
+        *-prod|*prod-*)       echo "" ;;
         *)
             if [[ -f /etc/dreamseed.env ]]; then
                 grep -q "^ENV=prod" /etc/dreamseed.env 2>/dev/null && echo "" || echo "-preprod"
@@ -63,16 +63,17 @@ format_name() {
 }
 
 send_tg() {
-    local thread_arg=()
-    [[ -n "$TG_THREAD_ID" ]] && thread_arg=(-d "message_thread_id=$TG_THREAD_ID")
-    curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-         -d chat_id="$TG_CHAT_ID" \
-         "${thread_arg[@]}" \
-         -d parse_mode="MarkdownV2" \
-         -d text="$1" >/dev/null 2>&1
+    local tg_url="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+    local data=(
+        --data-urlencode "chat_id=$TG_CHAT_ID"
+        --data-urlencode "text=$1"
+        --data-urlencode "parse_mode=MarkdownV2"
+    )
+    [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
+    curl -s -X POST "$tg_url" "${data[@]}" > /dev/null 2>&1
 }
 
 escape_md2() {
-    echo "$1" | sed 's/[][_*()~`>#+={|}.!-]/\\&/g'
+    echo "$1" | sed 's/[][_*()~`>#+={|}.!-\\]/\\&/g'
 }
 

@@ -112,7 +112,7 @@
     minute: "0"
     hour: "4"
     job: >
-      mysql -u root modx_db -e
+      mysql -u root {{ db_name }} -e
       "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
       2>/dev/null || true
     user: root
@@ -123,7 +123,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      echo "cron_last_run_backup $(date +%s)" | \
+      echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
   changed_when: false
   failed_when: false

@@ -1,5 +1,6 @@
 ---
 - name: Reload systemd and restart bot
+  become: true
   ansible.builtin.systemd:
     name: telegram-bot
     state: restarted
