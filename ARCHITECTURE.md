@@ -22,7 +22,7 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      hosts-<workspace>.yml, VAULT_TMP (0600)
        │
        ├─ 6. Ansible (7 playbooks)
-       │      01 Base ─── packages, swap, PHP, MariaDB
+       │      01 Base ─── Packages, swap, PHP, MariaDB
        │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
        │      03 DB ────── MariaDB tuning, users, restore
        │      04 Monitor ─ Exporters + VictoriaMetrics
@@ -47,9 +47,9 @@ Internet
 Cloudflare Proxy (Full SSL)
    │
    ├─ dreamseed.online ───→ Nginx :443 → PHP-FPM → MariaDB
-   │                          Nginx :80  → redirect to :443
+   │                        Nginx :80  → redirect to :443
    │
-   ├─ dreamseed.online/grafana/ ───→ Grafana :3000 (behind nginx proxy_pass)
+   ├─ dreamseed.online/grafana/ ───→ Grafana :3000 (behind Nginx proxy_pass)
    │
    ├─ dreamseed.online/manager/ → MODX admin panel
    │
@@ -73,10 +73,10 @@ secrets/.env (plaintext, gitignored)
    │                              echo "$ENV_FILE_B64" | base64 -d
    │                              │
    │                              ▼
-   │                         deploy.sh → VAULT_TMP (mktemp, 0600)
+   │                              deploy.sh → VAULT_TMP (mktemp, 0600)
    │                              │
    │                              ▼
-   │                         ansible-playbook --extra-vars @VAULT_TMP
+   │                              ansible-playbook --extra-vars @VAULT_TMP
    │
    └─ Server-side: /home/ubuntu/Scripts/.env (0600)
 ```
@@ -129,13 +129,13 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                        │
                                        │ Grafana datasource
                                        ▼
-                                ┌─────────────┐
+                                ┌──────────────┐
                                 │   Grafana    │
                                 │  :3000       │
                                 │              │
                                 │ 6 dashboards │
-                                 │ 9 alert rules│
-                                └──────┬──────┘
+                                │ 9 alert rules│
+                                └──────┬───────┘
                                        │
                                        │ Telegram contact point
                                        ▼
@@ -203,13 +203,13 @@ Manual dispatch    Deploy                Setup → secrets → deploy.sh / destr
                                           → Telegram
 
 Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
-Daily                                       (AWS prod only)
+  daily                                  (AWS prod only)
 
 Schedule Mon 10:00 Backup Test           Provision Hetzner → Ansible deploy
-Manual                                      → Tests (DB/Web/MODX/cart/SMTP)
-                                            → DAST scan (nuclei)
-                                            → Lynis audit → Destroy
-                                            → Telegram report
+  manual                                 → Tests (DB/Web/MODX/cart/SMTP)
+                                         → DAST scan (nuclei)
+                                         → Lynis audit → Destroy
+                                         → Telegram report
 
 Bot events         Renovate              Dependency updates (auto PRs)
                    Infracost App         Cost estimate comments on PRs
