@@ -66,6 +66,19 @@ def format_db_name(filename):
         return f"{parts[0]} {parts[1].replace('-', ':')}"
     return name
 
+def _rclone_lsf(path):
+    try:
+        out = subprocess.check_output(
+            ['rclone', 'lsf', path, '--files-only', '--format', 'tps'],
+            text=True, timeout=30
+        ).strip()
+        return sorted(
+            [line.split(';') for line in out.split('\n') if line],
+            key=lambda x: x[0], reverse=True
+        )
+    except Exception:
+        return []
+
 def cmd_status():
     env = get_env()
     try:
@@ -74,22 +87,8 @@ def cmd_status():
 
         remote_base = GDRIVE_BASE
         env_suffix = "" if env == "prod" else f"-{env}"
-        try:
-            cloud_proj_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/project{env_suffix}/', '--files-only', '--format', 'tps'], text=True).strip()
-            cloud_proj_files = sorted(
-                [line.split(';') for line in cloud_proj_out.split('\n') if line],
-                key=lambda x: x[0], reverse=True
-            )
-        except Exception:
-            cloud_proj_files = []
-        try:
-            cloud_db_out = subprocess.check_output(['rclone', 'lsf', f'{RCLONE_REMOTE}:{remote_base}/db{env_suffix}/', '--files-only', '--format', 'tps'], text=True).strip()
-            cloud_db_files = sorted(
-                [line.split(';') for line in cloud_db_out.split('\n') if line],
-                key=lambda x: x[0], reverse=True
-            )
-        except Exception:
-            cloud_db_files = []
+        cloud_proj_files = _rclone_lsf(f'{RCLONE_REMOTE}:{remote_base}/project{env_suffix}/')
+        cloud_db_files = _rclone_lsf(f'{RCLONE_REMOTE}:{remote_base}/db{env_suffix}/')
 
         def cloud_size(size_bytes):
             try:
@@ -166,12 +165,17 @@ def main():
 
                         text = msg.get('text', '').split('@')[0]
 
+                        t0 = time.time()
                         if text in ['/status', f'/status@{BOT_USERNAME}']:
                             response = cmd_status()
                         elif text in ['/backups', '/backup']:
                             response = cmd_backups()
                         else:
                             response = "Use /status or /backups"
+                            t0 = None
+                        if t0 is not None:
+                            elapsed = time.time() - t0
+                            response += f"\n\n⏱ {elapsed:.1f}s"
 
                         send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'Markdown'}
                         if TG_THREAD_ID:

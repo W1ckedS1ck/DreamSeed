@@ -31,8 +31,8 @@ DB_COUNT=$(ls -1 "$BACKUP_DIR"/db/db_*.sql.gz 2>/dev/null | wc -l)
 CLOUD_PROJ=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
 CLOUD_DB=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
 
-LAST_GDRIVE_PROJ=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" 2>/dev/null | head -1)")
-LAST_GDRIVE_DB=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" 2>/dev/null | head -1)")
+LAST_GDRIVE_PROJ=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" 2>/dev/null | tail -1)")
+LAST_GDRIVE_DB=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" 2>/dev/null | tail -1)")
 
 send_html() {
     local msg="$1"

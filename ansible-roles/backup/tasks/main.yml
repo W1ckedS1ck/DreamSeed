@@ -80,9 +80,8 @@
 
 - name: Setup daily GDrive upload cron
   ansible.builtin.cron:
-    name: "DreamSeed daily gdrive upload"
-    minute: "15"
-    hour: "3"
+    name: "DreamSeed hourly gdrive upload"
+    minute: "5"
     job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
