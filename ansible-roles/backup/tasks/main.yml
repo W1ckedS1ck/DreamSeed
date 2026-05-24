@@ -106,17 +106,26 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
-- name: Setup daily session cleanup cron
+- name: Setup hourly session cleanup cron
   ansible.builtin.cron:
     name: "DreamSeed session cleanup"
-    minute: "0"
-    hour: "4"
+    minute: "42"
     job: >
       mysql -u root {{ db_name }} -e
       "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
       2>/dev/null || true
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Update MODX session_gc_maxlifetime to 6 hours
+  become: true
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
 
 - name: Wait for VictoriaMetrics to accept writes
   become: true
