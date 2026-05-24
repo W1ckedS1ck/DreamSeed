@@ -140,5 +140,5 @@ jobs:
             fi
           fi
 
-          export CI_DESTROY_CONFIRM="$DESTROY_CONFIRM"
+          export CI_DESTROY_CONFIRM=yes
           ./deploy.sh "$ENV" -n -x

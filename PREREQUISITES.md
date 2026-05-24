@@ -38,7 +38,7 @@ pip install ansible-lint
 
 # Terraform
 brew install tflint
-brew install tfsec
+brew install trivy
 ```
 
 ## Secrets setup
