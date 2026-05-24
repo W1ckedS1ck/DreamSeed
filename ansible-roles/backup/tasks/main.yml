@@ -105,10 +105,12 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
-- name: Setup hourly session cleanup cron
+- name: Setup session cleanup cron (every 3 days)
   ansible.builtin.cron:
     name: "DreamSeed session cleanup"
     minute: "42"
+    hour: "4"
+    day: "*/3"
     job: >
       mysql -u root {{ db_name }} -e
       "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
