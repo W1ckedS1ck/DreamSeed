@@ -97,6 +97,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Cache Trivy DB
+        uses: actions/cache@v5
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ hashFiles('terraform/**/*.tf') }}
+          restore-keys: trivy-db-
       - name: Run Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -104,6 +110,7 @@ jobs:
           scan-ref: terraform
           exit-code: '1'
           severity: HIGH,CRITICAL
+          cache-dir: .trivy-cache
 
   gitleaks:
     name: Secret Scan
