@@ -60,6 +60,7 @@
     - {path: /etc/cron.weekly, mode: "0700"}
     - {path: /etc/cron.monthly, mode: "0700"}
     - {path: /etc/ssh/sshd_config, mode: "0600"}
+    - {path: /etc/at.deny, mode: "0600"}
 
 # --- Authorized Keys ---
 - name: Add additional SSH public keys
@@ -132,7 +133,7 @@
   become: true
   ansible.builtin.template:
     src: sysctl-hardening.conf.j2
-    dest: /etc/sysctl.d/99-hardening.conf
+    dest: /etc/sysctl.d/99-z-hardening.conf
     owner: root
     group: root
     mode: "0644"
@@ -222,13 +223,15 @@
   become: true
   ansible.builtin.file:
     path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: www-data
     mode: "{{ item.mode }}"
     recurse: true
   loop:
-    - {path: "{{ web_root }}/core/cache", mode: "0755"}
-    - {path: "{{ web_root }}/core/logs", mode: "0755"}
-    - {path: "{{ web_root }}/core/model", mode: "0750"}
-    - {path: "{{ web_root }}/core/components", mode: "0750"}
+    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "0755"}
+    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "0755"}
+    - {path: "{{ web_root }}/core/model", owner: root, mode: "0750"}
+    - {path: "{{ web_root }}/core/components", owner: root, mode: "0750"}
   when: modx_config_file.stat.exists and not (dev_write_perms | default(false))
 
 # --- Developer Write Permissions ---

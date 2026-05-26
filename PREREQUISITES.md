@@ -6,15 +6,19 @@ Tools required to work with this project locally.
 
 | Tool | Min version | Install |
 |------|-------------|---------|
-| Terraform | 1.5+ | https://developer.hashicorp.com/terraform/install |
+| Terraform or OpenTofu | 1.5+ | https://developer.hashicorp.com/terraform/install |
 | Ansible | 2.15+ | `pip install ansible` |
 | Python | 3.10+ | https://python.org |
 | SSH client | any | system package |
 
-### Ansible collections
+### Ansible collections & Python deps
 
 ```bash
+# Collections
 ansible-galaxy collection install community.mysql ansible.posix
+
+# Python (for community.mysql)
+pip install -r ansible/requirements-deploy.txt
 ```
 
 ## Cloud providers (depending on target)
@@ -22,7 +26,16 @@ ansible-galaxy collection install community.mysql ansible.posix
 | Tool | Required for |
 |------|--------------|
 | AWS CLI | `prod`, `dev-aws` targets (credentials in `secrets/.env`) |
-| Hetzner account | `dev-hetz` target |
+| Hetzner account + API token | `dev-hetz` target (set `HCLOUD_TOKEN` in `.env`) |
+
+## Pre-commit hooks (recommended)
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Runs on every commit: YAML lint, large file check, secret detection (gitleaks), private key guard.
 
 ## Linting / CI (optional, for local checks)
 
@@ -33,12 +46,15 @@ brew install shellcheck
 # Python
 pip install ruff
 
-# Ansible
-pip install ansible-lint
+# Ansible (pinned version matching CI)
+pip install -r ansible/requirements.txt
 
 # Terraform
 brew install tflint
 brew install trivy
+
+# Secrets
+brew install gitleaks
 ```
 
 ## Secrets setup

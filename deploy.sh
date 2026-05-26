@@ -1060,8 +1060,10 @@ INVEOF
         echo "domain: \"${DEPLOY_DOMAIN}\""
         if [[ "$TARGET" == "prod" ]]; then
             echo "domain_www: true"
+            echo "dev_write_perms: false"
         else
             echo "domain_www: false"
+            echo "dev_write_perms: true"
         fi
         echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
         echo "configs_dir: \"${SCRIPT_DIR}/configs\""
