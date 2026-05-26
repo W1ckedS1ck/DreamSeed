@@ -30,6 +30,37 @@
 - name: Apply SSH hardening
   ansible.builtin.meta: flush_handlers
 
+# --- Login Banner ---
+- name: Deploy legal login banner
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: |
+      WARNING: Unauthorized access to this system is prohibited.
+      All connections are monitored and recorded.
+      Disconnect immediately if you are not an authorized user.
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/issue
+    - /etc/issue.net
+
+# --- File Permissions ---
+- name: Restrict permissions on cron and sshd config files
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /etc/crontab, mode: "0600"}
+    - {path: /etc/cron.d, mode: "0700"}
+    - {path: /etc/cron.daily, mode: "0700"}
+    - {path: /etc/cron.hourly, mode: "0700"}
+    - {path: /etc/cron.weekly, mode: "0700"}
+    - {path: /etc/cron.monthly, mode: "0700"}
+    - {path: /etc/ssh/sshd_config, mode: "0600"}
+
 # --- Authorized Keys ---
 - name: Add additional SSH public keys
   become: true
