@@ -52,6 +52,14 @@ jobs:
         with:
           terraform_version: latest
 
+      - name: Cache Terraform providers
+        uses: actions/cache@v5
+        with:
+          path: |
+            terraform/hetzner/.terraform
+            terraform/aws/.terraform
+          key: terraform-${{ runner.os }}-${{ hashFiles('terraform/hetzner/.terraform.lock.hcl', 'terraform/aws/.terraform.lock.hcl') }}
+
       - name: Cache pip packages
         if: inputs.action == 'deploy'
         uses: actions/cache@v5
@@ -59,6 +67,13 @@ jobs:
           path: ~/.cache/pip
           key: pip-${{ runner.os }}-${{ hashFiles('ansible/requirements-deploy.txt') }}
           restore-keys: pip-${{ runner.os }}-
+
+      - name: Cache Ansible collections
+        if: inputs.action == 'deploy'
+        uses: actions/cache@v5
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
 
       - name: Setup Ansible
         if: inputs.action == 'deploy'
