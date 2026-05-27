@@ -21,7 +21,11 @@ DB_BACKUP="$BACKUP_DIR/db/db_${DB_NAME}_$DATE.sql.gz"
 rotate_files() {
     local pattern="$1"
     local keep="$2"
-    mapfile -t files < <(ls -1dt $pattern 2>/dev/null)
+    local dir
+    dir=$(dirname "$pattern")
+    local glob
+    glob=$(basename "$pattern")
+    mapfile -t files < <(find "$dir" -maxdepth 1 -name "$glob" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
     if [ "${#files[@]}" -gt "$keep" ]; then
         for ((i=keep; i<${#files[@]}; i++)); do
             rm -f "${files[i]}"
@@ -60,12 +64,11 @@ PREVIOUS_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
 if [ "$CURRENT_HASH" = "$PREVIOUS_HASH" ] && [ -n "$PREVIOUS_HASH" ]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
-    sudo tar -czf "$PROJECT_BACKUP" \
+    if sudo tar -czf "$PROJECT_BACKUP" \
         --exclude="html/core/cache" \
         --exclude="html/core/backup" \
-        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null
-
-    if [ $? -eq 0 ] && sudo tar -tzf "$PROJECT_BACKUP" >/dev/null 2>&1; then
+        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
+       sudo tar -tzf "$PROJECT_BACKUP" >/dev/null 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP"
         echo "$CURRENT_HASH" > "$HASH_FILE"
         PROJECT_STATUS="✅ Project backed up"
@@ -108,4 +111,8 @@ fi
 if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
     echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
+    # Ping healthchecks.io on success
+    if [[ -n "${HEALTHCHECK_BACKUP_UUID:-}" ]]; then
+        curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_BACKUP_UUID}" > /dev/null 2>&1
+    fi
 fi

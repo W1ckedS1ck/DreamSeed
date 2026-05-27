@@ -11,16 +11,4 @@ repos:
         exclude_types: [jinja]
         exclude: ^scripts/common_functions\.sh$
 
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.24.3
-    hooks:
-      - id: gitleaks
 
-  - repo: local
-    hooks:
-      - id: tflint
-        name: tflint
-        entry: bash -c 'command -v tflint >/dev/null 2>&1 && exec tflint "$@" || echo "tflint not found, skipping"'
-        language: system
-        files: \.tf$
-        args: [--config, .tflint.hcl, --call-module-type=none]

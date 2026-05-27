@@ -346,6 +346,22 @@ jobs:
           echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
           echo "Hardening index: $SCORE"
 
+      - name: Check Lynis score threshold
+        run: |
+          SCORE="${{ steps.lynis.outputs.lynis_score }}"
+          if [ "${SCORE:-0}" -lt 65 ]; then
+            echo "::error::Lynis hardening score dropped to $SCORE (threshold: 65)"
+            exit 1
+          fi
+          echo "✅ Lynis score: $SCORE (threshold: 65)"
+
+      - name: Archive Lynis report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lynis-report
+          path: /tmp/lynis-report.dat
+
       - name: Cleanup
         if: always()
         run: |

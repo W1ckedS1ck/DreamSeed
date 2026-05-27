@@ -22,11 +22,11 @@ ENV_DISPLAY=$(format_env_display "$ENV")
 REMOTE_BASE="DreamSeed/backups"
 
 # Get counts and files
-PROJ_FILES=$(ls -1t "$BACKUP_DIR"/project/DreamSeed_*.tar.gz 2>/dev/null | head -24)
-DB_FILES=$(ls -1t "$BACKUP_DIR"/db/db_*.sql.gz 2>/dev/null | head -24)
+PROJ_FILES=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -24 | cut -d' ' -f2-)
+DB_FILES=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -24 | cut -d' ' -f2-)
 
-PROJ_COUNT=$(ls -1 "$BACKUP_DIR"/project/DreamSeed_*.tar.gz 2>/dev/null | wc -l)
-DB_COUNT=$(ls -1 "$BACKUP_DIR"/db/db_*.sql.gz 2>/dev/null | wc -l)
+PROJ_COUNT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' 2>/dev/null | wc -l)
+DB_COUNT=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' 2>/dev/null | wc -l)
 
 CLOUD_PROJ=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
 CLOUD_DB=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
@@ -141,4 +141,15 @@ $(date '+%d.%m.%Y %H:%M')"
 else
     echo "Usage: $0 {daily|weekly}"
     exit 1
+fi
+
+# Ping healthchecks.io on success
+_hc_uuid=""
+if [[ "$REPORT_TYPE" == "daily" ]]; then
+    _hc_uuid="${HEALTHCHECK_REPORT_DAILY_UUID:-}"
+elif [[ "$REPORT_TYPE" == "weekly" ]]; then
+    _hc_uuid="${HEALTHCHECK_REPORT_WEEKLY_UUID:-}"
+fi
+if [[ -n "$_hc_uuid" ]]; then
+    curl -fsS -m 10 --retry 3 "https://hc-ping.com/$_hc_uuid" > /dev/null 2>&1
 fi

@@ -223,6 +223,7 @@ OPTIONS:
     -d, --dry-run      Show what would be deployed, no changes
     -h                 Show this help
     --logs [tf]        Tail latest deploy log (or terraform log)
+    --status           Show infrastructure status (cloud APIs, services, servers)
 
 EXAMPLES:
     \$0 prod -n                  Deploy prod (AWS + Nginx)
@@ -248,6 +249,11 @@ parse_args() {
             exit 1
         fi
         tail -f "$latest"
+        exit 0
+    fi
+
+    if [[ "$1" == "--status" ]]; then
+        bash "$SCRIPT_DIR/scripts/status.sh"
         exit 0
     fi
 
@@ -777,6 +783,17 @@ echo -e "\n${RED}╭────────────────────
     fi
 
     export_tf_env
+
+    # Check server reachability before destroy
+    local _destroy_ip
+    _destroy_ip=$(cd "$TF_DIR" 2>/dev/null && "$TERRAFORM" output -raw server_ipv4 2>/dev/null || true)
+    if [[ -n "$_destroy_ip" ]] && [[ -n "${SSH_KEY:-}" ]]; then
+        if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$_destroy_ip" 'true' 2>/dev/null; then
+            echo -e "  ${YELLOW}⚠ Server $_destroy_ip unreachable — destroying anyway${NC}"
+        else
+            echo -e "  ${GREEN}✓ Server $_destroy_ip reachable${NC}"
+        fi
+    fi
 
     terraform_init_if_needed || {
         log_error_details "$TF_LOG"

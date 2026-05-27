@@ -31,7 +31,7 @@ HAS_ERROR=0
 UPLOAD_MSG=""
 
 # ====== 1. Upload project ======
-LAST_PROJECT=$(ls -1t "$PROJECT_DIR"/DreamSeed_*.tar.gz 2>/dev/null | head -n1)
+LAST_PROJECT=$(find "$PROJECT_DIR" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_PROJECT" ]; then
     if ! rclone copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --ignore-existing; then
         UPLOAD_MSG+="❌ Project upload error
@@ -45,7 +45,7 @@ else
 fi
 
 # ====== 2. Upload database ======
-LAST_DB=$(ls -1t "$DB_DIR"/db_*.sql.gz 2>/dev/null | head -n1)
+LAST_DB=$(find "$DB_DIR" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_DB" ]; then
     if ! rclone copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --ignore-existing; then
         UPLOAD_MSG+="❌ DB upload error
@@ -80,6 +80,11 @@ fi
 
 # Trash
 rclone cleanup "$RCLONE_REMOTE:" 2>/dev/null
+
+# Ping healthchecks.io on success
+if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${HEALTHCHECK_GDRIVE_UUID:-}" ]]; then
+    curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_GDRIVE_UUID}" > /dev/null 2>&1
+fi
 
 # ====== Send alert only on failure ======
 if [ "$HAS_ERROR" -eq 1 ]; then
