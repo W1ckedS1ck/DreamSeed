@@ -68,6 +68,17 @@ for item in data.get('data', []):
         print("    Paused:   %s" % paused)
         print("    Created:  %s" % a['created_at'])
         print()
+    elif t == 'outgoing_webhook':
+        triggers = []
+        if a.get('on_incident_started'): triggers.append('started')
+        if a.get('on_incident_resolved'): triggers.append('resolved')
+        if a.get('on_incident_acknowledged'): triggers.append('ack')
+        print("  %s" % a['name'])
+        print("    URL:      %s" % a['url'])
+        print("    Trigger:  %s" % a['trigger_type'])
+        print("    Events:   %s" % ', '.join(triggers))
+        print()
+
     elif t == 'status_page':
         sub = a.get('subdomain', '')
         cd = a.get('custom_domain', '')
@@ -90,6 +101,7 @@ PYEOF
 
 fetch_and_format "monitors" "MONITORS"
 fetch_and_format "heartbeats" "HEARTBEATS"
+fetch_and_format "outgoing-webhooks" "OUTGOING WEBHOOKS"
 fetch_and_format "status-pages" "STATUS PAGES"
 
 echo -e "${CYAN}══════════════════════════════════════${NC}"
