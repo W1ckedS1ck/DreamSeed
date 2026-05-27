@@ -471,3 +471,47 @@ groups:
         annotations:
           summary: >-
             {% raw %}Backup cron hasn't run for 2h — check systemd/scheduler{% endraw %}
+
+      - uid: dreamseed-check-site-cron
+        title: Site Health Check Not Running
+        condition: B
+        labels:
+          env: {{ domain }}
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              expr: '(time() - max_over_time(check_site_last_run[10m]))'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [180]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: >-
+            {% raw %}Site health check (check_site.sh) hasn't run for >3 min on {{ $labels.instance }}{% endraw %}

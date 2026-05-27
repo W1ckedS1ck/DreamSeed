@@ -24,4 +24,6 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     else
         echo "victoria_up{instance=\"localhost:8428\"} 0"
     fi
+    # Last-run timestamp (heartbeat — same pattern as cron_last_run_backup)
+    echo "check_site_last_run{instance=\"{{ domain }}\"} $(date +%s)"
 } | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1
