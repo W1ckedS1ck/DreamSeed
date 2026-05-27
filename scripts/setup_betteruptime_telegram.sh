@@ -12,6 +12,7 @@ load_env "$SCRIPT_DIR/secrets/.env"
 [[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && { echo "Error: BETTERUPTIME_API_TOKEN not set"; exit 1; }
 [[ -z "${TG_TOKEN:-}" ]] && { echo "Error: TG_TOKEN not set"; exit 1; }
 [[ -z "${TG_CHAT_ID:-}" ]] && { echo "Error: TG_CHAT_ID not set"; exit 1; }
+THREAD="${TG_THREAD_ID:-}"
 
 API="https://uptime.betterstack.com/api/v2"
 AUTH="Authorization: Bearer $BETTERUPTIME_API_TOKEN"
@@ -35,6 +36,7 @@ cat > "$tmp" << ENDJSON
     ],
     "body_template": {
       "chat_id": "$TG_CHAT_ID",
+      "message_thread_id": $THREAD,
       "text": "\u26A0\uFE0F Better Stack Alert\n\nMonitor: \$NAME\nURL: \$URL\nCause: \$CAUSE\nStarted: \$STARTED_AT\nResolved: \$RESOLVED_AT"
     }
   }
