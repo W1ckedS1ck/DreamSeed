@@ -205,6 +205,49 @@ groups:
         annotations:
           summary: ""
 
+      - uid: dreamseed-phpfpm-down
+        title: PHP-FPM Down
+        condition: B
+        labels:
+          env: {{ domain }}
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              expr: 'php_fpm_up'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: ""
+
 {% if web_server == "apache" %}
       - uid: dreamseed-apache-down
         title: Apache Down
