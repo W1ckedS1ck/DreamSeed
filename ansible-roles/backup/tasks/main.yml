@@ -118,6 +118,15 @@
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
+- name: Check if MODX is installed (modx_system_settings table exists)
+  become: true
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = 'modx_system_settings'"
+  register: modx_check
+  ignore_errors: true
+
 - name: Update MODX session_gc_maxlifetime to 6 hours
   become: true
   community.mysql.mysql_query:
@@ -127,6 +136,7 @@
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
+  when: modx_check is not failed and modx_check.query_result[0][0] | int > 0
 
 - name: Wait for VictoriaMetrics to accept writes
   become: true

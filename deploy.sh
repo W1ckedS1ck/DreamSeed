@@ -26,6 +26,37 @@ fi
 
 export LC_ALL=C.UTF-8
 
+# Check that all prerequisite executables exist before proceeding.
+check_prerequisites() {
+    local missing=()
+    local tools=(
+        "$ANSIBLE_PLAYBOOK:ansible-playbook"
+        "$TERRAFORM:terraform"
+        "ssh:ssh"
+        "ssh-keygen:ssh-keygen"
+        "ansible-vault:ansible-vault"
+        "dig:dig (bind9-host or dnsutils)"
+    )
+    for entry in "${tools[@]}"; do
+        local bin="${entry%%:*}"
+        local desc="${entry##*:}"
+        # Skip if bin is a full path — just check file existence
+        if [[ "$bin" == */* ]]; then
+            [[ -x "$bin" ]] || missing+=("$desc")
+        else
+            command -v "$bin" &>/dev/null || missing+=("$desc")
+        fi
+    done
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo -e "\n${RED}Missing required tools:${NC}"
+        for m in "${missing[@]}"; do
+            echo -e "  ${YELLOW}·${NC} $m"
+        done
+        echo -e "\nInstall missing tools and try again."
+        exit 1
+    fi
+}
+
 # Timeouts
 SSH_ATTEMPTS="${SSH_ATTEMPTS:-20}"
 SSH_RETRY_INTERVAL="${SSH_RETRY_INTERVAL:-1}"
@@ -359,6 +390,8 @@ write_deploy_history() {
 }
 
 preflight_checks() {
+    check_prerequisites
+
     local env_to_source
     env_to_source=$(resolve_env_file "$ENV_FILE")
     validate_env_file "$env_to_source"

@@ -10,7 +10,7 @@ contactPoints:
         settings:
           bottoken: "{{ grafana_telegram_token }}"
           chatid: "{{ grafana_telegram_chat_id }}"
-          message: "{% raw %}{{ if .Alerts.Firing }}🔴 *{{ (index .Alerts.Firing 0).Labels.alertname }}* 🔴 [{{ .GroupLabels.env }}]\n{{ range .Alerts.Firing }}{{ .Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ *{{ (index .Alerts.Resolved 0).Labels.alertname }}* — resolved ✅ [{{ .GroupLabels.env }}]{{ end }}{% endraw %}"
+          message: "{% raw %}{{ if .Alerts.Firing }}🔴 *{{ (index .Alerts.Firing 0).Labels.alertname }}* 🔴\n{{ .GroupLabels.env }}{{ range .Alerts.Firing }}{{ if .Annotations.summary }}\n{{ .Annotations.summary }}{{ end }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ *{{ (index .Alerts.Resolved 0).Labels.alertname }}* — resolved ✅\n{{ .GroupLabels.env }}{{ end }}{% endraw %}"
         disableResolveMessage: false
 
 policies:
@@ -72,7 +72,7 @@ groups:
         for: 5m
         annotations:
           summary: >-
-            {% raw %}CPU usage > 85% for 5 min on {{ $labels.instance }}{% endraw %}
+            {% raw %}CPU usage > 85% for 5 min{% endraw %}
 
       - uid: dreamseed-high-ram
         title: High RAM
@@ -116,7 +116,7 @@ groups:
         for: 5m
         annotations:
           summary: >-
-            {% raw %}RAM usage > 90% on {{ $labels.instance }}{% endraw %}
+            {% raw %}RAM usage > 90%{% endraw %}
 
       - uid: dreamseed-low-disk
         title: Low Disk Space
@@ -160,7 +160,7 @@ groups:
         for: 5m
         annotations:
           summary: >-
-            {% raw %}Disk < 10% free on {{ $labels.instance }} mountpoint {{ $labels.mountpoint }}{% endraw %}
+            {% raw %}Disk < 10% free (mountpoint: {{ $labels.mountpoint }}){% endraw %}
 
       - uid: dreamseed-mysql-down
         title: MySQL Down
@@ -203,8 +203,7 @@ groups:
         execErrState: Error
         for: 1m
         annotations:
-          summary: >-
-            {% raw %}MariaDB is down on {{ $labels.instance }}{% endraw %}
+          summary: ""
 
 {% if web_server == "apache" %}
       - uid: dreamseed-apache-down
@@ -248,8 +247,7 @@ groups:
         execErrState: Error
         for: 1m
         annotations:
-          summary: >-
-            {% raw %}Apache is down on {{ $labels.instance }}{% endraw %}
+          summary: ""
 {% endif %}
 
 {% if web_server == "nginx" %}
@@ -294,8 +292,7 @@ groups:
         execErrState: Error
         for: 1m
         annotations:
-          summary: >-
-            {% raw %}Nginx is down on {{ $labels.instance }}{% endraw %}
+          summary: ""
 {% endif %}
 
       - uid: dreamseed-site-down
@@ -339,7 +336,7 @@ groups:
         execErrState: Error
         for: 2m
         annotations:
-          summary: "Website {{ domain }} is not responding (HTTP != 200)"
+          summary: "Website is not responding (HTTP != 200)"
 
       - uid: dreamseed-modx-core
         title: MODX Core Missing
@@ -382,7 +379,7 @@ groups:
         execErrState: Error
         for: 2m
         annotations:
-          summary: "MODX core files missing on {{ domain }}"
+          summary: ""
 
       - uid: dreamseed-victoria-down
         title: VictoriaMetrics Down
@@ -425,8 +422,7 @@ groups:
         execErrState: Alerting
         for: 1m
         annotations:
-          summary: >-
-            {% raw %}VictoriaMetrics is down on {{ $labels.instance }}{% endraw %}
+          summary: ""
 
       - uid: dreamseed-cron-backup
         title: Backup Cron Not Running
@@ -514,4 +510,4 @@ groups:
         for: 2m
         annotations:
           summary: >-
-            {% raw %}Site health check (check_site.sh) hasn't run for >3 min on {{ $labels.instance }}{% endraw %}
+            {% raw %}Site health check hasn't run for >3 min{% endraw %}
