@@ -111,8 +111,12 @@ fi
 if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
     echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
-    # Ping healthchecks.io on success
-    if [[ -n "${HEALTHCHECK_BACKUP_UUID:-}" ]]; then
-        curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_BACKUP_UUID}" > /dev/null 2>&1
+    # Ping external watchdog on success
+    # Legacy healthchecks.io (kept for portfolio reference):
+    # if [[ -n "${HEALTHCHECK_BACKUP_UUID:-}" ]]; then
+    #     curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_BACKUP_UUID}" > /dev/null 2>&1
+    # fi
+    if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
+        curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_BACKUP_KEY}" > /dev/null 2>&1
     fi
 fi

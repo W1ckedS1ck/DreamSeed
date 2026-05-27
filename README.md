@@ -5,7 +5,6 @@
 ![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 ![Backup Test](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/backup-test.yml/badge.svg)
 ![Gitleaks](https://img.shields.io/badge/Gitleaks-passed-00C853?logo=gitleaks)
-![Healthchecks](https://healthchecks.io/badge/25b8a86f-b061-48d4-be5b-de85c2/G4-UUwt_-2/dreamseed.svg)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
 ![Terraform](https://img.shields.io/badge/Terraform-1.1%2B-7B42BC?logo=terraform)

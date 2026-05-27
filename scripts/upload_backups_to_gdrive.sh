@@ -81,9 +81,13 @@ fi
 # Trash
 rclone cleanup "$RCLONE_REMOTE:" 2>/dev/null
 
-# Ping healthchecks.io on success
-if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${HEALTHCHECK_GDRIVE_UUID:-}" ]]; then
-    curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_GDRIVE_UUID}" > /dev/null 2>&1
+# Ping external watchdog on success
+# Legacy healthchecks.io (kept for portfolio reference):
+# if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${HEALTHCHECK_GDRIVE_UUID:-}" ]]; then
+#     curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_GDRIVE_UUID}" > /dev/null 2>&1
+# fi
+if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then
+    curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_GDRIVE_KEY}" > /dev/null 2>&1
 fi
 
 # ====== Send alert only on failure ======
