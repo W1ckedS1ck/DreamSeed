@@ -33,10 +33,13 @@ rotate_files() {
     fi
 }
 
-mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db"
+mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db" "$BACKUP_DIR/logs"
+LOG_FILE="$BACKUP_DIR/logs/backup_$(date +%Y-%m-%d).log"
 
 ENV=$(detect_env)
 ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
 
 # ====== Lock against parallel runs ======
 LOCK_FILE="/tmp/smart_backup.lock"
@@ -79,6 +82,8 @@ else
     fi
 fi
 
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
+
 # ====== Database backup (always) ======
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
@@ -92,6 +97,7 @@ else
     rm -f "$DB_BACKUP"
     DB_STATUS="❌ Database dump failed"
 fi
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
 
 # ====== Telegram notification only on failure ======
 if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* ]]; then
@@ -112,11 +118,17 @@ if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
     echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
     # Ping external watchdog on success
-    # Legacy healthchecks.io (kept for portfolio reference):
-    # if [[ -n "${HEALTHCHECK_BACKUP_UUID:-}" ]]; then
-    #     curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_BACKUP_UUID}" > /dev/null 2>&1
-    # fi
     if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
-        curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_BACKUP_KEY}" > /dev/null 2>&1
+        if curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_BACKUP_KEY}" > /dev/null 2>&1; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >> "$LOG_FILE"
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ curl failed" >> "$LOG_FILE"
+        fi
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)" >> "$LOG_FILE"
     fi
+else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (backup failed)" >> "$LOG_FILE"
 fi
+
+rotate_files "$BACKUP_DIR/logs/backup_*.log" 30

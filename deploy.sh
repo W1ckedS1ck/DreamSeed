@@ -254,7 +254,6 @@ OPTIONS:
     -d, --dry-run      Show what would be deployed, no changes
     -h                 Show this help
     --logs [tf]        Tail latest deploy log (or terraform log)
-    --status           Show infrastructure status (cloud APIs, services, servers)
 
 EXAMPLES:
     \$0 prod -n                  Deploy prod (AWS + Nginx)
@@ -280,11 +279,6 @@ parse_args() {
             exit 1
         fi
         tail -f "$latest"
-        exit 0
-    fi
-
-    if [[ "$1" == "--status" ]]; then
-        bash "$SCRIPT_DIR/scripts/status.sh"
         exit 0
     fi
 
@@ -401,6 +395,10 @@ preflight_checks() {
     set -a
     source "$env_to_source"
     set +a
+    # Auto-setup Better Stack heartbeats (prod only) if keys missing but API token present
+    [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]] &&
+        bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env &&
+        source <(grep -E '^BETTERUPTIME_' "$SCRIPT_DIR/secrets/.env" 2>/dev/null)
     eval "$_saved_opts"
     [[ -n "$_saved_tf_token" ]] && export TF_API_TOKEN="$_saved_tf_token"
     apply_target_vars
@@ -1131,6 +1129,9 @@ INVEOF
             done <<< "$ADDITIONAL_SSH_KEYS"
         }
     } > "$VAULT_TMP"
+
+    # Strip Better Stack keys for non-prod — heartbeats only on prod
+    [[ "$TARGET" != "prod" ]] && unset "${!BETTERUPTIME_@}"
 
     base_args=("-i" "$INVENTORY_FILE" "--extra-vars" "@${VAULT_TMP}")
 
