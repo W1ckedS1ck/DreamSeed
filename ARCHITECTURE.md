@@ -25,8 +25,8 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      01 Base ─── Packages, swap, PHP, MariaDB
        │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
        │      03 DB ────── MariaDB tuning, users, restore
-       │      04 Monitor ─ Exporters + VictoriaMetrics
-       │      05 Backup ── Scripts, crons, Telegram bot
+│ 04 Monitor ─ Exporters + VictoriaMetrics + check_site cron
+│ 05 Backup ── Scripts, crons, Better Stack heartbeats, Telegram bot
        │      06 Grafana ─ Dashboards, datasources, alerts
        │      07 Security ── SSH, fail2ban, sysctl, MODX perms
        │
@@ -93,13 +93,17 @@ smart_backup.sh (hourly via cron)
    │
    ├─ Database: mysqldump via ~/.my.cnf → gzip → rotate keep 15
    │
-   └─ Push cron_last_run_backup to VictoriaMetrics
+   ├─ Push cron_last_run_backup to VictoriaMetrics
+   │
+   └─ Ping Better Stack heartbeat → uptime.betterstack.com/api/v1/heartbeat
 
-upload_backups_to_gdrive.sh (daily at 03:15 UTC)
+upload_backups_to_gdrive.sh (every hour at :05)
    │
-   ├─ rclone copy latest project + db → gdrive:DreamSeed/backups/
+   ├─ rclone copy latest project + db → gdrive:DreamSeed/backups/ (ignore-existing)
    │
-   └─ Prune cloud: 10 project + 20 db → cleanup trash
+   ├─ Prune cloud: 10 project + 100 db → cleanup trash
+   │
+   └─ Ping Better Stack heartbeat
 
 RESTORE_ALL.sh (interactive or --auto-latest)
    │
@@ -117,11 +121,13 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 
 ## Monitoring & Alerting
 
+### Internal Layer (on-server)
+
 ```
 ┌──────────────┐    :8428    ┌─────────────────┐
 │  Exporters   │─────────────│ VictoriaMetrics │
 │  node_exporter              │ retention: 3mo  │
-│  nginx_exporter             │ scrape: 15s     │
+│  nginx/apache_exporter      │ scrape: 15s     │
 │  mysqld_exporter            └────────┬────────┘
 │  check_site.sh (every 1m)           │
 │  smart_backup.sh (heartbeat)        │
@@ -134,7 +140,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                 │  :3000       │
                                 │              │
                                 │ 6 dashboards │
-                                │ 9 alert rules│
+                                │ 12 alert rules│
                                 └──────┬───────┘
                                        │
                                        │ Telegram contact point
@@ -142,20 +148,44 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                  Telegram (chat_id)
 ```
 
-### Alert Rules
+### External Layer (cloud — survives server death)
+
+```
+Better Stack (cloud)
+   │
+   ├─ 3 HTTP monitors ──── https://dreamseed.online (3min, 4 regions)
+   ├─ 4 cron heartbeats ── backup, gdrive, report-daily, report-weekly
+   └─ Status page ──────── status.dreamseed.online
+   │
+   └─ Outgoing webhooks
+         │
+         ├─ Alert (incident started) ──→ Telegram
+         └─ Resolve (incident resolved) → Telegram
+```
+
+### Alert Rules (Grafana — 12 rules)
 
 | Alert | Condition | Response |
 |-------|-----------|----------|
 | CPU >85% | 5m avg | Check processes |
 | RAM >90% | 5m avg | Check OOM |
 | Disk <10% | 5m | Cleanup / resize |
-| MySQL down | instantaneous | Check mariadb |
-| Nginx down | instantaneous | Check nginx.service |
-| MODX Core Missing | instantaneous | Check /manager/ & core files |
-| Site down | instantaneous | Check HTTP 200 |
-| VM down | instantaneous | Check victoria-metrics |
-| Backup stale | >120min since last | Check smart_backup.sh |
-| Cron no heartbeat | >2h since cron_last_run | Check cron |
+| MySQL down | 1m | Check mariadb |
+| Web server down (Nginx/Apache) | 1m | Check nginx.service / apache2 |
+| PHP-FPM down | 1m | Check php*-fpm |
+| Site down | 2m | Check HTTP 200 |
+| MODX Core missing | 2m | Check /manager/ & core files |
+| VictoriaMetrics down | 1m | Check victoria-metrics |
+| Backup cron stale | >120 min | Check smart_backup.sh |
+| Site check cron stale | >3 min | Check check_site.sh |
+
+### External Monitoring (Better Stack — cloud)
+
+| Type | Items | Delivery |
+|------|-------|----------|
+| HTTP monitors | 3 (dreamseed.online, keyword, grafana) | Better Stack webhook → Telegram |
+| Cron heartbeats | 4 (backup, gdrive, report-daily, report-weekly) | Better Stack webhook → Telegram |
+| Status page | go-dreams.betterstackstatus.com (custom domain: status.dreamseed.online) | Public |
 
 ---
 
