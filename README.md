@@ -37,7 +37,7 @@
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | 1 hour → Google Drive, 15/5 versions retained |
 | Uptime coverage | 12 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
-| CI checks per push | 7 parallel jobs (lint → security → validate) |
+| CI checks per push | 8 parallel jobs (lint → security → validate) |
 | Cloud cost | Tracked via Infracost GitHub App on every PR |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
@@ -110,7 +110,7 @@ Real problems encountered and solved in production:
                    🌐 https://dreamseed.online
 ```
 
-Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). Ansible configures everything on the OS — packages, web server, database, SSL, monitoring stack, backup cron, Grafana dashboards, and security hardening. `deploy.sh` orchestrates both with SSH retry logic, cloud-init validation, parallel Ansible execution, coloured progress output, and timestamped logs.
+Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). Ansible configures everything on the OS — packages, web server, database, SSL, monitoring stack, backup cron, Grafana dashboards, and security hardening. `deploy.sh` orchestrates both with SSH retry logic, cloud-init validation, parallel Ansible execution, and timestamped logs.
 
 ---
 
@@ -148,7 +148,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (1000+ lines of battle-tested Bash)
+├── deploy.sh                 # Main orchestrator (700+ lines of battle-tested Bash)
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group
 │   └── hetzner/              # Cloud server + firewall + primary IP
@@ -217,13 +217,13 @@ Grafana dashboards, datasources, **and 12 alert rules** deployed automatically �
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 7 parallel checks | Every PR + push to main |
+| **CI** — 8 parallel checks | Every PR + push to main |
 | **Deploy** — single-click deploy | Manual dispatch (prod, dev-aws, dev-hetz) |
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
 
-CI checks: ShellCheck · ruff · ansible-lint · **Terraform** (tflint+validate) · **OpenTofu validate** · **Trivy** · **gitleaks**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
+CI checks: ShellCheck · ruff · ansible-lint · **Terraform** (tflint+validate) · **OpenTofu validate** · **Trivy** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
 
 ### 🛑 Production Safeguards
 - **Deploy:** manual `[y/N]` confirmation before touching production
