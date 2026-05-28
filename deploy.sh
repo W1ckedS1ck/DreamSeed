@@ -267,7 +267,6 @@ check_prerequisites() {
     command -v ssh &>/dev/null || missing+=("ssh")
     command -v ssh-keygen &>/dev/null || missing+=("ssh-keygen")
     command -v ansible-vault &>/dev/null || missing+=("ansible-vault")
-    command -v dig &>/dev/null || missing+=("dig (dnsutils)")
     if [[ ${#missing[@]} -gt 0 ]]; then echo "Missing: ${missing[*]}"; exit 1; fi
 }
 
