@@ -380,7 +380,13 @@ else
 fi
 
 SERVICES_STOPPED=0
-sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>/dev/null
+if sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>&1; then
+    echo -e "${GREEN}✓ Services started${NC}"
+else
+    echo -e "${RED}✗ Failed to start services${NC}"
+    SITE_STATUS="❌ Services failed to start"
+    RESTORE_RESULT=1
+fi
 sleep 3
 
 HTTP_CODE=$(curl -sk "$SITE_URL" -o /dev/null -w "%{http_code}")
@@ -388,8 +394,9 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
     SITE_STATUS="✅ HTTP $HTTP_CODE"
     echo -e "${GREEN}✓ Site is up (HTTP $HTTP_CODE)${NC}"
 else
-    SITE_STATUS="⚠️ HTTP $HTTP_CODE"
-    echo -e "${YELLOW}⚠️  Site returned HTTP $HTTP_CODE${NC}"
+    SITE_STATUS="❌ HTTP $HTTP_CODE"
+    echo -e "${RED}✗ Site returned HTTP $HTTP_CODE${NC}"
+    RESTORE_RESULT=1
 fi
 echo ""
 
@@ -406,7 +413,13 @@ if [ "$MODE" = "interactive" ]; then
     echo ""
 fi
 
-MSG="🔄 *[$ENV_DISPLAY] DreamSeed Restore*
+if [ "${RESTORE_RESULT:-0}" -eq 1 ]; then
+    MSG="❌ *[$ENV_DISPLAY] DreamSeed Restore FAILED*"
+else
+    MSG="✅ *[$ENV_DISPLAY] DreamSeed Restore*"
+fi
+
+MSG="$MSG
 
 📝 *Project:* $(escape_md2 "$PROJECT_STATUS")
 🗄️ *DB:* $(escape_md2 "$DB_STATUS")
@@ -420,3 +433,4 @@ if [[ "$DB_STATUS" == *"Rollback"* ]]; then
 fi
 
 send_tg "$MSG"
+exit "${RESTORE_RESULT:-0}"

@@ -66,3 +66,18 @@ cp secrets/.env.example secrets/.env
 ```
 
 See `secrets/.env.example` for the full list of required variables.
+
+### rclone.conf (required for site restore)
+
+The `restore` Ansible role downloads the MODX site from Google Drive during deploy.
+It reads `secrets/rclone.conf` — a standard rclone config file with a `gdrive:` remote.
+
+Without it, the deploy will finish (all services like nginx, php, mariadb, monitoring, grafana
+will be configured) but **the site itself will not be restored**. The deploy will fail at the
+final health check with "HTTP 403 — site not serving".
+
+To get this file, ask a team member who has already configured rclone with Google Drive access,
+or run `rclone config` locally to set up a `gdrive:` remote pointing to the DreamSeed backups folder.
+
+Alternatively, you can deploy without restore support and manually restore later via
+`RESTORE_ALL.sh` or `deploy.sh ... -i <IP>` after adding the config file.

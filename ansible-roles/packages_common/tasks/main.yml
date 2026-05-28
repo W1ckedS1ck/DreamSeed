@@ -79,7 +79,15 @@
   ansible.builtin.command: swapon /swapfile
   when: not swapfile_stat.stat.exists
   changed_when: true
-  failed_when: false
+  register: swap_enable_result
+  ignore_errors: true
+
+- name: Warn if swap enable failed
+  ansible.builtin.debug:
+    msg: "WARNING: swapon /swapfile failed — system has no swap. Under memory pressure OOM killer may kill PHP/DB. Fix: check filesystem or kernel params."
+  when:
+    - not swapfile_stat.stat.exists
+    - swap_enable_result is failed
 
 - name: Add swap to fstab
   become: true

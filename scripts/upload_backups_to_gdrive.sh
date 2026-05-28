@@ -61,21 +61,35 @@ fi
 # ====== 3. Clean old backups in cloud ======
 
 # Old projects
-CLOUD_PROJ_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only | sort -r)
-PROJ_COUNT=$(echo "$CLOUD_PROJ_ALL" | grep -c '[^[:space:]]')
-if [ "$PROJ_COUNT" -gt "$MAX_PROJECT_BACKUPS" ]; then
-    while read -r file; do
-        [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/$file"
-    done <<< "$(echo "$CLOUD_PROJ_ALL" | tail -n +$((MAX_PROJECT_BACKUPS + 1)))"
+CLOUD_PROJ_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort -r) || {
+    UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
+"
+    HAS_ERROR=1
+    CLOUD_PROJ_ALL=""
+}
+if [ -n "$CLOUD_PROJ_ALL" ]; then
+    PROJ_COUNT=$(echo "$CLOUD_PROJ_ALL" | grep -c '[^[:space:]]')
+    if [ "$PROJ_COUNT" -gt "$MAX_PROJECT_BACKUPS" ]; then
+        while read -r file; do
+            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/$file"
+        done <<< "$(echo "$CLOUD_PROJ_ALL" | tail -n +$((MAX_PROJECT_BACKUPS + 1)))"
+    fi
 fi
 
 # Old databases
-CLOUD_DB_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only | sort -r)
-DB_COUNT=$(echo "$CLOUD_DB_ALL" | grep -c '[^[:space:]]')
-if [ "$DB_COUNT" -gt "$MAX_DB_BACKUPS" ]; then
-    while read -r file; do
-        [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/$file"
-    done <<< "$(echo "$CLOUD_DB_ALL" | tail -n +$((MAX_DB_BACKUPS + 1)))"
+CLOUD_DB_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort -r) || {
+    UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
+"
+    HAS_ERROR=1
+    CLOUD_DB_ALL=""
+}
+if [ -n "$CLOUD_DB_ALL" ]; then
+    DB_COUNT=$(echo "$CLOUD_DB_ALL" | grep -c '[^[:space:]]')
+    if [ "$DB_COUNT" -gt "$MAX_DB_BACKUPS" ]; then
+        while read -r file; do
+            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/$file"
+        done <<< "$(echo "$CLOUD_DB_ALL" | tail -n +$((MAX_DB_BACKUPS + 1)))"
+    fi
 fi
 
 # Trash

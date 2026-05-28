@@ -60,7 +60,8 @@ PROJECT_STATUS=""
 CURRENT_HASH=$(set -o pipefail; sudo find "$PROJECT_DIR" -type f \
     ! -path "*/core/cache/*" \
     ! -path "*/core/backup/*" \
-    -print0 | xargs -0 sudo md5sum | sort | md5sum | awk '{print $1}') || CURRENT_HASH=""
+    -print0 | xargs -0 sudo md5sum 2>/dev/null | sort | md5sum | awk '{print $1}') || CURRENT_HASH=""
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Hash: $(echo "${CURRENT_HASH:-empty}" | head -c 12)..." >> "$LOG_FILE"
 
 PREVIOUS_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
 
@@ -70,8 +71,8 @@ else
     if sudo tar -czf "$PROJECT_BACKUP" \
         --exclude="html/core/cache" \
         --exclude="html/core/backup" \
-        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
-       sudo tar -tzf "$PROJECT_BACKUP" >/dev/null 2>&1; then
+        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" >> "$LOG_FILE" 2>&1 && \
+       sudo tar -tzf "$PROJECT_BACKUP" >> "$LOG_FILE" 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP"
         echo "$CURRENT_HASH" > "$HASH_FILE"
         PROJECT_STATUS="✅ Project backed up"

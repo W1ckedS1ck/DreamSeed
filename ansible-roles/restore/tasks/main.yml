@@ -32,9 +32,12 @@
     path: "{{ web_root }}/index.php"
   register: restore_site_exists
 
-- name: Skip restore (no rclone config)
+- name: Warn if site missing and no restore source
   ansible.builtin.debug:
-    msg: "⊘ rclone.conf not found — skipping restore from Google Drive"
+    msg: >-
+      ⚠ Site not found at {{ web_root }} and no rclone.conf available.
+      Deploy will continue but site won't serve content.
+      Fix: add rclone.conf to secrets/ and re-run deploy with -i <IP>.
   when:
     - not restore_site_exists.stat.exists
     - not rclone_config_stat.stat.exists

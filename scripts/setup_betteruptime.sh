@@ -26,11 +26,11 @@ ENV_FILE="$SCRIPT_DIR/secrets/.env"
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
 get_existing_heartbeats() {
-    curl -s -X GET "$API/heartbeats?page=1&per_page=50" -H "$AUTH"
+    curl -s -X GET "$API/heartbeats?page=1&per_page=50" -H "$AUTH" || echo '{"data":[]}'
 }
 
 get_existing_webhooks() {
-    curl -s -X GET "$API/outgoing-webhooks" -H "$AUTH"
+    curl -s -X GET "$API/outgoing-webhooks" -H "$AUTH" || echo '{"data":[]}'
 }
 
 heartbeat_exists() {
@@ -87,7 +87,7 @@ for spec in \
         echo -e "  ${GREEN}✓${NC} $name (already exists)"
     else
         json=$(printf '{"name":"%s","period":%s,"grace":%s,"email":true,"push":true}' "$name" "$period" "$grace")
-        resp=$(curl -s -X POST "$API/heartbeats" -H "$AUTH" -H "Content-Type: application/json" -d "$json")
+        resp=$(curl -s -X POST "$API/heartbeats" -H "$AUTH" -H "Content-Type: application/json" -d "$json" || echo "")
         url=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['attributes']['url'])" 2>/dev/null || echo "")
         key=$(echo "$url" | awk -F/ '{print $NF}')
 
@@ -160,7 +160,7 @@ with open("/tmp/bs_webhook.json", "w") as f:
 PYEOF
 
         if [[ -n "$existing_id" ]]; then
-            resp=$(curl -s -X PATCH "$API/outgoing-webhooks/$existing_id" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json")
+            resp=$(curl -s -X PATCH "$API/outgoing-webhooks/$existing_id" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json" || echo "")
             echo -e "  ${GREEN}✓${NC} $name (updated, ID $existing_id)"
         else
             # For creation we need the full payload
@@ -196,7 +196,7 @@ with open("/tmp/bs_webhook.json", "w") as f:
     json.dump(payload, f)
 PYEOF
 
-            resp=$(curl -s -X POST "$API/outgoing-webhooks" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json")
+            resp=$(curl -s -X POST "$API/outgoing-webhooks" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json" || echo "")
             id=$(echo "$resp" | grep -o '"id": *"[^"]*"' | head -1 | cut -d'"' -f4)
             if [[ -n "$id" ]]; then
                 echo -e "  ${GREEN}✓${NC} $name (created, ID $id)"

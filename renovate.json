@@ -8,19 +8,19 @@
   "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy"],
   "terraform": {
     "managerFilePatterns": [
-      "//terraform/.*\\.tf$//"
+      "terraform/.*\\.tf$"
     ],
     "versioning": "semver"
   },
   "pip_requirements": {
     "managerFilePatterns": [
-      "/ansible/requirements\\.txt$/",
-      "/ansible/requirements-deploy\\.txt$/"
+      "/ansible/requirements\\.txt$",
+      "/ansible/requirements-deploy\\.txt$"
     ]
   },
   "ansible-galaxy": {
     "managerFilePatterns": [
-      "/ansible/requirements\\.yml$/"
+      "/ansible/requirements\\.yml$"
     ]
   },
   "packageRules": [
