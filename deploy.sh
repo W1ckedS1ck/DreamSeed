@@ -440,7 +440,7 @@ run_parallel() {
             ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
             ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
             "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${VAULT_TMP}" \
-                "$SCRIPT_DIR/ansible/$pb" >> "$LOG" 2>&1
+                "$SCRIPT_DIR/ansible/$pb" 2>&1 | tee -a "$LOG"
         ) &
         pids+=("$!")
     done
