@@ -1,0 +1,37 @@
+#!/bin/bash
+# Check site and VictoriaMetrics health, push to VictoriaMetrics
+
+VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
+
+{
+    # Site check
+    if curl -sf --max-time 10 "https://{{ domain }}" > /dev/null 2>&1; then
+        echo "site_up{instance=\"{{ domain }}\"} 1"
+    else
+        echo "site_up{instance=\"{{ domain }}\"} 0"
+    fi
+
+    # MODX core check
+    if [ -f /var/www/html/manager/config.core.php ] && [ -f /var/www/html/core/model/modx/modx.class.php ]; then
+        echo "modx_core_ok{instance=\"{{ domain }}\"} 1"
+    else
+        echo "modx_core_ok{instance=\"{{ domain }}\"} 0"
+    fi
+
+    # PHP-FPM check (socket must exist + process must be running)
+    php_sock=$(ls /run/php/php*-fpm.sock 2>/dev/null | head -1)
+    if [ -n "$php_sock" ] && [ -S "$php_sock" ] && pgrep -f "php-fpm" > /dev/null 2>&1; then
+        echo "php_fpm_up{instance=\"{{ domain }}\"} 1"
+    else
+        echo "php_fpm_up{instance=\"{{ domain }}\"} 0"
+    fi
+
+    # VictoriaMetrics check
+    if curl -sf --max-time 5 "http://127.0.0.1:8428/health" | grep -q "OK"; then
+        echo "victoria_up{instance=\"localhost:8428\"} 1"
+    else
+        echo "victoria_up{instance=\"localhost:8428\"} 0"
+    fi
+    # Last-run timestamp (heartbeat — same pattern as cron_last_run_backup)
+    echo "check_site_last_run{instance=\"{{ domain }}\"} $(date +%s)"
+} | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1

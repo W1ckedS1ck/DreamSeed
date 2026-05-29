@@ -1,0 +1,39 @@
+# Managed by Ansible
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: node
+    static_configs:
+      - targets: ["localhost:9100"]
+        labels:
+          instance: "{{ domain }}"
+
+{% if web_server == "apache" %}
+  - job_name: apache
+    static_configs:
+      - targets: ["localhost:9117"]
+        labels:
+          instance: "{{ domain }}"
+{% elif web_server == "nginx" %}
+  - job_name: nginx
+    static_configs:
+      - targets: ["localhost:9113"]
+        labels:
+          instance: "{{ domain }}"
+{% endif %}
+
+{% if db_pass | default('') | length > 0 %}
+  - job_name: mysql
+    static_configs:
+      - targets: ["localhost:9104"]
+        labels:
+          instance: "{{ domain }}"
+{% endif %}
+
+  - job_name: victoria-metrics
+    static_configs:
+      - targets: ["localhost:8428"]
+        labels:
+          job: vm
+          instance: "{{ domain }}"

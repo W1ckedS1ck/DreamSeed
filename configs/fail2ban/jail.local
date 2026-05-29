@@ -1,0 +1,7 @@
+# Custom fail2ban overrides — defaults only.
+# All jails are defined in jail.d/custom.conf (managed by Ansible template).
+
+[DEFAULT]
+bantime  = 10m
+findtime = 10m
+maxretry = 5

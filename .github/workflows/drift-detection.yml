@@ -1,0 +1,66 @@
+name: Drift Detection
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '5 7 * * *'  # 07:05 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: drift-detection
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  drift-prod-aws:
+    name: Detect drift — AWS prod
+    runs-on: ubuntu-latest
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      TF_WORKSPACE: prod
+      AWS_ACCESS_KEY_ID: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.DEV_AWS_REGION }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: latest
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v5
+        with:
+          path: |
+            terraform/aws/.terraform
+            terraform/hetzner/.terraform
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl') }}
+          restore-keys: terraform-providers-${{ runner.os }}-
+
+      - name: Write prod SSH public key
+        run: echo "${{ secrets.DEV_AWS_SSH_PUBLIC_KEY }}" > /tmp/prod.pub
+
+      - name: Terraform Init
+        working-directory: terraform/aws
+        run: terraform init
+
+      - name: Detect Drift
+        id: plan
+        working-directory: terraform/aws
+        run: |
+          terraform plan -detailed-exitcode -no-color \
+            -var="ssh_public_key_path=/tmp/prod.pub" \
+            -var="elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" \
+            -var="environment=prod" \
+            -out=/tmp/prod.tfplan 2>&1 | tee /tmp/plan.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Report drift
+        if: steps.plan.outputs.exit_code == '2'
+        run: |
+          echo "::error::Infrastructure drift detected on prod! Review the plan output above."
+          exit 1

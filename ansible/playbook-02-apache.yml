@@ -1,0 +1,11 @@
+---
+- name: 02 Web Server (Apache)
+  hosts: dreamseed
+  become: false
+  gather_facts: false
+
+  roles:
+    - apache_http
+    - ssl
+    - apache_ssl
+    - php

@@ -1,0 +1,19 @@
+<VirtualHost *:80>
+    ServerName localhost
+    ServerAlias _
+
+    DocumentRoot /var/www/empty
+
+    <Directory /var/www/empty>
+        Require all denied
+    </Directory>
+
+    <Location /server-status>
+        SetHandler server-status
+        Require local
+    </Location>
+
+    <Location /.well-known>
+        Require all granted
+    </Location>
+</VirtualHost>

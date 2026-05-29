@@ -1,0 +1,118 @@
+#!/bin/bash
+
+# Path for cron
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# ====== Load shared functions ======
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common_functions.sh
+source "$SCRIPT_DIR/common_functions.sh"
+load_env "$SCRIPT_DIR/.env"
+
+# ====== Start time ======
+START_TIME=$(date +%s)
+
+# ====== Settings ======
+LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
+PROJECT_DIR="$LOCAL_BACKUP_DIR/project"
+DB_DIR="$LOCAL_BACKUP_DIR/db"
+
+RCLONE_REMOTE="gdrive"
+
+ENV=$(detect_env)
+ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
+REMOTE_BASE="DreamSeed/backups"
+
+MAX_PROJECT_BACKUPS="${CLOUD_PROJECT_KEEP:-10}"
+MAX_DB_BACKUPS="${CLOUD_DB_KEEP:-100}"
+
+
+HAS_ERROR=0
+UPLOAD_MSG=""
+
+# ====== 1. Upload project ======
+LAST_PROJECT=$(find "$PROJECT_DIR" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+if [ -n "$LAST_PROJECT" ]; then
+    if ! rclone copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --ignore-existing; then
+        UPLOAD_MSG+="❌ Project upload error
+"
+        HAS_ERROR=1
+    fi
+else
+    UPLOAD_MSG+="⚠️ Project backup not found
+"
+    HAS_ERROR=1
+fi
+
+# ====== 2. Upload database ======
+LAST_DB=$(find "$DB_DIR" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+if [ -n "$LAST_DB" ]; then
+    if ! rclone copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --ignore-existing; then
+        UPLOAD_MSG+="❌ DB upload error
+"
+        HAS_ERROR=1
+    fi
+else
+    UPLOAD_MSG+="⚠️ DB backup not found
+"
+    HAS_ERROR=1
+fi
+
+# ====== 3. Clean old backups in cloud ======
+
+# Old projects
+CLOUD_PROJ_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort -r) || {
+    UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
+"
+    HAS_ERROR=1
+    CLOUD_PROJ_ALL=""
+}
+if [ -n "$CLOUD_PROJ_ALL" ]; then
+    PROJ_COUNT=$(echo "$CLOUD_PROJ_ALL" | grep -c '[^[:space:]]')
+    if [ "$PROJ_COUNT" -gt "$MAX_PROJECT_BACKUPS" ]; then
+        while read -r file; do
+            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/$file"
+        done <<< "$(echo "$CLOUD_PROJ_ALL" | tail -n +$((MAX_PROJECT_BACKUPS + 1)))"
+    fi
+fi
+
+# Old databases
+CLOUD_DB_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort -r) || {
+    UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
+"
+    HAS_ERROR=1
+    CLOUD_DB_ALL=""
+}
+if [ -n "$CLOUD_DB_ALL" ]; then
+    DB_COUNT=$(echo "$CLOUD_DB_ALL" | grep -c '[^[:space:]]')
+    if [ "$DB_COUNT" -gt "$MAX_DB_BACKUPS" ]; then
+        while read -r file; do
+            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/$file"
+        done <<< "$(echo "$CLOUD_DB_ALL" | tail -n +$((MAX_DB_BACKUPS + 1)))"
+    fi
+fi
+
+# Trash
+rclone cleanup "$RCLONE_REMOTE:" 2>/dev/null
+
+# Ping external watchdog on success
+# Legacy healthchecks.io (kept for portfolio reference):
+# if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${HEALTHCHECK_GDRIVE_UUID:-}" ]]; then
+#     curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_GDRIVE_UUID}" > /dev/null 2>&1
+# fi
+if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then
+    curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_GDRIVE_KEY}" > /dev/null 2>&1
+fi
+
+# ====== Send alert only on failure ======
+if [ "$HAS_ERROR" -eq 1 ]; then
+    END_TIME=$(date +%s)
+    DURATION=$((END_TIME - START_TIME))
+    MSG="====== ALERT ======
+🔴 *UPLOAD FAILED* — $ENV_DISPLAY_ESCAPED
+
+❌ Upload to GDrive failed
+⏰ $(date '+%d.%m.%Y %H:%M')  ⏱ ${DURATION}s
+=========================="
+    send_tg "$MSG"
+fi

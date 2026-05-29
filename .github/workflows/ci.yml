@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: '.'
+          severity: error
+          ignore_paths: >-
+            .git
+
+  ruff:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run ruff
+        uses: chartboost/ruff-action@v1
+
+  ansible-lint:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: pip
+          cache-dependency-path: ansible/requirements.txt
+      - name: Run ansible-lint
+        working-directory: ansible
+        run: |
+          pip install -r requirements.txt --quiet
+          ansible-lint .
+
+  terraform-checks:
+    name: Terraform Lint + Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: latest
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: latest
+      - name: Cache Terraform providers
+        uses: actions/cache@v5
+        with:
+          path: |
+            terraform/aws/.terraform
+            terraform/hetzner/.terraform
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl') }}
+          restore-keys: terraform-providers-${{ runner.os }}-
+      - name: Run tflint
+        run: |
+          tflint --init
+          for dir in terraform/*/; do
+            echo "=== Linting $dir ==="
+            tflint --chdir="$dir"
+          done
+      - name: Validate all providers
+        run: |
+          for dir in terraform/*/; do
+            echo "=== Validating $dir ==="
+            terraform -chdir="$dir" init -backend=false -upgrade
+            terraform -chdir="$dir" validate
+          done
+
+  tofu-validate:
+    name: OpenTofu Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: latest
+      - name: Validate all providers
+        run: |
+          for dir in terraform/*/; do
+            echo "=== Validating $dir ==="
+            tofu -chdir="$dir" init -backend=false -upgrade
+            tofu -chdir="$dir" validate
+          done
+
+  trivy:
+    name: Terraform Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Cache Trivy DB
+        uses: actions/cache@v5
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ hashFiles('terraform/**/*.tf') }}
+          restore-keys: trivy-db-
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: terraform
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          cache-dir: .trivy-cache
+
+  gitleaks:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Secret Scan
+        run: |
+          curl -sL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --verbose
+
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Run pre-commit hooks
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files --show-diff-on-failure

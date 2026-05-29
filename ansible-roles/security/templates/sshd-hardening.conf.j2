@@ -1,0 +1,16 @@
+# DreamSeed SSH Hardening
+PasswordAuthentication no
+PermitRootLogin no
+X11Forwarding no
+AllowTcpForwarding no
+AllowAgentForwarding no
+MaxAuthTries 3
+MaxSessions 2
+ClientAliveCountMax 2
+LogLevel VERBOSE
+AllowUsers {{ ansible_user }}
+AuthorizedKeysFile .ssh/authorized_keys
+ClientAliveInterval 300
+UseDNS no
+Compression no
+TCPKeepAlive no

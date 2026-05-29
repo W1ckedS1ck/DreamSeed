@@ -1,0 +1,161 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [prod, dev-aws, dev-hetz]
+      action:
+        description: 'Action'
+        required: true
+        type: choice
+        options: [deploy, destroy]
+        default: deploy
+      web_server:
+        description: 'Web server (deploy only)'
+        required: true
+        type: choice
+        options: [nginx, apache]
+        default: nginx
+      server_ip:
+        description: 'Skip Terraform — reconfigure existing server IP (deploy only)'
+        required: false
+        type: string
+      confirm:
+        description: 'Destroy confirmation — type "destroy prod" to destroy prod, "destroy dev" for dev'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: latest
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v5
+        with:
+          path: |
+            terraform/aws/.terraform
+            terraform/hetzner/.terraform
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl') }}
+          restore-keys: terraform-providers-${{ runner.os }}-
+
+      - name: Cache pip packages
+        if: inputs.action == 'deploy'
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('ansible/requirements-deploy.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      - name: Cache Ansible collections
+        if: inputs.action == 'deploy'
+        uses: actions/cache@v5
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
+          restore-keys: ansible-collections-${{ runner.os }}-
+
+      - name: Setup Ansible
+        if: inputs.action == 'deploy'
+        run: |
+          pip install -r ansible/requirements-deploy.txt --quiet
+          ansible-galaxy collection install community.mysql ansible.posix
+
+      - name: Reconstruct secrets
+        env:
+          ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
+          VAULT_PASS: ${{ secrets.VAULT_PASSWORD }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
+        run: |
+          mkdir -p secrets
+          echo "$ENV_FILE_B64" | base64 -d > secrets/.env
+          chmod 600 secrets/.env
+
+          echo -n "$VAULT_PASS" > ~/.vault_pass_dreamseed
+          chmod 600 ~/.vault_pass_dreamseed
+
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/Vitali.pem
+          chmod 600 ~/.ssh/Vitali.pem
+
+          if [ -n "$RCLONE_CONF_B64" ]; then
+            echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf
+            chmod 600 secrets/rclone.conf
+          fi
+
+      - name: Deploy
+        if: inputs.action == 'deploy'
+        id: deploy
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+
+          # Set after sourcing .env — deploy.sh preserves it
+          export TF_API_TOKEN="${{ secrets.TF_API_TOKEN }}"
+
+          ENV="${{ inputs.environment }}"
+          WEB_SRV="${{ inputs.web_server }}"
+          SERVER_IP="${{ inputs.server_ip }}"
+
+          [[ -z "$ENV" ]] && { echo "Missing environment"; exit 1; }
+
+          WEB_FLAG="-n"
+          [[ "$WEB_SRV" == "apache" ]] && WEB_FLAG="-a"
+
+          IP_FLAG=""
+          [[ -n "$SERVER_IP" ]] && IP_FLAG="-i $SERVER_IP"
+
+          # shellcheck disable=SC2086
+          ./deploy.sh "$ENV" $WEB_FLAG $IP_FLAG -p
+
+      - name: Destroy
+        if: inputs.action == 'destroy'
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          DESTROY_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
+          export SSH_PUBLIC_KEY_PATH=~/.ssh/Vitali.pub
+
+          ENV="${{ inputs.environment }}"
+
+          # Prod requires typing "destroy prod"
+          if [[ "$ENV" == "prod" ]]; then
+            if [[ "$DESTROY_CONFIRM" != "destroy prod" ]]; then
+              echo "ERROR: To destroy prod you must set confirm = 'destroy prod'"
+              exit 1
+            fi
+          else
+            # Dev envs require typing "destroy dev"
+            if [[ "$DESTROY_CONFIRM" != "destroy dev" ]]; then
+              echo "ERROR: To destroy a dev environment you must set confirm = 'destroy dev'"
+              exit 1
+            fi
+          fi
+
+          export CI_DESTROY_CONFIRM=yes
+          ./deploy.sh "$ENV" -n -x

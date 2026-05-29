@@ -1,0 +1,116 @@
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{ domain }}{% if domain_www | default(true) %} www.{{ domain }}{% endif %};
+
+    root {{ web_root }};
+    index index.php index.html index.htm;
+
+{% if ssl_has_cert | default(false) %}
+    ssl_certificate /etc/letsencrypt/live/{{ domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ domain }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+{% else %}
+    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;
+    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;
+{% endif %}
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com; frame-ancestors 'self';" always;
+
+    client_max_body_size 64M;
+
+    access_log /var/log/nginx/{{ domain }}-ssl-access.log;
+    error_log /var/log/nginx/{{ domain }}-ssl-error.log;
+
+    location / {
+        try_files $uri $uri/ @modx;
+    }
+
+    location @modx {
+        rewrite ^/(.*)$ /index.php?q=$1 last;
+    }
+
+    location ^~ /manager {
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.gravatar.com; font-src 'self' data:; frame-ancestors 'self';" always;
+        try_files $uri $uri/ @modx;
+
+        location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+            fastcgi_buffer_size 32k;
+            fastcgi_buffers 16 16k;
+            fastcgi_connect_timeout 60s;
+            fastcgi_send_timeout 300s;
+            fastcgi_read_timeout 300s;
+        }
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_buffer_size 32k;
+        fastcgi_buffers 16 16k;
+        fastcgi_connect_timeout 60s;
+        fastcgi_send_timeout 300s;
+        fastcgi_read_timeout 300s;
+    }
+
+    location ~* \.(jpg|jpeg|gif|png|ico|css|js|svg|woff|woff2|ttf|eot|otf|webp)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location ^~ /core {
+        deny all;
+        return 404;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+
+    location ^~ /grafana {
+        proxy_pass http://127.0.0.1:{{ grafana_port }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Grafana has its own CSP; omit the site-wide one so the news panel
+        # can fetch from grafana.com and plugins can load their own assets.
+        # (Nginx does not inherit parent add_header when a child block has any,
+        #  so the server-level CSP is already absent here — this is explicit.)
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Cloudflare-CDN-Cache-Control "no-cache";
+    }
+}

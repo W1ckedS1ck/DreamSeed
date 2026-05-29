@@ -1,0 +1,8 @@
+---
+- name: 05 Grafana
+  hosts: dreamseed
+  become: true
+  gather_facts: false
+
+  roles:
+    - grafana

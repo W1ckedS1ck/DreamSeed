@@ -1,0 +1,159 @@
+---
+- name: Check if local SSL backup exists
+  delegate_to: localhost
+  delegate_facts: true
+  become: false
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/ssl/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: ssl_local_backup
+
+- name: Restore SSL certificates from local backup
+  become: true
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/ssl/letsencrypt/"
+    dest: /etc/letsencrypt/
+    owner: root
+    group: root
+    mode: "0755"
+  when: ssl_local_backup.stat.exists
+  register: ssl_restore_result
+
+- name: Set ssl_restored fact
+  ansible.builtin.set_fact:
+    ssl_restored: "{{ ssl_local_backup.stat.exists }}"
+    ssl_has_cert: "{{ ssl_local_backup.stat.exists }}"
+  when: ssl_local_backup.stat.exists
+
+- name: Check if certificate already exists
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: ssl_cert_file
+
+# --- Certbot DNS Challenge (CloudFlare) ---
+- name: Install CloudFlare DNS certbot plugin
+  become: true
+  ansible.builtin.apt:
+    name: python3-certbot-dns-cloudflare
+    state: present
+  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
+
+- name: Deploy CloudFlare credentials file
+  become: true
+  no_log: true
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/cloudflare.ini
+    content: |
+      dns_cloudflare_api_token = {{ cloudflare_api_token }}
+    mode: "0600"
+  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
+
+- name: Obtain SSL certificate via DNS CloudFlare
+  become: true
+  ansible.builtin.command: >
+    certbot certonly
+    --dns-cloudflare
+    --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
+    {{ '--staging' if ssl_staging | default(false) else '' }}
+    -d {{ domain }}{% if domain_www | default(true) %}
+    -d www.{{ domain }}{% endif %}
+    --non-interactive
+    --agree-tos
+    -m {{ admin_email }}
+    --rsa-key-size 4096
+  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
+  register: ssl_certbot_result
+  changed_when: false
+  failed_when: false
+
+# --- Final cert status ---
+- name: Re-check certificate after certbot
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: ssl_cert_file_final
+
+- name: Set ssl_has_cert fact
+  ansible.builtin.set_fact:
+    ssl_has_cert: "{{ ssl_cert_file_final.stat.exists }}"
+
+- name: SSL status
+  ansible.builtin.debug:
+    msg: >-
+      {{ ssl_restored | default(false) | ternary(
+        '✓ SSL: Restored from local backup',
+        ssl_has_cert | ternary(
+          '✓ SSL: Let''s Encrypt certificate ready',
+          '⊘ SSL: certbot failed — Nginx will use self-signed. Fix DNS and re-run.'
+        )
+      ) }}
+
+# --- Certbot timer + deploy-hook ---
+- name: Enable certbot auto-renewal timer
+  become: true
+  ansible.builtin.systemd:
+    name: certbot.timer
+    state: started
+    enabled: true
+  when: ssl_has_cert and not ssl_restored | default(false)
+
+- name: Create renewal hooks directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    mode: "0755"
+  when: ssl_has_cert
+
+- name: Deploy certbot renewal hook
+  become: true
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      if systemctl is-active --quiet apache2 2>/dev/null; then
+          systemctl reload apache2
+      elif systemctl is-active --quiet nginx 2>/dev/null; then
+          systemctl reload nginx
+      fi
+    dest: /etc/letsencrypt/renewal-hooks/deploy/reload-web.sh
+    mode: "0755"
+  when: ssl_has_cert
+
+# --- Self-signed fallback for Nginx ---
+- name: Generate self-signed private key for Nginx
+  become: true
+  ansible.builtin.command:
+    cmd: openssl genrsa -out /etc/ssl/private/nginx-selfsigned.key 2048
+    creates: /etc/ssl/private/nginx-selfsigned.key
+  when: not ssl_has_cert
+
+- name: Generate self-signed certificate for Nginx
+  become: true
+  ansible.builtin.command:
+    cmd: "openssl req -new -x509 -key /etc/ssl/private/nginx-selfsigned.key -out /etc/ssl/certs/nginx-selfsigned.crt -days 365 -nodes -subj /CN={{ domain }}"
+    creates: /etc/ssl/certs/nginx-selfsigned.crt
+  when: not ssl_has_cert
+
+- name: Ensure group ssl-cert exists
+  become: true
+  ansible.builtin.group:
+    name: ssl-cert
+    state: present
+  failed_when: false
+
+- name: Ensure SSL private key has correct permissions
+  become: true
+  ansible.builtin.file:
+    path: /etc/ssl/private/nginx-selfsigned.key
+    owner: root
+    group: ssl-cert
+    mode: "0640"
+  when: not ssl_has_cert
+
+- name: Add web server user to ssl-cert group
+  become: true
+  ansible.builtin.user:
+    name: www-data
+    groups: ssl-cert
+    append: true
+  when: not ssl_has_cert

@@ -1,0 +1,47 @@
+---
+- name: Node Exporter
+  ansible.builtin.include_tasks: node_exporter.yml
+
+- name: Apache Exporter
+  ansible.builtin.include_tasks: apache_exporter.yml
+  when: web_server == "apache"
+
+- name: Nginx Exporter
+  ansible.builtin.include_tasks: nginx_exporter.yml
+  when: web_server == "nginx"
+
+- name: MySQL Exporter
+  ansible.builtin.include_tasks: mysql_exporter.yml
+  when: db_pass | default('') | length > 0
+
+- name: VictoriaMetrics
+  ansible.builtin.include_tasks: victoria.yml
+
+- name: Reload systemd once
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Flush handler restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Build monitoring services list
+  ansible.builtin.set_fact:
+    _monitoring_services: >-
+      {{ ['node_exporter', 'victoria-metrics']
+         + (['nginx_exporter'] if web_server == 'nginx' else [])
+         + (['apache_exporter'] if web_server == 'apache' else [])
+         + (['mysqld_exporter'] if (db_pass | default('') | length > 0) else [])
+         + (['vmagent'] if (monitoring_vmagent_enabled and grafana_cloud_url | length > 0) else []) }}
+
+- name: Enable and start monitoring services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ _monitoring_services }}"
+
+- name: vmagent (Grafana Cloud)
+  ansible.builtin.include_tasks: vmagent.yml
+
+- name: Check site
+  ansible.builtin.include_tasks: check_site.yml
