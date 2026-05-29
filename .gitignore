@@ -1,0 +1,50 @@
+# Claude local state (not for git)
+.claude/
+
+# Opencode local state (not for git)
+.opencode/
+
+# Secrets (never commit)
+secrets/
+.env
+.env.local
+
+# Terraform state (never commit)
+*.tfstate*
+.terraform/
+terraform/.terraform/
+terraform/*.tfstate*
+
+# Ansible
+*.retry
+ansible/inventory/hosts-*.yml
+
+# Logs and temporary files
+logs/
+*.log
+/tmp/
+
+# System
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+__pycache__/
+*.pyc
+
+# Project instructions (internal)
+CLAUDE.md
+
+# Documentation (local snapshots)
+Docs/
+
+# Systemd service files (contain environment variables)
+*.service
+node_modules
+
+# Ansible fact cache and collections
+.ansible/
+
+# Linter cache
+.ruff_cache/

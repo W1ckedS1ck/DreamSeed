@@ -1,0 +1,62 @@
+---
+- name: Set Node Exporter desired version
+  ansible.builtin.set_fact:
+    monitoring_ne_version: "{{ monitoring_node_version }}"
+
+- name: Check if Node Exporter is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/node_exporter
+  register: monitoring_ne_bin
+
+- name: Get current Node Exporter version
+  ansible.builtin.command: /usr/local/bin/node_exporter --version
+  changed_when: false
+  failed_when: false
+  register: monitoring_ne_current_version
+  when: monitoring_ne_bin.stat.exists
+
+- name: Install/Upgrade Node Exporter
+  when: >
+    not monitoring_ne_bin.stat.exists or
+    monitoring_ne_version not in (monitoring_ne_current_version.stdout | default(''))
+  block:
+    - name: Download Node Exporter
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ monitoring_ne_version }}/node_exporter-{{ monitoring_ne_version }}.linux-amd64.tar.gz"
+        dest: /tmp/node_exporter.tar.gz
+        mode: "0644"
+
+    - name: Extract Node Exporter
+      ansible.builtin.unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install Node Exporter binary
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ monitoring_ne_version }}.linux-amd64/node_exporter"
+        dest: /usr/local/bin/node_exporter
+        mode: "0755"
+        remote_src: true
+
+    - name: Cleanup Node Exporter temp files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/node_exporter.tar.gz
+        - "/tmp/node_exporter-{{ monitoring_ne_version }}.linux-amd64"
+
+- name: Create node_exporter user
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    create_home: false
+    shell: /bin/false
+
+- name: Deploy Node Exporter service
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+  notify: Restart Node Exporter

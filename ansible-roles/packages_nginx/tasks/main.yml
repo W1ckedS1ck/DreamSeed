@@ -1,0 +1,11 @@
+---
+- name: Install Nginx packages
+  become: true
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - libnginx-mod-http-brotli-filter
+      - libnginx-mod-http-brotli-static
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive

@@ -1,0 +1,7 @@
+# Fail2ban filter for MODX admin panel brute-force attempts
+# Detects POST requests to /manager with 401/403 responses or excessive attempts
+
+[Definition]
+failregex = ^<HOST> .* "POST /manager/index.php.*" (401|403) .*$
+            ^<HOST> .* "POST /modx/manager/.*" (401|403) .*$
+ignoreregex =

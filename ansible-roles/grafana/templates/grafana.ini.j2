@@ -1,0 +1,37 @@
+# Managed by Ansible — DreamSeed Grafana configuration
+# Only overridden keys are listed; all others use Grafana defaults.
+
+[server]
+http_addr = 127.0.0.1
+http_port = {{ grafana_port }}
+domain = {{ domain }}
+root_url = https://{{ domain }}/grafana
+serve_from_sub_path = true
+enable_gzip = true
+
+[security]
+admin_user = admin
+admin_password = {{ grafana_admin_password }}
+
+[users]
+viewers_can_edit = false
+
+[auth.anonymous]
+enabled = false
+
+[analytics]
+reporting_enabled = false
+check_for_updates = false
+check_for_plugin_updates = false
+
+[database]
+{% if grafana_db_type | default('sqlite') == 'sqlite' %}
+# Default SQLite — no configuration needed
+{% endif %}
+versions_to_keep = 5
+max_connections = 0
+
+{% if grafana_log_level | default('info') != 'info' %}
+[log]
+level = {{ grafana_log_level }}
+{% endif %}

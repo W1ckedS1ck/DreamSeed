@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+
+import logging
+import os
+import sys
+import time
+import subprocess
+import requests
+
+from env_loader import load_env
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    stream=sys.stdout,
+)
+log = logging.getLogger('dreamseed-bot')
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(SCRIPT_DIR, '.env')
+
+load_env(ENV_FILE)
+
+TG_TOKEN = os.environ.get('TG_TOKEN', '')
+TG_CHAT_ID = os.environ.get('TG_CHAT_ID', '')
+try:
+    TG_THREAD_ID = int(os.environ.get('TG_THREAD_ID', ''))
+except ValueError:
+    TG_THREAD_ID = None
+
+BACKUP_DIR = os.environ.get('BACKUP_DIR', '/home/ubuntu/backups')
+RCLONE_REMOTE = 'gdrive'
+REMOTE_BASE = os.environ.get('REMOTE_BASE', 'DreamSeed/backups')
+BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')
+DB_PREFIX = os.environ.get('DB_PREFIX', 'db_modx_db_')
+
+def get_size(filepath):
+    if not filepath:
+        return "-"
+    try:
+        size = os.path.getsize(filepath)
+        if size > 1048576:
+            return f"{size // 1048576}MB"
+        else:
+            return f"{size // 1024}KB"
+    except Exception:
+        return "-"
+
+def get_env():
+    hostname = subprocess.check_output(['hostname'], text=True).strip()
+    if 'prod' in hostname and 'preprod' not in hostname:
+        return "prod"
+    return "preprod"
+
+def format_proj_name(filename):
+    name = filename.replace('DreamSeed_', '').replace('.tar.gz', '')
+    parts = name.rsplit('_', 1)
+    if len(parts) == 2:
+        return f"{parts[0]} {parts[1].replace('-', ':')}"
+    return name
+
+def format_db_name(filename):
+    name = filename.replace(DB_PREFIX, '').replace('.sql.gz', '')
+    parts = name.rsplit('_', 1)
+    if len(parts) == 2:
+        return f"{parts[0]} {parts[1].replace('-', ':')}"
+    return name
+
+def _rclone_lsf(path):
+    try:
+        out = subprocess.check_output(
+            ['rclone', 'lsf', path, '--files-only', '--format', 'tps'],
+            text=True, timeout=30
+        ).strip()
+        return sorted(
+            [line.split(';') for line in out.split('\n') if line],
+            key=lambda x: x[0], reverse=True
+        )
+    except Exception:
+        return []
+
+def cmd_status():
+    env = get_env()
+    try:
+        proj_files = sorted([f for f in os.listdir(f'{BACKUP_DIR}/project') if f.startswith('DreamSeed_')], key=lambda x: os.path.getmtime(f'{BACKUP_DIR}/project/{x}'), reverse=True)
+        db_files = sorted([f for f in os.listdir(f'{BACKUP_DIR}/db') if f.startswith('db_')], key=lambda x: os.path.getmtime(f'{BACKUP_DIR}/db/{x}'), reverse=True)
+
+        remote_base = REMOTE_BASE
+        env_suffix = "" if env == "prod" else f"-{env}"
+        cloud_proj_files = _rclone_lsf(f'{RCLONE_REMOTE}:{remote_base}/project{env_suffix}/')
+        cloud_db_files = _rclone_lsf(f'{RCLONE_REMOTE}:{remote_base}/db{env_suffix}/')
+
+        def cloud_size(size_bytes):
+            try:
+                s = int(size_bytes)
+                if s > 1048576:
+                    return f"{s // 1048576}MB"
+                else:
+                    return f"{s // 1024}KB"
+            except Exception:
+                return "-"
+
+        msg = f"📊 *Backup Status* — {env}\n\n"
+
+        msg += "📁 Local:\n"
+        for f in proj_files[:2]:
+            msg += f"  🖥 {format_proj_name(f)} ({get_size(f'{BACKUP_DIR}/project/{f}')})\n"
+        for f in db_files[:2]:
+            msg += f"  🗄 {format_db_name(f)} ({get_size(f'{BACKUP_DIR}/db/{f}')})\n"
+
+        msg += "\n☁️ GDrive:\n"
+        for line in cloud_proj_files[:2]:
+            msg += f"  🖥 {format_proj_name(line[1])} ({cloud_size(line[2])})\n"
+        for line in cloud_db_files[:2]:
+            msg += f"  🗄 {format_db_name(line[1])} ({cloud_size(line[2])})\n"
+
+        msg += f"\n⏰ Last check: {time.strftime('%d.%m %H:%M')}"
+        return msg
+    except Exception as e:
+        return f"Error: {e}"
+
+def cmd_backups():
+    env = get_env()
+    try:
+        proj_files = sorted([f for f in os.listdir(f'{BACKUP_DIR}/project') if f.startswith('DreamSeed_')], key=lambda x: os.path.getmtime(f'{BACKUP_DIR}/project/{x}'), reverse=True)[:5]
+        db_files = sorted([f for f in os.listdir(f'{BACKUP_DIR}/db') if f.startswith('db_')], key=lambda x: os.path.getmtime(f'{BACKUP_DIR}/db/{x}'), reverse=True)[:5]
+
+        msg = f"🖥 *Last 5 Projects* — {env}\n\n"
+        msg += '\n'.join([f"{format_proj_name(f)} ({get_size(f'{BACKUP_DIR}/project/{f}')})" for f in proj_files])
+
+        msg += f"\n\n🗄 *Last 5 DB* — {env}\n\n"
+        msg += '\n'.join([f"{format_db_name(f)} ({get_size(f'{BACKUP_DIR}/db/{f}')})" for f in db_files])
+
+        return msg
+    except Exception as e:
+        return f"Error: {e}"
+
+def main():
+    if not TG_TOKEN:
+        log.error("TG_TOKEN not set")
+        return
+
+    last_update = None
+
+    while True:
+        try:
+            params = {'timeout': 30}
+            if last_update is not None:
+                params['offset'] = last_update
+
+            updates = requests.get(f'https://api.telegram.org/bot{TG_TOKEN}/getUpdates',
+                               params=params, timeout=35).json()
+
+            if updates.get('ok') and updates.get('result'):
+                for up in updates.get('result', []):
+                    last_update = up['update_id'] + 1
+
+                    if 'message' in up:
+                        msg = up['message']
+                        chat_id = str(msg['chat']['id'])
+
+                        if chat_id != TG_CHAT_ID:
+                            log.warning("Ignored message from unauthorized chat: %s", chat_id)
+                            continue
+
+                        text = msg.get('text', '').split('@')[0]
+
+                        t0 = time.time()
+                        if text in ['/status', f'/status@{BOT_USERNAME}']:
+                            response = cmd_status()
+                        elif text in ['/backups', '/backup']:
+                            response = cmd_backups()
+                        else:
+                            response = "Use /status or /backups"
+                            t0 = None
+                        if t0 is not None:
+                            elapsed = time.time() - t0
+                            response += f"\n\n⏱ {elapsed:.1f}s"
+
+                        send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'Markdown'}
+                        if TG_THREAD_ID:
+                            send_kwargs['message_thread_id'] = TG_THREAD_ID
+
+                        requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
+                                  json=send_kwargs)
+
+        except requests.exceptions.Timeout:
+            continue
+        except Exception as e:
+            log.error("Main loop error: %s", e)
+
+if __name__ == '__main__':
+    main()

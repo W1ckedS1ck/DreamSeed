@@ -1,0 +1,135 @@
+name: Rollback Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [prod, dev-aws, dev-hetz]
+      confirm:
+        description: 'Prod confirmation — type "rollback prod"'
+        required: false
+        type: string
+
+concurrency:
+  group: rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  rollback:
+    name: Rollback ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Reconstruct secrets
+        env:
+          ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT_PASS: ${{ secrets.VAULT_PASSWORD }}
+        run: |
+          mkdir -p secrets
+          echo "$ENV_FILE_B64" | base64 -d > secrets/.env
+          chmod 600 secrets/.env
+
+          echo -n "$VAULT_PASS" > ~/.vault_pass_dreamseed
+          chmod 600 ~/.vault_pass_dreamseed
+
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/Vitali.pem
+          chmod 600 ~/.ssh/Vitali.pem
+
+      - name: Install ansible-core
+        run: pip install ansible-core --quiet
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: latest
+
+      - name: Get server IP
+        id: server-ip
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+
+          # Save TF_API_TOKEN before .env overrides
+          TF_TOKEN="${TF_API_TOKEN:-}"
+
+          ENV="${{ inputs.environment }}"
+
+          case "$ENV" in
+            prod|dev-aws)
+              IP="$DEV_AWS_EIP"
+              # Resolve EIP allocation ID → actual IP
+              if [[ "$IP" == eipalloc-* ]]; then
+                export AWS_ACCESS_KEY_ID="$DEV_AWS_ACCESS_KEY"
+                export AWS_SECRET_ACCESS_KEY="$DEV_AWS_SECRET_KEY"
+                export AWS_DEFAULT_REGION="$DEV_AWS_REGION"
+                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
+                     --query 'Addresses[0].PublicIp' --output text)
+              fi
+              ;;
+            dev-hetz)
+              export TF_TOKEN_app_terraform_io="$TF_TOKEN"
+              export TF_WORKSPACE="dev-hetz"
+              cd terraform/hetzner
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
+              ;;
+          esac
+
+          if [ -z "$IP" ]; then
+            echo "ERROR: Could not find IP for environment $ENV"
+            exit 1
+          fi
+
+          echo "ip=$IP" >> $GITHUB_OUTPUT
+          echo "Found server IP: $IP"
+
+      - name: Validate prod confirmation
+        if: inputs.environment == 'prod'
+        run: |
+          if [[ "${{ inputs.confirm }}" != "rollback prod" ]]; then
+            echo "::error::To rollback prod you must set confirm = 'rollback prod'"
+            exit 1
+          fi
+          echo "Prod rollback confirmed"
+
+      - name: Restore latest backup
+        id: restore
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              -i ~/.ssh/Vitali.pem \
+              ubuntu@${{ steps.server-ip.outputs.ip }} \
+              "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest"
+
+      - name: Send completion notification
+        if: always()
+        run: |
+          set -a
+          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          set +a
+
+          ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
+          RESTORE="${{ steps.restore.outcome }}"
+          [ "$RESTORE" = "success" ] && STATUS="✅ SUCCESS" || STATUS="❌ FAILED"
+          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\nEnvironment: %s\nRestore: %s\n🖥 %s' \
+            "$STATUS" \
+            "$(date '+%Y-%m-%d %H:%M')" \
+            "${{ inputs.environment }}" \
+            "$(ok $RESTORE)" \
+            "${{ steps.server-ip.outputs.ip }}")
+
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "text=$MSG" > /dev/null || true

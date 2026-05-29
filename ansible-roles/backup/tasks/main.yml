@@ -1,0 +1,161 @@
+---
+- name: Create backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - "{{ scripts_dir_remote }}"
+    - "{{ backup_dir }}/project"
+    - "{{ backup_dir }}/db"
+
+- name: Upload backup scripts
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/{{ item }}"
+    dest: "{{ scripts_dir_remote }}/{{ item }}"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - smart_backup.sh
+    - upload_backups_to_gdrive.sh
+    - RESTORE_ALL.sh
+    - send_report.sh
+    - test_tg.sh
+    - common_functions.sh
+    - env_loader.py
+
+- name: Upload Telegram bot script
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/telegram_bot.py"
+    dest: "{{ scripts_dir_remote }}/telegram_bot.py"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Upload bot runner script
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/run_bot.sh"
+    dest: "{{ scripts_dir_remote }}/run_bot.sh"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Deploy Telegram bot systemd service
+  ansible.builtin.template:
+    src: telegram_bot.service.j2
+    dest: /etc/systemd/system/telegram-bot.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd and restart bot
+
+- name: Render server .env (whitelist only — no cloud credentials)
+  ansible.builtin.template:
+    src: server.env.j2
+    dest: "{{ scripts_dir_remote }}/.env"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable bot service
+  ansible.builtin.systemd:
+    name: telegram-bot
+    enabled: yes
+    state: started
+
+
+- name: Setup hourly backup cron
+  ansible.builtin.cron:
+    name: "DreamSeed hourly backup"
+    minute: "0"
+    job: "{{ scripts_dir_remote }}/smart_backup.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup daily GDrive upload cron
+  ansible.builtin.cron:
+    name: "DreamSeed hourly gdrive upload"
+    minute: "5"
+    job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup daily report cron
+  ansible.builtin.cron:
+    name: "DreamSeed daily report"
+    minute: "30"
+    hour: "15"
+    job: "{{ scripts_dir_remote }}/send_report.sh daily"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup weekly report cron
+  ansible.builtin.cron:
+    name: "DreamSeed weekly report"
+    minute: "30"
+    hour: "18"
+    weekday: "0"
+    job: "{{ scripts_dir_remote }}/send_report.sh weekly"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Setup session cleanup cron (every 3 days)
+  ansible.builtin.cron:
+    name: "DreamSeed session cleanup"
+    minute: "42"
+    hour: "4"
+    day: "*/3"
+    job: >
+      mysql -u root {{ db_name }} -e
+      "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
+      2>/dev/null || true
+    user: root
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+
+- name: Check if MODX is installed (modx_system_settings table exists)
+  become: true
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = 'modx_system_settings'"
+  register: modx_check
+  ignore_errors: true
+
+- name: Update MODX session_gc_maxlifetime to 6 hours
+  become: true
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
+  when: modx_check is not failed and modx_check.query_result[0][0] | int > 0
+
+- name: Wait for VictoriaMetrics to accept writes
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:8428/health"
+  register: vm_health
+  retries: 12
+  delay: 2
+  until: vm_health.status == 200
+  changed_when: false
+
+- name: Push initial cron heartbeat to VictoriaMetrics
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      for i in 1 2 3; do
+        echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
+          curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
+        sleep 1
+      done
+  changed_when: false
+  failed_when: false

@@ -1,0 +1,8 @@
+---
+- name: 07 Security
+  hosts: dreamseed
+  become: false
+  gather_facts: false
+
+  roles:
+    - security
