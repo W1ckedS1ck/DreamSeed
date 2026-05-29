@@ -289,8 +289,9 @@ preflight_checks() {
 
     apply_target_vars
 
-    # Load Grafana Cloud credentials (prefixed by target)
-    local gc_pfx="$TARGET_PREFIX"
+    # Load Grafana Cloud credentials (PROD_ for prod, DEV_ for all dev)
+    local gc_pfx="DEV"
+    [[ "$TARGET" == "prod" ]] && gc_pfx="PROD"
     local gc_url="${gc_pfx}_GRAFANA_CLOUD_URL"
     local gc_user="${gc_pfx}_GRAFANA_CLOUD_USERNAME"
     local gc_token="${gc_pfx}_GRAFANA_CLOUD_TOKEN"
