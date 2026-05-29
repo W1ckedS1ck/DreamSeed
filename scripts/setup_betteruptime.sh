@@ -148,11 +148,12 @@ payload = {
         "headers_template": [
             {"name": "Content-Type", "value": "application/json"}
         ],
-        "body_template": {
-            "chat_id": chat_id,
-            "message_thread_id": int(thread),
-            "text": text
-        }
+            "body_template": {
+                "chat_id": chat_id,
+                "message_thread_id": int(thread),
+                "parse_mode": "MarkdownV2",
+                "text": text
+            }
     }
 }
 with open("/tmp/bs_webhook.json", "w") as f:
@@ -188,6 +189,7 @@ payload = {
         "body_template": {
             "chat_id": chat_id,
             "message_thread_id": int(thread),
+            "parse_mode": "MarkdownV2",
             "text": text
         }
     }
@@ -208,8 +210,8 @@ PYEOF
         rm -f /tmp/bs_webhook.json
     }
 
-    ensure_webhook "Better Stack → Alert" true false '\uD83D\uDD34BetterStack Alert\uD83D\uDD34\n\n$NAME\n$CAUSE\n---\n$STARTED_AT'
-    ensure_webhook "Better Stack → Resolve" false true '\u2705BetterStack Resolved\u2705\n\n$NAME\n---\n$STARTED_AT\n$RESOLVED_AT'
+    ensure_webhook "Better Stack → Alert" true false '🚨 *$NAME*\n_$CAUSE_\n\n🔗 $URL\n⏱ Started: $STARTED_AT'
+    ensure_webhook "Better Stack → Resolve" false true '✅ *$NAME* — Resolved\n_Back to normal_\n\n⏱ Down: $DURATION\n🕐 $STARTED_AT — $RESOLVED_AT'
 fi
 
 echo -e "\n${GREEN}All done${NC}"
