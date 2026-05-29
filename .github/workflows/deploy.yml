@@ -59,6 +59,7 @@ jobs:
             terraform/hetzner/.terraform
             terraform/aws/.terraform
           key: terraform-${{ runner.os }}-${{ hashFiles('terraform/hetzner/.terraform.lock.hcl', 'terraform/aws/.terraform.lock.hcl') }}
+          restore-keys: terraform-${{ runner.os }}-
 
       - name: Cache pip packages
         if: inputs.action == 'deploy'
@@ -74,6 +75,7 @@ jobs:
         with:
           path: ~/.ansible/collections
           key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
+          restore-keys: ansible-collections-${{ runner.os }}-
 
       - name: Setup Ansible
         if: inputs.action == 'deploy'

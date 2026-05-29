@@ -49,6 +49,13 @@ jobs:
         with:
           terraform_version: latest
 
+      - name: Cache Terraform providers
+        uses: actions/cache@v5
+        with:
+          path: terraform/hetzner/.terraform
+          key: terraform-test-${{ runner.os }}-${{ hashFiles('terraform/hetzner/.terraform.lock.hcl') }}
+          restore-keys: terraform-test-${{ runner.os }}-
+
       - name: Setup environment
         env:
           ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
@@ -89,6 +96,20 @@ jobs:
           echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/Vitali.pub)" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
+
+      - name: Cache pip packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pip
+          key: pip-test-${{ runner.os }}-${{ hashFiles('ansible/requirements-deploy.txt') }}
+          restore-keys: pip-test-${{ runner.os }}-
+
+      - name: Cache Ansible collections
+        uses: actions/cache@v5
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-test-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
+          restore-keys: ansible-collections-test-${{ runner.os }}-
 
       - name: Install Ansible
         run: |
