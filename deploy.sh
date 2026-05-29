@@ -299,6 +299,7 @@ preflight_checks() {
     export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
 
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
+    SSH_KEY="${SSH_KEY/#\~/$HOME}"
     if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
     if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
 
