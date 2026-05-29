@@ -30,7 +30,8 @@
       {{ ['node_exporter', 'victoria-metrics']
          + (['nginx_exporter'] if web_server == 'nginx' else [])
          + (['apache_exporter'] if web_server == 'apache' else [])
-         + (['mysqld_exporter'] if (db_pass | default('') | length > 0) else []) }}
+         + (['mysqld_exporter'] if (db_pass | default('') | length > 0) else [])
+         + (['vmagent'] if (monitoring_vmagent_enabled and grafana_cloud_url | length > 0) else []) }}
 
 - name: Enable and start monitoring services
   ansible.builtin.systemd:
