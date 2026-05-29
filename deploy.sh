@@ -288,6 +288,16 @@ preflight_checks() {
 
     apply_target_vars
 
+    # Load Grafana Cloud credentials (prefixed by target)
+    local gc_pfx="$TARGET_PREFIX"
+    local gc_url="${gc_pfx}_GRAFANA_CLOUD_URL"
+    local gc_user="${gc_pfx}_GRAFANA_CLOUD_USERNAME"
+    local gc_token="${gc_pfx}_GRAFANA_CLOUD_TOKEN"
+    GRAFANA_CLOUD_URL="${!gc_url:-}"
+    GRAFANA_CLOUD_USERNAME="${!gc_user:-}"
+    GRAFANA_CLOUD_TOKEN="${!gc_token:-}"
+    export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
+
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
     if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
     if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
@@ -655,6 +665,9 @@ INVEOF
         [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && echo "cloudflare_api_token: \"$(yaml_escape "$CLOUDFLARE_API_TOKEN")\""
         [[ -n "${GRAFANA_PASS:-}" ]] && echo "grafana_admin_password: \"$(yaml_escape "$GRAFANA_PASS")\""
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
+        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && echo "grafana_cloud_url: \"$(yaml_escape "$GRAFANA_CLOUD_URL")\""
+        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && echo "grafana_cloud_username: \"$(yaml_escape "$GRAFANA_CLOUD_USERNAME")\""
+        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && echo "grafana_cloud_token: \"$(yaml_escape "$GRAFANA_CLOUD_TOKEN")\""
         [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && {
             echo "additional_ssh_keys:"
             while IFS= read -r key; do

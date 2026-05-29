@@ -50,8 +50,13 @@ monitoring_mysql_version: "0.19.0"
 monitoring_vm_version: "1.144.0"
 vm_retention: 3
 monitoring_cron_enabled: true
+monitoring_vmagent_enabled: true
+monitoring_vmagent_version: "1.144.0"
 grafana_telegram_token: "{{ lookup('env', 'TG_TOKEN') }}"
 grafana_telegram_chat_id: "{{ lookup('env', 'TG_CHAT_ID') }}"
+grafana_cloud_url: ""
+grafana_cloud_username: ""
+grafana_cloud_token: ""
 
 # ========================
 #  Directories

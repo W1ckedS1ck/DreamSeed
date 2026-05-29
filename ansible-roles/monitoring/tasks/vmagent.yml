@@ -1,0 +1,75 @@
+---
+- name: Check if vmagent is enabled (has Grafana Cloud credentials)
+  ansible.builtin.set_fact:
+    _vmagent_enabled: "{{ monitoring_vmagent_enabled and grafana_cloud_url | length > 0 }}"
+
+- name: Check if vmagent is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/vmagent
+  register: monitoring_vmagent_bin
+  when: _vmagent_enabled
+
+- name: Get current vmagent version
+  ansible.builtin.command: /usr/local/bin/vmagent --version
+  changed_when: false
+  failed_when: false
+  register: monitoring_vmagent_current_version
+  when: _vmagent_enabled and monitoring_vmagent_bin.stat.exists
+
+- name: Install/Upgrade vmagent
+  when:
+    - _vmagent_enabled
+    - not monitoring_vmagent_bin.stat.exists or
+      monitoring_vmagent_version not in (monitoring_vmagent_current_version.stdout | default(''))
+  block:
+    - name: Download vmutils
+      ansible.builtin.get_url:
+        url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}.tar.gz"
+        dest: /tmp/vmagent.tar.gz
+        mode: "0644"
+
+    - name: Extract vmagent
+      ansible.builtin.unarchive:
+        src: /tmp/vmagent.tar.gz
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install vmagent binary
+      ansible.builtin.copy:
+        src: /tmp/vmagent-prod
+        dest: /usr/local/bin/vmagent
+        mode: "0755"
+        remote_src: true
+
+    - name: Cleanup vmagent temp files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/vmagent.tar.gz
+        - /tmp/vmagent-prod
+
+- name: Deploy vmagent scrape config
+  ansible.builtin.template:
+    src: vmagent-scrape.yml.j2
+    dest: /etc/vmagent/scrape.yml
+    mode: "0644"
+  notify: Restart vmagent
+  when: _vmagent_enabled
+
+- name: Deploy vmagent systemd service
+  ansible.builtin.template:
+    src: vmagent.service.j2
+    dest: /etc/systemd/system/vmagent.service
+    mode: "0644"
+  notify: Restart vmagent
+  when: _vmagent_enabled
+
+- name: Remove vmagent if disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/vmagent.service
+    - /etc/vmagent/scrape.yml
+  when: not _vmagent_enabled

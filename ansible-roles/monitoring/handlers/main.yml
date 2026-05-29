@@ -28,3 +28,9 @@
   ansible.builtin.systemd:
     name: victoria-metrics
     state: restarted
+
+- name: Restart vmagent
+  become: true
+  ansible.builtin.systemd:
+    name: vmagent
+    state: restarted

@@ -1,0 +1,18 @@
+# Managed by Ansible
+[Unit]
+Description=vmagent - VictoriaMetrics Agent (Grafana Cloud)
+After=network.target
+
+[Service]
+User=root
+ExecStart=/usr/local/bin/vmagent \
+  -remoteWrite.url={{ grafana_cloud_url }} \
+  -remoteWrite.basicAuth.username={{ grafana_cloud_username }} \
+  -remoteWrite.basicAuth.password={{ grafana_cloud_token }} \
+  -remoteWrite.label=env={{ domain }} \
+  -promscrape.config=/etc/vmagent/scrape.yml \
+  -remoteWrite.queues=4
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

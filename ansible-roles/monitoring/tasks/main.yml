@@ -39,5 +39,8 @@
     enabled: true
   loop: "{{ _monitoring_services }}"
 
+- name: vmagent (Grafana Cloud)
+  ansible.builtin.include_tasks: vmagent.yml
+
 - name: Check site
   ansible.builtin.include_tasks: check_site.yml
