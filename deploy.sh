@@ -235,7 +235,7 @@ export_tf_env() {
 yaml_escape() {
     local val="$1"
     val="${val//\\/\\\\}"; val="${val//\"/\\\"}"; val="${val//$'\n'/\\n}"
-    val="${val//!/\\!}"; val="${val//'#'/\\#}"; val="${val//:/\\:}"
+    val="${val//!/\\!}"; val="${val//'#'/\\#}"
     printf '%s' "$val"
 }
 
