@@ -5,15 +5,15 @@ terraform {
       version = "~> 2.0"
     }
   }
-  cloud {
+  backend "remote" {
     organization = "DreamSeed"
     workspaces {
-      name = "grafana-cloud"
+      prefix = "dreamseed-grafana-cloud-"
     }
   }
 }
 
 provider "grafana" {
   url  = var.grafana_cloud_url
-  auth = "admin:${var.grafana_cloud_token}"
+  auth = var.grafana_cloud_token
 }
