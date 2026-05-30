@@ -1,17 +1,41 @@
 data "http" "node_exporter_dashboard" {
   url = "https://grafana.com/api/dashboards/1860/revisions/latest/download"
+  lifecycle {
+    precondition {
+      condition     = self.status_code == 200
+      error_message = "Failed to fetch Node Exporter dashboard from Grafana.com"
+    }
+  }
 }
 
 data "http" "mysql_dashboard" {
   url = "https://grafana.com/api/dashboards/7362/revisions/latest/download"
+  lifecycle {
+    precondition {
+      condition     = self.status_code == 200
+      error_message = "Failed to fetch MySQL dashboard from Grafana.com"
+    }
+  }
 }
 
 data "http" "nginx_dashboard" {
   url = "https://grafana.com/api/dashboards/17452/revisions/latest/download"
+  lifecycle {
+    precondition {
+      condition     = self.status_code == 200
+      error_message = "Failed to fetch Nginx dashboard from Grafana.com"
+    }
+  }
 }
 
 data "http" "victoria_metrics_dashboard" {
   url = "https://grafana.com/api/dashboards/10229/revisions/latest/download"
+  lifecycle {
+    precondition {
+      condition     = self.status_code == 200
+      error_message = "Failed to fetch Victoria Metrics dashboard from Grafana.com"
+    }
+  }
 }
 
 locals {
