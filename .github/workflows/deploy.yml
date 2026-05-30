@@ -111,7 +111,7 @@ jobs:
         id: deploy
         run: |
           set -a
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          source secrets/.env
           set +a
 
           # Set after sourcing .env — deploy.sh preserves it
