@@ -1,0 +1,94 @@
+name: Grafana Cloud Dashboards
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/grafana/**'
+      - '.github/workflows/grafana-cloud.yml'
+  workflow_dispatch:
+    inputs:
+      workspace:
+        description: 'Workspace (prod or dev)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - prod
+          - dev
+
+env:
+  TF_VERSION: 1.15.5
+  TERRAFORM_CLOUD_TOKENS: app.terraform.io=${{ secrets.TF_CLOUD_TOKEN }}
+
+jobs:
+  plan-and-apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TF_WORKSPACE: grafana-cloud
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_CLOUD_TOKEN }}
+
+      - name: Terraform Init
+        working-directory: terraform/grafana
+        run: terraform init -upgrade=false
+
+      - name: Determine Target Workspace
+        id: workspace
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            WORKSPACE="${{ github.event.inputs.workspace }}"
+          else
+            WORKSPACE="dev"
+          fi
+          echo "target=$WORKSPACE" >> $GITHUB_OUTPUT
+          echo "Targeting workspace: $WORKSPACE"
+
+      - name: Set Grafana Cloud Credentials (Prod)
+        if: steps.workspace.outputs.target == 'prod'
+        env:
+          GRAFANA_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
+          GRAFANA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+        run: |
+          cat > terraform/grafana/terraform.tfvars <<EOF
+          grafana_cloud_url      = "$GRAFANA_URL"
+          grafana_cloud_username = "admin"
+          grafana_cloud_token    = "$GRAFANA_TOKEN"
+          EOF
+
+      - name: Set Grafana Cloud Credentials (Dev)
+        if: steps.workspace.outputs.target == 'dev'
+        env:
+          GRAFANA_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
+          GRAFANA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
+        run: |
+          cat > terraform/grafana/terraform.tfvars <<EOF
+          grafana_cloud_url      = "$GRAFANA_URL"
+          grafana_cloud_username = "admin"
+          grafana_cloud_token    = "$GRAFANA_TOKEN"
+          EOF
+
+      - name: Terraform Plan
+        working-directory: terraform/grafana
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform/grafana
+        run: terraform apply tfplan
+
+      - name: Clean Up Credentials
+        if: always()
+        run: rm -f terraform/grafana/terraform.tfvars
+
+      - name: Terraform State Output
+        working-directory: terraform/grafana
+        run: terraform output -json || echo "No outputs"
