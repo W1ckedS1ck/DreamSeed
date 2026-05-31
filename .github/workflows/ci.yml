@@ -135,7 +135,7 @@ jobs:
           curl -sL -o /tmp/gitleaks.checksum "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.sha256"
           cd /tmp && sha256sum -c gitleaks.checksum --ignore-missing 2>/dev/null
           sudo tar -xz -C /usr/local/bin -f /tmp/gitleaks.tar.gz gitleaks
-          gitleaks dir . --verbose
+          gitleaks detect --source . --verbose
 
   pre-commit:
     name: Pre-commit
