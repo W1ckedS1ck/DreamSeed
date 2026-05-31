@@ -47,9 +47,9 @@ jobs:
           DEV_SM_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
         run: |
           if [[ "${{ github.event.inputs.workspace }}" == "prod" ]]; then
-            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"; SM_TOKEN="${PROD_SM_TOKEN:-}"; DOMAIN="dreamseed.online"
+            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"; SM_TOKEN="$PROD_SM_TOKEN"; DOMAIN="dreamseed.online"
           else
-            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"; SM_TOKEN="${DEV_SM_TOKEN:-}"; DOMAIN="hetz.vitalikuts.online"
+            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"; SM_TOKEN="$DEV_SM_TOKEN"; DOMAIN="hetz.vitalikuts.online"
           fi
           SM_ENABLED=false
           [[ -n "$SM_TOKEN" ]] && SM_ENABLED=true

@@ -3,11 +3,14 @@
 # After that, SA token with SM scope is all that's needed.
 # Probes used: London, Frankfurt, New York City, Singapore (4 global regions)
 
-data "grafana_synthetic_monitoring_probes" "main" {}
+data "grafana_synthetic_monitoring_probes" "main" {
+  provider = grafana.sm
+}
 
 # --- HTTP check — main site ---
 resource "grafana_synthetic_monitoring_check" "http_main" {
   count    = var.sm_enabled ? 1 : 0
+  provider = grafana.sm
   job      = "HTTP — ${var.domain}"
   target   = "https://${var.domain}/"
   enabled  = true
@@ -41,6 +44,7 @@ resource "grafana_synthetic_monitoring_check" "http_main" {
 # --- HTTP check — Grafana endpoint ---
 resource "grafana_synthetic_monitoring_check" "http_grafana" {
   count    = var.sm_enabled ? 1 : 0
+  provider = grafana.sm
   job      = "HTTP — Grafana (${var.domain})"
   target   = "https://${var.domain}/grafana/"
   enabled  = true
@@ -71,6 +75,7 @@ resource "grafana_synthetic_monitoring_check" "http_grafana" {
 # --- SSL check ---
 resource "grafana_synthetic_monitoring_check" "ssl" {
   count    = var.sm_enabled ? 1 : 0
+  provider = grafana.sm
   job      = "SSL — ${var.domain}"
   target   = "https://${var.domain}/"
   enabled  = true
@@ -104,6 +109,7 @@ resource "grafana_synthetic_monitoring_check" "ssl" {
 # --- Ping check — latency ---
 resource "grafana_synthetic_monitoring_check" "ping" {
   count    = var.sm_enabled ? 1 : 0
+  provider = grafana.sm
   job      = "Ping — ${var.domain}"
   target   = var.domain
   enabled  = true
@@ -132,6 +138,7 @@ resource "grafana_synthetic_monitoring_check" "ping" {
 # --- DNS check ---
 resource "grafana_synthetic_monitoring_check" "dns" {
   count    = var.sm_enabled ? 1 : 0
+  provider = grafana.sm
   job      = "DNS — ${var.domain}"
   target   = var.domain
   enabled  = true
