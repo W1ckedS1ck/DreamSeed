@@ -43,34 +43,16 @@ jobs:
           fi
           echo "Target: $TARGET"
 
-      - name: Setup environment
-        env:
-          ENV_FILE_B64: ${{ secrets.ENV_FILE_BASE64 }}
-          VAULT_PASS: ${{ secrets.VAULT_PASSWORD }}
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
+      - uses: ./.github/actions/setup-secrets
+        with:
+          env-file-b64: ${{ secrets.ENV_FILE_BASE64 }}
+          vault-pass: ${{ secrets.VAULT_PASSWORD }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          rclone-conf-b64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          setup-ssh-config: 'true'
+
+      - name: Load secrets and export TF vars
         run: |
-          mkdir -p secrets
-          echo "$ENV_FILE_B64" | base64 -d > secrets/.env
-          chmod 600 secrets/.env
-
-          echo -n "$VAULT_PASS" > ~/.vault_pass_dreamseed
-          chmod 600 ~/.vault_pass_dreamseed
-
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/Vitali.pem
-          chmod 600 ~/.ssh/Vitali.pem
-
-          echo "Host *" > ~/.ssh/config
-          echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
-          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
-          echo "  IdentityFile ~/.ssh/Vitali.pem" >> ~/.ssh/config
-
-          if [ -n "$RCLONE_CONF_B64" ]; then
-            echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf
-            chmod 600 secrets/rclone.conf
-          fi
-
           ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
 
           set -a
@@ -270,6 +252,14 @@ jobs:
             exit 1
           fi
           echo "✅ Lynis score: $SCORE (threshold: 65)"
+
+      - name: Download Lynis report from server
+        if: always()
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          scp -o StrictHostKeyChecking=no \
+            "ubuntu@$SERVER_IP:/var/log/lynis-report.dat" /tmp/lynis-report.dat 2>/dev/null || \
+            echo "[WARN] lynis report not available on remote server"
 
       - name: Archive Lynis report
         if: always()

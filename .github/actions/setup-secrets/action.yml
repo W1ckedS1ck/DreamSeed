@@ -1,0 +1,48 @@
+name: 'Setup secrets'
+description: 'Reconstruct secrets files from base64-encoded inputs'
+inputs:
+  env-file-b64:
+    description: 'Base64-encoded .env file'
+    required: true
+  vault-pass:
+    description: 'Ansible vault password'
+    required: true
+  ssh-key:
+    description: 'SSH private key content'
+    required: true
+  rclone-conf-b64:
+    description: 'Base64-encoded rclone.conf'
+    required: false
+    default: ''
+  setup-ssh-config:
+    description: 'Create ~/.ssh/config with StrictHostKeyChecking no'
+    required: false
+    default: 'false'
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      run: |
+        mkdir -p secrets
+        echo "${{ inputs.env-file-b64 }}" | base64 -d > secrets/.env
+        chmod 600 secrets/.env
+
+        echo -n "${{ inputs.vault-pass }}" > ~/.vault_pass_dreamseed
+        chmod 600 ~/.vault_pass_dreamseed
+
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh-key }}" > ~/.ssh/Vitali.pem
+        chmod 600 ~/.ssh/Vitali.pem
+
+        if [[ "${{ inputs.setup-ssh-config }}" == "true" ]]; then
+          {
+            echo "StrictHostKeyChecking no"
+            echo "UserKnownHostsFile /dev/null"
+            echo "IdentityFile ~/.ssh/Vitali.pem"
+          } > ~/.ssh/config
+        fi
+
+        if [[ -n "${{ inputs.rclone-conf-b64 }}" ]]; then
+          echo "${{ inputs.rclone-conf-b64 }}" | base64 -d > secrets/rclone.conf
+          chmod 600 secrets/rclone.conf
+        fi

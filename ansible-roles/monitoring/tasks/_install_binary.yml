@@ -1,56 +1,55 @@
 ---
-# Shared binary installer — include with vars:
-#   _exp_name    — display name (e.g. "Node Exporter")
-#   bin          — binary filename (e.g. "node_exporter")
-#   url          — full GitHub release download URL
-#   version      — version string (e.g. "{{ monitoring_node_version }}")
-#   src_in_tmp   — path of extracted binary inside /tmp/ (e.g. "/tmp/node_exporter-1.2.3.linux-amd64/node_exporter")
-#   cleanup_dirs — list of paths to remove after install (tar + extracted dirs)
+# Shared binary installer for monitoring exporters.
+# Usage:
+#   - name: Install Foo Exporter
+#     ansible.builtin.include_tasks: _install_binary.yml
+#     vars:
+#       monitor_bin_name: "foo_exporter"
+#       monitor_bin_path: "/usr/local/bin/foo_exporter"
+#       monitor_version: "{{ monitoring_foo_version }}"
+#       monitor_download_url: "https://github.com/org/foo_exporter/releases/download/v{{ monitor_version }}/..."
+#       monitor_extracted_binary: "/tmp/foo_exporter-{{ monitor_version }}.linux-amd64/foo_exporter"
 
-- name: Check if {{ _exp_name }} is installed  # noqa: name[template]
+- name: "Check if {{ monitor_bin_name }} is installed"
   ansible.builtin.stat:
-    path: "/usr/local/bin/{{ bin }}"
-  register: _ib_stat
+    path: "{{ monitor_bin_path }}"
+  register: _monitor_bin
 
-- name: Get current {{ _exp_name }} version  # noqa: name[template]
-  ansible.builtin.command: "/usr/local/bin/{{ bin }} --version"
+- name: "Get current {{ monitor_bin_name }} version"
+  ansible.builtin.command: "{{ monitor_bin_path }} --version"
   changed_when: false
   failed_when: false
-  register: _ib_current
-  when: _ib_stat.stat.exists
+  register: _monitor_current_version
+  when: _monitor_bin.stat.exists
 
-- name: Install/Upgrade {{ _exp_name }}  # noqa: name[template]
+- name: "Install/Upgrade {{ monitor_bin_name }}"
   when: >
-    not _ib_stat.stat.exists or
-    version not in ((_ib_current.stdout | default('')) + (_ib_current.stderr | default('')))
+    not _monitor_bin.stat.exists or
+    monitor_version not in (_monitor_current_version.stdout + _monitor_current_version.stderr | default(''))
   block:
-    - name: Download {{ _exp_name }}  # noqa: name[template]
+    - name: "Download {{ monitor_bin_name }}"
       ansible.builtin.get_url:
-        url: "{{ url }}"
-        dest: "/tmp/{{ bin }}.tar.gz"
+        url: "{{ monitor_download_url }}"
+        dest: "/tmp/{{ monitor_bin_name }}.tar.gz"
         mode: "0644"
 
-    - name: Extract {{ _exp_name }}  # noqa: name[template]
+    - name: "Extract {{ monitor_bin_name }}"
       ansible.builtin.unarchive:
-        src: "/tmp/{{ bin }}.tar.gz"
+        src: "/tmp/{{ monitor_bin_name }}.tar.gz"
         dest: /tmp/
         remote_src: true
 
-    - name: Install {{ _exp_name }} binary  # noqa: name[template]
+    - name: "Install {{ monitor_bin_name }} binary"
       ansible.builtin.copy:
-        src: "{{ src_in_tmp }}"
-        dest: "/usr/local/bin/{{ bin }}"
+        src: "{{ monitor_extracted_binary }}"
+        dest: "{{ monitor_bin_path }}"
         mode: "0755"
         remote_src: true
 
-    - name: Cleanup {{ _exp_name }} temp files  # noqa: name[template]
+    - name: "Cleanup {{ monitor_bin_name }} temp files"
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
-      loop: "{{ cleanup_dirs }}"
-
-    - name: Restart {{ _exp_name }} after upgrade  # noqa: name[template]
-      ansible.builtin.systemd:
-        name: "{{ bin }}"
-        state: restarted
-      become: true
+      loop:
+        - "/tmp/{{ monitor_bin_name }}.tar.gz"
+        - "{{ monitor_extracted_dir | default(monitor_extracted_binary | dirname) }}"

@@ -1,15 +1,12 @@
 ---
 - name: Install/Upgrade MySQL Exporter
-  vars:
-    _exp_name: "MySQL Exporter"
-    bin: mysqld_exporter
-    version: "{{ monitoring_mysql_version }}"
-    url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ monitoring_mysql_version }}/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64.tar.gz"
-    src_in_tmp: "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64/mysqld_exporter"
-    cleanup_dirs:
-      - "/tmp/{{ bin }}.tar.gz"
-      - "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64"
   ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: mysqld_exporter
+    monitor_bin_path: /usr/local/bin/mysqld_exporter
+    monitor_version: "{{ monitoring_mysql_version }}"
+    monitor_download_url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ monitoring_mysql_version }}/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64.tar.gz"
+    monitor_extracted_binary: "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64/mysqld_exporter"
 
 - name: Create mysqld_exporter user
   ansible.builtin.user:
@@ -20,7 +17,7 @@
 
 - name: Create .my.cnf for exporter in system location
   ansible.builtin.copy:
-    dest: /etc/mysql/conf.d/exporter.cnf
+    dest: /etc/mysqld_exporter.cnf
     content: |
       [client]
       user = monitoring
@@ -42,7 +39,7 @@
       [Service]
       Type=simple
       User=mysqld_exporter
-      ExecStart=/usr/local/bin/mysqld_exporter --config.my-cnf=/etc/mysql/conf.d/exporter.cnf --web.listen-address=127.0.0.1:9104 --no-collect.slave_status
+      ExecStart=/usr/local/bin/mysqld_exporter --config.my-cnf=/etc/mysqld_exporter.cnf --web.listen-address=127.0.0.1:9104 --no-collect.slave_status
       Restart=always
 
       [Install]

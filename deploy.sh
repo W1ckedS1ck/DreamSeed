@@ -20,9 +20,12 @@ if [[ -z "$TERRAFORM" ]]; then
 fi
 
 # Colors (stripped in non-TTY)
-RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; DIM=$'\033[2m'; NC=$'\033[0m'
-[[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; DIM=''; NC=''; }
+RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; NC=$'\033[0m'
+[[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; NC=''; }
 TTY=$([[ -t 1 ]] && echo true || echo false)
+
+# Terraform shortcut
+_tf() { ( cd "$TF_DIR" && "$TERRAFORM" "$@" ); }
 
 # Timeouts
 SSH_ATTEMPTS=20 SSH_INTERVAL=1
@@ -158,7 +161,7 @@ resolve_target() {
     case "$TARGET" in
         prod)    TF_PROVIDER="aws";    DEPLOY_DOMAIN="dreamseed.online";       TF_WORKSPACE="prod";    TARGET_PREFIX="PROD" ;;
         dev-aws) TF_PROVIDER="aws";    DEPLOY_DOMAIN="aws.vitalikuts.online";  TF_WORKSPACE="dev-aws"; TARGET_PREFIX="DEV_AWS" ;;
-        dev-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz"; TARGET_PREFIX="DEV_HETZ" ;;
+        dev-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz" ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
@@ -255,8 +258,8 @@ write_deploy_history() {
 
 rotate_logs() {
     local max="${MAX_LOG_FILES:-10}"
-    ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs rm -f 2>/dev/null || true
-    ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs rm -f 2>/dev/null || true
+    ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs -r rm -f 2>/dev/null || true
+    ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs -r rm -f 2>/dev/null || true
 }
 
 # ----- preflight -----
@@ -343,17 +346,16 @@ print_summary() {
 # ----- Terraform -----
 
 terraform_select_workspace() {
-    local ws="$TF_WORKSPACE"
-    ( cd "$TF_DIR" && unset TF_WORKSPACE && ( \
-        "$TERRAFORM" workspace select "$ws" 2>/dev/null || \
-        "$TERRAFORM" workspace new "$ws" ) ) >> "$TF_LOG" 2>&1
+    unset TF_WORKSPACE
+    "$TERRAFORM" workspace select "$TF_WORKSPACE" 2>/dev/null || \
+    "$TERRAFORM" workspace new "$TF_WORKSPACE"
 }
 
 terraform_init_if_needed() {
     local ws
     ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
     if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$ws" != "$TF_WORKSPACE" ]]; then
-        ( cd "$TF_DIR" && "$TERRAFORM" init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1 )
+        _tf init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1
     fi
 }
 
@@ -380,16 +382,16 @@ terraform_destroy() {
     export_tf_env
 
     # Check server reachability
-    local ip; ip=$(cd "$TF_DIR" && "$TERRAFORM" output -raw server_ipv4 2>/dev/null || true)
+    local ip; ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
     [[ -n "$ip" && -n "${SSH_KEY:-}" ]] && \
-        ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
+        ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
             && echo "  ✓ Server $ip reachable" \
             || echo "  ⚠ Server $ip unreachable — destroying anyway"
 
     terraform_init_if_needed || { echo "Terraform init failed"; cat "$TF_LOG"; return 1; }
     ( cd "$TF_DIR" && terraform_select_workspace ) >> "$TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
 
-    ( cd "$TF_DIR" && "$TERRAFORM" show -no-color 2>/dev/null ) | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
+    _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
     local var_arg=""
     [[ "$TF_PROVIDER" == "aws" ]] && var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
@@ -397,7 +399,7 @@ terraform_destroy() {
 
     local out; out=$(mktemp)
     # shellcheck disable=SC2086
-    ( cd "$TF_DIR" && "$TERRAFORM" destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$out" ) || true
+    _tf destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$out" || true
     grep -q "Destroy complete" "$out" || step_fail "Terraform destroy failed (check $TF_LOG)"
     cat "$out" >> "$TF_LOG"; rm -f "$out"
 
@@ -413,22 +415,19 @@ terraform_destroy() {
 
 # ----- Ansible execution -----
 
-_exec_playbook() {
-    local pb="$1"
+_ansible_cmd() {
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
     ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
     "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${VAULT_TMP}" \
-        "$SCRIPT_DIR/ansible/$pb" 2>&1 | tee -a "$LOG"
-    local rc="${PIPESTATUS[0]}"
-    return "$rc"
+        "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
 }
 
 run_ansible() {
     local pb="$1" label="$2"
     [[ "$TTY" == "false" ]] && echo "::group::${label}"
     echo "    ▶ ${label}"
-    _exec_playbook "$pb"
+    _ansible_cmd "$pb"
     local rc=$?
     [[ "$TTY" == "false" ]] && echo "::endgroup::"
     return "$rc"
@@ -442,19 +441,12 @@ run_parallel() {
     for entry in "$@"; do
         local pb="${entry%%:*}" label="${entry##*:}"
         echo "      ├ ${label}"
-        (_exec_playbook "$pb") &
+        ( _ansible_cmd "$pb" ) &
         pids+=("$!")
     done
     for pid in "${pids[@]}"; do wait "$pid" || ok=false; done
     [[ "$TTY" == "false" ]] && echo "::endgroup::"
-    [[ "$ok" == "true" ]] || return 1
-}
-
-# ----- SSH helper -----
-
-_ssh() {
-    ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-        -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" "$@"
+    $ok
 }
 
 # ----- service checks -----
@@ -474,10 +466,14 @@ check_services() {
         else
             echo "    ✗ $svc — service not active"
         fi
-    done < <(_ssh "for s in ${services[*]}; do echo \"\$s: \$(systemctl is-active \"\$s\" 2>/dev/null || echo inactive)\"; done")
+    done < <(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "for s in ${services[*]}; do echo \"\$s: \$(systemctl is-active \"\$s\" 2>/dev/null || echo inactive)\"; done")
 
     local http
-    http=$(_ssh "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://${DEPLOY_DOMAIN}/" 2>/dev/null || echo "000")
+    http=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://${DEPLOY_DOMAIN}/" 2>/dev/null || echo "000")
     if [[ "$http" == "200" || "$http" == "301" ]]; then
         echo "    ✓ HTTP $http $DEPLOY_DOMAIN"
         echo "    All checks passed"
@@ -575,7 +571,7 @@ main() {
         step_start "Terraform init + apply ($TARGET)"
         export_tf_env
 
-        terraform_init_if_needed || { echo "Terraform init failed"; cat "$TF_LOG"; step_fail "Terraform init failed"; }
+        terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$TF_LOG"; step_fail "Terraform init failed"; }
         ( cd "$TF_DIR" && terraform_select_workspace ) || step_fail "Failed to select workspace: $TF_WORKSPACE"
 
         local tf_args=""
@@ -584,14 +580,14 @@ main() {
         local ok=false
         for try in 1 2; do
             # shellcheck disable=SC2086
-            if ( cd "$TF_DIR" && "$TERRAFORM" apply -auto-approve -no-color $tf_args >> "$TF_LOG" 2>&1 ); then
+            if _tf apply -auto-approve -no-color $tf_args >> "$TF_LOG" 2>&1; then
                 ok=true; break
             fi
             [[ $try -lt 2 ]] && { echo "    Attempt $try/2 failed, retrying in 10s..."; sleep 10; }
         done
         [[ "$ok" != "true" ]] && { tail -30 "$TF_LOG"; step_fail "Terraform apply failed"; }
 
-        SERVER_IP=$(cd "$TF_DIR" && "$TERRAFORM" output -raw server_ipv4 2>/dev/null) || step_fail "Could not get server IP"
+        SERVER_IP=$(_tf output -raw server_ipv4 2>/dev/null) || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
 
         ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
@@ -613,23 +609,23 @@ main() {
         SSH_ATTEMPTS=$AWS_SSH_ATTEMPTS; SSH_INTERVAL=$AWS_SSH_INTERVAL
     fi
     step_start "Wait for SSH ($SERVER_IP)"
-    local ready=false
-    for i in $(seq 1 "$SSH_ATTEMPTS"); do
-        if _ssh 'true' 2>/dev/null; then
-            ready=true; break
+    for ((i=1; i<=SSH_ATTEMPTS; i++)); do
+        if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+            -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
+            break
         fi
         [[ $i -eq $SSH_ATTEMPTS ]] && step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s"
         printf "."; sleep "$SSH_INTERVAL"
     done
     echo ""
-    if [[ "$ready" == "true" ]]; then step_ok; else step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s"; fi
+    step_ok
 
     # ----- Wait for cloud-init -----
     step_start "Wait for cloud-init"
-    _ssh "timeout 300 cloud-init status --wait" >/dev/null 2>/dev/null || {
-        for i in $(seq 1 "$CLOUDINIT_ATTEMPTS"); do
+    ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" "timeout 300 cloud-init status --wait" >/dev/null 2>/dev/null || {
+        for ((i=1; i<=CLOUDINIT_ATTEMPTS; i++)); do
             local st
-            st=$(_ssh 'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
+            st=$(ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
             [[ "$st" == *"status: done"* || "$st" == *"No pending"* ]] && break
             [[ "$st" == *"status: error"* ]] && step_fail "Cloud-init failed (check /var/log/cloud-init-output.log)"
             [[ $i -eq $CLOUDINIT_ATTEMPTS ]] && step_fail "Cloud-init timeout"
@@ -652,7 +648,6 @@ all:
       server_ip: ${SERVER_IP}
 INVEOF
 
-    _add_yaml_var() { local k="$1" v="$2"; [[ -n "${v:-}" ]] && echo "${k}: \"$(yaml_escape "$v")\""; }
     VAULT_TMP=$(mktemp); chmod 600 "$VAULT_TMP"
     {
         echo "db_pass: \"$(yaml_escape "$DB_PASS")\""
@@ -666,15 +661,15 @@ INVEOF
             echo "domain_www: false"
             echo "dev_write_perms: true"
         fi
-        _add_yaml_var "secrets_dir" "${SCRIPT_DIR}/secrets"
-        _add_yaml_var "configs_dir" "${SCRIPT_DIR}/configs"
-        _add_yaml_var "scripts_dir" "${SCRIPT_DIR}/scripts"
-        _add_yaml_var "cloudflare_api_token" "${CLOUDFLARE_API_TOKEN:-}"
-        _add_yaml_var "grafana_admin_password" "${GRAFANA_PASS:-}"
-        _add_yaml_var "ssh_public_key_path" "${SSH_PUBLIC_KEY_PATH:-}"
-        _add_yaml_var "grafana_cloud_url" "${GRAFANA_CLOUD_URL:-}"
-        _add_yaml_var "grafana_cloud_username" "${GRAFANA_CLOUD_USERNAME:-}"
-        _add_yaml_var "grafana_cloud_token" "${GRAFANA_CLOUD_TOKEN:-}"
+        echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
+        echo "configs_dir: \"${SCRIPT_DIR}/configs\""
+        echo "scripts_dir: \"${SCRIPT_DIR}/scripts\""
+        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && echo "cloudflare_api_token: \"$(yaml_escape "$CLOUDFLARE_API_TOKEN")\""
+        [[ -n "${GRAFANA_PASS:-}" ]] && echo "grafana_admin_password: \"$(yaml_escape "$GRAFANA_PASS")\""
+        [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
+        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && echo "grafana_cloud_url: \"$(yaml_escape "$GRAFANA_CLOUD_URL")\""
+        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && echo "grafana_cloud_username: \"$(yaml_escape "$GRAFANA_CLOUD_USERNAME")\""
+        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && echo "grafana_cloud_token: \"$(yaml_escape "$GRAFANA_CLOUD_TOKEN")\""
         [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && {
             echo "additional_ssh_keys:"
             while IFS= read -r key; do

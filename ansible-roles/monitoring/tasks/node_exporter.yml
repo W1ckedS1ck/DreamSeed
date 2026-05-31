@@ -1,15 +1,12 @@
 ---
 - name: Install/Upgrade Node Exporter
-  vars:
-    _exp_name: "Node Exporter"
-    bin: node_exporter
-    version: "{{ monitoring_node_version }}"
-    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ monitoring_node_version }}/node_exporter-{{ monitoring_node_version }}.linux-amd64.tar.gz"
-    src_in_tmp: "/tmp/node_exporter-{{ monitoring_node_version }}.linux-amd64/node_exporter"
-    cleanup_dirs:
-      - "/tmp/{{ bin }}.tar.gz"
-      - "/tmp/node_exporter-{{ monitoring_node_version }}.linux-amd64"
   ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: node_exporter
+    monitor_bin_path: /usr/local/bin/node_exporter
+    monitor_version: "{{ monitoring_node_version }}"
+    monitor_download_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ monitoring_node_version }}/node_exporter-{{ monitoring_node_version }}.linux-amd64.tar.gz"
+    monitor_extracted_binary: "/tmp/node_exporter-{{ monitoring_node_version }}.linux-amd64/node_exporter"
 
 - name: Create node_exporter user
   ansible.builtin.user:

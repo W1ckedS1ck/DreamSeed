@@ -1,15 +1,12 @@
 ---
 - name: Install/Upgrade VictoriaMetrics
-  vars:
-    _exp_name: VictoriaMetrics
-    bin: victoria-metrics
-    version: "{{ monitoring_vm_version }}"
-    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/victoria-metrics-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
-    src_in_tmp: /tmp/victoria-metrics-prod
-    cleanup_dirs:
-      - /tmp/victoria-metrics.tar.gz
-      - /tmp/victoria-metrics-prod
   ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: victoria-metrics
+    monitor_bin_path: /usr/local/bin/victoria-metrics
+    monitor_version: "{{ monitoring_vm_version }}"
+    monitor_download_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/victoria-metrics-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
+    monitor_extracted_binary: /tmp/victoria-metrics-prod
 
 - name: Create victoria-metrics user
   ansible.builtin.user:

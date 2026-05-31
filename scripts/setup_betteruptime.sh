@@ -36,15 +36,16 @@ get_existing_webhooks() {
 heartbeat_exists() {
     local name="$1"
     local data="$2"
-    echo "$data" | python3 -c "
+    echo "$data" | python3 - "$name" 2>/dev/null << 'PYEOF'
 import sys, json
+target = sys.argv[1]
 data = json.load(sys.stdin)
 for item in data.get('data', []):
     a = item['attributes']
-    if a['name'] == '$name':
+    if a['name'] == target:
         print(a['url'])
         break
-" 2>/dev/null
+PYEOF
 }
 
 find_key_in_env() {
@@ -59,7 +60,7 @@ find_key_in_env() {
 write_key_to_env() {
     local var_name="$1" value="$2"
     if grep -qP "^${var_name}=" "$ENV_FILE" 2>/dev/null; then
-        sed -i.bak "s/^${var_name}=.*$/${var_name}=\"${value}\"/" "$ENV_FILE"
+        sed -i.bak "s|^${var_name}=.*$|${var_name}=\"${value}\"|" "$ENV_FILE"
         rm -f "$ENV_FILE.bak"
     else
         echo "${var_name}=\"${value}\"" >> "$ENV_FILE"
@@ -125,35 +126,47 @@ else
         local name="$1" started="$2" resolved="$3" text="$4"
 
         # Check if webhook already exists by name
-        existing_id=$(echo "$existing_wh" | python3 -c "
+        existing_id=$(echo "$existing_wh" | python3 - "$name" 2>/dev/null << 'PYEOF'
 import sys, json
+target = sys.argv[1]
 data = json.load(sys.stdin)
 for item in data.get('data', []):
-    if item['attributes']['name'] == '$name':
+    if item['attributes']['name'] == target:
         print(item['id'])
         break
-" 2>/dev/null)
+PYEOF
+)
 
-        # Build JSON payload
-        python3 - "$name" "$TELEGRAM_URL" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" << 'PYEOF' > /dev/null
+        python3 - "$name" "$TELEGRAM_URL" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" "$([[ -n "$existing_id" ]] && echo false || echo true)" << 'PYEOF' > /dev/null
 import sys, json
 
-_, name, url, started, resolved, chat_id, thread, text = sys.argv
+_, name, url, started, resolved, chat_id, thread, text, for_creation = sys.argv
 started = started.lower() == 'true'
 resolved = resolved.lower() == 'true'
+for_creation = for_creation.lower() == 'true'
 
-payload = {
-    "custom_webhook_template_attributes": {
-        "http_method": "post",
-        "headers_template": [
-            {"name": "Content-Type", "value": "application/json"}
-        ],
-            "body_template": {
-                "chat_id": chat_id,
-                "message_thread_id": int(thread),
-                "parse_mode": "MarkdownV2",
-                "text": text
-            }
+payload = {}
+if for_creation:
+    payload.update({
+        "name": name,
+        "url": url,
+        "trigger_type": "incident_change",
+        "on_incident_started": started,
+        "on_incident_resolved": resolved,
+        "on_incident_acknowledged": False,
+        "on_incident_reopened": False,
+        "on_incident_comment": False,
+    })
+payload["custom_webhook_template_attributes"] = {
+    "http_method": "post",
+    "headers_template": [
+        {"name": "Content-Type", "value": "application/json"}
+    ],
+    "body_template": {
+        "chat_id": chat_id,
+        "message_thread_id": int(thread),
+        "parse_mode": "MarkdownV2",
+        "text": text
     }
 }
 with open("/tmp/bs_webhook.json", "w") as f:
@@ -164,40 +177,6 @@ PYEOF
             resp=$(curl -s -X PATCH "$API/outgoing-webhooks/$existing_id" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json" || echo "")
             echo -e "  ${GREEN}✓${NC} $name (updated, ID $existing_id)"
         else
-            # For creation we need the full payload
-            python3 - "$name" "$TELEGRAM_URL" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" << 'PYEOF' > /dev/null
-import sys, json
-
-_, name, url, started, resolved, chat_id, thread, text = sys.argv
-started = started.lower() == 'true'
-resolved = resolved.lower() == 'true'
-
-payload = {
-    "name": name,
-    "url": url,
-    "trigger_type": "incident_change",
-    "on_incident_started": started,
-    "on_incident_resolved": resolved,
-    "on_incident_acknowledged": False,
-    "on_incident_reopened": False,
-    "on_incident_comment": False,
-    "custom_webhook_template_attributes": {
-        "http_method": "post",
-        "headers_template": [
-            {"name": "Content-Type", "value": "application/json"}
-        ],
-        "body_template": {
-            "chat_id": chat_id,
-            "message_thread_id": int(thread),
-            "parse_mode": "MarkdownV2",
-            "text": text
-        }
-    }
-}
-with open("/tmp/bs_webhook.json", "w") as f:
-    json.dump(payload, f)
-PYEOF
-
             resp=$(curl -s -X POST "$API/outgoing-webhooks" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json" || echo "")
             id=$(echo "$resp" | grep -o '"id": *"[^"]*"' | head -1 | cut -d'"' -f4)
             if [[ -n "$id" ]]; then

@@ -15,11 +15,14 @@ NC=$'\033[0m'
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
-    while IFS='=' read -r key value; do
-        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-        value="${value#\"}" ; value="${value%\"}"
-        value="${value#\'}" ; value="${value%\'}"
-        export "$key=$value"
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
+        local key="${line%%=*}" value="${line#*=}"
+        # Strip matching outer quotes (single or double)
+        if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
+            value="${BASH_REMATCH[1]}"
+        fi
+        export "$key"="$value"
     done < "$env_file"
     OWNER="${OWNER:-}"
 }

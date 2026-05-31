@@ -21,6 +21,8 @@ jobs:
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
       TF_WORKSPACE: prod
+      # Intentionally using DEV_AWS credentials — prod drift detection runs in a dev
+      # context with read-only access. Prod keys are kept for deploy-only operations.
       AWS_ACCESS_KEY_ID: ${{ secrets.DEV_AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
       AWS_DEFAULT_REGION: ${{ secrets.DEV_AWS_REGION }}

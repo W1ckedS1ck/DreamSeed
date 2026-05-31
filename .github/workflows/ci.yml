@@ -81,7 +81,7 @@ jobs:
         run: |
           for dir in terraform/*/; do
             echo "=== Validating $dir ==="
-            terraform -chdir="$dir" init -backend=false -upgrade
+            terraform -chdir="$dir" init -backend=false
             terraform -chdir="$dir" validate
           done
 
@@ -141,6 +141,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
       - name: Run pre-commit hooks
         run: |
           pip install pre-commit

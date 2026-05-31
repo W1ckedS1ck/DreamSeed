@@ -54,7 +54,7 @@
     certbot certonly
     --dns-cloudflare
     --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
-    {{ '--staging' if ssl_staging | default(false) else '' }}
+    {% if ssl_staging | default(false) %}--staging{% endif %}
     -d {{ domain }}{% if domain_www | default(true) %}
     -d www.{{ domain }}{% endif %}
     --non-interactive
@@ -63,8 +63,6 @@
     --rsa-key-size 4096
   when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
   register: ssl_certbot_result
-  changed_when: false
-  failed_when: false
 
 # --- Final cert status ---
 - name: Re-check certificate after certbot
@@ -75,7 +73,7 @@
 
 - name: Set ssl_has_cert fact
   ansible.builtin.set_fact:
-    ssl_has_cert: "{{ ssl_cert_file_final.stat.exists | bool }}"
+    ssl_has_cert: "{{ ssl_cert_file_final.stat.exists }}"
 
 - name: SSL status
   ansible.builtin.debug:
@@ -119,20 +117,20 @@
     mode: "0755"
   when: ssl_has_cert
 
-# --- Self-signed fallback (Nginx only — Apache uses ssl-cert-snakeoil) ---
+# --- Self-signed fallback (generic name, works for both Nginx and Apache) ---
 - name: Generate self-signed private key
   become: true
   ansible.builtin.command:
-    cmd: openssl genrsa -out /etc/ssl/private/nginx-selfsigned.key 2048
-    creates: /etc/ssl/private/nginx-selfsigned.key
-  when: not ssl_has_cert and web_server == "nginx"
+    cmd: openssl genrsa -out /etc/ssl/private/selfsigned.key 2048
+    creates: /etc/ssl/private/selfsigned.key
+  when: not ssl_has_cert
 
 - name: Generate self-signed certificate
   become: true
   ansible.builtin.command:
-    cmd: "openssl req -new -x509 -key /etc/ssl/private/nginx-selfsigned.key -out /etc/ssl/certs/nginx-selfsigned.crt -days 365 -nodes -subj /CN={{ domain }}"
-    creates: /etc/ssl/certs/nginx-selfsigned.crt
-  when: not ssl_has_cert and web_server == "nginx"
+    cmd: "openssl req -new -x509 -key /etc/ssl/private/selfsigned.key -out /etc/ssl/certs/selfsigned.crt -days 365 -nodes -subj /CN={{ domain }}"
+    creates: /etc/ssl/certs/selfsigned.crt
+  when: not ssl_has_cert
 
 - name: Ensure group ssl-cert exists
   become: true
@@ -144,11 +142,11 @@
 - name: Ensure SSL private key has correct permissions
   become: true
   ansible.builtin.file:
-    path: /etc/ssl/private/nginx-selfsigned.key
+    path: /etc/ssl/private/selfsigned.key
     owner: root
     group: ssl-cert
     mode: "0640"
-  when: not ssl_has_cert and web_server == "nginx"
+  when: not ssl_has_cert
 
 - name: Add web server user to ssl-cert group
   become: true

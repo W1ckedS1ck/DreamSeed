@@ -143,14 +143,24 @@
   ansible.builtin.meta: flush_handlers
 
 # --- Lynis Hardening ---
-- name: Install hardening packages
+- name: Install hardening diagnostic packages
   become: true
   ansible.builtin.apt:
     name:
       - debsums
       - apt-show-versions
-      - libpam-tmpdir
-      - libpam-passwdqc
+    state: present
+
+- name: Install libpam-tmpdir for private /tmp
+  become: true
+  ansible.builtin.apt:
+    name: libpam-tmpdir
+    state: present
+
+- name: Install PAM password strength checking
+  become: true
+  ansible.builtin.apt:
+    name: libpam-pwquality
     state: present
 
 - name: Disable core dumps (limits)
@@ -172,16 +182,26 @@
     mode: "0644"
   notify: Reload sysctl
 
-- name: Set password aging policy
+- name: Set password max age (90 days)
   become: true
   ansible.builtin.lineinfile:
     path: /etc/login.defs
-    regexp: "^{{ item.key }}"
-    line: "{{ item.key }}\t{{ item.value }}"
-  loop:
-    - {key: PASS_MAX_DAYS, value: 90}
-    - {key: PASS_MIN_DAYS, value: 1}
-    - {key: PASS_WARN_AGE, value: 14}
+    regexp: '^PASS_MAX_DAYS'
+    line: "PASS_MAX_DAYS\t90"
+
+- name: Set password min age (1 day)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MIN_DAYS'
+    line: "PASS_MIN_DAYS\t1"
+
+- name: Set password warn age (14 days)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_WARN_AGE'
+    line: "PASS_WARN_AGE\t14"
 
 # --- MODX Security ---
 - name: Check if MODX config exists
@@ -229,5 +249,5 @@
     cmd: |
       find "{{ web_root }}" -type d -exec chmod g+rwxs {} +
       find "{{ web_root }}" -type f -exec chmod g+rw {} +
-  changed_when: true
+  changed_when: false
   when: dev_write_perms | default(false)
