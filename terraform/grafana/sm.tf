@@ -31,7 +31,7 @@ resource "grafana_synthetic_monitoring_check" "http_main" {
   probes = [
     data.grafana_synthetic_monitoring_probes.main.probes["London"],
     data.grafana_synthetic_monitoring_probes.main.probes["Frankfurt"],
-    data.grafana_synthetic_monitoring_probes.main.probes["New York City"],
+    data.grafana_synthetic_monitoring_probes.main.probes["NorthVirginia"],
     data.grafana_synthetic_monitoring_probes.main.probes["Singapore"],
   ]
 
@@ -62,7 +62,7 @@ resource "grafana_synthetic_monitoring_check" "http_grafana" {
   probes = [
     data.grafana_synthetic_monitoring_probes.main.probes["London"],
     data.grafana_synthetic_monitoring_probes.main.probes["Frankfurt"],
-    data.grafana_synthetic_monitoring_probes.main.probes["New York City"],
+    data.grafana_synthetic_monitoring_probes.main.probes["NorthVirginia"],
     data.grafana_synthetic_monitoring_probes.main.probes["Singapore"],
   ]
 
@@ -97,7 +97,7 @@ resource "grafana_synthetic_monitoring_check" "ssl" {
   probes = [
     data.grafana_synthetic_monitoring_probes.main.probes["London"],
     data.grafana_synthetic_monitoring_probes.main.probes["Frankfurt"],
-    data.grafana_synthetic_monitoring_probes.main.probes["New York City"],
+    data.grafana_synthetic_monitoring_probes.main.probes["NorthVirginia"],
   ]
 
   labels = {
@@ -125,7 +125,7 @@ resource "grafana_synthetic_monitoring_check" "ping" {
   probes = [
     data.grafana_synthetic_monitoring_probes.main.probes["London"],
     data.grafana_synthetic_monitoring_probes.main.probes["Frankfurt"],
-    data.grafana_synthetic_monitoring_probes.main.probes["New York City"],
+    data.grafana_synthetic_monitoring_probes.main.probes["NorthVirginia"],
     data.grafana_synthetic_monitoring_probes.main.probes["Singapore"],
   ]
 
@@ -158,7 +158,7 @@ resource "grafana_synthetic_monitoring_check" "dns" {
   probes = [
     data.grafana_synthetic_monitoring_probes.main.probes["London"],
     data.grafana_synthetic_monitoring_probes.main.probes["Frankfurt"],
-    data.grafana_synthetic_monitoring_probes.main.probes["New York City"],
+    data.grafana_synthetic_monitoring_probes.main.probes["NorthVirginia"],
   ]
 
   labels = {

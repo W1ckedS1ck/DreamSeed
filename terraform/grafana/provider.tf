@@ -27,4 +27,5 @@ provider "grafana" {
   url             = var.grafana_cloud_url
   auth            = var.grafana_cloud_token
   sm_access_token = var.sm_access_token
+  sm_url          = "https://synthetic-monitoring-api-eu-north-0.grafana.net"
 }
