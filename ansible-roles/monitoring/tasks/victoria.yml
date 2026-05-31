@@ -1,47 +1,15 @@
 ---
-- name: Check if VictoriaMetrics is installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/victoria-metrics
-  register: monitoring_vm_bin
-
-- name: Get current VictoriaMetrics version
-  ansible.builtin.command: /usr/local/bin/victoria-metrics --version
-  changed_when: false
-  failed_when: false
-  register: monitoring_vm_current_version
-  when: monitoring_vm_bin.stat.exists
-
 - name: Install/Upgrade VictoriaMetrics
-  when: >
-    not monitoring_vm_bin.stat.exists or
-    monitoring_vm_version not in (monitoring_vm_current_version.stdout | default(''))
-  block:
-    - name: Download VictoriaMetrics
-      ansible.builtin.get_url:
-        url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/victoria-metrics-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
-        dest: /tmp/victoria-metrics.tar.gz
-        mode: "0644"
-
-    - name: Extract VictoriaMetrics
-      ansible.builtin.unarchive:
-        src: /tmp/victoria-metrics.tar.gz
-        dest: /tmp/
-        remote_src: true
-
-    - name: Install VictoriaMetrics binary
-      ansible.builtin.copy:
-        src: /tmp/victoria-metrics-prod
-        dest: /usr/local/bin/victoria-metrics
-        mode: "0755"
-        remote_src: true
-
-    - name: Cleanup VictoriaMetrics temp files
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/victoria-metrics.tar.gz
-        - /tmp/victoria-metrics-prod
+  vars:
+    _exp_name: VictoriaMetrics
+    bin: victoria-metrics
+    version: "{{ monitoring_vm_version }}"
+    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/victoria-metrics-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
+    src_in_tmp: /tmp/victoria-metrics-prod
+    cleanup_dirs:
+      - /tmp/victoria-metrics.tar.gz
+      - /tmp/victoria-metrics-prod
+  ansible.builtin.include_tasks: _install_binary.yml
 
 - name: Create victoria-metrics user
   ansible.builtin.user:

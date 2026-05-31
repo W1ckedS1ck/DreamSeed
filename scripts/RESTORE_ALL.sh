@@ -77,7 +77,7 @@ select_backup() {
     local result_var="$3"
 
     local files=()
-    mapfile -t files < <(ls -1t "$dir"/$pattern 2>/dev/null)
+    while IFS= read -r f; do files+=("$f"); done < <(find "$dir" -maxdepth 1 -name "$pattern" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
 
     if [ ${#files[@]} -eq 0 ]; then
         echo -e "${RED}No backups found in $dir${NC}"
@@ -175,8 +175,8 @@ else
     RESTORE_PROJECT=1
     RESTORE_DB=1
 
-    SELECTED_PROJECT=$(ls -1t "$BACKUP_DIR/project/DreamSeed_"*.tar.gz 2>/dev/null | head -n1)
-    SELECTED_DB=$(ls -1t "$BACKUP_DIR/db/db_"*.sql.gz 2>/dev/null | head -n1)
+    SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
         echo "Local backups not found, trying Google Drive..."
@@ -187,8 +187,8 @@ else
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
             --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3
 
-        SELECTED_PROJECT=$(ls -1t "$BACKUP_DIR/project/DreamSeed_"*.tar.gz 2>/dev/null | head -n1)
-        SELECTED_DB=$(ls -1t "$BACKUP_DIR/db/db_"*.sql.gz 2>/dev/null | head -n1)
+        SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     fi
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
@@ -382,8 +382,8 @@ else
     echo "Starting services..."
 fi
 
-SERVICES_STOPPED=0
 if sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>&1; then
+    SERVICES_STOPPED=0
     echo -e "${GREEN}✓ Services started${NC}"
 else
     echo -e "${RED}✗ Failed to start services${NC}"

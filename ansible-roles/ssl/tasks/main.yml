@@ -75,7 +75,7 @@
 
 - name: Set ssl_has_cert fact
   ansible.builtin.set_fact:
-    ssl_has_cert: "{{ ssl_cert_file_final.stat.exists }}"
+    ssl_has_cert: "{{ ssl_cert_file_final.stat.exists | bool }}"
 
 - name: SSL status
   ansible.builtin.debug:

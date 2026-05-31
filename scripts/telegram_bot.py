@@ -34,11 +34,14 @@ REMOTE_BASE = os.environ.get('REMOTE_BASE', 'DreamSeed/backups')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')
 DB_PREFIX = os.environ.get('DB_PREFIX', 'db_modx_db_')
 
-def get_size(filepath):
-    if not filepath:
+def get_size(filepath_or_bytes):
+    if not filepath_or_bytes:
         return "-"
     try:
-        size = os.path.getsize(filepath)
+        if isinstance(filepath_or_bytes, str) and not filepath_or_bytes.isdigit():
+            size = os.path.getsize(filepath_or_bytes)
+        else:
+            size = int(filepath_or_bytes)
         if size > 1048576:
             return f"{size // 1048576}MB"
         else:
@@ -52,19 +55,18 @@ def get_env():
         return "prod"
     return "preprod"
 
-def format_proj_name(filename):
-    name = filename.replace('DreamSeed_', '').replace('.tar.gz', '')
+def _format_backup_name(filename, prefix, ext):
+    name = filename.replace(prefix, '').replace(ext, '')
     parts = name.rsplit('_', 1)
     if len(parts) == 2:
         return f"{parts[0]} {parts[1].replace('-', ':')}"
     return name
 
+def format_proj_name(filename):
+    return _format_backup_name(filename, 'DreamSeed_', '.tar.gz')
+
 def format_db_name(filename):
-    name = filename.replace(DB_PREFIX, '').replace('.sql.gz', '')
-    parts = name.rsplit('_', 1)
-    if len(parts) == 2:
-        return f"{parts[0]} {parts[1].replace('-', ':')}"
-    return name
+    return _format_backup_name(filename, DB_PREFIX, '.sql.gz')
 
 def _rclone_lsf(path):
     try:
@@ -90,16 +92,6 @@ def cmd_status():
         cloud_proj_files = _rclone_lsf(f'{RCLONE_REMOTE}:{remote_base}/project{env_suffix}/')
         cloud_db_files = _rclone_lsf(f'{RCLONE_REMOTE}:{remote_base}/db{env_suffix}/')
 
-        def cloud_size(size_bytes):
-            try:
-                s = int(size_bytes)
-                if s > 1048576:
-                    return f"{s // 1048576}MB"
-                else:
-                    return f"{s // 1024}KB"
-            except Exception:
-                return "-"
-
         msg = f"📊 *Backup Status* — {env}\n\n"
 
         msg += "📁 Local:\n"
@@ -110,9 +102,9 @@ def cmd_status():
 
         msg += "\n☁️ GDrive:\n"
         for line in cloud_proj_files[:2]:
-            msg += f"  🖥 {format_proj_name(line[1])} ({cloud_size(line[2])})\n"
+            msg += f"  🖥 {format_proj_name(line[1])} ({get_size(line[2])})\n"
         for line in cloud_db_files[:2]:
-            msg += f"  🗄 {format_db_name(line[1])} ({cloud_size(line[2])})\n"
+            msg += f"  🗄 {format_db_name(line[1])} ({get_size(line[2])})\n"
 
         msg += f"\n⏰ Last check: {time.strftime('%d.%m %H:%M')}"
         return msg

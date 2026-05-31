@@ -48,3 +48,9 @@
         path: "{{ item }}"
         state: absent
       loop: "{{ cleanup_dirs }}"
+
+    - name: Restart {{ _exp_name }} after upgrade  # noqa: name[template]
+      ansible.builtin.systemd:
+        name: "{{ bin }}"
+        state: restarted
+      become: true

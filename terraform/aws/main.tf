@@ -24,9 +24,7 @@ resource "aws_key_pair" "deploy" {
   public_key = file(pathexpand(var.ssh_public_key_path))
 
   tags = {
-    Name        = "dreamseed-key-${var.environment}"
-    Environment = local.environment_tag
-    Service     = local.service_tag
+    Name = "dreamseed-key-${var.environment}"
   }
 }
 
@@ -67,9 +65,7 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name        = "dreamseed-sg-${var.environment}"
-    Environment = local.environment_tag
-    Service     = local.service_tag
+    Name = "dreamseed-sg-${var.environment}"
   }
 }
 
@@ -85,9 +81,7 @@ resource "aws_instance" "web" {
     volume_type = "gp3"
     encrypted   = true
     tags = {
-      Name        = "dreamseed-${var.environment}-root"
-      Environment = local.environment_tag
-      Service     = local.service_tag
+      Name = "dreamseed-${var.environment}-root"
     }
   }
 
@@ -107,9 +101,7 @@ EOF
   ebs_optimized = true
 
   tags = {
-    Name        = "dreamseed-${var.environment}"
-    Environment = local.environment_tag
-    Service     = local.service_tag
+    Name = "dreamseed-${var.environment}"
   }
 }
 

@@ -143,24 +143,14 @@
   ansible.builtin.meta: flush_handlers
 
 # --- Lynis Hardening ---
-- name: Install hardening diagnostic packages
+- name: Install hardening packages
   become: true
   ansible.builtin.apt:
     name:
       - debsums
       - apt-show-versions
-    state: present
-
-- name: Install libpam-tmpdir for private /tmp
-  become: true
-  ansible.builtin.apt:
-    name: libpam-tmpdir
-    state: present
-
-- name: Install PAM password strength checking
-  become: true
-  ansible.builtin.apt:
-    name: libpam-passwdqc
+      - libpam-tmpdir
+      - libpam-passwdqc
     state: present
 
 - name: Disable core dumps (limits)

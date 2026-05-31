@@ -8,7 +8,7 @@
     _exp_name: vmagent
     bin: vmagent
     version: "{{ monitoring_vmagent_version }}"
-    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}.tar.gz"
+    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/vmutils-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
     src_in_tmp: /tmp/vmagent-prod
     cleanup_dirs:
       - /tmp/vmagent.tar.gz
@@ -43,7 +43,7 @@
     dest: /etc/vmagent/scrape.yml
     mode: "0644"
   vars:
-    _scrape_interval: 30s
+    _scrape_interval: "{{ monitoring_scrape_interval }}"
   notify: Restart vmagent
   when: _vmagent_enabled
 

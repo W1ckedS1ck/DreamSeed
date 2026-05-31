@@ -1,4 +1,29 @@
 ---
+- name: Check if rclone config exists locally
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/rclone.conf"
+  register: rclone_config_stat
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Create rclone config directory
+  ansible.builtin.file:
+    path: "/home/ubuntu/.config/rclone"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0700"
+  when: rclone_config_stat.stat.exists
+
+- name: Upload rclone config
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/rclone.conf"
+    dest: "/home/ubuntu/.config/rclone/rclone.conf"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  when: rclone_config_stat.stat.exists
+
 - name: Create backup directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -134,7 +159,7 @@
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
-  when: modx_check is not failed and modx_check.query_result[0][0].cnt | int > 0
+  when: modx_check is succeeded and (modx_check.query_result[0][0].cnt | default(0) | int > 0)
 
 - name: Wait for VictoriaMetrics to accept writes
   ansible.builtin.uri:

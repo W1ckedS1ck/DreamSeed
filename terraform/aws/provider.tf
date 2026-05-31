@@ -18,4 +18,10 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+  default_tags {
+    tags = {
+      Environment = local.environment_tag
+      Service     = local.service_tag
+    }
+  }
 }

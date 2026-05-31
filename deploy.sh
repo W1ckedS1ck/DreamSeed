@@ -447,7 +447,7 @@ run_parallel() {
     done
     for pid in "${pids[@]}"; do wait "$pid" || ok=false; done
     [[ "$TTY" == "false" ]] && echo "::endgroup::"
-    $ok
+    [[ "$ok" == "true" ]] || return 1
 }
 
 # ----- SSH helper -----
@@ -622,7 +622,7 @@ main() {
         printf "."; sleep "$SSH_INTERVAL"
     done
     echo ""
-    if [[ "$ready" == "true" ]]; then step_ok; else step_fail "SSH failed"; fi
+    if [[ "$ready" == "true" ]]; then step_ok; else step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s"; fi
 
     # ----- Wait for cloud-init -----
     step_start "Wait for cloud-init"
@@ -652,6 +652,7 @@ all:
       server_ip: ${SERVER_IP}
 INVEOF
 
+    _add_yaml_var() { local k="$1" v="$2"; [[ -n "${v:-}" ]] && echo "${k}: \"$(yaml_escape "$v")\""; }
     VAULT_TMP=$(mktemp); chmod 600 "$VAULT_TMP"
     {
         echo "db_pass: \"$(yaml_escape "$DB_PASS")\""
@@ -665,15 +666,15 @@ INVEOF
             echo "domain_www: false"
             echo "dev_write_perms: true"
         fi
-        echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
-        echo "configs_dir: \"${SCRIPT_DIR}/configs\""
-        echo "scripts_dir: \"${SCRIPT_DIR}/scripts\""
-        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && echo "cloudflare_api_token: \"$(yaml_escape "$CLOUDFLARE_API_TOKEN")\""
-        [[ -n "${GRAFANA_PASS:-}" ]] && echo "grafana_admin_password: \"$(yaml_escape "$GRAFANA_PASS")\""
-        [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
-        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && echo "grafana_cloud_url: \"$(yaml_escape "$GRAFANA_CLOUD_URL")\""
-        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && echo "grafana_cloud_username: \"$(yaml_escape "$GRAFANA_CLOUD_USERNAME")\""
-        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && echo "grafana_cloud_token: \"$(yaml_escape "$GRAFANA_CLOUD_TOKEN")\""
+        _add_yaml_var "secrets_dir" "${SCRIPT_DIR}/secrets"
+        _add_yaml_var "configs_dir" "${SCRIPT_DIR}/configs"
+        _add_yaml_var "scripts_dir" "${SCRIPT_DIR}/scripts"
+        _add_yaml_var "cloudflare_api_token" "${CLOUDFLARE_API_TOKEN:-}"
+        _add_yaml_var "grafana_admin_password" "${GRAFANA_PASS:-}"
+        _add_yaml_var "ssh_public_key_path" "${SSH_PUBLIC_KEY_PATH:-}"
+        _add_yaml_var "grafana_cloud_url" "${GRAFANA_CLOUD_URL:-}"
+        _add_yaml_var "grafana_cloud_username" "${GRAFANA_CLOUD_USERNAME:-}"
+        _add_yaml_var "grafana_cloud_token" "${GRAFANA_CLOUD_TOKEN:-}"
         [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && {
             echo "additional_ssh_keys:"
             while IFS= read -r key; do

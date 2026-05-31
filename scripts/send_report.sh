@@ -5,6 +5,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
@@ -45,8 +46,8 @@ if [ "$REPORT_TYPE" = "daily" ]; then
     DB_1=$(format_name "$(echo "$DB_FILES" | head -1)")
     DB_2=$(format_name "$(echo "$DB_FILES" | sed -n '2p')")
 
-    MSG="<b>DAILY REPORT</b>
-$(date +%d.%m) - $ENV_DISPLAY"
+    MSG="*DAILY REPORT*
+$(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
 
     if [ "$PROJ_COUNT" -ge 1 ]; then
         MSG+="
@@ -84,9 +85,9 @@ $(date +%d.%m) - $ENV_DISPLAY"
 
     MSG+="
 
-$(date '+%d.%m.%Y %H:%M')"
+$(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
 
-    send_tg "$MSG" "HTML"
+    send_tg "$MSG"
 
 # ====== WEEKLY REPORT ======
 elif [ "$REPORT_TYPE" = "weekly" ]; then
@@ -100,8 +101,8 @@ elif [ "$REPORT_TYPE" = "weekly" ]; then
         SUCCESS_RATE="$((TOTAL_CLOUD * 100 / WEEKLY_EXPECTED))%"
     fi
 
-    MSG="<b>WEEKLY REPORT</b>
-$(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
+    MSG="*WEEKLY REPORT*
+$(escape_md2 "$(date -d '-7 days' +%d.%m)")-$(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
 
     if [ "$PROJ_COUNT" -ge 1 ]; then
         MSG+="
@@ -124,9 +125,9 @@ $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
     MSG+="
 
 🎯 Cloud upload rate: $SUCCESS_RATE
-$(date '+%d.%m.%Y %H:%M')"
+$(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
 
-    send_tg "$MSG" "HTML"
+    send_tg "$MSG"
 
 else
     echo "Usage: $0 {daily|weekly}"

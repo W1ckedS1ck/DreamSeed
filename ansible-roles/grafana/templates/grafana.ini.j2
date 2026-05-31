@@ -25,9 +25,6 @@ check_for_updates = false
 check_for_plugin_updates = false
 
 [database]
-{% if grafana_db_type | default('sqlite') == 'sqlite' %}
-# Default SQLite — no configuration needed
-{% endif %}
 versions_to_keep = 5
 max_connections = 0
 

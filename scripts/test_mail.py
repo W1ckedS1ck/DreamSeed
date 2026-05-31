@@ -11,10 +11,13 @@ from env_loader import load_env
 # --- Load secrets from .env ---
 load_env()
 
-SMTP_SERVER = os.environ["SMTP_SERVER"]
-SMTP_PORT = int(os.environ["SMTP_PORT"])
-EMAIL_USER = os.environ["EMAIL_USER"]
-EMAIL_PASS = os.environ["EMAIL_PASS"]
+try:
+    SMTP_SERVER = os.environ["SMTP_SERVER"]
+    SMTP_PORT = int(os.environ["SMTP_PORT"])
+    EMAIL_USER = os.environ["EMAIL_USER"]
+    EMAIL_PASS = os.environ["EMAIL_PASS"]
+except KeyError as e:
+    sys.exit(f"Missing env var: {e}")
 
 
 def send_test(recipient_email: str) -> None:

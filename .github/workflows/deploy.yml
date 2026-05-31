@@ -46,42 +46,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: latest
-
-      - name: Cache Terraform providers
-        uses: actions/cache@v5
-        with:
-          path: |
-            terraform/aws/.terraform
-            terraform/hetzner/.terraform
-          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl') }}
-          restore-keys: terraform-providers-${{ runner.os }}-
-
-      - name: Cache pip packages
-        if: inputs.action == 'deploy'
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('ansible/requirements-deploy.txt') }}
-          restore-keys: pip-${{ runner.os }}-
-
-      - name: Cache Ansible collections
-        if: inputs.action == 'deploy'
-        uses: actions/cache@v5
-        with:
-          path: ~/.ansible/collections
-          key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
-          restore-keys: ansible-collections-${{ runner.os }}-
+      - uses: ./.github/actions/setup-terraform
 
       - name: Setup Ansible
         if: inputs.action == 'deploy'
-        run: |
-          pip install -r ansible/requirements-deploy.txt --quiet
-          ansible-galaxy collection install community.mysql ansible.posix
+        uses: ./.github/actions/setup-ansible
 
       - name: Reconstruct secrets
         env:
@@ -109,13 +78,12 @@ jobs:
       - name: Deploy
         if: inputs.action == 'deploy'
         id: deploy
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
           set -a
           source secrets/.env
           set +a
-
-          # Set after sourcing .env — deploy.sh preserves it
-          export TF_API_TOKEN="${{ secrets.TF_API_TOKEN }}"
 
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"

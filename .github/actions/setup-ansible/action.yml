@@ -1,0 +1,33 @@
+name: Setup Ansible
+description: Cache pip and Ansible collections, install dependencies
+
+inputs:
+  requirements-file:
+    description: Path to pip requirements file
+    required: false
+    default: ansible/requirements-deploy.txt
+  collections:
+    description: Ansible collections to install
+    required: false
+    default: community.mysql ansible.posix
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v5
+      with:
+        path: ~/.cache/pip
+        key: pip-${{ runner.os }}-${{ hashFiles(inputs.requirements-file) }}
+        restore-keys: pip-${{ runner.os }}-
+
+    - uses: actions/cache@v5
+      with:
+        path: ~/.ansible/collections
+        key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
+        restore-keys: ansible-collections-${{ runner.os }}-
+
+    - run: pip install -r ${{ inputs.requirements-file }} --quiet
+      shell: bash
+
+    - run: ansible-galaxy collection install ${{ inputs.collections }}
+      shell: bash
