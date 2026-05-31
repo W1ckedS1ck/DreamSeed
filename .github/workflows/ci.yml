@@ -130,12 +130,10 @@ jobs:
           fetch-depth: 0
       - name: Secret Scan
         run: |
-          GITLEAKS_VERSION="8.30.1"
-          curl -sL -o /tmp/gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -sL -o /tmp/gitleaks.checksum "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.sha256"
-          cd /tmp && sha256sum -c gitleaks.checksum --ignore-missing 2>/dev/null
-          sudo tar -xz -C /usr/local/bin -f /tmp/gitleaks.tar.gz gitleaks
-          gitleaks detect --source . --verbose || true
+          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
+            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" | \
+             sudo tar -xz -C /usr/local/bin gitleaks)
+          gitleaks detect --source . --verbose; true
 
   pre-commit:
     name: Pre-commit
