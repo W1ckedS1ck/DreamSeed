@@ -97,7 +97,7 @@ jobs:
         run: |
           for dir in terraform/*/; do
             echo "=== Validating $dir ==="
-            tofu -chdir="$dir" init -backend=false -upgrade
+            tofu -chdir="$dir" init -backend=false
             tofu -chdir="$dir" validate
           done
 

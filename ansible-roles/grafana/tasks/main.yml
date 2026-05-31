@@ -30,6 +30,7 @@
     group: grafana
     mode: "0640"
   notify: Restart Grafana
+  no_log: true
 
 - name: Create Grafana systemd override directory
   ansible.builtin.file:

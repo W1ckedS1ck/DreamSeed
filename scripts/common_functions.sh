@@ -101,15 +101,5 @@ escape_md2() {
     echo "$1" | sed 's/[][_*()~`>#+={|}.!-\\]/\\&/g'
 }
 
-init_script() {
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    load_env "$SCRIPT_DIR/.env"
-    ENV=$(detect_env)
-    ENV_DISPLAY=$(format_env_display "$ENV")
-}
 
-latest_file() {
-    local dir="$1" pattern="$2"
-    find "$dir" -maxdepth 1 -name "$pattern" -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-
-}
 

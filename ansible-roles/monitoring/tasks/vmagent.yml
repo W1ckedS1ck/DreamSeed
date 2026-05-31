@@ -4,16 +4,14 @@
     _vmagent_enabled: "{{ monitoring_vmagent_enabled and grafana_cloud_url | length > 0 }}"
 
 - name: Install/Upgrade vmagent
-  vars:
-    _exp_name: vmagent
-    bin: vmagent
-    version: "{{ monitoring_vmagent_version }}"
-    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/vmutils-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
-    src_in_tmp: /tmp/vmagent-prod
-    cleanup_dirs:
-      - /tmp/vmagent.tar.gz
-      - /tmp/vmagent-prod
   ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: vmagent
+    monitor_bin_path: /usr/local/bin/vmagent
+    monitor_version: "{{ monitoring_vmagent_version }}"
+    monitor_download_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}.tar.gz"
+    monitor_extracted_binary: /tmp/vmagent-prod
+    monitor_extracted_dir: /tmp/vmagent-prod
   when: _vmagent_enabled
 
 - name: Create vmagent directories

@@ -118,7 +118,7 @@ else
     echo -e "\n${CYAN}Better Stack — Telegram webhooks${NC}\n"
 
     TELEGRAM_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-    THREAD="${TG_THREAD_ID:-3}"
+    THREAD="${TG_THREAD_ID:-}"
 
     existing_wh=$(get_existing_webhooks)
 

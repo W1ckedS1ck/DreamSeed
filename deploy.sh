@@ -41,7 +41,7 @@ STEP_NAMES=() STEP_TIMES=() STEP_START=0
 DEPLOY_START=$(date +%s)
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/deploy_$(date +%Y%m%d_%H%M%S).log"
-TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
+DEPLOY_TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
 
 # ----- helpers -----
@@ -92,6 +92,7 @@ step_fail() {
 cleanup() {
     [[ -n "${VAULT_TMP:-}" && -f "${VAULT_TMP:-}" ]] && rm -f "$VAULT_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
+    [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
     [[ -n "${LOCK_FILE:-}" && -d "${LOCK_FILE:-}" ]] && rmdir "$LOCK_FILE" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -355,7 +356,7 @@ terraform_init_if_needed() {
     local ws
     ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
     if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$ws" != "$TF_WORKSPACE" ]]; then
-        _tf init -reconfigure -input=false -no-color >> "$TF_LOG" 2>&1
+        _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
     fi
 }
 
@@ -388,8 +389,8 @@ terraform_destroy() {
             && echo "  ✓ Server $ip reachable" \
             || echo "  ⚠ Server $ip unreachable — destroying anyway"
 
-    terraform_init_if_needed || { echo "Terraform init failed"; cat "$TF_LOG"; return 1; }
-    ( cd "$TF_DIR" && terraform_select_workspace ) >> "$TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
+    terraform_init_if_needed || { echo "Terraform init failed"; cat "$DEPLOY_TF_LOG"; return 1; }
+    ( cd "$TF_DIR" && terraform_select_workspace ) >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
 
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
@@ -397,18 +398,18 @@ terraform_destroy() {
     [[ "$TF_PROVIDER" == "aws" ]] && var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
     echo "  ━━━ Destroying resources ($TARGET)"
 
-    local out; out=$(mktemp)
+    TF_TMP_OUT=$(mktemp)
     # shellcheck disable=SC2086
-    _tf destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$out" || true
-    grep -q "Destroy complete" "$out" || step_fail "Terraform destroy failed (check $TF_LOG)"
-    cat "$out" >> "$TF_LOG"; rm -f "$out"
+    _tf destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$TF_TMP_OUT" || true
+    grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (check $DEPLOY_TF_LOG)"
+    cat "$TF_TMP_OUT" >> "$DEPLOY_TF_LOG"; rm -f "$TF_TMP_OUT"
 
     rm -f "$SCRIPT_DIR/secrets/tfstate-backup/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
 
     if [[ "$TARGET" != "prod" ]]; then
         local ws_del="$TF_WORKSPACE"
         ( cd "$TF_DIR" && unset TF_WORKSPACE && \
-          "$TERRAFORM" workspace delete "$ws_del" 2>&1 ) >> "$TF_LOG" 2>&1 || true
+          "$TERRAFORM" workspace delete "$ws_del" 2>&1 ) >> "$DEPLOY_TF_LOG" 2>&1 || true
     fi
     echo "  ✓ Destroyed"
 }
@@ -571,7 +572,7 @@ main() {
         step_start "Terraform init + apply ($TARGET)"
         export_tf_env
 
-        terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$TF_LOG"; step_fail "Terraform init failed"; }
+        terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform init failed"; }
         ( cd "$TF_DIR" && terraform_select_workspace ) || step_fail "Failed to select workspace: $TF_WORKSPACE"
 
         local tf_args=""
@@ -580,12 +581,12 @@ main() {
         local ok=false
         for try in 1 2; do
             # shellcheck disable=SC2086
-            if _tf apply -auto-approve -no-color $tf_args >> "$TF_LOG" 2>&1; then
+            if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
                 ok=true; break
             fi
             [[ $try -lt 2 ]] && { echo "    Attempt $try/2 failed, retrying in 10s..."; sleep 10; }
         done
-        [[ "$ok" != "true" ]] && { tail -30 "$TF_LOG"; step_fail "Terraform apply failed"; }
+        [[ "$ok" != "true" ]] && { tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"; }
 
         SERVER_IP=$(_tf output -raw server_ipv4 2>/dev/null) || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
@@ -661,6 +662,7 @@ INVEOF
             echo "domain_www: false"
             echo "dev_write_perms: true"
         fi
+        echo "php_version: \"${PHP_VERSION}\""
         echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
         echo "configs_dir: \"${SCRIPT_DIR}/configs\""
         echo "scripts_dir: \"${SCRIPT_DIR}/scripts\""

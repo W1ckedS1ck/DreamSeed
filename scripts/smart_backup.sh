@@ -89,7 +89,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
 
-mysqldump "$DB_NAME" | gzip > "$DB_BACKUP"
+mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$DB_BACKUP"
 
 if [ "${PIPESTATUS[0]}" -eq 0 ] && [ -s "$DB_BACKUP" ]; then
     DB_STATUS="✅ Database backed up"
