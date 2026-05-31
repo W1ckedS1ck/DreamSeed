@@ -510,15 +510,14 @@ vm=\$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "
 if [[ "\$vm" == "OK" ]]; then echo "  ✓ VictoriaMetrics"
 else echo "  ✗ VictoriaMetrics"; fail=1; fi
 
-# --- Exporters ---
-if curl -sf --max-time 3 "http://127.0.0.1:9100/metrics" | grep -q node_ 2>/dev/null; then echo "  ✓ node_exporter"
-else echo "  ✗ node_exporter"; fail=1; fi
-if curl -sf --max-time 3 "http://127.0.0.1:9104/metrics" | grep -q mysql_ 2>/dev/null; then echo "  ✓ mysql_exporter"; fi
-if [[ "\$web_svc" == "nginx" ]] && curl -sf --max-time 3 "http://127.0.0.1:9113/metrics" | grep -q nginx_ 2>/dev/null; then echo "  ✓ nginx_exporter"; fi
-if [[ "\$web_svc" == "apache2" ]] && curl -sf --max-time 3 "http://127.0.0.1:9117/metrics" | grep -q apache_ 2>/dev/null; then echo "  ✓ apache_exporter"; fi
+# --- Exporters (retry once after 3s — port may still be binding) ---
+_check_endpoint() { local p=\$1 k=\$2 n=\$3; for i in 1 2; do if curl -sf --max-time 3 "http://127.0.0.1:\$p/metrics" | grep -q "\$k" 2>/dev/null; then echo "  ✓ \$n"; return 0; fi; sleep 3; done; echo "  ✗ \$n"; return 1; }
+if _check_endpoint 9100 node_ node_exporter; then :; else fail=1; fi
+_check_endpoint 9104 mysql_ mysql_exporter || true
+[[ "\$web_svc" == "nginx" ]] && _check_endpoint 9113 nginx_ nginx_exporter || true
+[[ "\$web_svc" == "apache2" ]] && _check_endpoint 9117 apache_ apache_exporter || true
 if systemctl is-active vmagent > /dev/null 2>&1; then
-    if curl -sf --max-time 3 "http://127.0.0.1:8429/metrics" | grep -q vmagent_ 2>/dev/null; then echo "  ✓ vmagent"
-    else echo "  ⚠ vmagent running but no metrics"; fi
+    _check_endpoint 8429 vmagent_ vmagent || echo "  ⚠ vmagent running but no metrics"
 fi
 
 # --- Backup cron ---
