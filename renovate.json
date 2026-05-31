@@ -89,6 +89,15 @@
     },
     {
       "customType": "regex",
+      "description": "Track gitleaks version",
+      "fileMatch": ["^\\.github/workflows/ci\\.yml$"],
+      "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
       "description": "Track tflint-ruleset-aws version",
       "fileMatch": ["^terraform/aws/\\.tflint\\.hcl$"],
       "matchStrings": ["version = \"(?<currentValue>.*?)\""],
