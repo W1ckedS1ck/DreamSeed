@@ -138,6 +138,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 ```
 DreamSeed/
 ├── deploy.sh                 # Main orchestrator (800+ lines of battle-tested Bash)
+├── audit-secrets.sh          # Pre-push secret leakage scanner
 ├── .github/actions/          # Composite actions: setup-secrets, setup-terraform, setup-ansible
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group
@@ -157,6 +158,7 @@ DreamSeed/
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
 ├── .tflint.hcl               # Terraform linter config (root) + terraform/aws/.tflint.hcl (AWS ruleset)
+├── renovate.json              # Automated dependency update config
 └── .github/workflows/
     ├── ci.yml                # Full lint + security + validation pipeline
     ├── deploy.yml            # One-button deploy via GitHub Actions
