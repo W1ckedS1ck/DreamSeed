@@ -226,7 +226,7 @@ Trigger            Workflow              Jobs
 Push / PR          CI                    ShellCheck, ruff, ansible-lint,
                                           Terraform checks (tflint+validate),
                                           OpenTofu validate, Trivy, gitleaks
-                   ────────── 7 parallel ──────────
+                   ────────── 8 parallel ──────────
 
 Manual dispatch    Deploy                Setup → secrets → deploy.sh / destroy
                    Rollback              Get IP → confirm → RESTORE_ALL.sh
@@ -260,7 +260,7 @@ DreamSeed/
 │   └── group_vars/all.yml
 ├── ansible-roles/         # 15 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks
-├── .github/workflows/     # 5 workflows + Renovate + Infracost App
+├── .github/workflows/     # 6 workflows + Renovate + Infracost App
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup
 └── configs/               # fail2ban jails
 ```

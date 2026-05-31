@@ -2,10 +2,18 @@
 secrets/
 .env
 .env.local
+*.pem
+*.key
 
-# Terraform state & cache
+# Terraform state, cache & plans
 *.tfstate*
+*.tfplan
+*.tfplan.json
 .terraform/
+crash.log
+override.tf
+override.tf.json
+terraform/*/terraform.tfvars
 
 # Ansible
 *.retry

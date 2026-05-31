@@ -81,7 +81,7 @@ Real problems encountered and solved in production:
 | **Monitoring** | VictoriaMetrics · Grafana · Node/Nginx/MySQL exporters · 12 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (5 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · OpenTofu · Trivy · gitleaks · Renovate |
+| **CI/CD** | GitHub Actions (6 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · OpenTofu · Trivy · gitleaks · Renovate |
 
 ---
 
@@ -208,12 +208,12 @@ Grafana dashboards, datasources, **and 12 alert rules** deployed automatically �
 
 ### 💾 Real Backups, Tested Restores
 - **Local:** hourly project (hash-checked, skip if unchanged) + DB dump (always), rotated 5/15 versions
-- **Cloud:** hourly upload to Google Drive via rclone, rotated 10 project + 100 DB versions
+- **Cloud:** hourly upload to Google Drive via rclone, rotated 10 project + 20 DB versions
 - **Restore:** `RESTORE_ALL.sh --auto-latest` — downloads latest backup from GDrive, extracts, restores DB, clears cache, restarts services. **Full CI verification every week** (`backup-test.yml`)
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 5 Workflows + Renovate + Infracost App
+### 🧪 CI/CD Pipeline — 6 Workflows + Renovate + Infracost App
 
 | Workflow | Trigger |
 |----------|---------|
