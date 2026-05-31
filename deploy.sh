@@ -391,7 +391,7 @@ terraform_destroy() {
     export_tf_env
 
     # Check server reachability
-    local ip; ip=$(_tf output -lock-timeout=30s -raw server_ipv4 2>/dev/null || true)
+    local ip; ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
     [[ -n "$ip" && -n "${SSH_KEY:-}" ]] && \
         ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
             && echo "  ✓ Server $ip reachable" \
@@ -596,7 +596,7 @@ main() {
         done
         [[ "$ok" != "true" ]] && { tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"; }
 
-        SERVER_IP=$(_tf output -lock-timeout=30s -raw server_ipv4 2>/dev/null) || step_fail "Could not get server IP"
+        SERVER_IP=$(_tf output -raw server_ipv4 2>/dev/null) || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
 
         ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
