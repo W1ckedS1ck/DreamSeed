@@ -1,0 +1,4 @@
+# Grafana Cloud service account token — committed by mistake in an earlier commit
+# on the grafana-cloud feature branch. The current HEAD has the token commented out.
+# This fingerprint will be removed once the secret is fully scrubbed from history.
+a6c6e7ed20b94eefe558841149662763aff9f529:terraform/grafana/terraform.tfvars:grafana-service-account-token:3
