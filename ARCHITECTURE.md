@@ -134,7 +134,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 │  mysqld_exporter            └────────┬────────┘                    │
 │  check_site.sh (every 1m)           │                             │
 │  smart_backup.sh (heartbeat)        │                             │
-│  Telegraf (access log parsing)      │                             │
+
 └─────────────────────────────────────┘                             │
                                        │                            │
                                        │ Grafana datasource         │ Grafana Cloud
