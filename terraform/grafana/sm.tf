@@ -1,7 +1,7 @@
 # Grafana Cloud Synthetic Monitoring — enabled per-workspace via sm_enabled var
 # Prerequisite: enable SM once manually in Grafana Cloud UI (Stack → SM → Enable).
 # After that, SA token with SM scope is all that's needed.
-# Probes used: London, Frankfurt, New York City, Singapore (4 global regions)
+# Probes: London, Frankfurt, NorthVirginia, Singapore
 
 data "grafana_synthetic_monitoring_probes" "main" {
   provider = grafana.sm
