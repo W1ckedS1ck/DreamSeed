@@ -8,3 +8,35 @@ variable "grafana_cloud_token" {
   type        = string
   sensitive   = true
 }
+
+variable "sm_access_token" {
+  description = "Synthetic Monitoring access token (falls back to grafana_cloud_token)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "sm_enabled" {
+  description = "Enable Synthetic Monitoring checks"
+  type        = bool
+  default     = false
+}
+
+variable "domain" {
+  description = "Domain to monitor (e.g. dreamseed.online)"
+  type        = string
+  default     = "dreamseed.online"
+}
+
+variable "sm_stack_id" {
+  description = "Grafana Cloud stack ID for Synthetic Monitoring"
+  type        = number
+  default     = 0
+}
+
+variable "sm_metrics_publisher_key" {
+  description = "Metrics publisher key for the SM-enabled stack"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

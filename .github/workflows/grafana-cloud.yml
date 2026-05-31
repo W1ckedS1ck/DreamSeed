@@ -41,16 +41,27 @@ jobs:
         env:
           PROD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
           PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          PROD_SM_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
           DEV_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           DEV_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+          DEV_SM_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
         run: |
           if [[ "${{ github.event.inputs.workspace }}" == "prod" ]]; then
-            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"
+            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"; SM_TOKEN="${PROD_SM_TOKEN:-}"; DOMAIN="dreamseed.online"
           else
-            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"
+            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"; SM_TOKEN="${DEV_SM_TOKEN:-}"; DOMAIN="hetz.vitalikuts.online"
           fi
-          printf 'grafana_cloud_url   = "%s"\ngrafana_cloud_token = "%s"\n' \
-            "$URL" "$TOKEN" > terraform/grafana/terraform.tfvars
+          SM_ENABLED=false
+          [[ -n "$SM_TOKEN" ]] && SM_ENABLED=true
+          cat > terraform/grafana/terraform.tfvars << EOF
+          grafana_cloud_url     = "$URL"
+          grafana_cloud_token   = "$TOKEN"
+          sm_access_token       = "$SM_TOKEN"
+          sm_enabled            = $SM_ENABLED
+          domain                = "$DOMAIN"
+          sm_stack_id           = 0
+          sm_metrics_publisher_key = ""
+          EOF
 
       - name: Terraform Plan
         working-directory: terraform/grafana
