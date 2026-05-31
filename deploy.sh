@@ -466,29 +466,85 @@ check_services() {
 
     local web_svc="nginx"
     [[ "$WEB_SERVER" == "apache" ]] && web_svc="apache2"
-    local services=("$web_svc" "php${PHP_VERSION}-fpm" "mariadb" "victoria-metrics" "grafana-server")
 
-    while IFS= read -r line; do
-        local svc="${line%%:*}" status="${line#*: }"
-        if [[ "$status" == "active" ]]; then
-            echo "    ✓ $svc"
-        else
-            echo "    ✗ $svc — service not active"
-        fi
-    done < <(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "for s in ${services[*]}; do echo \"\$s: \$(systemctl is-active \"\$s\" 2>/dev/null || echo inactive)\"; done")
+    local db_name="${DB_NAME:-modx_db}"
 
-    local http
-    http=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://${DEPLOY_DOMAIN}/" 2>/dev/null || echo "000")
-    if [[ "$http" == "200" || "$http" == "301" ]]; then
-        echo "    ✓ HTTP $http $DEPLOY_DOMAIN"
+    # Build check script with local variables interpolated
+    local check_script=$(cat << SCRIPT
+set -euo pipefail
+domain="$DEPLOY_DOMAIN"
+web_svc="$web_svc"
+php_version="$PHP_VERSION"
+db_name="$db_name"
+fail=0
+
+# --- Services ---
+for s in "\$web_svc" "php\${php_version}-fpm" "mariadb" "victoria-metrics" "grafana-server" "telegram-bot"; do
+    st=\$(systemctl is-active "\$s" 2>/dev/null || echo "inactive")
+    if [[ "\$st" == "active" ]]; then echo "  ✓ \$s"
+    else echo "  ✗ \$s — \$st"; fail=1; fi
+done
+
+# --- Site HTTP ---
+http=\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://\$domain/" 2>/dev/null || echo "000")
+if [[ "\$http" == "200" || "\$http" == "301" ]]; then echo "  ✓ HTTP \$http \$domain"
+else echo "  ✗ HTTP \$http \$domain — site not serving"; fail=1; fi
+
+# --- SSL ---
+if certbot certificates 2>/dev/null | grep -q "VALID"; then echo "  ✓ SSL: letsencrypt"
+elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; then echo "  ⚠ SSL: self-signed (dev)"
+else echo "  ✗ SSL: no certificate"; fail=1; fi
+
+# --- MODX ---
+if [[ -f /var/www/html/index.php ]]; then echo "  ✓ MODX: index.php"
+else echo "  ✗ MODX: index.php missing"; fail=1; fi
+
+# --- Database ---
+tables=\$(mysql -N "\$db_name" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$db_name';" 2>/dev/null || echo "0")
+if [[ "\$tables" -ge 50 ]]; then echo "  ✓ DB: \$tables tables"
+elif [[ "\$tables" -ge 1 ]]; then echo "  ⚠ DB: only \$tables tables"
+else echo "  ✗ DB: no tables"; fail=1; fi
+
+# --- VictoriaMetrics ---
+vm=\$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
+if [[ "\$vm" == "OK" ]]; then echo "  ✓ VictoriaMetrics"
+else echo "  ✗ VictoriaMetrics"; fail=1; fi
+
+# --- Exporters ---
+if curl -sf --max-time 3 "http://127.0.0.1:9100/metrics" | grep -q node_ 2>/dev/null; then echo "  ✓ node_exporter"
+else echo "  ✗ node_exporter"; fail=1; fi
+if curl -sf --max-time 3 "http://127.0.0.1:9104/metrics" | grep -q mysql_ 2>/dev/null; then echo "  ✓ mysql_exporter"; fi
+if [[ "\$web_svc" == "nginx" ]] && curl -sf --max-time 3 "http://127.0.0.1:9113/metrics" | grep -q nginx_ 2>/dev/null; then echo "  ✓ nginx_exporter"; fi
+if [[ "\$web_svc" == "apache2" ]] && curl -sf --max-time 3 "http://127.0.0.1:9117/metrics" | grep -q apache_ 2>/dev/null; then echo "  ✓ apache_exporter"; fi
+if systemctl is-active vmagent > /dev/null 2>&1; then
+    if curl -sf --max-time 3 "http://127.0.0.1:8429/metrics" | grep -q vmagent_ 2>/dev/null; then echo "  ✓ vmagent"
+    else echo "  ⚠ vmagent running but no metrics"; fi
+fi
+
+# --- Backup cron ---
+if crontab -l 2>/dev/null | grep -q smart_backup; then echo "  ✓ cron: backup"
+else echo "  ✗ cron: backup not set"; fail=1; fi
+
+# --- fail2ban ---
+jails=\$(fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
+if echo "\$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: \$jails"
+else echo "  ⚠ fail2ban: no jails (\$jails)"; fi
+
+exit \$fail
+SCRIPT
+)
+
+    local output
+    output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+        -i "$SSH_KEY" "ubuntu@$SERVER_IP" bash <<< "$check_script" 2>&1)
+    local rc=$?
+
+    echo "$output"
+
+    if [[ "$rc" -eq 0 ]]; then
         echo "    All checks passed"
     else
-        echo "    ✗ HTTP $http $DEPLOY_DOMAIN — site not serving"
-        step_fail "Site check failed: HTTP $http from https://${DEPLOY_DOMAIN}/"
+        step_fail "Some checks failed (see above)"
     fi
 }
 
