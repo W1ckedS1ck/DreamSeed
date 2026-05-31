@@ -28,4 +28,10 @@ variable "domain" {
   default     = "dreamseed.online"
 }
 
+variable "sm_url" {
+  description = "Synthetic Monitoring API URL (e.g. https://synthetic-monitoring-api-eu-north-0.grafana.net)"
+  type        = string
+  default     = ""
+}
+
 

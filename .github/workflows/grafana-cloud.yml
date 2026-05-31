@@ -47,9 +47,11 @@ jobs:
           DEV_SM_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
         run: |
           if [[ "${{ github.event.inputs.workspace }}" == "prod" ]]; then
-            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"; SM_TOKEN="$PROD_SM_TOKEN"; DOMAIN="dreamseed.online"
+            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"; SM_TOKEN="$PROD_SM_TOKEN"
+            DOMAIN="dreamseed.online"; SM_URL="https://synthetic-monitoring-api-us-east-0.grafana.net"
           else
-            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"; SM_TOKEN="$DEV_SM_TOKEN"; DOMAIN="hetz.vitalikuts.online"
+            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"; SM_TOKEN="$DEV_SM_TOKEN"
+            DOMAIN="hetz.vitalikuts.online"; SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
           fi
           SM_ENABLED=false
           [[ -n "$SM_TOKEN" ]] && SM_ENABLED=true
@@ -59,6 +61,7 @@ jobs:
           sm_access_token     = "$SM_TOKEN"
           sm_enabled          = $SM_ENABLED
           domain              = "$DOMAIN"
+          sm_url              = "$SM_URL"
           EOF
 
       - name: Terraform Plan
