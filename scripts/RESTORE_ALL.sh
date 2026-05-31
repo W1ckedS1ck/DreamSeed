@@ -301,7 +301,8 @@ if [ -n "$SELECTED_DB" ]; then
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"
         echo -e "${RED}✗ Failed to decompress archive!${NC}"
-    elif mysql "$DB_NAME" < "$TEMP_SQL"; then
+    else
+        if mysql "$DB_NAME" < "$TEMP_SQL"; then
             mysql "$DB_NAME" -e "TRUNCATE TABLE ${DB_PREFIX}session;" 2>/dev/null
 
             COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM modx_site_content;" 2>/dev/null || echo "0")

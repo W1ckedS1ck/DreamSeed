@@ -94,10 +94,6 @@ apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 EOF
 
-  lifecycle {
-    prevent_destroy = var.environment == "prod"
-  }
-
   metadata_options {
     http_tokens = "required"
   }
