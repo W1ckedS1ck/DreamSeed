@@ -54,13 +54,11 @@ jobs:
           SM_ENABLED=false
           [[ -n "$SM_TOKEN" ]] && SM_ENABLED=true
           cat > terraform/grafana/terraform.tfvars << EOF
-          grafana_cloud_url     = "$URL"
-          grafana_cloud_token   = "$TOKEN"
-          sm_access_token       = "$SM_TOKEN"
-          sm_enabled            = $SM_ENABLED
-          domain                = "$DOMAIN"
-          sm_stack_id           = 0
-          sm_metrics_publisher_key = ""
+          grafana_cloud_url   = "$URL"
+          grafana_cloud_token = "$TOKEN"
+          sm_access_token     = "$SM_TOKEN"
+          sm_enabled          = $SM_ENABLED
+          domain              = "$DOMAIN"
           EOF
 
       - name: Terraform Plan
