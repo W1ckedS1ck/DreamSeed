@@ -1,4 +1,48 @@
 # Managed by Ansible
+
+{% macro alert_body(uid, title, expr, range_from, thresh_val, thresh_type, for_dur, no_data, exec_err) %}
+      - uid: dreamseed-{{ uid }}
+        title: {{ title }}
+        condition: B
+        labels:
+          env: {{ domain }}
+        data:
+          - refId: A
+            datasourceUid: VictoriaMetrics
+            queryType: ''
+            relativeTimeRange:
+              from: {{ range_from }}
+              to: 0
+            model:
+              expr: '{{ expr }}'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: '__expr__'
+            queryType: ''
+            relativeTimeRange:
+              from: {{ range_from }}
+              to: 0
+            model:
+              type: threshold
+              refId: B
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [{{ thresh_val }}]
+                    type: {{ thresh_type }}
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+        noDataState: {{ no_data }}
+        execErrState: {{ exec_err }}
+        for: {{ for_dur }}
+{% endmacro %}
+
 apiVersion: 1
 
 contactPoints:
@@ -30,527 +74,59 @@ groups:
     interval: 1m
     rules:
 
-      - uid: dreamseed-high-cpu
-        title: High CPU
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              expr: '100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [85]
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 5m
+{{ alert_body('high-cpu', 'High CPU', '100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)', 300, 85, 'gt', '5m', 'OK', 'Error') }}
         annotations:
           summary: >-
-            {% raw %}CPU usage > 85% for 5 min{% endraw %}
+            CPU usage > 85% for 5 min
 
-      - uid: dreamseed-high-ram
-        title: High RAM
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [90]
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 5m
+{{ alert_body('high-ram', 'High RAM', '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)', 300, 90, 'gt', '5m', 'OK', 'Error') }}
         annotations:
           summary: >-
-            {% raw %}RAM usage > 90%{% endraw %}
+            RAM usage > 90%
 
-      - uid: dreamseed-low-disk
-        title: Low Disk Space
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              expr: '100 * node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"}'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [10]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 5m
+{{ alert_body('low-disk', 'Low Disk Space', '100 * node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"}', 300, 10, 'lt', '5m', 'OK', 'Error') }}
         annotations:
           summary: >-
             {% raw %}Disk < 10% free (mountpoint: {{ $labels.mountpoint }}){% endraw %}
 
-      - uid: dreamseed-mysql-down
-        title: MySQL Down
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              expr: 'mysql_up'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [1]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 1m
+{{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
         annotations:
           summary: ""
 
-      - uid: dreamseed-phpfpm-down
-        title: PHP-FPM Down
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              expr: 'php_fpm_up'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [1]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 1m
+{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
         annotations:
           summary: ""
 
 {% if web_server == "apache" %}
-      - uid: dreamseed-apache-down
-        title: Apache Down
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              expr: 'apache_up'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [1]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 1m
+{{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
         annotations:
           summary: ""
 {% endif %}
 
 {% if web_server == "nginx" %}
-      - uid: dreamseed-nginx-down
-        title: Nginx Down
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              expr: 'nginx_up'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [1]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 1m
+{{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
         annotations:
           summary: ""
 {% endif %}
 
-      - uid: dreamseed-site-down
-        title: Site Down
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 120
-              to: 0
-            model:
-              expr: 'site_up'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 120
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [1]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 2m
+{{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'OK', 'Error') }}
         annotations:
-          summary: "Website is not responding (HTTP != 200)"
+          summary: Website is not responding (HTTP != 200)
 
-      - uid: dreamseed-modx-core
-        title: MODX Core Missing
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              expr: 'modx_core_ok'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [1]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Error
-        for: 2m
+{{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '2m', 'OK', 'Error') }}
         annotations:
           summary: ""
 
-      - uid: dreamseed-victoria-down
-        title: VictoriaMetrics Down
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              expr: 'victoria_up'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 60
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [1]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: OK
-        execErrState: Alerting
-        for: 1m
+{{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'OK', 'Alerting') }}
         annotations:
           summary: ""
 
-      - uid: dreamseed-cron-backup
-        title: Backup Cron Not Running
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 86400
-              to: 0
-            model:
-              expr: '(time() - max_over_time(cron_last_run_backup[1d])) / 60'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 86400
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [70]
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: Alerting
-        execErrState: Error
-        for: 5m
+{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '5m', 'Alerting', 'Error') }}
         annotations:
           summary: >-
             {% raw %}Backup cron hasn't run for 1h on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
 
-      - uid: dreamseed-check-site-cron
-        title: Site Health Check Not Running
-        condition: B
-        labels:
-          env: {{ domain }}
-        data:
-          - refId: A
-            datasourceUid: VictoriaMetrics
-            queryType: ''
-            relativeTimeRange:
-              from: 600
-              to: 0
-            model:
-              expr: '(time() - max_over_time(check_site_last_run[10m]))'
-              instant: true
-              refId: A
-          - refId: B
-            datasourceUid: '__expr__'
-            queryType: ''
-            relativeTimeRange:
-              from: 600
-              to: 0
-            model:
-              type: threshold
-              refId: B
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [180]
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
-                  type: query
-        noDataState: Alerting
-        execErrState: Error
-        for: 2m
+{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '2m', 'Alerting', 'Error') }}
         annotations:
           summary: >-
-            {% raw %}Site health check hasn't run for >3 min{% endraw %}
+            Site health check hasn't run for >3 min
