@@ -25,15 +25,17 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      01 Base ─── Packages, swap, PHP, MariaDB
        │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
        │      03 DB ────── MariaDB tuning, users, restore
-│ 04 Monitor ─ Exporters + VictoriaMetrics + check_site cron
+│ 04 Monitor ─ Exporters + VictoriaMetrics + vmagent + check_site cron
 │ 05 Backup ── Scripts, crons, Better Stack heartbeats, Telegram bot
        │      06 Grafana ─ Dashboards, datasources, alerts
        │      07 Security ── SSH, fail2ban, sysctl, MODX perms
        │
-       └─ 7. Post-deploy checks
-              systemctl is-active (5 services)
-              curl https://$DOMAIN/ → 200|301
-              Telegram summary
+        └─ 7. Post-deploy checks
+               systemctl is-active (6 services + Telegram bot)
+               curl https://$DOMAIN/ → 200|301
+               SSL, MODX index.php, DB tables, VictoriaMetrics health
+               Exporters (node, mysql, nginx/apache), vmagent, fail2ban
+               Backup cron installed
 ```
 
 ---
@@ -53,11 +55,12 @@ Cloudflare Proxy (Full SSL)
    │
    ├─ dreamseed.online/manager/ → MODX admin panel
    │
-   └─ Monitoring backplane (127.0.0.1 only)
-        Node Exporter :9100
-        Nginx Exporter :9113 / Apache Exporter :9117
-        MySQLd Exporter :9104
-        VictoriaMetrics :8428
+    └─ Monitoring backplane (127.0.0.1 only)
+         Node Exporter :9100
+         Nginx Exporter :9113 / Apache Exporter :9117
+         MySQLd Exporter :9104
+         VictoriaMetrics :8428
+         vmagent :8429 ──remote write──→ Grafana Cloud
 ```
 
 ---
@@ -124,25 +127,26 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 ### Internal Layer (on-server)
 
 ```
-┌──────────────┐    :8428    ┌─────────────────┐
-│  Exporters   │─────────────│ VictoriaMetrics │
-│  node_exporter              │ retention: 3mo  │
-│  nginx/apache_exporter      │ scrape: 15s     │
-│  mysqld_exporter            └────────┬────────┘
-│  check_site.sh (every 1m)           │
-│  smart_backup.sh (heartbeat)        │
-└─────────────────────────────────────┘
-                                       │
-                                       │ Grafana datasource
-                                       ▼
-                                ┌──────────────┐
-                                │   Grafana    │
-                                │  :3000       │
-                                │              │
-                                │ 6 dashboards │
-                                │ 12 alert rules│
-                                └──────┬───────┘
-                                       │
+┌──────────────┐    :8428    ┌─────────────────┐    :8429    ┌───────────────┐
+│  Exporters   │─────────────│ VictoriaMetrics │────────────│   vmagent     │
+│  node_exporter              │ retention: 3mo  │            │ remote write  │
+│  nginx/apache_exporter      │ scrape: 15s     │            └───────┬───────┘
+│  mysqld_exporter            └────────┬────────┘                    │
+│  check_site.sh (every 1m)           │                             │
+│  smart_backup.sh (heartbeat)        │                             │
+│  Telegraf (access log parsing)      │                             │
+└─────────────────────────────────────┘                             │
+                                       │                            │
+                                       │ Grafana datasource         │ Grafana Cloud
+                                       ▼                            ▼
+                                ┌──────────────┐           ┌──────────────────┐
+                                │   Grafana    │           │  Grafana Cloud   │
+                                │  :3000       │           │  (hosted metrics)│
+                                │              │           │                  │
+                                │ 6 dashboards │           │ Logs Overview    │
+                                │ 11 alert rules│          │ Traffic Analysis  │
+                                └──────┬───────┘           │ SM checks        │
+                                       │                    └──────────────────┘
                                        │ Telegram contact point
                                        ▼
                                  Telegram (chat_id)
@@ -163,7 +167,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 12 rules)
+### Alert Rules (Grafana — 11 rules)
 
 | Alert | Condition | Response |
 |-------|-----------|----------|
@@ -252,15 +256,20 @@ Bot events         Renovate              Dependency updates (auto PRs)
 ```
 DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
+├── audit-secrets.sh       # Pre-push secret leakage check
+├── .github/
+│   ├── actions/           # Composite actions: setup-secrets, setup-terraform, setup-ansible
+│   └── workflows/         # 6 workflows + Renovate + Infracost App
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
-│   └── hetzner/           # Server + firewall + primary IP
+│   ├── hetzner/           # Server + firewall + primary IP
+│   └── grafana/           # Grafana Cloud dashboard provisioning via Terraform
 ├── ansible/
 │   ├── playbook-01-base.yml ... playbook-07-security.yml
 │   └── group_vars/all.yml
 ├── ansible-roles/         # 15 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks
-├── .github/workflows/     # 6 workflows + Renovate + Infracost App
-├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup
+├── .tflint.hcl            # Terraform linter config (+ AWS ruleset plugin)
+├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/
 └── configs/               # fail2ban jails
 ```

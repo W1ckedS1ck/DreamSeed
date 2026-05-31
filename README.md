@@ -36,7 +36,7 @@
 | Deploy time | <10 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | 1 hour → Google Drive, 15/5 versions retained |
-| Uptime coverage | 12 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
+| Uptime coverage | 11 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
 | CI checks per push | 8 parallel jobs (lint → security → validate) |
 | Cloud cost | Tracked via Infracost GitHub App on every PR |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
@@ -51,9 +51,9 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
-- **Observability** — VictoriaMetrics + Grafana stack with 12 alert rules (CPU, RAM, Disk, MySQL, Nginx/Apache, PHP-FPM, MODX Core, site availability, VictoriaMetrics, backup cron, site check cron). External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Observability** — VictoriaMetrics + Grafana stack with 11 alert rules (CPU, RAM, Disk, MySQL, Nginx/Apache, PHP-FPM, MODX Core, site availability, VictoriaMetrics, backup cron, site check cron). Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 15/5 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, Terraform checks (lint+validate), OpenTofu validate, Trivy, gitleaks, pre-commit. Plus deploy, backup-test, drift-detection, rollback workflows
+- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, Terraform checks (lint+validate), OpenTofu validate, Trivy, gitleaks, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -78,7 +78,7 @@ Real problems encountered and solved in production:
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · Node/Nginx/MySQL exporters · 12 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · Telegraf (access log parsing) · 11 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
 | **CI/CD** | GitHub Actions (6 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · OpenTofu · Trivy · gitleaks · Renovate |
@@ -148,10 +148,12 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (700+ lines of battle-tested Bash)
+├── deploy.sh                 # Main orchestrator (800+ lines of battle-tested Bash)
+├── .github/actions/          # Composite actions: setup-secrets, setup-terraform, setup-ansible
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group
-│   └── hetzner/              # Cloud server + firewall + primary IP
+│   ├── hetzner/              # Cloud server + firewall + primary IP
+│   └── grafana/              # Grafana Cloud dashboard provisioning via Terraform
 ├── ansible/
 │   ├── playbook-01-base.yml      # OS packages
 │   ├── playbook-02-nginx.yml     # Nginx + PHP
@@ -164,13 +166,15 @@ DreamSeed/
 ├── ansible-roles/            # 15 reusable roles (nginx, mariadb, ssl, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
-├── secrets/                  # Ansible Vault encrypted secrets (gitignored)
+├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
+├── .tflint.hcl               # Terraform linter config (+ AWS ruleset plugin)
 └── .github/workflows/
     ├── ci.yml                # Full lint + security + validation pipeline
     ├── deploy.yml            # One-button deploy via GitHub Actions
     ├── drift-detection.yml   # Daily terraform plan against prod
     ├── backup-test.yml       # Full backup/restore verification with app health checks
-    └── rollback.yml          # Emergency rollback with prod confirmation
+    ├── rollback.yml          # Emergency rollback with prod confirmation
+    └── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
 ```
 
 ---
@@ -189,7 +193,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 - Full sysctl hardening (ICMP redirects, martian logging, core dumps disabled)
 
 ### 📊 Full Observability — Auto-Provisioned
-Grafana dashboards, datasources, **and 12 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
+Grafana dashboards, datasources, **and 11 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 **Internal (Grafana + VictoriaMetrics on-server):**
 
@@ -197,8 +201,13 @@ Grafana dashboards, datasources, **and 12 alert rules** deployed automatically �
 - **Nginx Prometheus Exporter** (`:9113`) / **Apache Exporter** (`:9117`) — web server health
 - **MySQLd Exporter** (`:9104`) — queries, connections, slave status
 - **VictoriaMetrics** (`:8428`) — 3-month retention, 15s scrape interval
-- **Grafana** (`:3000`) — 6 provisioned dashboards, 12 alert rules → Telegram
+- **Grafana** (`:3000`) — 6 provisioned dashboards, 11 alert rules → Telegram
 - **check_site.sh** (cron, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
+
+**Grafana Cloud (hosted metrics):**
+- **vmagent** (`:8429`) — VictoriaMetrics agent, scrapes on-server exporters and remote-writes to Grafana Cloud
+- **Grafana Cloud dashboards** — "Logs Overview" (6 panels) + "Traffic Analysis" (4 panels)
+- **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 9 global regions + SSL checks from 3 regions
 
 **External (Better Stack cloud-hosted):**
 - **3 HTTP monitors** — `dreamseed.online` (HTTP 200 + keyword check + Grafana endpoint), 3min interval, 4 global regions
@@ -222,6 +231,7 @@ Grafana dashboards, datasources, **and 12 alert rules** deployed automatically �
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
+| **Grafana Cloud** — dashboard provisioning | Manual dispatch |
 
 CI checks: ShellCheck · ruff · ansible-lint · **Terraform** (tflint+validate) · **OpenTofu validate** · **Trivy** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
 
