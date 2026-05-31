@@ -65,10 +65,7 @@ jobs:
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
-          set -a
-          source secrets/.env
-          set +a
-
+          # deploy.sh loads secrets/.env internally — no need to source here
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
           SERVER_IP="${{ inputs.server_ip }}"

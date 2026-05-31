@@ -22,19 +22,25 @@ runs:
   using: 'composite'
   steps:
     - shell: bash
+      env:
+        ENV_FILE_B64: ${{ inputs.env-file-b64 }}
+        VAULT_PASS: ${{ inputs.vault-pass }}
+        SSH_KEY: ${{ inputs.ssh-key }}
+        RCLONE_CONF_B64: ${{ inputs.rclone-conf-b64 }}
+        SETUP_SSH_CONFIG: ${{ inputs.setup-ssh-config }}
       run: |
         mkdir -p secrets
-        echo "${{ inputs.env-file-b64 }}" | base64 -d > secrets/.env
+        echo "$ENV_FILE_B64" | base64 -d > secrets/.env
         chmod 600 secrets/.env
 
-        echo -n "${{ inputs.vault-pass }}" > ~/.vault_pass_dreamseed
+        echo -n "$VAULT_PASS" > ~/.vault_pass_dreamseed
         chmod 600 ~/.vault_pass_dreamseed
 
         mkdir -p ~/.ssh
-        echo "${{ inputs.ssh-key }}" > ~/.ssh/Vitali.pem
+        echo "$SSH_KEY" > ~/.ssh/Vitali.pem
         chmod 600 ~/.ssh/Vitali.pem
 
-        if [[ "${{ inputs.setup-ssh-config }}" == "true" ]]; then
+        if [[ "$SETUP_SSH_CONFIG" == "true" ]]; then
           {
             echo "StrictHostKeyChecking no"
             echo "UserKnownHostsFile /dev/null"
@@ -42,7 +48,7 @@ runs:
           } > ~/.ssh/config
         fi
 
-        if [[ -n "${{ inputs.rclone-conf-b64 }}" ]]; then
-          echo "${{ inputs.rclone-conf-b64 }}" | base64 -d > secrets/rclone.conf
+        if [[ -n "$RCLONE_CONF_B64" ]]; then
+          echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf
           chmod 600 secrets/rclone.conf
         fi

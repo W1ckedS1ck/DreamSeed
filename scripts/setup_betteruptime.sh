@@ -36,7 +36,7 @@ get_existing_webhooks() {
 heartbeat_exists() {
     local name="$1"
     local data="$2"
-    echo "$data" | python3 - "$name" 2>/dev/null << 'PYEOF'
+    echo "$data" | python3 -c "
 import sys, json
 target = sys.argv[1]
 data = json.load(sys.stdin)
@@ -45,7 +45,7 @@ for item in data.get('data', []):
     if a['name'] == target:
         print(a['url'])
         break
-PYEOF
+" "$name" 2>/dev/null
 }
 
 find_key_in_env() {
@@ -124,9 +124,11 @@ else
 
     ensure_webhook() {
         local name="$1" started="$2" resolved="$3" text="$4"
+        local wh_json; wh_json=$(mktemp /tmp/bs_webhook_XXXXXX.json)
+        trap 'rm -f "$wh_json"' RETURN
 
         # Check if webhook already exists by name
-        existing_id=$(echo "$existing_wh" | python3 - "$name" 2>/dev/null << 'PYEOF'
+        existing_id=$(echo "$existing_wh" | python3 -c "
 import sys, json
 target = sys.argv[1]
 data = json.load(sys.stdin)
@@ -134,13 +136,13 @@ for item in data.get('data', []):
     if item['attributes']['name'] == target:
         print(item['id'])
         break
-PYEOF
+" "$name" 2>/dev/null
 )
 
-        python3 - "$name" "$TELEGRAM_URL" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" "$([[ -n "$existing_id" ]] && echo false || echo true)" << 'PYEOF' > /dev/null
+        python3 - "$name" "$TELEGRAM_URL" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" "$([[ -n "$existing_id" ]] && echo false || echo true)" "$wh_json" << 'PYEOF' > /dev/null
 import sys, json
 
-_, name, url, started, resolved, chat_id, thread, text, for_creation = sys.argv
+_, name, url, started, resolved, chat_id, thread, text, for_creation, out_path = sys.argv
 started = started.lower() == 'true'
 resolved = resolved.lower() == 'true'
 for_creation = for_creation.lower() == 'true'
@@ -169,15 +171,15 @@ payload["custom_webhook_template_attributes"] = {
         "text": text
     }
 }
-with open("/tmp/bs_webhook.json", "w") as f:
+with open(out_path, "w") as f:
     json.dump(payload, f)
 PYEOF
 
         if [[ -n "$existing_id" ]]; then
-            resp=$(curl -s -X PATCH "$API/outgoing-webhooks/$existing_id" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json" || echo "")
+            resp=$(curl -s -X PATCH "$API/outgoing-webhooks/$existing_id" -H "$AUTH" -H "Content-Type: application/json" -d "@$wh_json" || echo "")
             echo -e "  ${GREEN}✓${NC} $name (updated, ID $existing_id)"
         else
-            resp=$(curl -s -X POST "$API/outgoing-webhooks" -H "$AUTH" -H "Content-Type: application/json" -d "@/tmp/bs_webhook.json" || echo "")
+            resp=$(curl -s -X POST "$API/outgoing-webhooks" -H "$AUTH" -H "Content-Type: application/json" -d "@$wh_json" || echo "")
             id=$(echo "$resp" | grep -o '"id": *"[^"]*"' | head -1 | cut -d'"' -f4)
             if [[ -n "$id" ]]; then
                 echo -e "  ${GREEN}✓${NC} $name (created, ID $id)"
@@ -186,7 +188,6 @@ PYEOF
                 echo -e "  ${RED}✗${NC} $name — ${err:-unknown}" >&2
             fi
         fi
-        rm -f /tmp/bs_webhook.json
     }
 
     ensure_webhook "Better Stack → Alert" true false '🚨 *$NAME*\n_$CAUSE_\n\n🔗 $URL\n⏱ Started: $STARTED_AT'

@@ -78,6 +78,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0600"
+  no_log: true
 
 - name: Create monitoring user for MySQL exporter (localhost)
   become: true

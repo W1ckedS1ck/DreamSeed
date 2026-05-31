@@ -43,6 +43,8 @@ mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/deploy_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
+> "$LOG"; chmod 600 "$LOG"
+> "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
 
 # ----- helpers -----
 
@@ -140,7 +142,11 @@ parse_args() {
             prod|dev-aws|dev-hetz) TARGET="$1"; shift ;;
             -n) WEB_SERVER="nginx"; shift ;;
             -a) WEB_SERVER="apache"; shift ;;
-            -i|--ip) EXISTING_IP="$2"; SKIP_TERRAFORM=true; shift 2 ;;
+            -i|--ip)
+                if [[ -z "${2:-}" || "$2" =~ ^- ]]; then
+                    echo "Error: -i requires an IP address argument"; usage; exit 1
+                fi
+                EXISTING_IP="$2"; SKIP_TERRAFORM=true; shift 2 ;;
             -x|--destroy) DESTROY_MODE=true; shift ;;
             -p|--parallel) PARALLEL_MODE=true; shift ;;
             -d|--dry-run) DRY_RUN=true; shift ;;
@@ -238,8 +244,7 @@ export_tf_env() {
 
 yaml_escape() {
     local val="$1"
-    val="${val//\\/\\\\}"; val="${val//\"/\\\"}"; val="${val//$'\n'/\\n}"
-    val="${val//!/\\!}"; val="${val//'#'/\\#}"
+    val="${val//\'/\'\'}"
     printf '%s' "$val"
 }
 
@@ -288,7 +293,7 @@ preflight_checks() {
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env
-        source <(grep -E '^BETTERUPTIME_' "$SCRIPT_DIR/secrets/.env" 2>/dev/null)
+        source "$env_src"
     fi
 
     apply_target_vars
@@ -347,9 +352,12 @@ print_summary() {
 # ----- Terraform -----
 
 terraform_select_workspace() {
-    unset TF_WORKSPACE
-    "$TERRAFORM" workspace select "$TF_WORKSPACE" 2>/dev/null || \
-    "$TERRAFORM" workspace new "$TF_WORKSPACE"
+    local ws="$TF_WORKSPACE"
+    (
+        unset TF_WORKSPACE
+        _tf workspace select "$ws" 2>/dev/null || \
+        _tf workspace new "$ws"
+    )
 }
 
 terraform_init_if_needed() {
@@ -383,14 +391,14 @@ terraform_destroy() {
     export_tf_env
 
     # Check server reachability
-    local ip; ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
+    local ip; ip=$(_tf output -lock-timeout=30s -raw server_ipv4 2>/dev/null || true)
     [[ -n "$ip" && -n "${SSH_KEY:-}" ]] && \
         ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
             && echo "  ✓ Server $ip reachable" \
             || echo "  ⚠ Server $ip unreachable — destroying anyway"
 
     terraform_init_if_needed || { echo "Terraform init failed"; cat "$DEPLOY_TF_LOG"; return 1; }
-    ( cd "$TF_DIR" && terraform_select_workspace ) >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
+    terraform_select_workspace >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
 
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
@@ -573,7 +581,7 @@ main() {
         export_tf_env
 
         terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform init failed"; }
-        ( cd "$TF_DIR" && terraform_select_workspace ) || step_fail "Failed to select workspace: $TF_WORKSPACE"
+        terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
 
         local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
@@ -588,15 +596,14 @@ main() {
         done
         [[ "$ok" != "true" ]] && { tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"; }
 
-        SERVER_IP=$(_tf output -raw server_ipv4 2>/dev/null) || step_fail "Could not get server IP"
+        SERVER_IP=$(_tf output -lock-timeout=30s -raw server_ipv4 2>/dev/null) || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
 
         ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
 
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
-        [[ -f "$TF_DIR/terraform.tfstate" ]] && \
-            cp "$TF_DIR/terraform.tfstate" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+        _tf state pull > "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate" 2>/dev/null || true
         ls -1t "$bk/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
         step_ok
     else
@@ -651,7 +658,7 @@ INVEOF
 
     VAULT_TMP=$(mktemp); chmod 600 "$VAULT_TMP"
     {
-        echo "db_pass: \"$(yaml_escape "$DB_PASS")\""
+        echo "db_pass: '$(yaml_escape "$DB_PASS")'"
         echo "server_ip: \"${SERVER_IP}\""
         echo "web_server: \"${WEB_SERVER}\""
         echo "domain: \"${DEPLOY_DOMAIN}\""
@@ -666,16 +673,16 @@ INVEOF
         echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
         echo "configs_dir: \"${SCRIPT_DIR}/configs\""
         echo "scripts_dir: \"${SCRIPT_DIR}/scripts\""
-        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && echo "cloudflare_api_token: \"$(yaml_escape "$CLOUDFLARE_API_TOKEN")\""
-        [[ -n "${GRAFANA_PASS:-}" ]] && echo "grafana_admin_password: \"$(yaml_escape "$GRAFANA_PASS")\""
+        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && echo "cloudflare_api_token: '$(yaml_escape "$CLOUDFLARE_API_TOKEN")'"
+        [[ -n "${GRAFANA_PASS:-}" ]] && echo "grafana_admin_password: '$(yaml_escape "$GRAFANA_PASS")'"
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
-        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && echo "grafana_cloud_url: \"$(yaml_escape "$GRAFANA_CLOUD_URL")\""
-        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && echo "grafana_cloud_username: \"$(yaml_escape "$GRAFANA_CLOUD_USERNAME")\""
-        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && echo "grafana_cloud_token: \"$(yaml_escape "$GRAFANA_CLOUD_TOKEN")\""
+        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && echo "grafana_cloud_url: '$(yaml_escape "$GRAFANA_CLOUD_URL")'"
+        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && echo "grafana_cloud_username: '$(yaml_escape "$GRAFANA_CLOUD_USERNAME")'"
+        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && echo "grafana_cloud_token: '$(yaml_escape "$GRAFANA_CLOUD_TOKEN")'"
         [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && {
             echo "additional_ssh_keys:"
             while IFS= read -r key; do
-                [[ -n "$key" ]] && echo "  - \"$(yaml_escape "$key")\""
+                [[ -n "$key" ]] && echo "  - '$(yaml_escape "$key")'"
             done <<< "$ADDITIONAL_SSH_KEYS"
         }
     } > "$VAULT_TMP"

@@ -36,6 +36,7 @@
       - fail2ban
       - jq
       - rclone
+      - ssl-cert
       - unzip
       - bind9-dnsutils
       - python3-pymysql

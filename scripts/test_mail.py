@@ -52,7 +52,7 @@ This is an automated system notification.
     print(f"--- Initiating secure transfer to: {recipient_email} ---")
     try:
         context = ssl.create_default_context()
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.starttls(context=context)
             server.login(EMAIL_USER, EMAIL_PASS)
             server.send_message(msg)

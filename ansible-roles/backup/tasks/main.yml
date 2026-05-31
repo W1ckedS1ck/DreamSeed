@@ -86,9 +86,6 @@
     mode: "0600"
   no_log: true
 
-- name: Flush handlers
-  ansible.builtin.meta: flush_handlers
-
 - name: Enable bot service
   ansible.builtin.systemd:
     name: telegram-bot
@@ -139,7 +136,7 @@
     day: "*/3"
     job: >
       mysql -u root {{ db_name }} -e
-      "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
+      "DELETE FROM {{ db_prefix | default('modx_') }}session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
       2>/dev/null || true
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"

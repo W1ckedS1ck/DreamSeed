@@ -10,6 +10,23 @@
   ansible.builtin.include_tasks: nginx_exporter.yml
   when: web_server == "nginx"
 
+- name: Remove stale web exporter on web server switch
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  failed_when: false
+  loop: "{{ ['nginx_exporter'] if web_server == 'apache' else ['apache_exporter'] }}"
+
+- name: Remove stale web exporter binary on web server switch
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: >
+    {{ ['/usr/local/bin/nginx_exporter']
+       if web_server == 'apache'
+       else ['/usr/local/bin/apache_exporter'] }}
+
 - name: MySQL Exporter
   ansible.builtin.include_tasks: mysql_exporter.yml
   when: db_pass | default('') | length > 0

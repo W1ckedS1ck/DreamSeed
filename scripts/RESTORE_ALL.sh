@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
+DB_PREFIX="${DB_PREFIX:-modx_}"
 
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
@@ -41,6 +42,7 @@ START_TIME=$(date +%s)
 
 SERVICES_STOPPED=0
 cleanup_trap() {
+    rm -rf /tmp/restore_* 2>/dev/null || true
     if [ "$SERVICES_STOPPED" -eq 1 ]; then
         if [ "$MODE" = "interactive" ]; then
             echo ""
@@ -259,9 +261,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
     fi
 
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
-    sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"
-
-    if [ $? -eq 0 ]; then
+    if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
         sudo rm -rf "$PROJECT_DIR"
         sudo mv "$TEMP_EXTRACT/$(basename "$PROJECT_DIR")" "$PROJECT_DIR"
         sudo rm -rf "$TEMP_EXTRACT"
@@ -297,17 +297,12 @@ if [ -n "$SELECTED_DB" ]; then
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)
 
     TEMP_SQL=$(mktemp /tmp/restore_XXXXXX.sql)
-    gunzip -c "$SELECTED_DB" > "$TEMP_SQL"
-
-    if [ $? -ne 0 ]; then
+    if ! gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"
         echo -e "${RED}✗ Failed to decompress archive!${NC}"
-    else
-        mysql "$DB_NAME" < "$TEMP_SQL"
-
-        if [ $? -eq 0 ]; then
-            mysql "$DB_NAME" -e "TRUNCATE TABLE modx_session;" 2>/dev/null
+    elif mysql "$DB_NAME" < "$TEMP_SQL"; then
+            mysql "$DB_NAME" -e "TRUNCATE TABLE ${DB_PREFIX}session;" 2>/dev/null
 
             COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM modx_site_content;" 2>/dev/null || echo "0")
             LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)

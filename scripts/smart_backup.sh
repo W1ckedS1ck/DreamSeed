@@ -71,9 +71,10 @@ else
     if sudo tar -czf "$PROJECT_BACKUP" \
         --exclude="html/core/cache" \
         --exclude="html/core/backup" \
-        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" >> "$LOG_FILE" 2>&1 && \
-       sudo tar -tzf "$PROJECT_BACKUP" >> "$LOG_FILE" 2>&1; then
+        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
+       sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
         echo "$CURRENT_HASH" > "$HASH_FILE"
         PROJECT_STATUS="✅ Project backed up"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"

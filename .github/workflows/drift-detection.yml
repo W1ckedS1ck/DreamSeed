@@ -21,8 +21,10 @@ jobs:
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
       TF_WORKSPACE: prod
-      # Intentionally using DEV_AWS credentials — prod drift detection runs in a dev
-      # context with read-only access. Prod keys are kept for deploy-only operations.
+      # Using DEV_AWS credentials + DEV SSH key + DEV EIP for prod drift detection
+      # because prod was migrated onto what was previously the dev AWS infrastructure.
+      # The old prod was decommissioned; the current prod uses the same AWS resources
+      # as the former dev environment. DEV credentials are intentionally read-only.
       AWS_ACCESS_KEY_ID: ${{ secrets.DEV_AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
       AWS_DEFAULT_REGION: ${{ secrets.DEV_AWS_REGION }}
@@ -30,7 +32,7 @@ jobs:
     steps:
       - uses: ./.github/actions/setup-terraform
 
-      - name: Write prod SSH public key
+      - name: Write SSH public key
         run: echo "${{ secrets.DEV_AWS_SSH_PUBLIC_KEY }}" > /tmp/prod.pub
 
       - name: Terraform Init

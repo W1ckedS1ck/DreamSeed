@@ -22,6 +22,12 @@
     - not restore_site_exists.stat.exists
     - not rclone_config_remote.stat.exists
 
+# NOTE: Dev environments (dev-aws, dev-hetz) intentionally restore backups
+# from prod (gdrive:DreamSeed/backups/project/ and db/). There is no
+# separate backup pipeline for dev — dev always pulls latest prod data.
+# This is by design, not a bug. If you change these paths, make sure dev
+# still gets prod data, not dev-specific backups.
+
 - name: Restore project from Google Drive
   when:
     - not restore_site_exists.stat.exists
@@ -107,6 +113,9 @@
 - name: Set db_needs_restore fact
   ansible.builtin.set_fact:
     restore_db_needs_restore: "{{ (restore_db_tables.stdout | default('0') | int) < 2 }}"
+
+# NOTE: See the project-restore block above — same logic applies: dev always
+# restores from prod backups. Paths are intentionally prod-only.
 
 - name: Restore database from Google Drive
   when:

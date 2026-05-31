@@ -55,9 +55,7 @@ jobs:
         run: |
           ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
 
-          set -a
           source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
-          set +a
           echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"

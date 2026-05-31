@@ -143,6 +143,7 @@
     owner: grafana
     group: grafana
     mode: "0640"
+  no_log: true
   notify: Restart Grafana
   when: grafana_telegram_token | default('') | length > 0
 
@@ -168,10 +169,20 @@
   ansible.builtin.command:
     cmd: grafana-cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
+    creates: /etc/grafana/.admin_password_set
   no_log: true
   changed_when: false
   register: grafana_cli_result
   when: grafana_admin_password | default('') | length > 0
+
+- name: Mark Grafana password as set
+  ansible.builtin.file:
+    path: /etc/grafana/.admin_password_set
+    state: touch
+  when:
+    - grafana_cli_result is defined
+    - grafana_cli_result is not skipped
+    - grafana_cli_result.rc == 0
 
 - name: Warn if Grafana password reset failed
   ansible.builtin.debug:
