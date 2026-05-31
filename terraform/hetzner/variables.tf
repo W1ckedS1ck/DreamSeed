@@ -40,7 +40,3 @@ variable "location" {
   default     = "nbg1"
 }
 
-locals {
-  use_dynamic_ip   = var.primary_ip_name == ""
-  use_existing_key = var.ssh_key_name != ""
-}

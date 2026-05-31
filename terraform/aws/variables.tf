@@ -27,7 +27,3 @@ variable "environment" {
   default     = "prod"
 }
 
-locals {
-  environment_tag = var.environment == "prod" ? "Prod" : "Dev"
-  service_tag     = "DreamSeed"
-}

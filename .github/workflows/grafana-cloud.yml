@@ -37,27 +37,20 @@ jobs:
         working-directory: terraform/grafana
         run: terraform init -upgrade=false
 
-      - name: Set Grafana Cloud Credentials (Prod)
-        if: ${{ github.event.inputs.workspace == 'prod' }}
+      - name: Set Grafana Cloud Credentials
         env:
-          GRAFANA_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
-          GRAFANA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          PROD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
+          PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          DEV_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
+          DEV_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
         run: |
-          cat > terraform/grafana/terraform.tfvars <<EOF
-          grafana_cloud_url      = "$GRAFANA_URL"
-          grafana_cloud_token    = "$GRAFANA_TOKEN"
-          EOF
-
-      - name: Set Grafana Cloud Credentials (Dev)
-        if: ${{ github.event.inputs.workspace == 'dev' }}
-        env:
-          GRAFANA_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
-          GRAFANA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
-        run: |
-          cat > terraform/grafana/terraform.tfvars <<EOF
-          grafana_cloud_url      = "$GRAFANA_URL"
-          grafana_cloud_token    = "$GRAFANA_TOKEN"
-          EOF
+          if [[ "${{ github.event.inputs.workspace }}" == "prod" ]]; then
+            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"
+          else
+            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"
+          fi
+          printf 'grafana_cloud_url   = "%s"\ngrafana_cloud_token = "%s"\n' \
+            "$URL" "$TOKEN" > terraform/grafana/terraform.tfvars
 
       - name: Terraform Plan
         working-directory: terraform/grafana

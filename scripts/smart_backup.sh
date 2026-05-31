@@ -120,10 +120,10 @@ if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
     # Ping external watchdog on success
     if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
-        if curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_BACKUP_KEY}" > /dev/null 2>&1; then
+        if ping_heartbeat "$BETTERUPTIME_BACKUP_KEY"; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >> "$LOG_FILE"
         else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ curl failed" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ failed" >> "$LOG_FILE"
         fi
     else
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)" >> "$LOG_FILE"

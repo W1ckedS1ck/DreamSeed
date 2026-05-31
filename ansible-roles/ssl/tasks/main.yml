@@ -119,20 +119,20 @@
     mode: "0755"
   when: ssl_has_cert
 
-# --- Self-signed fallback for Nginx ---
-- name: Generate self-signed private key for Nginx
+# --- Self-signed fallback (Nginx only — Apache uses ssl-cert-snakeoil) ---
+- name: Generate self-signed private key
   become: true
   ansible.builtin.command:
     cmd: openssl genrsa -out /etc/ssl/private/nginx-selfsigned.key 2048
     creates: /etc/ssl/private/nginx-selfsigned.key
-  when: not ssl_has_cert
+  when: not ssl_has_cert and web_server == "nginx"
 
-- name: Generate self-signed certificate for Nginx
+- name: Generate self-signed certificate
   become: true
   ansible.builtin.command:
     cmd: "openssl req -new -x509 -key /etc/ssl/private/nginx-selfsigned.key -out /etc/ssl/certs/nginx-selfsigned.crt -days 365 -nodes -subj /CN={{ domain }}"
     creates: /etc/ssl/certs/nginx-selfsigned.crt
-  when: not ssl_has_cert
+  when: not ssl_has_cert and web_server == "nginx"
 
 - name: Ensure group ssl-cert exists
   become: true
@@ -148,7 +148,7 @@
     owner: root
     group: ssl-cert
     mode: "0640"
-  when: not ssl_has_cert
+  when: not ssl_has_cert and web_server == "nginx"
 
 - name: Add web server user to ssl-cert group
   become: true

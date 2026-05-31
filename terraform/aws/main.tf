@@ -1,6 +1,11 @@
+locals {
+  environment_tag = var.environment == "prod" ? "Prod" : "Dev"
+  service_tag     = "DreamSeed"
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477", "839968031152"]
+  owners      = ["099720109477"]
 
   filter {
     name   = "name"
@@ -72,7 +77,7 @@ resource "aws_instance" "web" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.deploy.key_name
-  security_groups             = [aws_security_group.web.name]
+  vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = var.elastic_ip_allocation_id == ""
 
   root_block_device {
@@ -86,14 +91,14 @@ resource "aws_instance" "web" {
     }
   }
 
-  user_data = <<-EOF
-  #!/bin/bash
-  hostnamectl set-hostname dreamseed-${var.environment}
-  sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  systemctl restart sshd
-  apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
-  EOF
+  user_data = <<EOF
+#!/bin/bash
+hostnamectl set-hostname dreamseed-${var.environment}
+sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+systemctl restart sshd
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+EOF
 
   metadata_options {
     http_tokens = "required"

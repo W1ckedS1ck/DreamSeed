@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -67,13 +67,14 @@ jobs:
           path: |
             terraform/aws/.terraform
             terraform/hetzner/.terraform
-          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl') }}
+            terraform/grafana/.terraform
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl', 'terraform/grafana/.terraform.lock.hcl') }}
           restore-keys: terraform-providers-${{ runner.os }}-
       - name: Run tflint
         run: |
-          tflint --init
           for dir in terraform/*/; do
             echo "=== Linting $dir ==="
+            tflint --init --chdir="$dir"
             tflint --chdir="$dir"
           done
       - name: Validate all providers

@@ -1,8 +1,2 @@
 ---
-- name: Reload Nginx
-  become: true
-  ansible.builtin.systemd:
-    name: nginx
-    state: reloaded
-
-
+# Empty — handlers are inherited from nginx role (always included first)

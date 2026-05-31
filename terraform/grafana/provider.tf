@@ -4,6 +4,10 @@ terraform {
       source  = "grafana/grafana"
       version = "~> 2.0"
     }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
+    }
   }
   backend "remote" {
     organization = "DreamSeed"

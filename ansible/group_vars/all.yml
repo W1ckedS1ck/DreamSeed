@@ -7,7 +7,6 @@ domain: ""
 domain_www: true
 admin_email: "hello@dreamseed.online"
 web_server: "nginx"
-server_ip: "{{ ansible_host }}"
 
 # ========================
 #  Database

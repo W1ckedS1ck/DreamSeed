@@ -63,14 +63,35 @@ format_name() {
 }
 
 send_tg() {
+    local text="$1"
+    local parse_mode="${2:-MarkdownV2}"
     local tg_url="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
     local data=(
         --data-urlencode "chat_id=$TG_CHAT_ID"
-        --data-urlencode "text=$1"
-        --data-urlencode "parse_mode=MarkdownV2"
+        --data-urlencode "text=$text"
+        --data-urlencode "parse_mode=$parse_mode"
     )
     [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
     curl -s -X POST "$tg_url" "${data[@]}" > /dev/null 2>&1
+}
+
+ping_heartbeat() {
+    local key="${1:-}"
+    [[ -z "$key" ]] && return 0
+    curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/$key" > /dev/null 2>&1
+}
+
+prune_cloud_backups() {
+    local subdir="$1" max="$2"
+    local all
+    all=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/" --files-only 2>/dev/null | sort -r) || return 1
+    local count
+    count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]')
+    if [ "$count" -gt "$max" ]; then
+        printf '%s\n' "$all" | tail -n +$((max + 1)) | while read -r file; do
+            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/$file"
+        done
+    fi
 }
 
 escape_md2() {

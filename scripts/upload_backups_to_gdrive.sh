@@ -60,37 +60,16 @@ fi
 
 # ====== 3. Clean old backups in cloud ======
 
-# Old projects
-CLOUD_PROJ_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort -r) || {
+prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || {
     UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
 "
     HAS_ERROR=1
-    CLOUD_PROJ_ALL=""
 }
-if [ -n "$CLOUD_PROJ_ALL" ]; then
-    PROJ_COUNT=$(echo "$CLOUD_PROJ_ALL" | grep -c '[^[:space:]]')
-    if [ "$PROJ_COUNT" -gt "$MAX_PROJECT_BACKUPS" ]; then
-        while read -r file; do
-            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/$file"
-        done <<< "$(echo "$CLOUD_PROJ_ALL" | tail -n +$((MAX_PROJECT_BACKUPS + 1)))"
-    fi
-fi
-
-# Old databases
-CLOUD_DB_ALL=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort -r) || {
+prune_cloud_backups "db" "$MAX_DB_BACKUPS" || {
     UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
 "
     HAS_ERROR=1
-    CLOUD_DB_ALL=""
 }
-if [ -n "$CLOUD_DB_ALL" ]; then
-    DB_COUNT=$(echo "$CLOUD_DB_ALL" | grep -c '[^[:space:]]')
-    if [ "$DB_COUNT" -gt "$MAX_DB_BACKUPS" ]; then
-        while read -r file; do
-            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/$file"
-        done <<< "$(echo "$CLOUD_DB_ALL" | tail -n +$((MAX_DB_BACKUPS + 1)))"
-    fi
-fi
 
 # Trash
 rclone cleanup "$RCLONE_REMOTE:" 2>/dev/null
@@ -101,7 +80,7 @@ rclone cleanup "$RCLONE_REMOTE:" 2>/dev/null
 #     curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_GDRIVE_UUID}" > /dev/null 2>&1
 # fi
 if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then
-    curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_GDRIVE_KEY}" > /dev/null 2>&1
+    ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"
 fi
 
 # ====== Send alert only on failure ======
@@ -111,8 +90,7 @@ if [ "$HAS_ERROR" -eq 1 ]; then
     MSG="====== ALERT ======
 🔴 *UPLOAD FAILED* — $ENV_DISPLAY_ESCAPED
 
-❌ Upload to GDrive failed
-⏰ $(date '+%d.%m.%Y %H:%M')  ⏱ ${DURATION}s
+${UPLOAD_MSG}⏰ $(date '+%d.%m.%Y %H:%M')  ⏱ ${DURATION}s
 =========================="
     send_tg "$MSG"
 fi

@@ -1,3 +1,8 @@
+locals {
+  use_dynamic_ip   = var.primary_ip_name == ""
+  use_existing_key = var.ssh_key_name != ""
+}
+
 data "hcloud_ssh_key" "default" {
   count = local.use_existing_key ? 1 : 0
   name  = var.ssh_key_name
@@ -52,17 +57,17 @@ resource "hcloud_server" "main" {
     ipv4         = local.use_dynamic_ip ? null : data.hcloud_primary_ip.main[0].id
   }
 
-  user_data = <<-EOF
-    #!/bin/bash
-    useradd -m -s /bin/bash -G sudo ubuntu
-    mkdir -p /home/ubuntu/.ssh
-    cp /root/.ssh/authorized_keys /home/ubuntu/.ssh/
-    chown -R ubuntu:ubuntu /home/ubuntu/.ssh
-    chmod 700 /home/ubuntu/.ssh
-    chmod 600 /home/ubuntu/.ssh/authorized_keys
-    echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu
-    echo 'PermitRootLogin no' > /etc/ssh/sshd_config.d/disable-root.conf
-    systemctl restart ssh
-    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
-  EOF
+  user_data = <<EOF
+#!/bin/bash
+useradd -m -s /bin/bash -G sudo ubuntu
+mkdir -p /home/ubuntu/.ssh
+cp /root/.ssh/authorized_keys /home/ubuntu/.ssh/
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+chmod 700 /home/ubuntu/.ssh
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu
+echo 'PermitRootLogin no' > /etc/ssh/sshd_config.d/disable-root.conf
+systemctl restart ssh
+apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+EOF
 }

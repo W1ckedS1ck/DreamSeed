@@ -119,7 +119,6 @@
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
 - name: Check if MODX is installed (modx_system_settings table exists)
-  become: true
   community.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
@@ -127,8 +126,7 @@
   register: modx_check
   ignore_errors: true
 
-- name: Update MODX session_gc_maxlifetime to 6 hours
-  become: true
+- name: Update MODX session_gc_maxlifetime to 24 hours
   community.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
@@ -136,10 +134,9 @@
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
-  when: modx_check is not failed and modx_check.query_result[0][0] | int > 0
+  when: modx_check is not failed and modx_check.query_result[0][0].cnt | int > 0
 
 - name: Wait for VictoriaMetrics to accept writes
-  become: true
   ansible.builtin.uri:
     url: "http://127.0.0.1:8428/health"
   register: vm_health
@@ -149,14 +146,13 @@
   changed_when: false
 
 - name: Push initial cron heartbeat to VictoriaMetrics
-  become: true
   ansible.builtin.shell:
     cmd: |
+      set -o pipefail
       for i in 1 2 3; do
         echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
         sleep 1
       done
   changed_when: false
-  ignore_errors: true
   failed_when: false

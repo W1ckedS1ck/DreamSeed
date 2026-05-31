@@ -218,7 +218,7 @@ export_tf_env() {
         [[ -n "${HETZNER_SSH_KEY_NAME:-}" ]] && export TF_VAR_ssh_key_name="$HETZNER_SSH_KEY_NAME"
         [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && export TF_VAR_primary_ip_name="$HETZNER_PRIMARY_IP_NAME"
         if [[ -z "${HETZNER_SSH_KEY_NAME:-}" && -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
-            local pk; pk="$(eval echo "$SSH_PUBLIC_KEY_PATH")"
+            local pk; pk="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
             if [[ -r "$pk" ]]; then
                 local pk_content; pk_content="$(<"$pk")"
                 export TF_VAR_ssh_public_key="$pk_content"
@@ -382,7 +382,7 @@ terraform_destroy() {
     # Check server reachability
     local ip; ip=$(cd "$TF_DIR" && "$TERRAFORM" output -raw server_ipv4 2>/dev/null || true)
     [[ -n "$ip" && -n "${SSH_KEY:-}" ]] && \
-        ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
+        ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
             && echo "  ✓ Server $ip reachable" \
             || echo "  ⚠ Server $ip unreachable — destroying anyway"
 
@@ -413,16 +413,23 @@ terraform_destroy() {
 
 # ----- Ansible execution -----
 
-run_ansible() {
-    local pb="$1" label="$2"
-    [[ "$TTY" == "false" ]] && echo "::group::${label}"
-    echo "    ▶ ${label}"
+_exec_playbook() {
+    local pb="$1"
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
     ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
     "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${VAULT_TMP}" \
         "$SCRIPT_DIR/ansible/$pb" 2>&1 | tee -a "$LOG"
     local rc="${PIPESTATUS[0]}"
+    return "$rc"
+}
+
+run_ansible() {
+    local pb="$1" label="$2"
+    [[ "$TTY" == "false" ]] && echo "::group::${label}"
+    echo "    ▶ ${label}"
+    _exec_playbook "$pb"
+    local rc=$?
     [[ "$TTY" == "false" ]] && echo "::endgroup::"
     return "$rc"
 }
@@ -435,18 +442,19 @@ run_parallel() {
     for entry in "$@"; do
         local pb="${entry%%:*}" label="${entry##*:}"
         echo "      ├ ${label}"
-        (
-            ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
-            ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
-            ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
-            "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${VAULT_TMP}" \
-                "$SCRIPT_DIR/ansible/$pb" 2>&1 | tee -a "$LOG"
-        ) &
+        (_exec_playbook "$pb") &
         pids+=("$!")
     done
     for pid in "${pids[@]}"; do wait "$pid" || ok=false; done
     [[ "$TTY" == "false" ]] && echo "::endgroup::"
     $ok
+}
+
+# ----- SSH helper -----
+
+_ssh() {
+    ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+        -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" "$@"
 }
 
 # ----- service checks -----
@@ -466,14 +474,10 @@ check_services() {
         else
             echo "    ✗ $svc — service not active"
         fi
-    done < <(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "for s in ${services[*]}; do echo \"\$s: \$(systemctl is-active \"\$s\" 2>/dev/null || echo inactive)\"; done")
+    done < <(_ssh "for s in ${services[*]}; do echo \"\$s: \$(systemctl is-active \"\$s\" 2>/dev/null || echo inactive)\"; done")
 
     local http
-    http=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://${DEPLOY_DOMAIN}/" 2>/dev/null || echo "000")
+    http=$(_ssh "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://${DEPLOY_DOMAIN}/" 2>/dev/null || echo "000")
     if [[ "$http" == "200" || "$http" == "301" ]]; then
         echo "    ✓ HTTP $http $DEPLOY_DOMAIN"
         echo "    All checks passed"
@@ -611,11 +615,10 @@ main() {
     step_start "Wait for SSH ($SERVER_IP)"
     local ready=false
     for i in $(seq 1 "$SSH_ATTEMPTS"); do
-        if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-            -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
+        if _ssh 'true' 2>/dev/null; then
             ready=true; break
         fi
-        [[ $i -eq $SSH_ATTEMPTS ]] && step_fail "SSH not ready after ${SSH_ATTEMPTS}s"
+        [[ $i -eq $SSH_ATTEMPTS ]] && step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s"
         printf "."; sleep "$SSH_INTERVAL"
     done
     echo ""
@@ -623,10 +626,10 @@ main() {
 
     # ----- Wait for cloud-init -----
     step_start "Wait for cloud-init"
-    ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" "timeout 300 cloud-init status --wait" >/dev/null 2>/dev/null || {
+    _ssh "timeout 300 cloud-init status --wait" >/dev/null 2>/dev/null || {
         for i in $(seq 1 "$CLOUDINIT_ATTEMPTS"); do
             local st
-            st=$(ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
+            st=$(_ssh 'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
             [[ "$st" == *"status: done"* || "$st" == *"No pending"* ]] && break
             [[ "$st" == *"status: error"* ]] && step_fail "Cloud-init failed (check /var/log/cloud-init-output.log)"
             [[ $i -eq $CLOUDINIT_ATTEMPTS ]] && step_fail "Cloud-init timeout"

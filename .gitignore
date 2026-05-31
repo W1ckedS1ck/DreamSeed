@@ -46,5 +46,8 @@ node_modules
 # Ansible fact cache and collections
 .ansible/
 
+# Tool/agent local state
+.codemie/
+
 # Linter cache
 .ruff_cache/

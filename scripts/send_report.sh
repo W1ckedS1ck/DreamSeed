@@ -28,22 +28,12 @@ DB_FILES=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p
 PROJ_COUNT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' 2>/dev/null | wc -l)
 DB_COUNT=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' 2>/dev/null | wc -l)
 
-CLOUD_PROJ=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
-CLOUD_DB=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
-
-LAST_GDRIVE_PROJ=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" 2>/dev/null | tail -1)")
-LAST_GDRIVE_DB=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" 2>/dev/null | tail -1)")
-
-send_html() {
-    local msg="$1"
-    local thread_arg=()
-    [[ -n "$TG_THREAD_ID" ]] && thread_arg=(-d "message_thread_id=$TG_THREAD_ID")
-    curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-         -d chat_id="$TG_CHAT_ID" \
-         "${thread_arg[@]}" \
-         -d parse_mode="HTML" \
-         -d text="$msg"
-}
+_proj_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort)
+_db_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort)
+CLOUD_PROJ=$(printf '%s' "$_proj_list" | grep -c '.' || true)
+CLOUD_DB=$(printf '%s' "$_db_list" | grep -c '.' || true)
+LAST_GDRIVE_PROJ=$(format_name "$(printf '%s' "$_proj_list" | tail -1)")
+LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
 
 # ====== DAILY REPORT ======
 if [ "$REPORT_TYPE" = "daily" ]; then
@@ -96,7 +86,7 @@ $(date +%d.%m) - $ENV_DISPLAY"
 
 $(date '+%d.%m.%Y %H:%M')"
 
-    send_html "$MSG"
+    send_tg "$MSG" "HTML"
 
 # ====== WEEKLY REPORT ======
 elif [ "$REPORT_TYPE" = "weekly" ]; then
@@ -136,7 +126,7 @@ $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
 🎯 Cloud upload rate: $SUCCESS_RATE
 $(date '+%d.%m.%Y %H:%M')"
 
-    send_html "$MSG"
+    send_tg "$MSG" "HTML"
 
 else
     echo "Usage: $0 {daily|weekly}"
@@ -160,6 +150,4 @@ if [[ "$REPORT_TYPE" == "daily" ]]; then
 elif [[ "$REPORT_TYPE" == "weekly" ]]; then
     _bs_key="${BETTERUPTIME_REPORT_WEEKLY_KEY:-}"
 fi
-if [[ -n "$_bs_key" ]]; then
-    curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/$_bs_key" > /dev/null 2>&1
-fi
+ping_heartbeat "$_bs_key"

@@ -1,47 +1,15 @@
 ---
-- name: Check if MySQL Exporter is installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/mysqld_exporter
-  register: monitoring_mysql_bin
-
-- name: Get current MySQL Exporter version
-  ansible.builtin.command: /usr/local/bin/mysqld_exporter --version
-  changed_when: false
-  failed_when: false
-  register: monitoring_mysql_current_version
-  when: monitoring_mysql_bin.stat.exists
-
 - name: Install/Upgrade MySQL Exporter
-  when: >
-    not monitoring_mysql_bin.stat.exists or
-    monitoring_mysql_version not in (monitoring_mysql_current_version.stdout | default(''))
-  block:
-    - name: Download MySQL Exporter
-      ansible.builtin.get_url:
-        url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ monitoring_mysql_version }}/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64.tar.gz"
-        dest: /tmp/mysqld_exporter.tar.gz
-        mode: "0644"
-
-    - name: Extract MySQL Exporter
-      ansible.builtin.unarchive:
-        src: /tmp/mysqld_exporter.tar.gz
-        dest: /tmp/
-        remote_src: true
-
-    - name: Install MySQL Exporter binary
-      ansible.builtin.copy:
-        src: "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64/mysqld_exporter"
-        dest: /usr/local/bin/mysqld_exporter
-        mode: "0755"
-        remote_src: true
-
-    - name: Cleanup MySQL Exporter temp files
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/mysqld_exporter.tar.gz
-        - "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64"
+  vars:
+    _exp_name: "MySQL Exporter"
+    bin: mysqld_exporter
+    version: "{{ monitoring_mysql_version }}"
+    url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ monitoring_mysql_version }}/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64.tar.gz"
+    src_in_tmp: "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64/mysqld_exporter"
+    cleanup_dirs:
+      - "/tmp/{{ bin }}.tar.gz"
+      - "/tmp/mysqld_exporter-{{ monitoring_mysql_version }}.linux-amd64"
+  ansible.builtin.include_tasks: _install_binary.yml
 
 - name: Create mysqld_exporter user
   ansible.builtin.user:

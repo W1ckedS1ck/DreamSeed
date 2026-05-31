@@ -1,0 +1,50 @@
+---
+# Shared binary installer — include with vars:
+#   _exp_name    — display name (e.g. "Node Exporter")
+#   bin          — binary filename (e.g. "node_exporter")
+#   url          — full GitHub release download URL
+#   version      — version string (e.g. "{{ monitoring_node_version }}")
+#   src_in_tmp   — path of extracted binary inside /tmp/ (e.g. "/tmp/node_exporter-1.2.3.linux-amd64/node_exporter")
+#   cleanup_dirs — list of paths to remove after install (tar + extracted dirs)
+
+- name: Check if {{ _exp_name }} is installed  # noqa: name[template]
+  ansible.builtin.stat:
+    path: "/usr/local/bin/{{ bin }}"
+  register: _ib_stat
+
+- name: Get current {{ _exp_name }} version  # noqa: name[template]
+  ansible.builtin.command: "/usr/local/bin/{{ bin }} --version"
+  changed_when: false
+  failed_when: false
+  register: _ib_current
+  when: _ib_stat.stat.exists
+
+- name: Install/Upgrade {{ _exp_name }}  # noqa: name[template]
+  when: >
+    not _ib_stat.stat.exists or
+    version not in ((_ib_current.stdout | default('')) + (_ib_current.stderr | default('')))
+  block:
+    - name: Download {{ _exp_name }}  # noqa: name[template]
+      ansible.builtin.get_url:
+        url: "{{ url }}"
+        dest: "/tmp/{{ bin }}.tar.gz"
+        mode: "0644"
+
+    - name: Extract {{ _exp_name }}  # noqa: name[template]
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ bin }}.tar.gz"
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install {{ _exp_name }} binary  # noqa: name[template]
+      ansible.builtin.copy:
+        src: "{{ src_in_tmp }}"
+        dest: "/usr/local/bin/{{ bin }}"
+        mode: "0755"
+        remote_src: true
+
+    - name: Cleanup {{ _exp_name }} temp files  # noqa: name[template]
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ cleanup_dirs }}"

@@ -116,14 +116,11 @@
     owner: grafana
     group: grafana
     mode: "0755"
-    recurse: true
-  become: true
 
 - name: Fix Grafana dashboard file permissions
   ansible.builtin.shell:
-    cmd: find /var/lib/grafana/dashboards -type f -name "*.json" -exec chmod 0644 {} +
+    cmd: find /var/lib/grafana/dashboards -type f -name "*.json" -exec chmod 0644 {} + -exec chown grafana:grafana {} +
   changed_when: false
-  become: true
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
@@ -159,6 +156,7 @@
     status_code: 200
   retries: 14
   delay: 2
+  changed_when: false
 
 - name: Reset Grafana admin password via CLI
   ansible.builtin.command:

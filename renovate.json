@@ -68,9 +68,34 @@
       "depNameTemplate": "grafana/grafana",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track apache_exporter version",
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_apache_version: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "Lusitaniae/apache_exporter",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track vmagent version",
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_vmagent_version: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
+    {
+      "description": "Group VictoriaMetrics server and vmagent — always released together",
+      "matchPackageNames": ["VictoriaMetrics/VictoriaMetrics"],
+      "matchManagers": ["custom.regex"],
+      "groupName": "VictoriaMetrics",
+      "labels": ["dependencies", "monitoring"]
+    },
     {
       "description": "Group all non-major Terraform provider updates",
       "matchManagers": ["terraform"],

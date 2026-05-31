@@ -182,26 +182,16 @@
     mode: "0644"
   notify: Reload sysctl
 
-- name: Set password max age (90 days)
+- name: Set password aging policy
   become: true
   ansible.builtin.lineinfile:
     path: /etc/login.defs
-    regexp: '^PASS_MAX_DAYS'
-    line: "PASS_MAX_DAYS\t90"
-
-- name: Set password min age (1 day)
-  become: true
-  ansible.builtin.lineinfile:
-    path: /etc/login.defs
-    regexp: '^PASS_MIN_DAYS'
-    line: "PASS_MIN_DAYS\t1"
-
-- name: Set password warn age (14 days)
-  become: true
-  ansible.builtin.lineinfile:
-    path: /etc/login.defs
-    regexp: '^PASS_WARN_AGE'
-    line: "PASS_WARN_AGE\t14"
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }}\t{{ item.value }}"
+  loop:
+    - {key: PASS_MAX_DAYS, value: 90}
+    - {key: PASS_MIN_DAYS, value: 1}
+    - {key: PASS_WARN_AGE, value: 14}
 
 # --- MODX Security ---
 - name: Check if MODX config exists
