@@ -137,7 +137,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (800+ lines of battle-tested Bash)
+├── deploy.sh                 # Main orchestrator (800+ lines of Bash)
 ├── .github/actions/          # Composite actions: setup-secrets, setup-terraform, setup-ansible
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group
@@ -156,7 +156,7 @@ DreamSeed/
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
-├── .tflint.hcl               # Terraform linter config (+ AWS ruleset plugin)
+├── .tflint.hcl               # Terraform linter config (root) + terraform/aws/.tflint.hcl (AWS ruleset)
 └── .github/workflows/
     ├── ci.yml                # Full lint + security + validation pipeline
     ├── deploy.yml            # One-button deploy via GitHub Actions
@@ -196,7 +196,7 @@ Grafana dashboards, datasources, **and 11 alert rules** deployed automatically �
 **Grafana Cloud (hosted metrics):**
 - **vmagent** (`:8429`) — VictoriaMetrics agent, scrapes on-server exporters and remote-writes to Grafana Cloud
 - **Grafana Cloud dashboards** — "Logs Overview" (6 panels) + "Traffic Analysis" (4 panels)
-- **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 9 global regions + SSL checks from 3 regions
+- **Synthetic Monitoring** — HTTP checks from 9 global regions + SSL checks from 3 regions (manual setup, Terraform config available)
 
 **External (Better Stack cloud-hosted):**
 - **3 HTTP monitors** — `dreamseed.online` (HTTP 200 + keyword check + Grafana endpoint), 3min interval, 4 global regions
@@ -238,7 +238,7 @@ CI checks: ShellCheck · ruff · ansible-lint · **Terraform** (tflint+validate)
 - **Idempotent Ansible roles** — every playbook re-runs safely; updates config without breaking live services
 - **Cloudflare-first SSL** — all environments behind Cloudflare proxy (Full SSL mode); origin uses self-signed cert. This eliminates Let's Encrypt rate limits and certbot failures during provisioning
 - **VictoriaMetrics over Prometheus** — single binary, no dependencies, lower memory footprint on t3.small/cx23. Same PromQL, simpler ops
-- **Ansible Vault for secrets** — not GitHub Secrets or AWS Secrets Manager. Secrets are versioned with code, encrypted at rest, decrypted at deploy time. CI has the vault password, prod doesn't need it
+- **Ansible Vault (optional)** — `.env` may be vault-encrypted for CI, or kept plaintext via `gitignore`. Decoupled from GitHub Secrets / AWS Secrets Manager
 - **No Docker** — MODX is a traditional PHP CMS, containerization adds complexity without benefit here. Ansible handles idempotent provisioning natively
 - **RESTORE_ALL.sh with rollback detection** — compares `modx_site_content.editedon` timestamps before and after restore, warns if restored data is older than current. Critical for real-world DR where a restore might overwrite recent data
 
@@ -249,7 +249,7 @@ CI checks: ShellCheck · ruff · ansible-lint · **Terraform** (tflint+validate)
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|
 | `prod` | AWS EC2 (`us-west-1`) | [dreamseed.online](https://dreamseed.online) | Nginx + PHP 8.3 + MariaDB |
-| `dev-aws` | AWS EC2 | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Full stack |
+| `dev-aws` | AWS EC2 | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Full stack (inactive) |
 | `dev-hetz` | Hetzner (`nbg1`) | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Full stack |
 
 All environments are fully monitored, backed up, and behind Cloudflare proxy.
