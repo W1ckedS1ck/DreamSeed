@@ -59,17 +59,6 @@ I own **everything below the application layer** — provisioning, configuration
 
 ---
 
-## 🔥 Battle-Tested
-
-Real problems encountered and solved in production:
-
-- **Terraform Cloud destroy exit code** — TFC returns exit code 1 even on successful `destroy` ("Destroy complete! Resources: 0 destroyed."). Workaround: `|| true` + `grep "Destroy complete"` instead of relying on exit code.
-- **Grafana alert provisioning** — Python `yaml.dump` reformats alert YAML and breaks multi-line templates. Solution: keep alert generation in pure Python with manual structure control.
-- **VictoriaMetrics stale metrics** — `cron_last_run_backup` disappears after 5 minutes (Prometheus staleness). Fixed with `max_over_time(metric[1d])` — continuous sawtooth without gaps, alert only at threshold.
-- **Backup cron false alerts** — Original alert `cron_last_run_backup < 1` used raw timestamp (~1.78B). Never fires. Fixed to `(time() - max_over_time(cron_last_run_backup[1d])) / 60 > 120` — minutes since last backup, no gaps.
-
----
-
 ## 🧰 Tech Stack
 
 | Layer | Tools |
