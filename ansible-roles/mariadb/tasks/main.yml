@@ -1,19 +1,8 @@
 ---
 - name: Deploy optimized my.cnf
   become: true
-  ansible.builtin.copy:
-    content: |
-      [mysqld]
-      bind-address = 127.0.0.1
-      character-set-server = utf8mb4
-      collation-server = utf8mb4_unicode_ci
-      innodb_flush_method = O_DIRECT
-      # Performance optimizations from MySQLTuner
-      skip-name-resolve=ON
-      tmp_table_size=32M
-      max_heap_table_size=32M
-      innodb_buffer_pool_size=512M
-      innodb_log_file_size=100M
+  ansible.builtin.template:
+    src: 99-optimizations.cnf.j2
     dest: /etc/mysql/conf.d/99-optimizations.cnf
     mode: "0644"
   notify: Restart MariaDB

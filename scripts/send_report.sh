@@ -83,12 +83,6 @@ $(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
     [ -n "$LAST_GDRIVE_DB" ] && MSG+="
 - Last db: $LAST_GDRIVE_DB"
 
-        # --- Better Stack heartbeat status ---
-    _bs_status=$(_bs_heartbeat_status)
-    [[ -n "$_bs_status" ]] && MSG+="
-
-💟 Better Stack: $_bs_status"
-
     MSG+="
 
 $(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
@@ -97,16 +91,6 @@ $(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
 
 # ====== WEEKLY REPORT ======
 elif [ "$REPORT_TYPE" = "weekly" ]; then
-    # Expected GDrive uploads in a week: 7 days x 2 types = 14
-    WEEKLY_EXPECTED=14
-    TOTAL_CLOUD=$((CLOUD_PROJ + CLOUD_DB))
-
-    if [ "$TOTAL_CLOUD" -ge "$WEEKLY_EXPECTED" ]; then
-        SUCCESS_RATE="100%"
-    else
-        SUCCESS_RATE="$((TOTAL_CLOUD * 100 / WEEKLY_EXPECTED))%"
-    fi
-
     MSG="*WEEKLY REPORT*
 $(escape_md2 "$(date -d '-7 days' +%d.%m)")-$(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
 
@@ -128,15 +112,8 @@ $(escape_md2 "$(date -d '-7 days' +%d.%m)")-$(escape_md2 "$(date +%d.%m)") - $EN
     [ -n "$LAST_GDRIVE_DB" ] && MSG+="
 - Last db: $LAST_GDRIVE_DB"
 
-    # --- Better Stack heartbeat status ---
-    _bs_status=$(_bs_heartbeat_status)
-    [[ -n "$_bs_status" ]] && MSG+="
-
-💟 Better Stack: $_bs_status"
-
     MSG+="
 
-🎯 Cloud upload rate: $SUCCESS_RATE
 $(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
 
     send_tg "$MSG"

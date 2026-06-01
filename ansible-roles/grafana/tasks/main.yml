@@ -51,6 +51,30 @@
     - Reload systemd
     - Restart Grafana
 
+- name: Deploy Grafana admin password env file
+  ansible.builtin.copy:
+    dest: /etc/grafana/grafana.env
+    content: |
+      GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+    owner: root
+    group: grafana
+    mode: "0600"
+  no_log: true
+  notify:
+    - Reload systemd
+    - Restart Grafana
+
+- name: Set Grafana admin password via systemd EnvironmentFile
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/grafana-server.service.d/password.conf
+    content: |
+      [Service]
+      EnvironmentFile=/etc/grafana/grafana.env
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Grafana
+
 - name: Create Grafana directories
   ansible.builtin.file:
     path: "{{ item }}"

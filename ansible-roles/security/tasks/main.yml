@@ -63,6 +63,12 @@
     - {path: /etc/at.deny, mode: "0600"}
 
 # --- Authorized Keys ---
+- name: Validate additional SSH public keys
+  ansible.builtin.shell:
+    cmd: "echo '{{ item }}' | ssh-keygen -l -f /dev/stdin > /dev/null 2>&1"
+  changed_when: false
+  loop: "{{ additional_ssh_keys | default([]) }}"
+
 - name: Add additional SSH public keys
   become: true
   ansible.posix.authorized_key:

@@ -297,15 +297,7 @@ jobs:
           else
             echo "Destroy exit (ignored — TFC exit code 1 bug)"
           fi
-          # Delete CI SSH key if it was created
-          if [ -n "${TF_VAR_hcloud_token:-}" ]; then
-            KEY_ID=$(curl -sf -H "Authorization: Bearer $TF_VAR_hcloud_token" \
-              "https://api.hetzner.cloud/v1/ssh_keys?name=dreamseed-ci-test" \
-              | python3 -c "import sys,json; r=json.load(sys.stdin)['ssh_keys']; print(r[0]['id'] if r else '')" 2>/dev/null || true)
-            [ -n "$KEY_ID" ] && curl -sf -X DELETE \
-              "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID" \
-              -H "Authorization: Bearer $TF_VAR_hcloud_token" > /dev/null && echo "CI SSH key deleted" || true
-          fi
+          # SSH key cleanup not needed — uses existing key (Vitali), not CI-generated
 
       - name: Send Telegram report
         if: always()

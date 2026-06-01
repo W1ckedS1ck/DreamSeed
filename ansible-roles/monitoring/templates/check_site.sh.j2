@@ -62,22 +62,24 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         fi
 
         # Cart check (add a product via miniShop2, then clean)
-        product_id=$(mysql -Nse "SELECT id FROM modx_site_content WHERE class_key='msProduct' AND published=1 AND deleted=0 LIMIT 1" 2>/dev/null)
-        if [ -n "$product_id" ]; then
-            cart_resp=$(curl -sk --max-time 10 -X POST \
-                -H "X-Requested-With: XMLHttpRequest" \
-                -d "ms2_action=cart/add&id=$product_id&count=1&options=[]" \
-                "https://{{ domain }}/assets/components/minishop2/action.php" 2>/dev/null)
-            if echo "$cart_resp" | grep -q '"success":true'; then
-                echo "cart_add_ok{instance=\"{{ domain }}\"} 1"
-            else
-                echo "cart_add_ok{instance=\"{{ domain }}\"} 0"
+        if [ -f "{{ web_root }}/assets/components/minishop2/action.php" ]; then
+            product_id=$(mysql -Nse "SELECT id FROM modx_site_content WHERE class_key='msProduct' AND published=1 AND deleted=0 LIMIT 1" 2>/dev/null)
+            if [ -n "$product_id" ]; then
+                cart_resp=$(curl -sk --max-time 10 -X POST \
+                    -H "X-Requested-With: XMLHttpRequest" \
+                    -d "ms2_action=cart/add&id=$product_id&count=1&options=[]" \
+                    "https://{{ domain }}/assets/components/minishop2/action.php" 2>/dev/null)
+                if echo "$cart_resp" | grep -q '"success":true'; then
+                    echo "cart_add_ok{instance=\"{{ domain }}\"} 1"
+                else
+                    echo "cart_add_ok{instance=\"{{ domain }}\"} 0"
+                fi
+                # Clean the cart
+                curl -sk --max-time 10 -X POST \
+                    -H "X-Requested-With: XMLHttpRequest" \
+                    -d "ms2_action=cart/clean" \
+                    "https://{{ domain }}/assets/components/minishop2/action.php" > /dev/null 2>&1
             fi
-            # Clean the cart
-            curl -sk --max-time 10 -X POST \
-                -H "X-Requested-With: XMLHttpRequest" \
-                -d "ms2_action=cart/clean" \
-                "https://{{ domain }}/assets/components/minishop2/action.php" > /dev/null 2>&1
         fi
     fi
 } | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1

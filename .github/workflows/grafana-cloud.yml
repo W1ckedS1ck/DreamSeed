@@ -33,36 +33,31 @@ jobs:
         run: |
           echo "TF_WORKSPACE=${{ github.event.inputs.workspace }}" >> $GITHUB_ENV
 
-      - name: Terraform Init
-        working-directory: terraform/grafana
-        run: terraform init -upgrade=false
-
-      - name: Set Grafana Cloud Credentials
+      - name: Set Terraform variables
         env:
-          PROD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
-          PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
           PROD_SM_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
-          DEV_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
-          DEV_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
           DEV_SM_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
         run: |
           if [[ "${{ github.event.inputs.workspace }}" == "prod" ]]; then
-            URL="$PROD_URL"; TOKEN="$PROD_TOKEN"; SM_TOKEN="$PROD_SM_TOKEN"
-            DOMAIN="dreamseed.online"; SM_URL="https://synthetic-monitoring-api-us-east-0.grafana.net"
+            echo "TF_VAR_grafana_cloud_url=${{ secrets.PROD_GRAFANA_CLOUD_URL }}" >> $GITHUB_ENV
+            echo "TF_VAR_grafana_cloud_token=${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" >> $GITHUB_ENV
+            echo "TF_VAR_sm_access_token=${{ secrets.PROD_SM_ACCESS_TOKEN }}" >> $GITHUB_ENV
+            echo "TF_VAR_domain=dreamseed.online" >> $GITHUB_ENV
+            echo "TF_VAR_sm_url=https://synthetic-monitoring-api-us-east-0.grafana.net" >> $GITHUB_ENV
+            [[ -n "$PROD_SM_TOKEN" ]] && SM_ENABLED=true || SM_ENABLED=false
           else
-            URL="$DEV_URL"; TOKEN="$DEV_TOKEN"; SM_TOKEN="$DEV_SM_TOKEN"
-            DOMAIN="hetz.vitalikuts.online"; SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
+            echo "TF_VAR_grafana_cloud_url=${{ secrets.DEV_GRAFANA_CLOUD_URL }}" >> $GITHUB_ENV
+            echo "TF_VAR_grafana_cloud_token=${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}" >> $GITHUB_ENV
+            echo "TF_VAR_sm_access_token=${{ secrets.DEV_SM_ACCESS_TOKEN }}" >> $GITHUB_ENV
+            echo "TF_VAR_domain=hetz.vitalikuts.online" >> $GITHUB_ENV
+            echo "TF_VAR_sm_url=https://synthetic-monitoring-api-eu-north-0.grafana.net" >> $GITHUB_ENV
+            [[ -n "$DEV_SM_TOKEN" ]] && SM_ENABLED=true || SM_ENABLED=false
           fi
-          SM_ENABLED=false
-          [[ -n "$SM_TOKEN" ]] && SM_ENABLED=true
-          cat > terraform/grafana/terraform.tfvars << EOF
-          grafana_cloud_url   = "$URL"
-          grafana_cloud_token = "$TOKEN"
-          sm_access_token     = "$SM_TOKEN"
-          sm_enabled          = $SM_ENABLED
-          domain              = "$DOMAIN"
-          sm_url              = "$SM_URL"
-          EOF
+          echo "TF_VAR_sm_enabled=$SM_ENABLED" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        working-directory: terraform/grafana
+        run: terraform init -upgrade=false
 
       - name: Terraform Plan
         working-directory: terraform/grafana
@@ -71,10 +66,6 @@ jobs:
       - name: Terraform Apply
         working-directory: terraform/grafana
         run: terraform apply tfplan
-
-      - name: Clean Up Credentials
-        if: always()
-        run: rm -f terraform/grafana/terraform.tfvars
 
       - name: Terraform State Output
         working-directory: terraform/grafana

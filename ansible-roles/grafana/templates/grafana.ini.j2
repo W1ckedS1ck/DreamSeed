@@ -11,7 +11,7 @@ enable_gzip = true
 
 [security]
 admin_user = admin
-admin_password = {{ grafana_admin_password }}
+# Password set via GF_SECURITY_ADMIN_PASSWORD in systemd EnvironmentFile
 
 [users]
 viewers_can_edit = false

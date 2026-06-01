@@ -3,5 +3,6 @@
 
 [Definition]
 failregex = ^<HOST> .* "POST /manager/index.php.*" (401|403) .*$
+            ^<HOST> .* "POST /manager[ /?]" (401|403) .*$
             ^<HOST> .* "POST /modx/manager/.*" (401|403) .*$
 ignoreregex =

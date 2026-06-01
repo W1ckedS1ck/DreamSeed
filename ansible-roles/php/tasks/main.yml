@@ -1,4 +1,12 @@
 ---
+- name: Configure PHP-FPM pool (dynamic pm.max_children)
+  become: true
+  ansible.builtin.template:
+    src: www.conf.j2
+    dest: "/etc/php/{{ php_version }}/fpm/pool.d/www.conf"
+    mode: "0644"
+  notify: Restart PHP-FPM
+
 - name: Configure PHP memory limits
   become: true
   ansible.builtin.template:

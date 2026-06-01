@@ -2,7 +2,7 @@
 - name: 02 Web Server (Nginx/Apache + PHP + SSL)
   hosts: dreamseed
   become: false
-  gather_facts: false
+  gather_facts: true
 
   roles:
     - role: nginx

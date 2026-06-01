@@ -1,0 +1,9 @@
+; Managed by Ansible — DreamSeed PHP-FPM pool
+; pm.max_children auto-calculated as 60% RAM / 50MB per process
+[www]
+pm = dynamic
+pm.max_children = {{ ((ansible_memtotal_mb | int) * 0.6 / 50) | int }}
+pm.start_servers = 5
+pm.min_spare_servers = 3
+pm.max_spare_servers = 10
+pm.max_requests = 500

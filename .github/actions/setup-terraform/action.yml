@@ -21,5 +21,6 @@ runs:
         path: |
           terraform/aws/.terraform
           terraform/hetzner/.terraform
-        key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl') }}
+          terraform/grafana/.terraform
+        key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl', 'terraform/grafana/.terraform.lock.hcl') }}
         restore-keys: terraform-providers-${{ runner.os }}-
