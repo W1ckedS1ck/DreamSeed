@@ -113,6 +113,9 @@ done
 # ─── HTTP monitors ──────────────────────────────────────────────────────────
 
 echo -e "\n${CYAN}Better Stack — HTTP monitors${NC}\n"
+# Note: widget type for status page (history/response_time) is UI-only.
+# After first run, go to Better Stack → Status Pages → go-dreams
+# and set Response time for main monitor (🌐 dreamseed.online).
 
 existing_mon=$(curl -s -X GET "$API/monitors" -H "$AUTH" || echo '{"data":[]}')
 
@@ -166,6 +169,57 @@ print(json.dumps(payload))
         fi
     fi
 done
+
+# ─── Status page resources ──────────────────────────────────────────────────
+
+SP_ID=$(curl -s -X GET "$API/status-pages" -H "$AUTH" | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')" 2>/dev/null)
+
+if [[ -n "$SP_ID" ]]; then
+    echo -e "\n${CYAN}Better Stack — status page resources${NC}\n"
+
+existing_sp=$(curl -s -X GET "$API/status-pages/$SP_ID/resources" -H "$AUTH" || echo '{"data":[]}')
+
+sp_resource_exists() {
+    local rtype="$1" rid="$2"
+    echo "$existing_sp" | python3 -c "
+import sys, json
+t, i = sys.argv[1], int(sys.argv[2])
+for r in json.load(sys.stdin).get('data', []):
+    a = r['attributes']
+    if a.get('resource_type') == t and a.get('resource_id') == i:
+        print(r['id'])
+        break
+" "$rtype" "$rid" 2>/dev/null
+}
+
+for spec in \
+    "Monitor|4015585|🌐 dreamseed.online|0" \
+    "Monitor|4015606|📊 Grafana|1" ; do
+
+    IFS='|' read -r rtype rid name pos <<< "$spec"
+    rtype_cap="${rtype}"
+
+    existing_id=$(sp_resource_exists "$rtype_cap" "$rid")
+
+    if [[ -n "$existing_id" ]]; then
+        curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" -H "$AUTH" \
+          -H "Content-Type: application/json" \
+          -d "{\"public_name\":\"$name\",\"position\":$pos}" > /dev/null
+        echo -e "  ${GREEN}✓${NC} $name — already on status page"
+    else
+        resp=$(curl -s -X POST "$API/status-pages/$SP_ID/resources" -H "$AUTH" \
+          -H "Content-Type: application/json" \
+          -d "{\"resource_type\":\"$rtype_cap\",\"resource_id\":$rid,\"public_name\":\"$name\",\"position\":$pos}" || echo "")
+        sp_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null)
+        if [[ -n "$sp_id" ]]; then
+            echo -e "  ${GREEN}✓${NC} $name — added to status page"
+        else
+            echo -e "  ${RED}✗${NC} $name — failed" >&2
+        fi
+    fi
+done
+
+fi
 
 # ─── Telegram webhooks ──────────────────────────────────────────────────────
 
