@@ -130,3 +130,17 @@ groups:
         annotations:
           summary: >-
             Site health check hasn't run for >3 min
+
+{{ alert_body('ssl-expiry', 'SSL Cert Expiring Soon', 'ssl_days_remaining', 86400, 7, 'lt', '1h', 'OK', 'OK') }}
+        annotations:
+          summary: >-
+            {% raw %}SSL cert expires in {{ $values.A }} days on {{ $labels.instance }}{% endraw %}
+
+{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '2m', 'OK', 'Error') }}
+        annotations:
+          summary: ""
+
+{{ alert_body('cart-add', 'Cart Check Failed', 'cart_add_ok', 180, 1, 'lt', '2m', 'OK', 'Error') }}
+        annotations:
+          summary: >-
+            miniShop2 cart add/clean failed — check action.php and products

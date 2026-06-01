@@ -24,6 +24,17 @@
     mode: "0600"
   when: rclone_config_stat.stat.exists
 
+- name: Create root MySQL config for cron jobs
+  ansible.builtin.copy:
+    content: |
+      [mysql]
+      user=root
+      password={{ db_pass }}
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: "0600"
+
 - name: Create backup directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -51,6 +62,7 @@
     - test_tg.sh
     - common_functions.sh
     - env_loader.py
+    - check_services.sh
 
 - name: Upload Telegram bot script
   ansible.builtin.copy:
@@ -128,15 +140,14 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
-- name: Setup session cleanup cron (every 3 days)
+- name: Setup session cleanup cron (daily, 7-day retention)
   ansible.builtin.cron:
     name: "DreamSeed session cleanup"
     minute: "42"
     hour: "4"
-    day: "*/3"
     job: >
       mysql -u root {{ db_name }} -e
-      "DELETE FROM {{ db_prefix | default('modx_') }}session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
+      "DELETE FROM {{ db_prefix | default('modx_') }}session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
       2>/dev/null || true
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
@@ -157,6 +168,26 @@
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
+  when: modx_check is succeeded and (modx_check.query_result[0][0].cnt | default(0) | int > 0)
+
+- name: Enable MODX database query caching (cache_db)
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('cache_db', '1', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '1', `editedon` = NOW()
+  when: modx_check is succeeded and (modx_check.query_result[0][0].cnt | default(0) | int > 0)
+
+- name: Enable MODX session data caching (cache_db_session)
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('cache_db_session', '1', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '1', `editedon` = NOW()
   when: modx_check is succeeded and (modx_check.query_result[0][0].cnt | default(0) | int > 0)
 
 - name: Wait for VictoriaMetrics to accept writes

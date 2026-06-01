@@ -24,9 +24,6 @@ RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; NC=$'\033[0m'
 [[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; NC=''; }
 TTY=$([[ -t 1 ]] && echo true || echo false)
 
-# Terraform shortcut
-_tf() { ( cd "$TF_DIR" && "$TERRAFORM" "$@" ); }
-
 # Timeouts
 SSH_ATTEMPTS=20 SSH_INTERVAL=1
 AWS_SSH_ATTEMPTS=40 AWS_SSH_INTERVAL=10
@@ -46,57 +43,13 @@ DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
 > "$LOG"; chmod 600 "$LOG"
 > "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
 
-# ----- helpers -----
+# Load modules
+source "$SCRIPT_DIR/lib/helpers.sh"
+source "$SCRIPT_DIR/lib/env.sh"
+source "$SCRIPT_DIR/lib/preflight.sh"
+source "$SCRIPT_DIR/lib/terraform.sh"
+source "$SCRIPT_DIR/lib/ansible.sh"
 
-format_time() {
-    local s=$1
-    if [[ $s -ge 3600 ]]; then printf "%dh %02dm %02ds" $((s/3600)) $(((s%3600)/60)) $((s%60))
-    elif [[ $s -ge 60 ]]; then printf "%dm %02ds" $((s/60)) $((s%60))
-    else printf "%ds" "$s"; fi
-}
-
-log() { echo "[$(date '+%H:%M:%S')] $*" >> "$LOG"; }
-
-step_start() {
-    STEP_START=$(date +%s)
-    STEP_LABEL="$*"
-    log "▶ $*"
-    if [[ "$TTY" == "true" ]]; then
-        printf "\n  \033[1m▶ %s\033[0m\n" "$*"
-    else
-        printf "\n  ▶ %s\n" "$*"
-    fi
-}
-
-step_ok() {
-    local d=$(( $(date +%s) - STEP_START ))
-    STEP_NAMES+=("$STEP_LABEL"); STEP_TIMES+=("$d")
-    log "✓ $STEP_LABEL (elapsed: $(format_time $d))"
-    if [[ "$TTY" == "true" ]]; then
-        printf "  ${GREEN}✓${NC} %s (${YELLOW}%s${NC})\n" "$STEP_LABEL" "$(format_time $d)"
-    else
-        printf "  ✓ %s (%s)\n" "$STEP_LABEL" "$(format_time $d)"
-    fi
-}
-
-step_fail() {
-    log "✗ $*"
-    if [[ "$TTY" == "true" ]]; then
-        printf "\n  ${RED}✗${NC} %s\n" "$*"
-    else
-        printf "\n  ✗ %s\n" "$*"
-        echo "::error title=${STEP_LABEL:-Deploy}::$1"
-    fi
-    write_deploy_history "FAILURE" "$*"
-    exit 1
-}
-
-cleanup() {
-    [[ -n "${VAULT_TMP:-}" && -f "${VAULT_TMP:-}" ]] && rm -f "$VAULT_TMP"
-    [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
-    [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
-    [[ -n "${LOCK_FILE:-}" && -d "${LOCK_FILE:-}" ]] && rmdir "$LOCK_FILE" 2>/dev/null || true
-}
 trap cleanup EXIT
 
 # ----- arg parsing -----
@@ -122,7 +75,8 @@ OPTIONS:
   -p, --parallel     Parallel playbook execution (3 phases)
   -d, --dry-run      Preview only
   -h                 Show this help
-  --logs [tf]        Tail latest deploy/terraform log
+   --logs [tf]        Tail latest deploy/terraform log
+   --lint             Run all linters locally (no deploy)
 EOF
 }
 
@@ -135,6 +89,11 @@ parse_args() {
         local latest; latest=$(ls -t "$LOG_DIR/${prefix}_"*.log 2>/dev/null | head -1)
         [[ -z "$latest" ]] && { echo "No ${prefix} logs found"; exit 1; }
         tail -f "$latest"; exit 0
+    fi
+
+    if [[ "$1" == "--lint" ]]; then
+        run_lint
+        exit $?
     fi
 
     while [[ $# -gt 0 ]]; do
@@ -173,378 +132,15 @@ resolve_target() {
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
 
-# ----- .env handling -----
+# ----- lint -----
 
-validate_env_file() {
-    local f="$1" n=0
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        ((n++)) || true
-        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || { echo "Invalid env format at $f:$n"; exit 1; }
-    done < "$f"
-}
-
-resolve_env_file() {
-    local f="$1"
-    [[ ! -f "$f" ]] && { echo "Error: $f not found" >&2; exit 1; }
-    if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
-        local pw="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
-        [[ ! -f "$pw" ]] && { echo "Error: vault password file not found: $pw" >&2; exit 1; }
-        local tmp; tmp=$(mktemp); chmod 600 "$tmp"
-        ansible-vault view "$f" --vault-password-file "$pw" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
-        ENV_DECRYPTED_TMP="$tmp"
-        printf '%s' "$tmp"
-    else
-        printf '%s' "$f"
-    fi
-}
-
-# ----- env var helpers -----
-
-apply_target_vars() {
-    if [[ "$TF_PROVIDER" == "aws" ]]; then
-        local pfx="$TARGET_PREFIX"
-        local v_key="${pfx}_ACCESS_KEY" v_sec="${pfx}_SECRET_KEY"
-        local v_reg="${pfx}_REGION" v_eip="${pfx}_EIP"
-        AWS_ACCESS_KEY="${!v_key:-}"
-        AWS_SECRET_KEY="${!v_sec:-}"
-        AWS_REGION="${!v_reg:-us-west-1}"
-        AWS_EIP_ALLOCATION_ID="${!v_eip:-}"
-        export AWS_ACCESS_KEY AWS_SECRET_KEY AWS_REGION AWS_EIP_ALLOCATION_ID
-    fi
-}
-
-export_tf_env() {
-    [[ "$TF_PROVIDER" == "aws" ]] && {
-        export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
-        export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
-        export AWS_DEFAULT_REGION="$AWS_REGION"
-        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
-    }
-    [[ "$TF_PROVIDER" == "hetzner" ]] && {
-        export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
-        [[ -n "${HETZNER_SERVER_TYPE:-}" ]] && export TF_VAR_server_type="$HETZNER_SERVER_TYPE"
-        [[ -n "${HETZNER_LOCATION:-}" ]] && export TF_VAR_location="$HETZNER_LOCATION"
-        [[ -n "${HETZNER_SSH_KEY_NAME:-}" ]] && export TF_VAR_ssh_key_name="$HETZNER_SSH_KEY_NAME"
-        [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && export TF_VAR_primary_ip_name="$HETZNER_PRIMARY_IP_NAME"
-        if [[ -z "${HETZNER_SSH_KEY_NAME:-}" && -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
-            local pk; pk="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
-            if [[ -r "$pk" ]]; then
-                local pk_content; pk_content="$(<"$pk")"
-                export TF_VAR_ssh_public_key="$pk_content"
-            fi
-        fi
-    }
-    export TF_VAR_environment="$TARGET"
-    export TF_WORKSPACE="$TF_WORKSPACE"
-    export TF_TOKEN_app_terraform_io="${TF_API_TOKEN:-}"
-}
-
-# ----- YAML escaping for extra-vars -----
-
-yaml_escape() {
-    local val="$1"
-    val="${val//\'/\'\'}"
-    printf '%s' "$val"
-}
-
-# ----- deploy history -----
-
-write_deploy_history() {
-    local status="$1" msg="${2:-}" ts dur
-    ts=$(date '+%Y-%m-%d %H:%M:%S')
-    dur=$(( $(date +%s) - DEPLOY_START ))
-    printf "%s | %-7s | %-8s | %-6s | %-15s | %5ss | v%s" \
-        "$ts" "$status" "$TARGET" "${WEB_SERVER:-N/A}" "${SERVER_IP:-N/A}" "$dur" "$VERSION" >> "$DEPLOY_HISTORY"
-    [[ -n "$msg" ]] && printf " | %s" "$msg" >> "$DEPLOY_HISTORY"
-    echo >> "$DEPLOY_HISTORY"
-}
-
-# ----- log rotation -----
-
-rotate_logs() {
-    local max="${MAX_LOG_FILES:-10}"
-    ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs -r rm -f 2>/dev/null || true
-    ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs -r rm -f 2>/dev/null || true
-}
-
-# ----- preflight -----
-
-check_prerequisites() {
-    local missing=()
-    command -v "$ANSIBLE_PLAYBOOK" &>/dev/null || missing+=("ansible-playbook")
-    command -v "$TERRAFORM" &>/dev/null || missing+=("terraform")
-    command -v ssh &>/dev/null || missing+=("ssh")
-    command -v ssh-keygen &>/dev/null || missing+=("ssh-keygen")
-    command -v ansible-vault &>/dev/null || missing+=("ansible-vault")
-    if [[ ${#missing[@]} -gt 0 ]]; then echo "Missing: ${missing[*]}"; exit 1; fi
-}
-
-preflight_checks() {
-    check_prerequisites
-
-    local env_src; env_src=$(resolve_env_file "$ENV_FILE")
-    validate_env_file "$env_src"
-
-    local saved_opts; saved_opts="$(set +o)"
-    set -a; source "$env_src"; set +a
-    eval "$saved_opts"
-
-    # Auto-setup Better Stack heartbeats for prod if needed
-    if [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
-        bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env
-        source "$env_src"
-    fi
-
-    apply_target_vars
-
-    # Load Grafana Cloud credentials (PROD_ for prod, DEV_ for all dev)
-    local gc_pfx="DEV"
-    [[ "$TARGET" == "prod" ]] && gc_pfx="PROD"
-    local gc_url="${gc_pfx}_GRAFANA_CLOUD_URL"
-    local gc_user="${gc_pfx}_GRAFANA_CLOUD_USERNAME"
-    local gc_token="${gc_pfx}_GRAFANA_CLOUD_TOKEN"
-    GRAFANA_CLOUD_URL="${!gc_url:-}"
-    GRAFANA_CLOUD_USERNAME="${!gc_user:-}"
-    GRAFANA_CLOUD_TOKEN="${!gc_token:-}"
-    export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
-
-    SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
-    SSH_KEY="${SSH_KEY/#\~/$HOME}"
-    if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
-    if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
-
-    if [[ "$DESTROY_MODE" == "false" ]]; then
-        if [[ -z "${DB_PASS:-}" ]]; then echo "Error: DB_PASS not set"; exit 1; fi
-        if [[ -z "${GRAFANA_PASS:-}" ]]; then echo "Error: GRAFANA_PASS not set"; exit 1; fi
-    fi
-
-    if [[ "$TF_PROVIDER" == "aws" ]]; then
-        if [[ -z "${AWS_ACCESS_KEY:-}" || -z "${AWS_SECRET_KEY:-}" ]]; then echo "Error: AWS credentials required"; exit 1; fi
-        : "${AWS_REGION:=us-west-1}"
-        if [[ -z "${SSH_PUBLIC_KEY_PATH:-}" ]]; then echo "Error: SSH_PUBLIC_KEY_PATH not set"; exit 1; fi
-    fi
-
-    if [[ "$TF_PROVIDER" == "hetzner" && -z "${HCLOUD_TOKEN:-}" ]]; then
-        echo "Error: HCLOUD_TOKEN not set"; exit 1
-    fi
-    if [[ "$SKIP_TERRAFORM" == "false" && ! -f "$TF_DIR/main.tf" ]]; then
-        echo "Error: $TF_DIR/main.tf not found"; exit 1
-    fi
-}
-
-# ----- summary table -----
-
-print_summary() {
-    echo ""
-    echo "  ──────────────────────────────────────────────────────"
-    printf "  %-5s %-35s %s\n" "" "Step" "Time"
-    echo "  ──────────────────────────────────────────────────────"
-    local i
-    for i in "${!STEP_NAMES[@]}"; do
-        printf "  %-40s ${YELLOW}%s${NC}\n" "${STEP_NAMES[$i]}" "$(format_time "${STEP_TIMES[$i]}")"
-    done
-    echo "  ──────────────────────────────────────────────────────"
-    local total=$(( $(date +%s) - DEPLOY_START ))
-    printf "  %-40s ${YELLOW}%s${NC}\n" "Total" "$(format_time $total)"
-}
-
-# ----- Terraform -----
-
-terraform_select_workspace() {
-    local ws="$TF_WORKSPACE"
-    (
-        unset TF_WORKSPACE
-        _tf workspace select "$ws" 2>/dev/null || \
-        _tf workspace new "$ws"
-    )
-}
-
-terraform_init_if_needed() {
-    local ws
-    ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
-    if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$ws" != "$TF_WORKSPACE" ]]; then
-        _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
-    fi
-}
-
-terraform_destroy() {
+run_lint() {
+    bash "$SCRIPT_DIR/scripts/lint.sh" --fast
+    local rc=$?
     if [[ "$TTY" == "false" ]]; then
-        [[ "${CI_DESTROY_CONFIRM:-}" == "yes" ]] || { echo "Error: CI destroy requires CI_DESTROY_CONFIRM=yes"; exit 1; }
-    elif [[ "$TARGET" == "prod" ]]; then
-        echo ""
-        echo "  ⚠  PRODUCTION DESTROY REQUESTED  ⚠"
-        echo "  This will PERMANENTLY DELETE: dreamseed.online"
-        echo ""
-        read -rp "  Step 1/3 — Do you REALLY want to destroy PROD? [y/N] " a1
-        [[ ! "${a1:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
-        read -rp "  Step 2/3 — Are you absolutely sure? [y/N] " a2
-        [[ ! "${a2:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
-        echo "  Step 3/3 — Type 'destroy prod' to confirm: "
-        read -rp "  > " a3
-        [[ "$a3" != "destroy prod" ]] && { echo "Aborted."; exit 0; }
-    else
-        read -rp "  Destroy $TARGET? [y/N] " a
-        [[ ! "${a:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
+        if [[ $rc -eq 0 ]]; then echo "::notice title=Lint::All linters passed"; fi
     fi
-
-    export_tf_env
-
-    # Check server reachability
-    local ip; ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
-    [[ -n "$ip" && -n "${SSH_KEY:-}" ]] && \
-        ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
-            && echo "  ✓ Server $ip reachable" \
-            || echo "  ⚠ Server $ip unreachable — destroying anyway"
-
-    terraform_init_if_needed || { echo "Terraform init failed"; cat "$DEPLOY_TF_LOG"; return 1; }
-    terraform_select_workspace >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
-
-    _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
-
-    local var_arg=""
-    [[ "$TF_PROVIDER" == "aws" ]] && var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
-    echo "  ━━━ Destroying resources ($TARGET)"
-
-    TF_TMP_OUT=$(mktemp)
-    # shellcheck disable=SC2086
-    _tf destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$TF_TMP_OUT" || true
-    grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (check $DEPLOY_TF_LOG)"
-    cat "$TF_TMP_OUT" >> "$DEPLOY_TF_LOG"; rm -f "$TF_TMP_OUT"
-
-    rm -f "$SCRIPT_DIR/secrets/tfstate-backup/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
-
-    if [[ "$TARGET" != "prod" ]]; then
-        local ws_del="$TF_WORKSPACE"
-        ( cd "$TF_DIR" && unset TF_WORKSPACE && \
-          "$TERRAFORM" workspace delete "$ws_del" 2>&1 ) >> "$DEPLOY_TF_LOG" 2>&1 || true
-    fi
-    echo "  ✓ Destroyed"
-}
-
-# ----- Ansible execution -----
-
-_ansible_cmd() {
-    ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
-    ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
-    ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${VAULT_TMP}" \
-        "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
-}
-
-run_ansible() {
-    local pb="$1" label="$2"
-    [[ "$TTY" == "false" ]] && echo "::group::${label}"
-    echo "    ▶ ${label}"
-    _ansible_cmd "$pb"
-    local rc=$?
-    [[ "$TTY" == "false" ]] && echo "::endgroup::"
-    return "$rc"
-}
-
-run_parallel() {
-    local phase="$1"; shift
-    [[ "$TTY" == "false" ]] && echo "::group::${phase}"
-    echo "    ▶ ${phase}"
-    local pids=() ok=true
-    for entry in "$@"; do
-        local pb="${entry%%:*}" label="${entry##*:}"
-        echo "      ├ ${label}"
-        ( _ansible_cmd "$pb" ) &
-        pids+=("$!")
-    done
-    for pid in "${pids[@]}"; do wait "$pid" || ok=false; done
-    [[ "$TTY" == "false" ]] && echo "::endgroup::"
-    $ok
-}
-
-# ----- service checks -----
-
-check_services() {
-    echo ""
-    echo "  ▸ Post-deploy checks"
-
-    local web_svc="nginx"
-    [[ "$WEB_SERVER" == "apache" ]] && web_svc="apache2"
-
-    local db_name="${DB_NAME:-modx_db}"
-
-    # Build check script with local variables interpolated
-    local check_script=$(cat << SCRIPT
-set -euo pipefail
-domain="$DEPLOY_DOMAIN"
-web_svc="$web_svc"
-php_version="$PHP_VERSION"
-db_name="$db_name"
-fail=0
-
-# --- Services ---
-for s in "\$web_svc" "php\${php_version}-fpm" "mariadb" "victoria-metrics" "grafana-server" "telegram-bot"; do
-    st=\$(systemctl is-active "\$s" 2>/dev/null || echo "inactive")
-    if [[ "\$st" == "active" ]]; then echo "  ✓ \$s"
-    else echo "  ✗ \$s — \$st"; fail=1; fi
-done
-
-# --- Site HTTP ---
-http=\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://\$domain/" 2>/dev/null || echo "000")
-if [[ "\$http" == "200" || "\$http" == "301" ]]; then echo "  ✓ HTTP \$http \$domain"
-else echo "  ✗ HTTP \$http \$domain — site not serving"; fail=1; fi
-
-# --- SSL ---
-if certbot certificates 2>/dev/null | grep -q "VALID"; then echo "  ✓ SSL: letsencrypt"
-elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; then echo "  ⚠ SSL: self-signed (dev)"
-else echo "  ✗ SSL: no certificate"; fail=1; fi
-
-# --- MODX ---
-if [[ -f /var/www/html/index.php ]]; then echo "  ✓ MODX: index.php"
-else echo "  ✗ MODX: index.php missing"; fail=1; fi
-
-# --- Database ---
-tables=\$(mysql -N "\$db_name" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$db_name';" 2>/dev/null || echo "0")
-if [[ "\$tables" -ge 50 ]]; then echo "  ✓ DB: \$tables tables"
-elif [[ "\$tables" -ge 1 ]]; then echo "  ⚠ DB: only \$tables tables"
-else echo "  ✗ DB: no tables"; fail=1; fi
-
-# --- VictoriaMetrics ---
-vm=\$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
-if [[ "\$vm" == "OK" ]]; then echo "  ✓ VictoriaMetrics"
-else echo "  ✗ VictoriaMetrics"; fail=1; fi
-
-# --- Exporters (retry 5 times × 2s — port may still be binding) ---
-_check_ep() { local p=\$1 k=\$2 n=\$3; for i in \$(seq 1 5); do if curl -sf --max-time 3 "http://127.0.0.1:\$p/metrics" | grep -q "\$k" 2>/dev/null; then echo "  ✓ \$n"; return 0; fi; sleep 2; done; echo "  ✗ \$n"; return 1; }
-if _check_ep 9100 node_ node_exporter; then :; else fail=1; fi
-_check_ep 9104 mysql_ mysql_exporter || true
-[[ "\$web_svc" == "nginx" ]] && _check_ep 9113 nginx_ nginx_exporter || true
-[[ "\$web_svc" == "apache2" ]] && _check_ep 9117 apache_ apache_exporter || true
-if systemctl is-active vmagent > /dev/null 2>&1; then
-    _check_ep 8429 vmagent_ vmagent || echo "  ⚠ vmagent running but no metrics"
-fi
-
-# --- Backup cron ---
-if crontab -l 2>/dev/null | grep -q smart_backup; then echo "  ✓ cron: backup"
-else echo "  ✗ cron: backup not set"; fail=1; fi
-
-# --- fail2ban ---
-jails=\$(fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
-if echo "\$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: \$jails"
-else echo "  ⚠ fail2ban: no jails (\$jails)"; fi
-
-exit \$fail
-SCRIPT
-)
-
-    local output
-    output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-        -i "$SSH_KEY" "ubuntu@$SERVER_IP" bash <<< "$check_script" 2>&1)
-    local rc=$?
-
-    echo "$output"
-
-    if [[ "$rc" -eq 0 ]]; then
-        echo "    All checks passed"
-    else
-        step_fail "Some checks failed (see above)"
-    fi
+    return $rc
 }
 
 # ----- main -----
@@ -565,8 +161,7 @@ main() {
     [[ "$DESTROY_MODE" == "true" ]] && echo "  Action:     destroy"
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::endgroup::"
 
-    local web_playbook="playbook-02-nginx.yml:Web server (Nginx/PHP)"
-    [[ "$WEB_SERVER" == "apache" ]] && web_playbook="playbook-02-apache.yml:Web server (Apache/PHP)"
+    local web_playbook="playbook-02-web.yml:Web server (Nginx/Apache + PHP)"
 
     local playbooks=(
         "playbook-01-base.yml:Base packages"

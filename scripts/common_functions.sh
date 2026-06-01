@@ -101,5 +101,25 @@ escape_md2() {
     echo "$1" | sed 's/[][_*()~`>#+={|}.!-\\]/\\&/g'
 }
 
+_bs_heartbeat_status() {
+    if [[ -z "${BETTERUPTIME_API_TOKEN:-}" ]]; then return 0; fi
+    curl -s -H "Authorization: Bearer $BETTERUPTIME_API_TOKEN" \
+        "https://uptime.betterstack.com/api/v2/heartbeats" 2>/dev/null | \
+        python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    hbs = [h['attributes'] for h in data.get('data', [])]
+    names = {'backup': '\U0001f4e6 Backup', 'gdrive-upload': '\u2601\ufe0f GDrive', 'report-daily': '\U0001f4c5 Daily', 'report-weekly': '\U0001f4c6 Weekly'}
+    parts = []
+    for h in hbs:
+        label = names.get(h['name'], h['name'])
+        icon = '\u2705' if h['status'] == 'up' else '\u274c'
+        parts.append(f'{icon} {label}')
+    print(' | '.join(parts))
+except:
+    print('', end='')
+" 2>/dev/null
+}
 
 

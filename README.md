@@ -147,8 +147,7 @@ DreamSeed/
 │   └── grafana/              # Grafana Cloud dashboard provisioning via Terraform
 ├── ansible/
 │   ├── playbook-01-base.yml      # OS packages
-│   ├── playbook-02-nginx.yml     # Nginx + PHP
-│   ├── playbook-02-apache.yml    # Apache + PHP
+│   ├── playbook-02-web.yml          # Nginx/Apache + PHP + SSL
 │   ├── playbook-03-db.yml        # MariaDB + restore logic
 │   ├── playbook-04-monitor.yml   # VictoriaMetrics + exporters
 │   ├── playbook-05-backup.yml   # Backup cron + Telegram bot

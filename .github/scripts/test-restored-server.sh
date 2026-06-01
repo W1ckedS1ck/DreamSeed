@@ -27,10 +27,23 @@ ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && echo "[PASS] Assets ex
 KEYWORDS=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 10 https://localhost/ 2>/dev/null | grep -coi 'Lucky Bamboo\|bonsai\|sakura\|maple\|oak\|pine\|willow\|cypress\|Dreamers\|Wheel of Life'" 2>/dev/null || echo 0)
 [ "${KEYWORDS:-0}" -ge 3 ] && echo "[PASS] Site keywords ($KEYWORDS matches)" || echo "[WARN] Keywords low ($KEYWORDS)"
 
-# Cart test
-CART_ADD=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 10 -X POST -H 'X-Requested-With: XMLHttpRequest' -d \"ms2_action=cart/add&id=\$(mysql modx_db -N -e 'SELECT id FROM modx_site_content WHERE class_key=\"msProduct\" AND published=1 AND deleted=0 ORDER BY RAND() LIMIT 1' 2>/dev/null)&count=1&options=%5B%5D\" https://localhost/assets/components/minishop2/action.php 2>/dev/null" 2>/dev/null || echo '{"success":false}')
-CART_COUNT=$(echo "$CART_ADD" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('total_count',0))" 2>/dev/null || echo 0)
-[ "$CART_COUNT" -ge 1 ] && echo "[PASS] Cart add OK (count=$CART_COUNT)" || echo "[WARN] Cart add failed"
+# Cart test (add product via miniShop2, then clean)
+CART_RESULT=$(ssh ubuntu@"$SERVER_IP" '
+    ID=$(mysql modx_db -N -e "SELECT id FROM modx_site_content WHERE class_key=\"msProduct\" AND published=1 AND deleted=0 LIMIT 1")
+    [ -z "$ID" ] && echo "NO_PRODUCT" && exit 0
+    RESP=$(curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
+        -d "ms2_action=cart/add&id=$ID&count=1&options=[]" \
+        "https://localhost/assets/components/minishop2/action.php" 2>/dev/null)
+    echo "$RESP" | grep -q '"success":true' && echo "OK" || echo "$RESP"
+    curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
+        -d "ms2_action=cart/clean" \
+        "https://localhost/assets/components/minishop2/action.php" > /dev/null 2>&1
+')
+case "$CART_RESULT" in
+    OK) echo "[PASS] Cart add + clean OK" ;;
+    NO_PRODUCT) echo "[WARN] No products in DB" ;;
+    *) echo "[FAIL] Cart: $CART_RESULT"; ALL_OK=false ;;
+esac
 
 # SMTP
 SMTP_RESULT=$(ssh ubuntu@"$SERVER_IP" "timeout 10 bash -c 'echo | openssl s_client -starttls smtp -connect mail.privateemail.com:587 2>/dev/null | grep -q \"Verification: OK\" && echo OK || echo FAIL'" 2>/dev/null || echo "FAIL")

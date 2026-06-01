@@ -84,27 +84,10 @@ $(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
 - Last db: $LAST_GDRIVE_DB"
 
         # --- Better Stack heartbeat status ---
-    if [[ -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
-        _bs_status=$(curl -s -H "Authorization: Bearer $BETTERUPTIME_API_TOKEN" \
-            "https://uptime.betterstack.com/api/v2/heartbeats" 2>/dev/null | \
-            python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    hbs = [h['attributes'] for h in data.get('data', [])]
-    names = {'backup': '📦 Backup', 'gdrive-upload': '☁️ GDrive', 'report-daily': '📅 Daily', 'report-weekly': '📆 Weekly'}
-    parts = []
-    for h in hbs:
-        label = names.get(h['name'], h['name'])
-        icon = '✅' if h['status'] == 'up' else '❌'
-        parts.append(f'{icon} {label}')
-    print(' | '.join(parts))
-except: print('')
-" 2>/dev/null) || _bs_status=""
-        [[ -n "$_bs_status" ]] && MSG+="
+    _bs_status=$(_bs_heartbeat_status)
+    [[ -n "$_bs_status" ]] && MSG+="
 
 💟 Better Stack: $_bs_status"
-    fi
 
     MSG+="
 
@@ -146,27 +129,10 @@ $(escape_md2 "$(date -d '-7 days' +%d.%m)")-$(escape_md2 "$(date +%d.%m)") - $EN
 - Last db: $LAST_GDRIVE_DB"
 
     # --- Better Stack heartbeat status ---
-    if [[ -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
-        _bs_status=$(curl -s -H "Authorization: Bearer $BETTERUPTIME_API_TOKEN" \
-            "https://uptime.betterstack.com/api/v2/heartbeats" 2>/dev/null | \
-            python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    hbs = [h['attributes'] for h in data.get('data', [])]
-    names = {'backup': '📦 Backup', 'gdrive-upload': '☁️ GDrive', 'report-daily': '📅 Daily', 'report-weekly': '📆 Weekly'}
-    parts = []
-    for h in hbs:
-        label = names.get(h['name'], h['name'])
-        icon = '✅' if h['status'] == 'up' else '❌'
-        parts.append(f'{icon} {label}')
-    print(' | '.join(parts))
-except: print('')
-" 2>/dev/null) || _bs_status=""
-        [[ -n "$_bs_status" ]] && MSG+="
+    _bs_status=$(_bs_heartbeat_status)
+    [[ -n "$_bs_status" ]] && MSG+="
 
 💟 Better Stack: $_bs_status"
-    fi
 
     MSG+="
 

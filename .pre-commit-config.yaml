@@ -11,4 +11,17 @@ repos:
         exclude_types: [jinja]
         exclude: ^scripts/common_functions\.sh$
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=error]
+        types: [shell]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        types: [python]
+
 

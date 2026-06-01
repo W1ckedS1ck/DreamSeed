@@ -166,7 +166,7 @@ jobs:
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml
 
       - name: Deploy Nginx
-        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-02-nginx.yml -e @/tmp/test_vault.yml
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-02-web.yml -e @/tmp/test_vault.yml
 
       - name: Deploy Database
         id: deploy_db

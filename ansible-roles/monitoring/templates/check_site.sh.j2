@@ -34,4 +34,50 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     fi
     # Last-run timestamp (heartbeat — same pattern as cron_last_run_backup)
     echo "check_site_last_run{instance=\"{{ domain }}\"} $(date +%s)"
+
+    # SSL cert expiry (days remaining)
+    cert="/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+    if [ -f "$cert" ]; then
+        expiry=$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)
+        expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null || echo 0)
+        days_left=$(( (expiry_epoch - $(date +%s)) / 86400 ))
+        echo "ssl_days_remaining{instance=\"{{ domain }}\"} $days_left"
+    fi
+
+    # MODX session table size (MB)
+    session_size=$(mysql --socket=/run/mysqld/mysqld.sock -se "SELECT ROUND(((data_length+index_length)/1024/1024),2) FROM information_schema.tables WHERE table_schema='{{ db_name }}' AND table_name='{{ db_prefix | default('modx_') }}session';" 2>/dev/null || echo 0)
+    echo "modx_session_size_mb{instance=\"{{ domain }}\"} ${session_size:-0}"
+
+    # Hourly checks (admin login + cart) — run once per hour, not every minute
+    _hour_marker="/tmp/.check_site_hour"
+    _cur_hour=$(date +%Y%m%d%H)
+    if [ "$(cat "$_hour_marker" 2>/dev/null)" != "$_cur_hour" ]; then
+        echo "$_cur_hour" > "$_hour_marker"
+
+        # Admin login check (/manager/ returns 200 with MODX content)
+        if curl -sk --max-time 10 "https://{{ domain }}/manager/" 2>/dev/null | grep -qi "modx\|login"; then
+            echo "admin_login_ok{instance=\"{{ domain }}\"} 1"
+        else
+            echo "admin_login_ok{instance=\"{{ domain }}\"} 0"
+        fi
+
+        # Cart check (add a product via miniShop2, then clean)
+        product_id=$(mysql -Nse "SELECT id FROM modx_site_content WHERE class_key='msProduct' AND published=1 AND deleted=0 LIMIT 1" 2>/dev/null)
+        if [ -n "$product_id" ]; then
+            cart_resp=$(curl -sk --max-time 10 -X POST \
+                -H "X-Requested-With: XMLHttpRequest" \
+                -d "ms2_action=cart/add&id=$product_id&count=1&options=[]" \
+                "https://{{ domain }}/assets/components/minishop2/action.php" 2>/dev/null)
+            if echo "$cart_resp" | grep -q '"success":true'; then
+                echo "cart_add_ok{instance=\"{{ domain }}\"} 1"
+            else
+                echo "cart_add_ok{instance=\"{{ domain }}\"} 0"
+            fi
+            # Clean the cart
+            curl -sk --max-time 10 -X POST \
+                -H "X-Requested-With: XMLHttpRequest" \
+                -d "ms2_action=cart/clean" \
+                "https://{{ domain }}/assets/components/minishop2/action.php" > /dev/null 2>&1
+        fi
+    fi
 } | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1
