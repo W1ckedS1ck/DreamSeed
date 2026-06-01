@@ -110,6 +110,63 @@ for spec in \
     fi
 done
 
+# ─── HTTP monitors ──────────────────────────────────────────────────────────
+
+echo -e "\n${CYAN}Better Stack — HTTP monitors${NC}\n"
+
+existing_mon=$(curl -s -X GET "$API/monitors" -H "$AUTH" || echo '{"data":[]}')
+
+monitor_exists() {
+    local url="$1"
+    local data="$2"
+    echo "$data" | python3 -c "
+import sys, json
+target = sys.argv[1]
+data = json.load(sys.stdin)
+for item in data.get('data', []):
+    if item['attributes']['url'] == target:
+        print(item['id'])
+        break
+" "$url" 2>/dev/null
+}
+
+for spec in \
+    "https://dreamseed.online/|Main site|The Dreamers|180" \
+    "https://dreamseed.online/grafana|Grafana|Grafana|180"; do
+
+    IFS='|' read -r url name keyword freq <<< "$spec"
+
+    mid=$(monitor_exists "$url" "$existing_mon")
+
+    json=$(python3 -c "
+import json
+payload = {
+    'url': '$url',
+    'pronounceable_name': '$name',
+    'check_frequency': $freq,
+    'request_timeout': 30,
+    'regions': ['eu', 'us', 'as', 'au'],
+    'required_keyword': '$keyword',
+    'keyword_type': 'exists'
+}
+print(json.dumps(payload))
+")
+
+    if [[ -n "$mid" ]]; then
+        curl -s -X PATCH "$API/monitors/$mid" -H "$AUTH" -H "Content-Type: application/json" -d "$json" > /dev/null
+        echo -e "  ${GREEN}✓${NC} $name ($url) — already exists"
+    else
+        resp=$(curl -s -X POST "$API/monitors" -H "$AUTH" -H "Content-Type: application/json" -d "$json" || echo "")
+        id=$(echo "$resp" | grep -o '"id": *"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [[ -n "$id" ]]; then
+            echo -e "  ${GREEN}✓${NC} $name ($url) — created"
+        else
+            err=$(echo "$resp" | grep -o '"error": "[^"]*"' | head -1)
+            echo -e "  ${RED}✗${NC} $name — ${err:-unknown}" >&2
+        fi
+    fi
+done
+
 # ─── Telegram webhooks ──────────────────────────────────────────────────────
 
 if [[ -z "${TG_TOKEN:-}" || -z "${TG_CHAT_ID:-}" ]]; then
