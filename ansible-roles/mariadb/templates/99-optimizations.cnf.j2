@@ -10,5 +10,5 @@ innodb_flush_method = O_DIRECT
 skip-name-resolve=ON
 tmp_table_size=32M
 max_heap_table_size=32M
-innodb_buffer_pool_size={{ (ansible_memtotal_mb // 4) }}M
-innodb_log_file_size={{ ((ansible_memtotal_mb // 4) // 5) }}M
+innodb_buffer_pool_size={{ (ansible_facts['memtotal_mb'] // 4) }}M
+innodb_log_file_size={{ ((ansible_facts['memtotal_mb'] // 4) // 5) }}M
