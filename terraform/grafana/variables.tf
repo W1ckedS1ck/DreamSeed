@@ -33,5 +33,3 @@ variable "sm_url" {
   type        = string
   default     = ""
 }
-
-

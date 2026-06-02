@@ -130,6 +130,13 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
+            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
+             sudo tar -xz -C /usr/local/bin gitleaks)
       - name: Run pre-commit hooks
         run: |
           pip install pre-commit
