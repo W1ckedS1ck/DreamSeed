@@ -6,7 +6,7 @@
     mode: "0755"
 
 - name: Deploy check_site systemd timer
-  ansible.builtin.copy:
+  ansible.builtin.template:
     src: check-site.timer.j2
     dest: /etc/systemd/system/check-site.timer
     owner: root
@@ -16,7 +16,7 @@
   when: monitoring_cron_enabled | bool
 
 - name: Deploy check_site systemd service
-  ansible.builtin.copy:
+  ansible.builtin.template:
     src: check-site.service.j2
     dest: /etc/systemd/system/check-site.service
     owner: root
