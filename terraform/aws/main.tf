@@ -101,9 +101,8 @@ EOF
   ebs_optimized               = true
   disable_api_termination     = var.environment == "prod"
 
-  lifecycle {
-    prevent_destroy = var.environment == "prod"
-  }
+  # prevent_destroy intentionally omitted — Terraform 1.11+ rejects variables in lifecycle.
+  # Prod protection uses disable_api_termination above.
 
   tags = {
     Name = "dreamseed-${var.environment}"
