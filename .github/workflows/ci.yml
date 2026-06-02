@@ -87,9 +87,9 @@ jobs:
       - name: Cache Trivy DB
         uses: actions/cache@v5
         with:
-          path: .trivy-cache
-          key: trivy-db-${{ hashFiles('terraform/**/*.tf') }}
-          restore-keys: trivy-db-
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}
+          restore-keys: trivy-db-${{ runner.os }}
       - name: Run Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -97,7 +97,6 @@ jobs:
           scan-ref: terraform
           exit-code: '1'
           severity: HIGH,CRITICAL
-          cache-dir: .trivy-cache
 
   gitleaks:
     name: Secret Scan
@@ -130,6 +129,7 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: precommit-${{ runner.os }}-
       - name: Install gitleaks
         env:
           GITLEAKS_VERSION: "8.30.1"
