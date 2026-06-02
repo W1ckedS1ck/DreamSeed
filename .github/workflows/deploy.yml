@@ -74,14 +74,12 @@ jobs:
 
           [[ -z "$ENV" ]] && { echo "Missing environment"; exit 1; }
 
-          WEB_FLAG="-n"
-          [[ "$WEB_SRV" == "apache" ]] && WEB_FLAG="-a"
+          DEPLOY_ARGS=("$ENV")
+          [[ "$WEB_SRV" == "apache" ]] && DEPLOY_ARGS+=("-a") || DEPLOY_ARGS+=("-n")
+          [[ -n "$SERVER_IP" ]] && DEPLOY_ARGS+=("-i" "$SERVER_IP")
+          DEPLOY_ARGS+=("-p")
 
-          IP_FLAG=""
-          [[ -n "$SERVER_IP" ]] && IP_FLAG="-i $SERVER_IP"
-
-          # shellcheck disable=SC2086
-          ./deploy.sh "$ENV" $WEB_FLAG $IP_FLAG -p
+          ./deploy.sh "${DEPLOY_ARGS[@]}"
 
       - name: Destroy
         if: inputs.action == 'destroy'
@@ -109,7 +107,8 @@ jobs:
           fi
 
           export CI_DESTROY_CONFIRM=yes
-          ./deploy.sh "$ENV" -n -x
+          WEB_FLAG="${{ inputs.web_server == 'apache' && '-a' || '-n' }}"
+          ./deploy.sh "$ENV" $WEB_FLAG -x
 
       - name: Notify failure
         if: failure()
@@ -121,4 +120,5 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true

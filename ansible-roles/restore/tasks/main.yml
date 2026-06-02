@@ -172,7 +172,9 @@
           set -o pipefail
           gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql {{ db_name }}
         executable: /bin/bash
+      register: restore_db_result
       changed_when: false
+      failed_when: restore_db_result.rc != 0
 
     - name: Verify database restore (expect 50+ tables)
       ansible.builtin.shell:

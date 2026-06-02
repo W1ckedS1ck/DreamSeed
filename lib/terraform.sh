@@ -58,6 +58,16 @@ terraform_destroy() {
 
     local var_arg=""
     [[ "$TF_PROVIDER" == "aws" ]] && var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+
+    if [[ "$TF_PROVIDER" == "aws" ]] && [[ "$TARGET" == "prod" ]]; then
+        echo "  ⚠ Removing termination protection..."
+        local instance_id
+        instance_id=$(_tf output -raw instance_id 2>/dev/null || true)
+        if [[ -n "$instance_id" ]]; then
+            aws ec2 modify-instance-attribute --instance-id "$instance_id" --no-disable-api-termination >/dev/null 2>&1 || true
+        fi
+    fi
+
     echo "  ━━━ Destroying resources ($TARGET)"
 
     TF_TMP_OUT=$(mktemp)

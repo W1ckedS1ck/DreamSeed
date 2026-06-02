@@ -57,16 +57,23 @@ jobs:
           exit 1
 
       - name: Notify drift
-        if: failure()
+        if: steps.plan.outputs.exit_code == '2'
         env:
           ENV_B64: ${{ secrets.ENV_FILE_BASE64 }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           echo "$ENV_B64" | base64 -d > /tmp/.env && source /tmp/.env && rm -f /tmp/.env
+          echo "::add-mask::$TG_TOKEN"
+          echo "::add-mask::$TG_CHAT_ID"
+          echo "::add-mask::$TG_THREAD_ID"
+          echo "::add-mask::$DB_PASS"
+          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+          echo "::add-mask::$HCLOUD_TOKEN"
           MSG="🔴 *Drift detected* — AWS prod
           🔗 $RUN_URL
           📅 $(date '+%Y-%m-%d %H:%M')"
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true

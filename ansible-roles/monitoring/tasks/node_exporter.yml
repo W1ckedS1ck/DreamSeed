@@ -16,8 +16,20 @@
     shell: /bin/false
 
 - name: Deploy Node Exporter service
-  ansible.builtin.template:
-    src: node_exporter.service.j2
+  ansible.builtin.copy:
     dest: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Node Exporter
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=node_exporter
+      ExecStart=/usr/local/bin/node_exporter --web.listen-address=127.0.0.1:9100
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
     mode: "0644"
   notify: Restart Node Exporter

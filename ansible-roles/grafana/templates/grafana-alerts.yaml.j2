@@ -140,7 +140,7 @@ groups:
         annotations:
           summary: ""
 
-{{ alert_body('cart-add', 'Cart Check Failed', 'cart_add_ok', 180, 1, 'lt', '2m', 'OK', 'Error') }}
+{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '2m', 'OK', 'Error') }}
         annotations:
           summary: >-
-            miniShop2 cart add/clean failed — check action.php and products
+            miniShop2 write probe failed — DB INSERT/delete check. See check_site.sh hourly metrics (ms2_endpoint_ok, ms2_tables_ok, admin_login_ok)

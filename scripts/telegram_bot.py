@@ -32,6 +32,12 @@ REMOTE_BASE = os.environ.get('REMOTE_BASE', 'DreamSeed/backups')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')
 DB_PREFIX = os.environ.get('DB_PREFIX', 'db_modx_db_')
 
+
+def escape_md2(text):
+    text = str(text).replace('\\', '\\\\')
+    special_chars = r'_*[]()~`>#+-=|{}.!'
+    return ''.join(f'\\{c}' if c in special_chars else c for c in text)
+
 def get_size(filepath_or_bytes):
     if not filepath_or_bytes:
         return "-"
@@ -44,21 +50,22 @@ def get_size(filepath_or_bytes):
             return f"{size // 1048576}MB"
         else:
             return f"{size // 1024}KB"
-    except Exception:
+    except Exception as e:
+        log.warning("Failed to get file size: %s", e)
         return "-"
 
 def get_env():
     hostname = subprocess.check_output(['hostname'], text=True).strip()
-    if 'prod' in hostname and 'preprod' not in hostname:
+    if 'prod' in hostname:
         return "prod"
-    return "preprod"
+    return "dev"
 
 def format_backup_name(filename, prefix='DreamSeed_'):
     name = filename.replace(prefix, '').replace('.tar.gz', '').replace('.sql.gz', '')
     parts = name.rsplit('_', 1)
     if len(parts) == 2:
-        return f"{parts[0]} {parts[1].replace('-', ':')}"
-    return name
+        return escape_md2(f"{parts[0]} {parts[1].replace('-', ':')}")
+    return escape_md2(name)
 
 def _local_backups(subdir, prefix):
     path = f'{BACKUP_DIR}/{subdir}'
@@ -67,7 +74,8 @@ def _local_backups(subdir, prefix):
             [f for f in os.listdir(path) if f.startswith(prefix)],
             key=lambda x: os.path.getmtime(f'{path}/{x}'), reverse=True
         )
-    except Exception:
+    except Exception as e:
+        log.warning("Failed to list local backups in %s: %s", path, e)
         return []
 
 def _rclone_lsf(path):
@@ -80,7 +88,8 @@ def _rclone_lsf(path):
             [line.split(';', 2) for line in out.split('\n') if line],
             key=lambda x: x[0], reverse=True
         )
-    except Exception:
+    except Exception as e:
+        log.warning("rclone lsf %s failed: %s", path, e)
         return []
 
 def cmd_status():
@@ -100,7 +109,8 @@ def cmd_status():
                     return f"{s // 1048576}MB"
                 else:
                     return f"{s // 1024}KB"
-            except Exception:
+            except Exception as e:
+                log.warning("Failed to parse cloud size %s: %s", size_bytes, e)
                 return "-"
 
         msg = f"📊 *Backup Status* — {env}\n\n"
@@ -150,6 +160,8 @@ def main():
         '/backup': cmd_backups,
     }
 
+    retry_count = 0
+
     while True:
         try:
             params = {'timeout': 30}
@@ -190,12 +202,18 @@ def main():
                         if not resp.json().get('ok'):
                             log.warning("Telegram API error: %s", resp.text)
 
+            retry_count = 0
             time.sleep(1)
 
         except requests.exceptions.Timeout:
-            continue
+            retry_count += 1
+            backoff = min(2 ** retry_count, 300)
+            log.warning("Timeout (retry %d), sleeping %ds", retry_count, backoff)
+            time.sleep(backoff)
         except Exception as e:
             log.error("Main loop error: %s", e)
+            retry_count += 1
+            time.sleep(min(2 ** retry_count, 300))
 
 if __name__ == '__main__':
     main()

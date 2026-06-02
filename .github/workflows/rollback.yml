@@ -100,11 +100,27 @@ jobs:
       - name: Restore latest backup
         id: restore
         run: |
-          ssh -o StrictHostKeyChecking=no \
+          ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=10 \
               -i ~/.ssh/Vitali.pem \
               ubuntu@${{ steps.server-ip.outputs.ip }} \
               "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest"
+
+      - name: Health check
+        id: health
+        run: |
+          for i in 1 2 3 4 5; do
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+              "http://${{ steps.server-ip.outputs.ip }}" || echo "000")
+            if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
+              echo "HTTP $http_code — OK"
+              exit 0
+            fi
+            echo "Attempt $i/5: HTTP $http_code, waiting 5s..."
+            sleep 5
+          done
+          echo "::error::Site not healthy after rollback"
+          exit 1
 
       - name: Send completion notification
         if: always()
@@ -115,12 +131,20 @@ jobs:
 
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           RESTORE="${{ steps.restore.outcome }}"
-          [ "$RESTORE" = "success" ] && STATUS="✅ SUCCESS" || STATUS="❌ FAILED"
-          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\nEnvironment: %s\nRestore: %s\n🖥 %s' \
+          HEALTH="${{ steps.health.outcome }}"
+          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
+            STATUS="✅ ROLLBACK OK"
+          elif [[ "$RESTORE" != "success" ]]; then
+            STATUS="❌ RESTORE FAILED"
+          else
+            STATUS="⚠️  SITE UNHEALTHY"
+          fi
+          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\nEnvironment: %s\nRestore: %s\nHealth: %s\n🖥 %s' \
             "$STATUS" \
             "$(date '+%Y-%m-%d %H:%M')" \
             "${{ inputs.environment }}" \
             "$(ok $RESTORE)" \
+            "$(ok $HEALTH)" \
             "${{ steps.server-ip.outputs.ip }}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \

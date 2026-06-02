@@ -1,0 +1,11 @@
+location ~ \.php$ {
+    include snippets/fastcgi-php.conf;
+    fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    include fastcgi_params;
+    fastcgi_buffer_size 32k;
+    fastcgi_buffers 16 16k;
+    fastcgi_connect_timeout 60s;
+    fastcgi_send_timeout 300s;
+    fastcgi_read_timeout 300s;
+}

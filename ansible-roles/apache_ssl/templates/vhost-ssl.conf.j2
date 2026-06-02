@@ -12,11 +12,11 @@
     SSLCertificateKeyFile /etc/letsencrypt/live/{{ domain }}/privkey.pem
     SSLProtocol TLSv1.2 TLSv1.3
     SSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
-    
+
 {% else %}
     SSLEngine on
-    SSLCertificateFile /etc/ssl/certs/ssl-cert-snakeoil.pem
-    SSLCertificateKeyFile /etc/ssl/private/ssl-cert-snakeoil.key
+    SSLCertificateFile /etc/ssl/certs/selfsigned.crt
+    SSLCertificateKeyFile /etc/ssl/private/selfsigned.key
 {% endif %}
 
     # --- HTTP/2 ---

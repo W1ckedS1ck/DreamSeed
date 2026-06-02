@@ -69,9 +69,9 @@ write_deploy_history() {
 }
 
 rotate_logs() {
-    local max="${MAX_LOG_FILES:-10}"
-    ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs -r rm -f 2>/dev/null || true
-    ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +$((max + 1)) | xargs -r rm -f 2>/dev/null || true
+    local max="${MAX_LOG_FILES:-10}" f
+    while IFS= read -r f; do rm -f "$f"; done < <(ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +$((max + 1))) 2>/dev/null || true
+    while IFS= read -r f; do rm -f "$f"; done < <(ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +$((max + 1))) 2>/dev/null || true
 }
 
 print_summary() {

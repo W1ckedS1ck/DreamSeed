@@ -77,7 +77,7 @@ resource "aws_instance" "web" {
   associate_public_ip_address = var.elastic_ip_allocation_id == ""
 
   root_block_device {
-    volume_size = 30
+    volume_size = var.root_volume_size
     volume_type = "gp3"
     encrypted   = true
     tags = {
@@ -89,7 +89,7 @@ resource "aws_instance" "web" {
 #!/bin/bash
 hostnamectl set-hostname dreamseed-${var.environment}
 sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-systemctl restart sshd
+systemctl restart ssh
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 EOF
@@ -98,7 +98,12 @@ EOF
     http_tokens = "required"
   }
 
-  ebs_optimized = true
+  ebs_optimized               = true
+  disable_api_termination     = var.environment == "prod"
+
+  lifecycle {
+    prevent_destroy = var.environment == "prod"
+  }
 
   tags = {
     Name = "dreamseed-${var.environment}"

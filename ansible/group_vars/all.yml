@@ -43,6 +43,7 @@ cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 grafana_version: "12.4.3"
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') or fail('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
+grafana_memory_limit: "400MiB"
 monitoring_node_version: "1.11.1"
 monitoring_nginx_version: "1.5.1"
 monitoring_apache_version: "1.0.12"

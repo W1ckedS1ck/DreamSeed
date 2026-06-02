@@ -68,7 +68,22 @@ echo ""
 
 # 6. Search for common patterns in committed code
 echo "✓ Searching for hardcoded secrets in tracked files..."
-PATTERNS=("password=\"[^\"]*\"" "token=\"[^\"]*\"" "TG_TOKEN=" "AWS_SECRET" "api_key=" "\"secret\":" "private_key" "Authorization: Bearer")
+PATTERNS=(
+    "password=\"[^\"]*\""
+    "\"password\":" "PASSWORD="
+    "token=\"[^\"]*\""
+    "_TOKEN="
+    "_SECRET="
+    "_KEY="
+    "_PASS="
+    "TG_TOKEN="
+    "AWS_SECRET"
+    "api_key="
+    "\"secret\":"
+    "private_key"
+    "Authorization: Bearer"
+    "-----BEGIN.*PRIVATE KEY-----"
+)
 FOUND_PATTERNS=0
 
 for pattern in "${PATTERNS[@]}"; do

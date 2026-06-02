@@ -50,7 +50,7 @@ source "$SCRIPT_DIR/lib/preflight.sh"
 source "$SCRIPT_DIR/lib/terraform.sh"
 source "$SCRIPT_DIR/lib/ansible.sh"
 
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # ----- arg parsing -----
 
@@ -150,7 +150,16 @@ main() {
     resolve_target
 
     LOCK_FILE="/tmp/deploy-${TARGET}.lock"
-    mkdir "$LOCK_FILE" 2>/dev/null || { echo "Error: deploy already running for $TARGET ($LOCK_FILE)"; exit 1; }
+    mkdir "$LOCK_FILE" 2>/dev/null || {
+        if [[ -f "$LOCK_FILE/pid" ]] && kill -0 "$(cat "$LOCK_FILE/pid")" 2>/dev/null; then
+            echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE/pid"))"
+            exit 1
+        fi
+        echo "Warning: removing stale lock for $TARGET"
+        rmdir "$LOCK_FILE" 2>/dev/null || true
+        mkdir "$LOCK_FILE"
+    }
+    echo "$$" > "$LOCK_FILE/pid"
 
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
     echo "  Target:     $TARGET"
@@ -265,6 +274,8 @@ main() {
     # ----- Wait for SSH -----
     if [[ "$TF_PROVIDER" == "aws" ]]; then
         SSH_ATTEMPTS=$AWS_SSH_ATTEMPTS; SSH_INTERVAL=$AWS_SSH_INTERVAL
+    elif [[ "$TF_PROVIDER" == "hetzner" ]]; then
+        SSH_ATTEMPTS=90; SSH_INTERVAL=2
     fi
     step_start "Wait for SSH ($SERVER_IP)"
     for ((i=1; i<=SSH_ATTEMPTS; i++)); do

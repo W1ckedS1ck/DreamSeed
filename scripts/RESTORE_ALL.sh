@@ -262,6 +262,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
 
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
     if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
+        [[ "$PROJECT_DIR" == "/var/www/html" ]] || { echo "ERROR: PROJECT_DIR must be /var/www/html, got: $PROJECT_DIR"; exit 1; }
         sudo rm -rf "$PROJECT_DIR"
         sudo mv "$TEMP_EXTRACT/$(basename "$PROJECT_DIR")" "$PROJECT_DIR"
         sudo rm -rf "$TEMP_EXTRACT"
@@ -297,6 +298,7 @@ if [ -n "$SELECTED_DB" ]; then
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)
 
     TEMP_SQL=$(mktemp /tmp/restore_XXXXXX.sql)
+    chmod 600 "$TEMP_SQL"
     if ! gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"

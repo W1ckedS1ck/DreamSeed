@@ -137,10 +137,18 @@ run_terraform_validate() {
 }
 
 run_gitleaks() {
-    group_start "Gitleaks (Secrets)"
+    local mode="${1:-working-tree}"
+    group_start "Gitleaks (Secrets) — ${mode}"
     if ! tool_available gitleaks; then print_skip "gitleaks not installed"; group_end; return 0; fi
 
-    if gitleaks detect --source . --no-git -v 2>&1; then
+    local args
+    if [[ "$mode" == "full-history" ]]; then
+        args="--source ."
+    else
+        args="--source . --no-git"
+    fi
+
+    if gitleaks detect $args -v 2>&1; then
         print_ok "No secrets found"; ci_annotation "Gitleaks" "pass"
     else
         print_fail "Secrets detected"; ci_annotation "Gitleaks" "fail"
@@ -273,7 +281,8 @@ OPTIONS:
   --ansible-lint      Run only ansible-lint
   --tflint            Run only tflint
   --validate-terraform Run only terraform validate
-  --gitleaks          Run only gitleaks
+  --gitleaks          Run only gitleaks (working tree)
+  --gitleaks-full-history Run only gitleaks (full git history, slower)
   --trivy             Run only trivy
   --secrets           Run only secrets audit
 
@@ -317,6 +326,7 @@ while [[ $# -gt 0 ]]; do
         --tflint)            MODE="tflint"; shift ;;
         --validate-terraform) MODE="terraform-validate"; shift ;;
         --gitleaks)          MODE="gitleaks"; shift ;;
+        --gitleaks-full-history) MODE="gitleaks-full-history"; shift ;;
         --trivy)             MODE="trivy"; shift ;;
         --secrets)           MODE="secrets"; shift ;;
         --list)              MODE="list"; shift ;;
@@ -334,6 +344,7 @@ case "$MODE" in
     tflint)              run_tflint ;;
     terraform-validate)  run_terraform_validate ;;
     gitleaks)            run_gitleaks ;;
+    gitleaks-full-history) run_gitleaks "full-history" ;;
     trivy)               run_trivy ;;
     secrets)             run_secrets_audit ;;
     list)                list_tools ;;

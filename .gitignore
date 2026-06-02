@@ -33,13 +33,15 @@ logs/
 .DS_Store
 .vscode/
 .idea/
-*.swp
-*.swo
+*.sw?
+*~
 
 # Python
 __pycache__/
 *.pyc
 .ruff_cache/
+venv/
+.venv/
 
 # Node.js
 node_modules/

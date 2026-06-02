@@ -7,6 +7,8 @@ repos:
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: detect-private-key
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
       - id: check-shebang-scripts-are-executable
         exclude_types: [jinja]
         exclude: ^scripts/common_functions\.sh$
@@ -24,4 +26,10 @@ repos:
       - id: ruff
         types: [python]
 
-
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: Check for hardcoded secrets
+        entry: gitleaks detect --source . --no-git -v
+        language: system
+        pass_filenames: false

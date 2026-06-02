@@ -31,13 +31,12 @@ detect_env() {
     local h
     h=$(hostname)
     case "$h" in
-        *-preprod|*preprod-*) echo "-preprod" ;;
-        *-prod|*prod-*)       echo "" ;;
+        *-prod|*prod-*) echo "" ;;
         *)
             if [[ -f /etc/dreamseed.env ]]; then
-                grep -q "^ENV=prod" /etc/dreamseed.env 2>/dev/null && echo "" || echo "-preprod"
+                grep -q "^ENV=prod" /etc/dreamseed.env 2>/dev/null && echo "" || echo "-dev"
             else
-                echo "-preprod"
+                echo "-dev"
             fi
             ;;
     esac
@@ -100,6 +99,3 @@ prune_cloud_backups() {
 escape_md2() {
     echo "$1" | sed 's/[][_*()~`>#+={|}.!-\\]/\\&/g'
 }
-
-
-

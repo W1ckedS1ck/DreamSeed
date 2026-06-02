@@ -1,6 +1,11 @@
 locals {
   use_dynamic_ip   = var.primary_ip_name == ""
   use_existing_key = var.ssh_key_name != ""
+  labels = {
+    environment = var.environment
+    service     = "DreamSeed"
+    managed_by  = "terraform"
+  }
 }
 
 data "hcloud_ssh_key" "default" {
@@ -15,27 +20,28 @@ resource "hcloud_ssh_key" "ci_key" {
 }
 
 resource "hcloud_firewall" "web" {
-  name = "dreamseed-fw-${var.environment}"
+  name   = "dreamseed-fw-${var.environment}"
+  labels = local.labels
 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "22"
-    source_ips = ["0.0.0.0/0"] # IPv4 only
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "80"
-    source_ips = ["0.0.0.0/0"] # IPv4 only
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "443"
-    source_ips = ["0.0.0.0/0"] # IPv4 only
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
 }
 
@@ -49,6 +55,7 @@ resource "hcloud_server" "main" {
   server_type  = var.server_type
   image        = "ubuntu-24.04"
   location     = var.location
+  labels       = local.labels
   ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
   firewall_ids = [hcloud_firewall.web.id]
 

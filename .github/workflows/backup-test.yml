@@ -29,6 +29,8 @@ jobs:
     timeout-minutes: 35
 
     steps:
+      - uses: actions/checkout@v6
+
       - uses: ./.github/actions/setup-terraform
 
       - name: Record start time
@@ -255,7 +257,7 @@ jobs:
         if: always()
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          scp -o StrictHostKeyChecking=no \
+          scp -o StrictHostKeyChecking=accept-new \
             "ubuntu@$SERVER_IP:/var/log/lynis-report.dat" /tmp/lynis-report.dat 2>/dev/null || \
             echo "[WARN] lynis report not available on remote server"
 

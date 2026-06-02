@@ -53,6 +53,14 @@
   notify: Restart vmagent
   when: _vmagent_enabled
 
+- name: Stop and disable vmagent before removal
+  ansible.builtin.systemd:
+    name: vmagent
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: not _vmagent_enabled
+
 - name: Remove vmagent if disabled
   ansible.builtin.file:
     path: "{{ item }}"

@@ -38,14 +38,12 @@
     state: directory
     mode: "0755"
 
-- name: Set Grafana systemd memory limits
+- name: Set Grafana Go memory limit
   ansible.builtin.copy:
     dest: /etc/systemd/system/grafana-server.service.d/memory.conf
     content: |
       [Service]
-      Environment="GOMEMLIMIT=400MiB"
-      MemoryMax=480M
-      MemoryHigh=400M
+      Environment="GOMEMLIMIT={{ grafana_memory_limit }}"
     mode: "0644"
   notify:
     - Reload systemd
@@ -148,9 +146,13 @@
     mode: "0755"
 
 - name: Fix Grafana dashboard file permissions
-  ansible.builtin.shell:
-    cmd: find /var/lib/grafana/dashboards -type f -name "*.json" -exec chmod 0644 {} + -exec chown grafana:grafana {} +
-  changed_when: false
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    owner: grafana
+    group: grafana
+    mode: "0644"
+    recurse: true
+    file_type: file
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:

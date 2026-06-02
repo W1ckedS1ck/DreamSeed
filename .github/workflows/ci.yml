@@ -16,6 +16,7 @@ jobs:
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Run ShellCheck
@@ -29,6 +30,7 @@ jobs:
   ruff:
     name: Python Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Run ruff
@@ -37,6 +39,7 @@ jobs:
   ansible-lint:
     name: Ansible Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -52,6 +55,7 @@ jobs:
   terraform-checks:
     name: Terraform Lint + Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v4
@@ -77,6 +81,7 @@ jobs:
   trivy:
     name: Terraform Security
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Cache Trivy DB
@@ -97,6 +102,7 @@ jobs:
   gitleaks:
     name: Secret Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -108,12 +114,13 @@ jobs:
           sudo apt-get install -y gitleaks -qq 2>/dev/null || \
             (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
              sudo tar -xz -C /usr/local/bin gitleaks)
-      - name: Secret Scan
-        run: bash scripts/lint.sh --ci --gitleaks
+      - name: Secret Scan (full history)
+        run: bash scripts/lint.sh --ci --gitleaks-full-history
 
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

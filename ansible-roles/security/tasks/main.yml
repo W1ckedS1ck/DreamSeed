@@ -234,11 +234,11 @@
     mode: "{{ item.mode }}"
     recurse: true
   loop:
-    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "0755"}
-    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "0755"}
-    - {path: "{{ web_root }}/core/model", owner: root, mode: "0750"}
-    - {path: "{{ web_root }}/core/components", owner: root, mode: "0750"}
-  when: modx_config_file.stat.exists and not (dev_write_perms | default(false))
+    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "u=rwX,g=rwX,o=rX"}
+    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "u=rwX,g=rwX,o=rX"}
+    - {path: "{{ web_root }}/core/model", owner: root, mode: "u=rwX,g=rwX,o="}
+    - {path: "{{ web_root }}/core/components", owner: root, mode: "u=rwX,g=rwX,o="}
+  when: modx_config_file.stat.exists
 
 # --- Developer Write Permissions ---
 - name: Add ubuntu user to www-data group
@@ -247,13 +247,10 @@
     name: ubuntu
     groups: www-data
     append: true
-  when: dev_write_perms | default(false)
 
-- name: Allow group write access to web root for developers
+- name: Set setgid so new files inherit www-data group
   become: true
-  ansible.builtin.shell:
-    cmd: |
-      find "{{ web_root }}" -type d -exec chmod g+rwxs {} +
-      find "{{ web_root }}" -type f -exec chmod g+rw {} +
-  changed_when: false
-  when: dev_write_perms | default(false)
+  ansible.builtin.file:
+    path: "{{ web_root }}"
+    state: directory
+    mode: g+s

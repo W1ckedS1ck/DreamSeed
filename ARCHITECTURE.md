@@ -13,7 +13,7 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      backup tfstate → ssh-keygen -R
        │
        ├─ 3. Wait for SSH
-       │      AWS: 40×10s | Hetzner: 20×1s polling
+       │      AWS: 40×10s | Hetzner: 90×2s polling
        │
        ├─ 4. Wait for cloud-init
        │      timeout 300s + 15×2s fallback
@@ -229,8 +229,8 @@ Trigger            Workflow              Jobs
 ───────            ────────              ────
 Push / PR          CI                    ShellCheck, ruff, ansible-lint,
                                           Terraform checks (tflint+validate),
-                                          OpenTofu validate, Trivy, gitleaks
-                   ────────── 8 parallel ──────────
+                                          Trivy, gitleaks, pre-commit
+                    ────────── 7 parallel ──────────
 
 Manual dispatch    Deploy                Setup → secrets → deploy.sh / destroy
                    Rollback              Get IP → confirm → RESTORE_ALL.sh

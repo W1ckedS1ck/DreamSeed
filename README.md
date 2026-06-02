@@ -8,9 +8,8 @@
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
-![Terraform](https://img.shields.io/badge/Terraform-1.1%2B-7B42BC?logo=terraform)
-![OpenTofu](https://img.shields.io/badge/OpenTofu-1.6%2B-FDA726?logo=opentofu)
-![Ansible](https://img.shields.io/badge/Ansible-2.15%2B-EE0000?logo=ansible)
+![Terraform](https://img.shields.io/badge/Terraform-1.9%2B-7B42BC?logo=terraform)
+![Ansible](https://img.shields.io/badge/Ansible-13%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
 ![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
@@ -34,7 +33,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Deploy time | <10 min (zero to live, either cloud) |
+| Deploy time | ~15-25 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | 1 hour → Google Drive, 15/5 versions retained |
 | Uptime coverage | 11 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
@@ -54,7 +53,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
 - **Observability** — VictoriaMetrics + Grafana stack with 11 alert rules (CPU, RAM, Disk, MySQL, Nginx/Apache, PHP-FPM, MODX Core, site availability, VictoriaMetrics, backup cron, site check cron). Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 15/5 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, Terraform checks (lint+validate), OpenTofu validate, Trivy, gitleaks, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
+- **CI/CD** — 7 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, Terraform checks (lint+validate), Trivy, gitleaks, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -138,7 +137,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (800+ lines of battle-tested Bash)
+├── deploy.sh                 # Main orchestrator (~400 lines + 5 modular lib files)
 ├── audit-secrets.sh          # Pre-push secret leakage scanner
 ├── .github/actions/          # Composite actions: setup-secrets, setup-terraform, setup-ansible
 ├── terraform/
@@ -261,4 +260,3 @@ All environments are fully monitored, backed up, and behind Cloudflare proxy.
 <p align="center">
 Infrastructure engineered by <a href="https://github.com/W1ckedS1ck">Vitali Kuts</a> · DreamSeed — <em>A promise to follow your dream</em>
 </p>
-
