@@ -94,7 +94,7 @@
     name: certbot.timer
     state: started
     enabled: true
-  when: ssl_has_cert and not ssl_restored | default(false)
+  when: ssl_has_cert
 
 - name: Create renewal hooks directory
   become: true

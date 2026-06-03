@@ -95,6 +95,21 @@ jobs:
 
           [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
+      - name: Mask secrets
+        run: |
+          echo "::add-mask::${{ secrets.TG_TOKEN }}"
+          echo "::add-mask::${{ secrets.TG_CHAT_ID }}"
+          echo "::add-mask::${{ secrets.TG_THREAD_ID }}"
+          echo "::add-mask::${{ secrets.DB_PASS }}"
+          echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          echo "::add-mask::${{ secrets.CF_ZONE_ID }}"
+          echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}"
+          echo "::add-mask::${{ secrets.GRAFANA_PASS }}"
+          echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}"
+          echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}"
+          echo "::add-mask::${{ secrets.VAULT_PASSWORD }}"
+          echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}"
+
       - name: Deploy
         if: inputs.action == 'deploy'
         id: deploy

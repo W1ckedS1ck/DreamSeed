@@ -1,6 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
+# ====== Prevent concurrent executions ======
+LOCK_FILE="/tmp/restore_all.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "ERROR: Restore already in progress ($LOCK_FILE)"
+    exit 1
+fi
+trap 'exec 9>&-' EXIT
+
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
