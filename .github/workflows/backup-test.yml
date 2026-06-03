@@ -312,7 +312,7 @@ jobs:
           path: /tmp/lynis-report.dat
 
       - name: Cleanup
-        if: success()
+        if: always()
         run: |
           set -a
           source secrets/.env
@@ -338,7 +338,7 @@ jobs:
 
       - name: Terraform Destroy
         id: destroy
-        if: success()
+        if: always()
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
