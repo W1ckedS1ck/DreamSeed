@@ -312,7 +312,7 @@ jobs:
           path: /tmp/lynis-report.dat
 
       - name: Cleanup
-        if: always()
+        if: success()
         run: |
           set -a
           source secrets/.env
@@ -325,9 +325,20 @@ jobs:
             "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /dev/null && echo "DNS record deleted" || echo "No DNS record to delete"
 
+      - name: Server info on failure
+        if: failure()
+        run: |
+          echo "============================================"
+          echo "❌ Tests failed — server kept for debugging"
+          echo "Server IP: ${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "SSH: ssh -i ~/.ssh/Vitali.pem ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "Domain: https://test.dreamseed.online/"
+          echo "Destroy manually when done: gh workflow run deploy.yml -f environment=dev-hetz -f action=destroy -f confirm='destroy dev'"
+          echo "============================================"
+
       - name: Terraform Destroy
         id: destroy
-        if: always()
+        if: success()
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
