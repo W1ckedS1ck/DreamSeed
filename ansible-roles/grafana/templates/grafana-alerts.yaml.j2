@@ -144,3 +144,18 @@ groups:
         annotations:
           summary: >-
             miniShop2 write probe failed — DB INSERT/delete check. See check_site.sh hourly metrics (ms2_endpoint_ok, ms2_tables_ok, admin_login_ok)
+
+{{ alert_body('health-overall', 'Overall Health Check Failed', 'dreamseed_health_overall', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
+        annotations:
+          summary: >-
+            DreamSeed health check detected failure — review service status dashboard
+
+{{ alert_body('site-http-down', 'Site HTTP Status Critical', 'site_http_status', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
+        annotations:
+          summary: >-
+            {% raw %}Site not responding with 200/301 on {{ $labels.domain }} (HTTP {{ $labels.code }}){% endraw %}
+
+{{ alert_body('db-tables-low', 'Database Tables Below Threshold', 'database_tables', 300, 50, 'lt', '2m', 'Alerting', 'Error') }}
+        annotations:
+          summary: >-
+            {% raw %}Database {{ $labels.database }} has {{ $values.A }} tables (expected ≥50) — check restore or migration{% endraw %}
