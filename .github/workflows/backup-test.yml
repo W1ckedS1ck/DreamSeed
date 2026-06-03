@@ -25,12 +25,17 @@ env:
 jobs:
   test-restore:
     name: Test backup restoration
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Guard against accidental push trigger
+        if: github.event_name == 'push'
+        run: |
+          echo "::error::BackupRestorationTest triggered by push (GitHub bug with workflow_dispatch). No action taken."
+          exit 1
 
       - uses: ./.github/actions/setup-terraform
 
