@@ -71,7 +71,7 @@ jobs:
         run: |
           mkdir -p secrets ~/.ssh
 
-          cat > secrets/.env << 'ENVEOF'
+          cat > secrets/.env << ENVEOF
           TG_TOKEN=$TG_TOKEN
           TG_CHAT_ID=$TG_CHAT_ID
           TG_THREAD_ID=$TG_THREAD_ID
