@@ -75,6 +75,7 @@ jobs:
 
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/Vitali.pem
           chmod 600 ~/.ssh/Vitali.pem
+          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
 
           echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
           chmod 600 ~/.vault_pass_dreamseed
@@ -87,9 +88,40 @@ jobs:
             echo "IdentityFile ~/.ssh/Vitali.pem"
           } > ~/.ssh/config
 
-      - name: Load secrets and export TF vars
+      - name: Sync SSH key to Hetzner and export TF vars
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
+          PUB_KEY=$(cat ~/.ssh/Vitali.pub)
+
+          # Delete any key from Hetzner with same public key
+          curl -s -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys" | jq -r --arg pub "$PUB_KEY" \
+            '.ssh_keys[] | select(.public_key == $pub) | .id' \
+            > /tmp/hcloud_key_to_delete.txt 2>/dev/null || true
+          if [ -s /tmp/hcloud_key_to_delete.txt ]; then
+            while IFS= read -r KID; do
+              echo "Deleting existing key with same content (id=$KID)..."
+              curl -s -o /dev/null -w '  HTTP %{http_code}\n' -X DELETE \
+                -H "Authorization: Bearer $HCLOUD_TOKEN" \
+                "https://api.hetzner.cloud/v1/ssh_keys/$KID"
+            done < /tmp/hcloud_key_to_delete.txt
+          fi
+
+          # Upload fresh key
+          echo "Uploading deploy key to Hetzner..."
+          HTTP_CODE=$(curl -s -o /tmp/hcloud_upload_resp.json -w '%{http_code}' \
+            -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"deploy-run\",\"public_key\":\"$PUB_KEY\"}" \
+            "https://api.hetzner.cloud/v1/ssh_keys")
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Uploaded successfully"
+          else
+            echo "Upload failed (HTTP $HTTP_CODE):"
+            cat /tmp/hcloud_upload_resp.json 2>/dev/null || true
+            exit 1
+          fi
 
           source secrets/.env
           echo "::add-mask::$HCLOUD_TOKEN"
@@ -97,9 +129,8 @@ jobs:
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/Vitali.pub)" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=deploy-run" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
