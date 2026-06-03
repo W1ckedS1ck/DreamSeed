@@ -364,12 +364,16 @@ INVEOF
         run_ansible "playbook-01-base.yml" "Base packages" || step_fail "Base packages failed"
         step_ok
 
-        # Phase 2: Web + DB + Security
-        step_start "Phase 2: Web/DB/Security"
-        run_parallel "Web/DB/Security" \
+        # Phase 2: Web + DB
+        step_start "Phase 2: Web/DB"
+        run_parallel "Web/DB" \
             "$web_playbook" \
-            "playbook-03-db.yml:Database & Restore" \
-            "playbook-07-security.yml:Security hardening" || step_fail "Phase 2 failed"
+            "playbook-03-db.yml:Database & Restore" || step_fail "Phase 2 failed"
+        step_ok
+
+        # Phase 2.5: Security (sequential — requires DB + web config)
+        step_start "Security hardening"
+        run_ansible "playbook-07-security.yml" "Security hardening" || step_fail "Security hardening failed"
         step_ok
 
         # Phase 3: Monitoring + Backup

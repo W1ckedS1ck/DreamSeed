@@ -53,6 +53,7 @@ START_TIME=$(date +%s)
 SERVICES_STOPPED=0
 cleanup_trap() {
     rm -rf /tmp/restore_* 2>/dev/null || true
+    # Keep pre_restore_* snapshots on exit (only clean explicit restore temp dirs)
     if [ "$SERVICES_STOPPED" -eq 1 ]; then
         if [ "$MODE" = "interactive" ]; then
             echo ""
@@ -344,6 +345,39 @@ if ! sudo systemctl stop "$PHP_FPM" "$WEB_SERVICE" 2>/dev/null; then
 fi
 SERVICES_STOPPED=1
 echo -e "${GREEN}✓ Services stopped${NC}"
+echo ""
+
+# ================================================
+# STEP 5.5: Backup current state (emergency snapshot)
+# ================================================
+if [ "$MODE" = "interactive" ]; then
+    echo -e "${YELLOW}[1.5] Backing up current state...${NC}"
+else
+    echo "Backing up current state..."
+fi
+
+PRE_RESTORE_BACKUP_DIR="/tmp/pre_restore_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$PRE_RESTORE_BACKUP_DIR"
+
+if [ -n "$SELECTED_DB" ]; then
+    BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
+    if mysqldump "$DB_NAME" 2>/dev/null | gzip > "$BACKUP_DB_FILE"; then
+        echo -e "${GREEN}✓ Database snapshot: $(du -h "$BACKUP_DB_FILE" | cut -f1)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Database snapshot failed (continuing)${NC}"
+    fi
+fi
+
+if [ -n "$SELECTED_PROJECT" ]; then
+    BACKUP_PROJ_FILE="$PRE_RESTORE_BACKUP_DIR/project_snapshot.tar.gz"
+    if sudo tar -czf "$BACKUP_PROJ_FILE" -C /var/www . 2>/dev/null; then
+        echo -e "${GREEN}✓ Project snapshot: $(du -h "$BACKUP_PROJ_FILE" | cut -f1)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Project snapshot failed (continuing)${NC}"
+    fi
+fi
+
+echo -e "${CYAN}Emergency snapshot saved to: $PRE_RESTORE_BACKUP_DIR${NC}"
 echo ""
 
 # ================================================
