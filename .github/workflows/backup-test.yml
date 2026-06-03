@@ -1,9 +1,6 @@
 name: BackupRestorationTest
 
 on:
-  push:
-    branches-ignore:
-      - '**'
   schedule:
     - cron: "0 10 * * 1"
   workflow_dispatch:
@@ -27,7 +24,8 @@ env:
 
 jobs:
   test-restore:
-    name: Test backup restoration (${{ inputs.environment || 'hetzner' }})
+    name: Test backup restoration
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
