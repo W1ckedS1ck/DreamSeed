@@ -14,7 +14,7 @@ web_server: "nginx"
 db_name: "modx_db"
 db_user: "modx_user"
 db_prefix: "modx_"
-db_pass: "{{ lookup('env', 'DB_PASS') or fail('DB_PASS env var is required') }}"
+db_pass: "{{ lookup('env', 'DB_PASS') | mandatory('DB_PASS environment variable is required') }}"
 
 # ========================
 #  PHP
