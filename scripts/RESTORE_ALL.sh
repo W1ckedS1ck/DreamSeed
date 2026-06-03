@@ -114,10 +114,90 @@ select_backup() {
     fi
 }
 
+select_backup_cloud() {
+    local remote_path="$1"
+    local pattern="$2"
+    local result_var="$3"
+
+    local files=()
+    while IFS= read -r f; do files+=("$f"); done < <(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/" --files-only --format tps 2>/dev/null | grep "$pattern" | sort -t';' -k1 -r || true)
+
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "${RED}No backups found on GDrive ($remote_path)${NC}"
+        return 1
+    fi
+
+    echo -e "${YELLOW}Available backups (GDrive):${NC}"
+    echo ""
+    for i in "${!files[@]}"; do
+        local line="${files[$i]}"
+        local name="${line#*;}"
+        name="${name%;*}"
+        local size="${line##*;}"
+        local size_str=""
+        if [ "$size" -gt 1048576 ]; then
+            size_str="$((size / 1048576))MB"
+        else
+            size_str="$((size / 1024))KB"
+        fi
+        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "$name")  ${CYAN}[$size_str]${NC}"
+    done
+    echo ""
+
+    local choice
+    read -r -p "Select number (Enter = skip): " choice
+    echo ""
+
+    if [ -z "$choice" ]; then
+        echo -e "${YELLOW}Skipped.${NC}"
+        return 0
+    fi
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
+        local line="${files[$((choice-1))]}"
+        local selected_name="${line#*;}"
+        selected_name="${selected_name%;*}"
+        echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")"
+        echo -e "${YELLOW}Downloading...${NC}"
+        local temp_file="/tmp/$(basename "$selected_name")"
+        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" /tmp/ 2>&1
+        if [ -f "$temp_file" ]; then
+            echo -e "${GREEN}✓ Downloaded to $temp_file${NC}"
+            declare -g "$result_var"="$temp_file"
+            return 0
+        else
+            echo -e "${RED}✗ Download failed!${NC}"
+            return 1
+        fi
+    else
+        echo -e "${RED}Invalid selection!${NC}"
+        return 1
+    fi
+}
+
 # ====== INTERACTIVE MODE ======
 if [ "$MODE" != "--auto-latest" ]; then
     # ====== Header ======
     print_header "Restore DreamSeed"
+
+    # ================================================
+    # STEP 0: Choose source (local or cloud)
+    # ================================================
+    echo -e "${YELLOW}Source:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1${NC}) Local backups"
+    echo -e "  ${GREEN}2${NC}) GDrive (cloud)"
+    echo ""
+    read -r -p "Your choice: " SOURCE_CHOICE
+    echo ""
+    case "$SOURCE_CHOICE" in
+        1) SOURCE="local" ;;
+        2) SOURCE="cloud" ;;
+        *) echo -e "${YELLOW}Default: local${NC}"; SOURCE="local"; echo "" ;;
+    esac
+
+    ENV_SUFFIX=""
+    [ "$ENV" != "prod" ] && ENV_SUFFIX="-$ENV"
 
     # ================================================
     # STEP 1: What to restore?
@@ -138,11 +218,19 @@ if [ "$MODE" != "--auto-latest" ]; then
     # STEP 2: Select backup files
     # ================================================
     if [ "$RESTORE_PROJECT" -eq 1 ]; then
-        select_backup "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+        if [ "$SOURCE" = "cloud" ]; then
+            select_backup_cloud "project${ENV_SUFFIX}" "DreamSeed_" "SELECTED_PROJECT" || exit 1
+        else
+            select_backup "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+        fi
     fi
 
     if [ "$RESTORE_DB" -eq 1 ]; then
-        select_backup "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
+        if [ "$SOURCE" = "cloud" ]; then
+            select_backup_cloud "db${ENV_SUFFIX}" "db_" "SELECTED_DB" || exit 1
+        else
+            select_backup "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
+        fi
     fi
 
     echo ""
