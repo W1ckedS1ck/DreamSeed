@@ -3,12 +3,17 @@
 # Sourced by deploy.sh — do not execute directly.
 
 validate_env_file() {
-    local f="$1" n=0
+    local f="$1" n=0 required=("DB_PASS" "GRAFANA_PASS" "TG_TOKEN" "TG_CHAT_ID")
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((n++)) || true
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || { echo "Invalid env format at $f:$n"; exit 1; }
+        [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || { echo "Invalid env format at $f:$n: $line" >&2; exit 1; }
     done < "$f"
+    for req in "${required[@]}"; do
+        source "$f" 2>/dev/null || true
+        local val="${!req:-}"
+        [[ -z "$val" ]] && { echo "Error: required var $req is empty or undefined in $f" >&2; exit 1; }
+    done
 }
 
 resolve_env_file() {
