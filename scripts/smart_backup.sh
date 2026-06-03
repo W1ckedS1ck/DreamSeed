@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# Validate required commands
+for cmd in curl tar gzip find mysqldump; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+done
+
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh

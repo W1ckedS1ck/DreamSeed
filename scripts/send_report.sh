@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# Validate required commands
+for cmd in find rclone du cut date grep printf; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+done
+
 # Path for cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -39,9 +44,14 @@ LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
 
 # ====== DAILY REPORT ======
 if [ "$REPORT_TYPE" = "daily" ]; then
+    set +o pipefail
     PROJ_1_SIZE=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null | cut -f1)
+    [[ ${PIPESTATUS[0]} -eq 0 ]] || PROJ_1_SIZE="ERROR"
     DB_1_SIZE=$(du -h "$(echo "$DB_FILES" | head -1)" 2>/dev/null | cut -f1)
+    [[ ${PIPESTATUS[0]} -eq 0 ]] || DB_1_SIZE="ERROR"
     DB_2_SIZE=$(du -h "$(echo "$DB_FILES" | sed -n '2p')" 2>/dev/null | cut -f1)
+    [[ ${PIPESTATUS[0]} -eq 0 ]] || DB_2_SIZE="ERROR"
+    set -o pipefail
 
     PROJ_1=$(format_name "$(echo "$PROJ_FILES" | head -1)")
     DB_1=$(format_name "$(echo "$DB_FILES" | head -1)")
