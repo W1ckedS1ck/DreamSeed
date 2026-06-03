@@ -93,8 +93,29 @@ jobs:
             echo "IdentityFile ~/.ssh/deploy_key"
           } > ~/.ssh/config
 
-      - name: Load secrets and export TF vars
+      - name: Upload SSH key to Hetzner and export TF vars
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
+          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
+          PUB_KEY=$(cat ~/.ssh/deploy_key.pub)
+
+          # Upload with unique name per run to avoid conflicts
+          KEY_NAME="deploy-ci-${GITHUB_RUN_ID}"
+          echo "Uploading SSH key as $KEY_NAME..."
+          HTTP_CODE=$(curl -s -o /tmp/hcloud_upload_resp.json -w '%{http_code}' \
+            -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"$KEY_NAME\",\"public_key\":\"$PUB_KEY\"}" \
+            "https://api.hetzner.cloud/v1/ssh_keys")
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Uploaded successfully"
+          else
+            echo "Upload failed (HTTP $HTTP_CODE):"
+            cat /tmp/hcloud_upload_resp.json 2>/dev/null || true
+            exit 1
+          fi
+
           source secrets/.env
           echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
@@ -102,7 +123,7 @@ jobs:
           echo "::add-mask::$TG_TOKEN"
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=$KEY_NAME" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
