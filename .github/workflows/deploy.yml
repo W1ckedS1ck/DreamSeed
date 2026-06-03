@@ -54,6 +54,21 @@ jobs:
         if: inputs.action == 'deploy'
         uses: ./.github/actions/setup-ansible
 
+      - name: Mask secrets
+        run: |
+          echo "::add-mask::${{ secrets.TG_TOKEN }}"
+          echo "::add-mask::${{ secrets.TG_CHAT_ID }}"
+          echo "::add-mask::${{ secrets.TG_THREAD_ID }}"
+          echo "::add-mask::${{ secrets.DB_PASS }}"
+          echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          echo "::add-mask::${{ secrets.CF_ZONE_ID }}"
+          echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}"
+          echo "::add-mask::${{ secrets.GRAFANA_PASS }}"
+          echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}"
+          echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}"
+          echo "::add-mask::${{ secrets.VAULT_PASSWORD }}"
+          echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}"
+
       - name: Setup secrets
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
@@ -71,19 +86,19 @@ jobs:
         run: |
           mkdir -p secrets ~/.ssh
 
-          cat > secrets/.env << ENVEOF
-          TG_TOKEN=$TG_TOKEN
-          TG_CHAT_ID=$TG_CHAT_ID
-          TG_THREAD_ID=$TG_THREAD_ID
-          DB_PASS=$DB_PASS
-          CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
-          CLOUDFLARE_ZONE_ID=$CF_ZONE_ID
-          HCLOUD_TOKEN=$HCLOUD_TOKEN
-          GRAFANA_PASS=$GRAFANA_PASS
-          BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN
-          SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/Vitali.pem
-          SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/Vitali.pub
-          ENVEOF
+          {
+            echo "TG_TOKEN=$TG_TOKEN"
+            echo "TG_CHAT_ID=$TG_CHAT_ID"
+            echo "TG_THREAD_ID=$TG_THREAD_ID"
+            echo "DB_PASS=$DB_PASS"
+            echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
+            echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
+            echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
+            echo "GRAFANA_PASS=$GRAFANA_PASS"
+            echo "BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN"
+            echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/Vitali.pem"
+            echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/Vitali.pub"
+          } > secrets/.env
           chmod 600 secrets/.env
 
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/Vitali.pem
@@ -94,21 +109,6 @@ jobs:
           chmod 600 ~/.vault_pass_dreamseed
 
           [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
-
-      - name: Mask secrets
-        run: |
-          echo "::add-mask::${{ secrets.TG_TOKEN }}"
-          echo "::add-mask::${{ secrets.TG_CHAT_ID }}"
-          echo "::add-mask::${{ secrets.TG_THREAD_ID }}"
-          echo "::add-mask::${{ secrets.DB_PASS }}"
-          echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}"
-          echo "::add-mask::${{ secrets.CF_ZONE_ID }}"
-          echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}"
-          echo "::add-mask::${{ secrets.GRAFANA_PASS }}"
-          echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}"
-          echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}"
-          echo "::add-mask::${{ secrets.VAULT_PASSWORD }}"
-          echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}"
 
       - name: Deploy
         if: inputs.action == 'deploy'
