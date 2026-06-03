@@ -111,7 +111,7 @@ jobs:
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          KEY_NAME="dreamseed-ci-${TARGET}"
+          KEY_NAME="dreamseed-ci-test"
           KEY_ID=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
             "https://api.hetzner.cloud/v1/ssh_keys?name=$KEY_NAME" \
             | python3 -c "import sys,json; r=json.load(sys.stdin).get('ssh_keys',[]); print(r[0]['id'] if r else '')" 2>/dev/null || true)
