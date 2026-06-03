@@ -354,6 +354,9 @@ INVEOF
     # Strip Better Stack keys for non-prod
     [[ "$TARGET" != "prod" ]] && unset "${!BETTERUPTIME_@}"
 
+    # ----- Verify SSH host key -----
+    ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+
     # ----- Ansible playbooks -----
     if [[ "$PARALLEL_MODE" == "true" ]]; then
         # Phase 1: Base (sequential — prerequisite)
