@@ -197,14 +197,10 @@ jobs:
               admin_email: admin@dreamseed.online
           EOF
 
-          cat > /tmp/test_vault.yml <<EOF
-          db_pass: "${DB_PASS}"
-          server_ip: "${{ steps.terraform.outputs.server_ipv4 }}"
-          web_server: nginx
-          domain: test.dreamseed.online
-          cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
-          EOF
+          python3 -c "import json,os;json.dump({'db_pass':os.environ['DB_PASS'],'server_ip':'${{ steps.terraform.outputs.server_ipv4 }}','web_server':'nginx','domain':'test.dreamseed.online','cloudflare_api_token':os.environ.get('CLOUDFLARE_API_TOKEN','')},open('/tmp/test_vault.yml','w'),indent=2)"
           chmod 600 /tmp/test_vault.yml
+
+      - name: Deploy Base packages
 
       - name: Deploy Base packages
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml
