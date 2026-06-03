@@ -93,29 +93,41 @@ jobs:
             echo "IdentityFile ~/.ssh/deploy_key"
           } > ~/.ssh/config
 
-      - name: Generate unique CI SSH key
+      - name: Upload deploy key to Hetzner and export TF vars
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          ssh-keygen -t ed25519 -f ~/.ssh/ci_key -N "" -q
-          echo "SSH_PUB_KEY=$(cat ~/.ssh/ci_key.pub)" >> "$GITHUB_ENV"
-          echo "SSH_KEY_FINGERPRINT=$(ssh-keygen -lf ~/.ssh/ci_key.pub | awk '{print $2}')" >> "$GITHUB_ENV"
+          # Generate public key from deploy key
+          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
+          PUB_KEY=$(cat ~/.ssh/deploy_key.pub)
 
-          # SSH config using CI key
-          {
-            echo "StrictHostKeyChecking accept-new"
-            echo "IdentityFile ~/.ssh/ci_key"
-          } > ~/.ssh/config
+          # Delete old deploy_key from Hetzner if exists
+          OLD_ID=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys?name=deploy_key" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin).get('ssh_keys',[]); print(r[0]['id'] if r else '')" 2>/dev/null || true)
+          if [ -n "$OLD_ID" ]; then
+            echo "Removing old deploy_key from Hetzner (id=$OLD_ID)..."
+            curl -sf -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" \
+              "https://api.hetzner.cloud/v1/ssh_keys/$OLD_ID" > /dev/null || true
+          fi
 
-      - name: Load secrets and export TF vars
-        run: |
+          # Upload fresh deploy_key to Hetzner
+          echo "Uploading deploy_key to Hetzner..."
+          curl -sf -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"deploy_key\",\"public_key\":\"$PUB_KEY\"}" \
+            "https://api.hetzner.cloud/v1/ssh_keys" > /dev/null && echo "Uploaded successfully"
+
+          # Export Terraform vars
           source secrets/.env
           echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_public_key=$SSH_PUB_KEY" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_public_key=" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=deploy_key" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
@@ -203,7 +215,7 @@ jobs:
               dreamseed:
                 ansible_host: ${SERVER_IP}
                 ansible_user: ubuntu
-                ansible_ssh_private_key_file: ~/.ssh/ci_key
+                ansible_ssh_private_key_file: ~/.ssh/deploy_key
                 ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
             vars:
               web_server: nginx
@@ -341,7 +353,7 @@ jobs:
           echo "============================================"
           echo "❌ Tests failed — server kept for debugging"
           echo "Server IP: ${{ steps.terraform.outputs.server_ipv4 }}"
-          echo "SSH: ssh -i ~/.ssh/ci_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
           echo "Domain: https://test.dreamseed.online/"
           echo "Destroy manually when done: gh workflow run deploy.yml -f environment=dev-hetz -f action=destroy -f confirm='destroy dev'"
           echo "============================================"
