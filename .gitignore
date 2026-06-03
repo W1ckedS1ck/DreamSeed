@@ -57,3 +57,4 @@ Docs/
 terraform/grafana/.dashboards/
 # Generated audit files
 AUDIT_*
+*.json
