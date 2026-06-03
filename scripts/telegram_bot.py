@@ -116,7 +116,7 @@ def cmd_status():
                 log.warning("Failed to parse cloud size %s: %s", size_bytes, e)
                 return "-"
 
-        msg = f"📊 *Backup Status* — {env}\n\n"
+        msg = f"📊 *Backup Status* — {escape_md2(env)}\n\n"
 
         msg += "📁 Local:\n"
         for f in proj_files[:2]:
@@ -141,7 +141,7 @@ def cmd_backups():
         proj_files = _local_backups('project', 'DreamSeed_')[:5]
         db_files = _local_backups('db', 'db_')[:5]
 
-        msg = f"🖥 *Last 5 Projects* — {env}\n\n"
+        msg = f"🖥 *Last 5 Projects* — {escape_md2(env)}\n\n"
         msg += '\n'.join([f"{format_backup_name(f)} ({get_size(f'{BACKUP_DIR}/project/{f}')})" for f in proj_files])
 
         msg += f"\n\n🗄 *Last 5 DB* — {env}\n\n"

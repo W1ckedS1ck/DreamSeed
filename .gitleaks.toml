@@ -12,7 +12,7 @@ tags = ["grafana", "secret"]
 
 [allowlist]
 paths = [
-  '''secrets/''',
   '''\.claude/''',
   '''\.terraform\.lock\.hcl''',
+  '''secrets/\.env\.example''',
 ]

@@ -29,12 +29,10 @@
     - {path: /etc/victoria-metrics, owner: root}
 
 - name: Deploy VictoriaMetrics scrape config
-  ansible.builtin.template:
-    src: scrape.yml.j2
-    dest: /etc/victoria-metrics/scrape.yml
-    mode: "0644"
-  become: true
-  notify: Restart VictoriaMetrics
+  ansible.builtin.include_tasks: _deploy_scrape.yml
+  vars:
+    _scrape_dest: /etc/victoria-metrics/scrape.yml
+    _scrape_notify: Restart VictoriaMetrics
 
 - name: Deploy VictoriaMetrics service
   ansible.builtin.template:

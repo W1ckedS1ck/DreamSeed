@@ -25,7 +25,6 @@ variable "primary_ip_name" {
 variable "environment" {
   description = "Deployment environment (prod, dev-hetz, etc.) — used in resource names to avoid conflicts"
   type        = string
-  default     = "prod"
 }
 
 variable "server_type" {

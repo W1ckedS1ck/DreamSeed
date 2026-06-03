@@ -13,8 +13,38 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shell: ${{ steps.filter.outputs.shell }}
+      python: ${{ steps.filter.outputs.python }}
+      ansible: ${{ steps.filter.outputs.ansible }}
+      terraform: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shell:
+              - '*.sh'
+              - 'scripts/**/*.sh'
+              - 'lib/**/*.sh'
+              - '.github/scripts/**/*.sh'
+            python:
+              - 'scripts/**/*.py'
+            ansible:
+              - 'ansible/**/*.yml'
+              - 'ansible-roles/**/*.yml'
+            terraform:
+              - 'terraform/**'
+
   shellcheck:
     name: ShellCheck
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -29,6 +59,8 @@ jobs:
 
   ruff:
     name: Python Lint
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,6 +70,8 @@ jobs:
 
   ansible-lint:
     name: Ansible Lint
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -54,6 +88,8 @@ jobs:
 
   terraform-checks:
     name: Terraform Lint + Validate
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -64,15 +100,6 @@ jobs:
       - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
-      - name: Cache Terraform providers
-        uses: actions/cache@v5
-        with:
-          path: |
-            terraform/aws/.terraform
-            terraform/hetzner/.terraform
-            terraform/grafana/.terraform
-          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/aws/.terraform.lock.hcl', 'terraform/hetzner/.terraform.lock.hcl', 'terraform/grafana/.terraform.lock.hcl') }}
-          restore-keys: terraform-providers-${{ runner.os }}-
       - name: Run tflint
         run: bash scripts/lint.sh --ci --tflint
       - name: Validate all providers
@@ -80,6 +107,8 @@ jobs:
 
   trivy:
     name: Terraform Security
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

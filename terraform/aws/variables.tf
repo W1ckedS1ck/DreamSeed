@@ -30,5 +30,4 @@ variable "root_volume_size" {
 variable "environment" {
   description = "Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts"
   type        = string
-  default     = "prod"
 }

@@ -142,18 +142,22 @@ for spec in \
     mid=$(monitor_exists "$url" "$existing_mon")
 
     json=$(python3 -c "
-import json
+import json, sys
+
+url, name, keyword = sys.argv[1], sys.argv[2], sys.argv[3]
+freq = int(sys.argv[4])
+
 payload = {
-    'url': '$url',
-    'pronounceable_name': '$name',
-    'check_frequency': $freq,
+    'url': url,
+    'pronounceable_name': name,
+    'check_frequency': freq,
     'request_timeout': 30,
     'regions': ['eu', 'us', 'as', 'au'],
-    'required_keyword': '$keyword',
+    'required_keyword': keyword,
     'keyword_type': 'exists'
 }
 print(json.dumps(payload))
-")
+" "$url" "$name" "$keyword" "$freq")
 
     if [[ -n "$mid" ]]; then
         curl -s -X PATCH "$API/monitors/$mid" -H "$AUTH" -H "Content-Type: application/json" -d "$json" > /dev/null
@@ -257,6 +261,7 @@ _, name, url, started, resolved, chat_id, thread, text, for_creation, out_path =
 started = started.lower() == 'true'
 resolved = resolved.lower() == 'true'
 for_creation = for_creation.lower() == 'true'
+text = text.replace('\\n', '\n')
 
 payload = {}
 if for_creation:

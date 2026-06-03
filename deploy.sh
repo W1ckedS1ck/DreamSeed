@@ -355,6 +355,7 @@ INVEOF
     [[ "$TARGET" != "prod" ]] && unset "${!BETTERUPTIME_@}"
 
     # ----- Verify SSH host key -----
+    ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
     ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
 
     # ----- Ansible playbooks -----

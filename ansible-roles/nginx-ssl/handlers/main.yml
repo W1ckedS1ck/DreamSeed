@@ -1,5 +1,5 @@
 ---
-- name: Reload Nginx
+- name: Reload Nginx (ssl)
   become: true
   ansible.builtin.systemd:
     name: nginx

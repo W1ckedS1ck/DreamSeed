@@ -73,7 +73,7 @@ prune_cloud_backups "db" "$MAX_DB_BACKUPS" || {
 }
 
 # Trash
-rclone cleanup "$RCLONE_REMOTE:" 2>/dev/null
+rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null
 
 # Ping external watchdog on success
 # Legacy healthchecks.io (kept for portfolio reference):

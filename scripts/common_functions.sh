@@ -12,6 +12,10 @@ CYAN=$'\033[0;36m'
 # shellcheck disable=SC2034
 NC=$'\033[0m'
 
+# Backup rotation defaults (can be overridden via environment)
+BACKUP_PROJECT_KEEP="${BACKUP_PROJECT_KEEP:-5}"
+BACKUP_DB_KEEP="${BACKUP_DB_KEEP:-15}"
+
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }

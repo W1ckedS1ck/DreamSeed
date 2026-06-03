@@ -12,6 +12,10 @@ on:
           - prod
           - dev
 
+concurrency:
+  group: grafana-cloud-${{ github.event.inputs.workspace }}
+  cancel-in-progress: false
+
 env:
   TF_VERSION: latest
 

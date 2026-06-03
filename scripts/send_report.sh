@@ -16,8 +16,8 @@ REPORT_TYPE="${1:-daily}"  # daily or weekly
 # ====== Settings ======
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 RCLONE_REMOTE="gdrive"
-LOCAL_PROJ_KEEP=5
-LOCAL_DB_KEEP=15
+LOCAL_PROJ_KEEP="${BACKUP_PROJECT_KEEP:-5}"
+LOCAL_DB_KEEP="${BACKUP_DB_KEEP:-15}"
 
 ENV=$(detect_env)
 ENV_DISPLAY=$(format_env_display "$ENV")

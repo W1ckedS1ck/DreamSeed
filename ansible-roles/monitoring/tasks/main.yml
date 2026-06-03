@@ -25,7 +25,7 @@
     state: absent
   become: true
   loop: >
-    {{ ['/usr/local/bin/nginx_exporter']
+    {{ ['/usr/local/bin/nginx-prometheus-exporter']
        if web_server == 'apache'
        else ['/usr/local/bin/apache_exporter'] }}
 
@@ -38,11 +38,6 @@
 
 - name: Vmagent (Grafana Cloud)
   ansible.builtin.include_tasks: vmagent.yml
-
-- name: Reload systemd once
-  ansible.builtin.systemd:
-    daemon_reload: true
-  become: true
 
 - name: Flush handler restarts
   ansible.builtin.meta: flush_handlers

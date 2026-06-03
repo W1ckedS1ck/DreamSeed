@@ -49,14 +49,11 @@
   when: _vmagent_enabled
 
 - name: Deploy vmagent scrape config
-  ansible.builtin.template:
-    src: scrape.yml.j2
-    dest: /etc/vmagent/scrape.yml
-    mode: "0644"
-  become: true
+  ansible.builtin.include_tasks: _deploy_scrape.yml
   vars:
+    _scrape_dest: /etc/vmagent/scrape.yml
+    _scrape_notify: Restart vmagent
     _scrape_interval: "{{ monitoring_scrape_interval }}"
-  notify: Restart vmagent
   when: _vmagent_enabled
 
 - name: Deploy vmagent systemd service

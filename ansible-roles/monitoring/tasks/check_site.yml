@@ -35,3 +35,22 @@
     enabled: true
   become: true
   when: monitoring_cron_enabled | bool
+
+- name: Stop and disable check_site timer when disabled
+  ansible.builtin.systemd:
+    name: check-site.timer
+    state: stopped
+    enabled: false
+  become: true
+  when: not monitoring_cron_enabled | bool
+
+- name: Remove check_site unit files when disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/systemd/system/check-site.timer
+    - /etc/systemd/system/check-site.service
+  notify: Reload systemd
+  when: not monitoring_cron_enabled | bool

@@ -52,13 +52,7 @@ jobs:
             -out=/tmp/prod.tfplan 2>&1 | tee /tmp/plan.log
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
-      - name: Report drift
-        if: steps.plan.outputs.exit_code == '2'
-        run: |
-          echo "::error::Infrastructure drift detected on prod! Review the plan output above."
-          exit 1
-
-      - name: Notify drift
+      - name: Report and notify drift
         if: steps.plan.outputs.exit_code == '2'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
@@ -66,6 +60,7 @@ jobs:
           TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          echo "::error::Infrastructure drift detected on prod! Review the plan output above."
           MSG="🔴 *Drift detected* — AWS prod
           🔗 $RUN_URL
           📅 $(date '+%Y-%m-%d %H:%M')"
@@ -74,3 +69,4 @@ jobs:
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
+          exit 1

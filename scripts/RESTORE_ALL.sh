@@ -170,8 +170,9 @@ select_backup_cloud() {
         selected_name="${selected_name%;*}"
         echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")"
         echo -e "${YELLOW}Downloading...${NC}"
-        local temp_file="/tmp/$(basename "$selected_name")"
-        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" /tmp/ 2>&1
+        local temp_dir; temp_dir=$(mktemp -d /tmp/restore_XXXXXX)
+        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
+        local temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
             echo -e "${GREEN}✓ Downloaded to $temp_file${NC}"
             eval "$result_var=\$temp_file"

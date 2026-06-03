@@ -61,21 +61,13 @@ resource "hcloud_server" "main" {
 
   public_net {
     ipv4_enabled = true
+    ipv6_enabled = true
     ipv4         = local.use_dynamic_ip ? null : data.hcloud_primary_ip.main[0].id
   }
 
   user_data = <<EOF
 #!/bin/bash
-useradd -m -s /bin/bash -G sudo ubuntu
-mkdir -p /home/ubuntu/.ssh
-# Only write the intended public key, don't copy platform-injected keys from root
-echo ${var.ssh_public_key} > /home/ubuntu/.ssh/authorized_keys
-chown -R ubuntu:ubuntu /home/ubuntu/.ssh
-chmod 700 /home/ubuntu/.ssh
-chmod 600 /home/ubuntu/.ssh/authorized_keys
-echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu
-echo 'PermitRootLogin no' > /etc/ssh/sshd_config.d/disable-root.conf
-systemctl restart ssh
+hostnamectl set-hostname dreamseed-${var.environment}
 apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 EOF
 }

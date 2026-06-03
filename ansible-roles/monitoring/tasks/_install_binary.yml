@@ -25,7 +25,7 @@
 - name: "Install/Upgrade {{ monitor_bin_name }}"
   when: >
     not _monitor_bin.stat.exists or
-    monitor_version not in (_monitor_current_version.stdout + _monitor_current_version.stderr | default(''))
+    monitor_version not in (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')).split()
   block:
     - name: "Download {{ monitor_bin_name }}"
       ansible.builtin.get_url:

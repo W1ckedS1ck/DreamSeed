@@ -24,8 +24,8 @@ echo -e "${CYAN}═════════════════════�
 fetch_and_format() {
     local endpoint="$1" label="$2"
     local json_tmp py_tmp
-    json_tmp=$(mktemp)
-    py_tmp=$(mktemp)
+    json_tmp=$(mktemp /tmp/bs_json_XXXXXX)
+    py_tmp=$(mktemp /tmp/bs_py_XXXXXX)
     curl -s "$API/$endpoint" -H "$AUTH" > "$json_tmp"
 
     cat > "$py_tmp" << 'PYEOF'
@@ -93,7 +93,7 @@ for item in data.get('data', []):
 PYEOF
 
     echo -e "${CYAN}${label}${NC}"
-    printf "${CYAN}%s${NC}\n" "$(printf '─%.0s' $(seq 1 ${#label}))"
+    printf "${CYAN}%s${NC}\n" "$(printf '─%.0s' $(eval "echo {1..${#label}}"))"
     python3 "$py_tmp" "$json_tmp"
 
     rm -f "$json_tmp" "$py_tmp"
