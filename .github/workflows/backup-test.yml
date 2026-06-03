@@ -184,12 +184,19 @@ jobs:
 
           echo "Waiting for SSH on $SERVER_IP..."
           for i in $(seq 1 90); do
-            if ssh -o ConnectTimeout=5 ubuntu@$SERVER_IP "exit 0" 2>/dev/null; then
+            SSH_OUT=$(ssh -o ConnectTimeout=5 ubuntu@$SERVER_IP "exit 0" 2>&1)
+            EXIT=$?
+            if [ $EXIT -eq 0 ]; then
               echo "SSH is ready"
               break
             fi
-            echo "Attempt $i/30 - waiting..."
-            [ "$i" -eq 30 ] && { echo "SSH never became available"; exit 1; }
+            if echo "$SSH_OUT" | grep -q "Permission denied"; then
+              echo "ERROR: SSH port is open but key was rejected — check SSH key setup"
+              echo "$SSH_OUT"
+              exit 1
+            fi
+            echo "Attempt $i/90 - waiting..."
+            [ "$i" -eq 90 ] && { echo "SSH never became available"; exit 1; }
             sleep 5
           done
 
