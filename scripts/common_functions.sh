@@ -28,18 +28,16 @@ load_env() {
 }
 
 detect_env() {
-    local h
-    h=$(hostname)
-    case "$h" in
-        *-prod|*prod-*) echo "" ;;
-        *)
-            if [[ -f /etc/dreamseed.env ]]; then
-                grep -q "^ENV=prod" /etc/dreamseed.env 2>/dev/null && echo "" || echo "-dev"
-            else
-                echo "-dev"
-            fi
-            ;;
-    esac
+    if [[ -f "$SCRIPT_DIR/.env" ]]; then
+        grep -q "^ENV=prod" "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
+    else
+        local h
+        h=$(hostname)
+        case "$h" in
+            *-prod|*prod-*) echo "" ;;
+            *) echo "-dev" ;;
+        esac
+    fi
 }
 
 format_env_display() {

@@ -159,14 +159,21 @@
     mode: "0755"
   become: true
 
+- name: Find Grafana dashboard files
+  ansible.builtin.find:
+    paths: /var/lib/grafana/dashboards
+    file_type: file
+    recurse: true
+  register: _grafana_dash_files
+  become: true
+
 - name: Fix Grafana dashboard file permissions
   ansible.builtin.file:
-    path: /var/lib/grafana/dashboards
+    path: "{{ item.path }}"
     owner: grafana
     group: grafana
     mode: "0644"
-    recurse: true
-    file_type: file
+  loop: "{{ _grafana_dash_files.files }}"
   become: true
 
 - name: Create Grafana alerting provisioning directory

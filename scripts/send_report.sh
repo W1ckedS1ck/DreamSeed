@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Path for cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
