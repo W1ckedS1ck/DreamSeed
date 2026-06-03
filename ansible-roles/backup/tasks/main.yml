@@ -59,6 +59,7 @@
   loop:
     - smart_backup.sh
     - upload_backups_to_gdrive.sh
+    - verify_backups.sh
     - RESTORE_ALL.sh
     - send_report.sh
     - test_tg.sh
@@ -158,6 +159,16 @@
       "DELETE FROM {{ db_prefix | default('modx_') }}session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
       2>&1 | logger -t session-cleanup
     user: root
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
+
+- name: Setup backup verification cron (daily at 4 AM)
+  ansible.builtin.cron:
+    name: "DreamSeed backup verification"
+    minute: "0"
+    hour: "4"
+    job: "{{ scripts_dir_remote }}/verify_backups.sh"
+    user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
