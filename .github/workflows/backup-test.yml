@@ -57,7 +57,7 @@ jobs:
         run: |
           ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
 
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          source secrets/.env
           echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
@@ -101,7 +101,7 @@ jobs:
       - name: Provision & wait
         run: |
           set -a
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          source secrets/.env
           set +a
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
 
@@ -143,7 +143,7 @@ jobs:
       - name: Generate config
         run: |
           set -a
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          source secrets/.env
           set +a
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
 
@@ -281,7 +281,7 @@ jobs:
         if: always()
         run: |
           set -a
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          source secrets/.env
           set +a
           rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
           RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
@@ -314,7 +314,7 @@ jobs:
         if: always()
         run: |
           set -a
-          source <(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed)
+          source secrets/.env
           set +a
 
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
