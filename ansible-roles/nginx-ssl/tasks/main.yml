@@ -15,6 +15,7 @@
     src: "/etc/nginx/sites-available/{{ domain }}-ssl.conf"
     dest: "/etc/nginx/sites-enabled/{{ domain }}-ssl.conf"
     state: link
+    force: true
   notify: Reload Nginx
 
 - name: Test Nginx configuration

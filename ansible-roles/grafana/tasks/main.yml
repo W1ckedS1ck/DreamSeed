@@ -7,18 +7,20 @@
     executable: /bin/bash
   args:
     creates: /usr/share/keyrings/grafana.gpg
-  failed_when: false
+  become: true
 
 - name: Add Grafana repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main"
     filename: grafana
     state: present
+  become: true
 
 - name: Install Grafana
   ansible.builtin.apt:
     name: grafana={{ grafana_version }}
     state: present
+  become: true
   environment:
     DEBIAN_FRONTEND: noninteractive
 
@@ -29,6 +31,7 @@
     owner: root
     group: grafana
     mode: "0640"
+  become: true
   notify: Restart Grafana
   no_log: true
 
@@ -37,6 +40,7 @@
     path: /etc/systemd/system/grafana-server.service.d
     state: directory
     mode: "0755"
+  become: true
 
 - name: Set Grafana Go memory limit
   ansible.builtin.copy:
@@ -45,6 +49,7 @@
       [Service]
       Environment="GOMEMLIMIT={{ grafana_memory_limit }}"
     mode: "0644"
+  become: true
   notify:
     - Reload systemd
     - Restart Grafana
@@ -57,6 +62,7 @@
     owner: root
     group: grafana
     mode: "0600"
+  become: true
   no_log: true
   notify:
     - Reload systemd
@@ -69,6 +75,7 @@
       [Service]
       EnvironmentFile=/etc/grafana/grafana.env
     mode: "0644"
+  become: true
   notify:
     - Reload systemd
     - Restart Grafana
@@ -80,6 +87,7 @@
     owner: grafana
     group: grafana
     mode: "0755"
+  become: true
   loop:
     - /etc/grafana/provisioning/datasources
     - /etc/grafana/provisioning/dashboards
@@ -92,6 +100,7 @@
     owner: grafana
     group: grafana
     mode: "0644"
+  become: true
   notify: Restart Grafana
 
 - name: Deploy Grafana dashboard provisioner
@@ -101,6 +110,7 @@
     owner: grafana
     group: grafana
     mode: "0644"
+  become: true
   notify: Restart Grafana
 
 - name: Copy common Grafana dashboards
@@ -110,6 +120,7 @@
     owner: grafana
     group: grafana
     mode: "0644"
+  become: true
   loop:
     - mysql-database.json
     - node-exporter-full.json
@@ -128,6 +139,7 @@
     owner: grafana
     group: grafana
     mode: "0644"
+  become: true
   loop: "{{ _ws_copy_dashboards }}"
   notify: Restart Grafana
 
@@ -135,6 +147,7 @@
   ansible.builtin.file:
     path: "/var/lib/grafana/dashboards/{{ item }}"
     state: absent
+  become: true
   loop: "{{ _ws_remove_dashboards }}"
   notify: Restart Grafana
 
@@ -144,6 +157,7 @@
     owner: grafana
     group: grafana
     mode: "0755"
+  become: true
 
 - name: Fix Grafana dashboard file permissions
   ansible.builtin.file:
@@ -153,6 +167,7 @@
     mode: "0644"
     recurse: true
     file_type: file
+  become: true
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
@@ -161,6 +176,7 @@
     owner: grafana
     group: grafana
     mode: "0755"
+  become: true
 
 - name: Deploy Grafana alerts
   ansible.builtin.template:
@@ -169,6 +185,7 @@
     owner: grafana
     group: grafana
     mode: "0640"
+  become: true
   no_log: true
   notify: Restart Grafana
   when: grafana_telegram_token | default('') | length > 0
@@ -181,6 +198,7 @@
     name: grafana-server
     state: started
     enabled: true
+  become: true
 
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
@@ -196,6 +214,7 @@
     cmd: grafana-cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
     creates: /etc/grafana/.admin_password_set
+  become: true
   no_log: true
   changed_when: false
   register: grafana_cli_result
@@ -205,6 +224,7 @@
   ansible.builtin.file:
     path: /etc/grafana/.admin_password_set
     state: touch
+  become: true
   when:
     - grafana_cli_result is defined
     - grafana_cli_result is not skipped

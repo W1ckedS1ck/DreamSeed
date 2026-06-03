@@ -19,11 +19,11 @@ output "dashboard_urls" {
 
 output "sm_check_ids" {
   description = "Map of synthetic monitoring check names to IDs"
-  value = {
-    http_main   = grafana_synthetic_monitoring_check.http_main[0].id
+  value = var.sm_enabled ? {
+    http_main    = grafana_synthetic_monitoring_check.http_main[0].id
     http_grafana = grafana_synthetic_monitoring_check.http_grafana[0].id
-    ssl         = grafana_synthetic_monitoring_check.ssl[0].id
-    ping        = grafana_synthetic_monitoring_check.ping[0].id
-    dns         = grafana_synthetic_monitoring_check.dns[0].id
-  }
+    ssl          = grafana_synthetic_monitoring_check.ssl[0].id
+    ping         = grafana_synthetic_monitoring_check.ping[0].id
+    dns          = grafana_synthetic_monitoring_check.dns[0].id
+  } : {}
 }

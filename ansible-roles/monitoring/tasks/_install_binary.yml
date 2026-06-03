@@ -45,6 +45,7 @@
         dest: "{{ monitor_bin_path }}"
         mode: "0755"
         remote_src: true
+      become: true
 
     - name: "Cleanup {{ monitor_bin_name }} temp files"
       ansible.builtin.file:

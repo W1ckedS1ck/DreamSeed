@@ -15,6 +15,7 @@
     system: true
     create_home: false
     shell: /bin/false
+  become: true
 
 - name: Create VictoriaMetrics directories
   ansible.builtin.file:
@@ -22,6 +23,7 @@
     state: directory
     owner: "{{ item.owner }}"
     mode: "0755"
+  become: true
   loop:
     - {path: /var/lib/victoria-metrics, owner: victoria-metrics}
     - {path: /etc/victoria-metrics, owner: root}
@@ -31,6 +33,7 @@
     src: scrape.yml.j2
     dest: /etc/victoria-metrics/scrape.yml
     mode: "0644"
+  become: true
   notify: Restart VictoriaMetrics
 
 - name: Deploy VictoriaMetrics service
@@ -38,4 +41,5 @@
     src: victoria-metrics.service.j2
     dest: /etc/systemd/system/victoria-metrics.service
     mode: "0644"
+  become: true
   notify: Restart VictoriaMetrics

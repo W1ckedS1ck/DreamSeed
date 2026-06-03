@@ -14,6 +14,7 @@
     system: true
     create_home: false
     shell: /bin/false
+  become: true
 
 - name: Deploy Node Exporter service
   ansible.builtin.copy:
@@ -32,4 +33,5 @@
       [Install]
       WantedBy=multi-user.target
     mode: "0644"
+  become: true
   notify: Restart Node Exporter

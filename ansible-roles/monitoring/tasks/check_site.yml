@@ -4,6 +4,7 @@
     src: check_site.sh.j2
     dest: /usr/local/bin/check_site.sh
     mode: "0755"
+  become: true
 
 - name: Deploy check_site systemd timer
   ansible.builtin.template:
@@ -12,6 +13,7 @@
     owner: root
     group: root
     mode: "0644"
+  become: true
   notify: Reload systemd
   when: monitoring_cron_enabled | bool
 
@@ -22,6 +24,7 @@
     owner: root
     group: root
     mode: "0644"
+  become: true
   notify: Reload systemd
   when: monitoring_cron_enabled | bool
 
@@ -30,4 +33,5 @@
     name: check-site.timer
     state: started
     enabled: true
+  become: true
   when: monitoring_cron_enabled | bool

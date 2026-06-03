@@ -97,5 +97,5 @@ prune_cloud_backups() {
 }
 
 escape_md2() {
-    echo "$1" | sed 's/[][_*()~`>#+={|}.!-\\]/\\&/g'
+    echo "$1" | sed 's/[][_*()~`>#+={|}.!\\-]/\\&/g'
 }

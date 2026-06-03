@@ -14,11 +14,23 @@
     monitor_extracted_dir: /tmp/vmagent-prod
   when: _vmagent_enabled
 
+- name: Create vmagent user
+  ansible.builtin.user:
+    name: vmagent
+    system: true
+    create_home: false
+    shell: /bin/false
+  become: true
+  when: _vmagent_enabled
+
 - name: Create vmagent directories
   ansible.builtin.file:
     path: /etc/vmagent
     state: directory
+    owner: vmagent
+    group: vmagent
     mode: "0755"
+  become: true
   when: _vmagent_enabled
 
 - name: Deploy vmagent credentials file
@@ -28,9 +40,10 @@
       VM_CLOUD_URL={{ grafana_cloud_url }}
       VM_CLOUD_USER={{ grafana_cloud_username }}
       VM_CLOUD_PASS={{ grafana_cloud_token }}
-    owner: root
-    group: root
+    owner: vmagent
+    group: vmagent
     mode: "0600"
+  become: true
   no_log: true
   notify: Restart vmagent
   when: _vmagent_enabled
@@ -40,6 +53,7 @@
     src: scrape.yml.j2
     dest: /etc/vmagent/scrape.yml
     mode: "0644"
+  become: true
   vars:
     _scrape_interval: "{{ monitoring_scrape_interval }}"
   notify: Restart vmagent
@@ -50,6 +64,7 @@
     src: vmagent.service.j2
     dest: /etc/systemd/system/vmagent.service
     mode: "0644"
+  become: true
   notify: Restart vmagent
   when: _vmagent_enabled
 
@@ -58,6 +73,7 @@
     name: vmagent
     state: stopped
     enabled: false
+  become: true
   failed_when: false
   when: not _vmagent_enabled
 
@@ -65,6 +81,7 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
+  become: true
   loop:
     - /etc/systemd/system/vmagent.service
     - /etc/vmagent/scrape.yml

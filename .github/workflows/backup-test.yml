@@ -90,6 +90,14 @@ jobs:
             -var="environment=test"
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
 
+      - name: Capture server SSH host key
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          for i in $(seq 1 15); do
+            ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+
       - name: Provision & wait
         run: |
           set -a
@@ -183,6 +191,7 @@ jobs:
       - name: Run service tests
         id: service_tests
         run: |
+          set -o pipefail
           ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
             | tee /dev/stderr | grep '^content_rows=' >> "$GITHUB_OUTPUT"
 

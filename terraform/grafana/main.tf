@@ -11,10 +11,13 @@ locals {
     victoria_metrics = { gid = 10229 }
   }
 
-  # Decode all dashboard JSONs
+  # Read dashboard JSONs from local cache, fallback to minimal stub
   raw = {
     for k, v in local.dashboards :
-    k => jsondecode(data.http.dashboard[k].response_body)
+    k => try(
+      jsondecode(file("${path.module}/.dashboards/${k}.json")),
+      { id = null, title = k, gnetId = v.gid, templating = { list = [] } }
+    )
   }
 
   # Apply per-dashboard transformations
@@ -57,9 +60,14 @@ locals {
   }
 }
 
-data "http" "dashboard" {
+resource "terraform_data" "dashboard_download" {
   for_each = local.dashboards
-  url      = "https://grafana.com/api/dashboards/${each.value.gid}/revisions/latest/download"
+
+  triggers_replace = each.value.gid
+
+  provisioner "local-exec" {
+    command = "mkdir -p ${path.module}/.dashboards && curl -sf 'https://grafana.com/api/dashboards/${each.value.gid}/revisions/latest/download' -o '${path.module}/.dashboards/${each.key}.json'"
+  }
 }
 
 resource "grafana_folder" "dreamseed" {
@@ -67,6 +75,7 @@ resource "grafana_folder" "dreamseed" {
 }
 
 resource "grafana_dashboard" "this" {
+  depends_on  = [terraform_data.dashboard_download]
   for_each    = local.dashboards
   config_json = local.config[each.key]
   folder      = grafana_folder.dreamseed.id

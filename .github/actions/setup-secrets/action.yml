@@ -43,7 +43,6 @@ runs:
         if [[ "$SETUP_SSH_CONFIG" == "true" ]]; then
           {
             echo "StrictHostKeyChecking accept-new"
-            echo "UserKnownHostsFile /dev/null"
             echo "IdentityFile ~/.ssh/Vitali.pem"
           } > ~/.ssh/config
         fi

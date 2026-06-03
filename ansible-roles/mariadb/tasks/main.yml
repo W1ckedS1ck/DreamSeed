@@ -14,9 +14,6 @@
     state: started
     enabled: true
 
-- name: Flush handlers
-  ansible.builtin.meta: flush_handlers
-
 - name: Remove anonymous users
   become: true
   community.mysql.mysql_user:
@@ -39,6 +36,9 @@
     host: "127.0.0.1"
     state: absent
     login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Flush handlers (apply config, restart MariaDB)
+  ansible.builtin.meta: flush_handlers
 
 - name: Create database
   become: true

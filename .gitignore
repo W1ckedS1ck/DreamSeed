@@ -52,3 +52,6 @@ yarn.lock
 CLAUDE.md
 Docs/
 *.service
+
+# Grafana dashboard cache
+terraform/grafana/.dashboards/

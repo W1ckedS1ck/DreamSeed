@@ -25,6 +25,7 @@ preflight_checks() {
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env
+        env_src=$(resolve_env_file "$ENV_FILE")
         source "$env_src"
     fi
 

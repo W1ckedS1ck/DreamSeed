@@ -87,9 +87,9 @@ PATTERNS=(
 FOUND_PATTERNS=0
 
 for pattern in "${PATTERNS[@]}"; do
-    if git grep -i "$pattern" HEAD 2>/dev/null | grep -v "{{ " | grep -v "lookup('env'" | grep -v "# " > /dev/null; then
+    if git grep -i "$pattern" HEAD --cached 2>/dev/null | grep -v "{{ " | grep -v "lookup('env'" | grep -v "# " > /dev/null; then
         echo "  ⚠️  Pattern '$pattern' found:"
-        git grep -i "$pattern" HEAD | grep -v "{{ " | grep -v "lookup('env'" | grep -v "# " | head -3
+        git grep -i "$pattern" HEAD --cached | grep -v "{{ " | grep -v "lookup('env'" | grep -v "# " | head -3
         FOUND_PATTERNS=$((FOUND_PATTERNS + 1))
     fi
 done

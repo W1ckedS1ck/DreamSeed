@@ -34,6 +34,7 @@
     owner: root
     group: root
     mode: "0600"
+  become: true
   no_log: true
 
 - name: Create backup directories
@@ -88,6 +89,7 @@
     owner: root
     group: root
     mode: "0644"
+  become: true
   notify: Reload systemd and restart bot
 
 - name: Render server .env (whitelist only — no cloud credentials)
@@ -104,6 +106,7 @@
     name: telegram-bot
     enabled: yes
     state: started
+  become: true
 
 
 - name: Setup hourly backup cron
@@ -113,6 +116,7 @@
     job: "{{ scripts_dir_remote }}/smart_backup.sh"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
 
 - name: Setup daily GDrive upload cron
   ansible.builtin.cron:
@@ -121,6 +125,7 @@
     job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
 
 - name: Setup daily report cron
   ansible.builtin.cron:
@@ -130,6 +135,7 @@
     job: "{{ scripts_dir_remote }}/send_report.sh daily"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
 
 - name: Setup weekly report cron
   ansible.builtin.cron:
@@ -140,6 +146,7 @@
     job: "{{ scripts_dir_remote }}/send_report.sh weekly"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
 
 - name: Setup session cleanup cron (daily, 7-day retention)
   ansible.builtin.cron:
@@ -149,9 +156,10 @@
     job: >
       mysql -u root {{ db_name }} -e
       "DELETE FROM {{ db_prefix | default('modx_') }}session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
-      2>/dev/null || true
+      2>&1 | logger -t session-cleanup
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
 
 - name: Check if MODX is installed (modx_system_settings table exists)
   community.mysql.mysql_query:
@@ -159,6 +167,7 @@
     login_user: root
     query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = 'modx_system_settings'"
   register: modx_check
+  become: true
   failed_when: false
 
 - name: Update MODX session_gc_maxlifetime to 24 hours
@@ -169,9 +178,10 @@
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
+  become: true
   when:
     - modx_check.query_result is defined
-    - modx_check.query_result[0][0].cnt | default(0) | int > 0
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Set MODX database query caching (cache_db)
   community.mysql.mysql_query:
@@ -181,9 +191,10 @@
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('cache_db', '{{ modx_cache_db | default("0") }}', 'combo-boolean', 'core', 'caching', NOW())
       ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db | default("0") }}', `editedon` = NOW()
+  become: true
   when:
     - modx_check.query_result is defined
-    - modx_check.query_result[0][0].cnt | default(0) | int > 0
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Set MODX session data caching (cache_db_session)
   community.mysql.mysql_query:
@@ -193,9 +204,10 @@
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('cache_db_session', '{{ modx_cache_db_session | default("0") }}', 'combo-boolean', 'core', 'caching', NOW())
       ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db_session | default("0") }}', `editedon` = NOW()
+  become: true
   when:
     - modx_check.query_result is defined
-    - modx_check.query_result[0][0].cnt | default(0) | int > 0
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Wait for VictoriaMetrics to accept writes
   ansible.builtin.uri:

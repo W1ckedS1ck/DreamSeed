@@ -14,6 +14,8 @@ HASH_FILE="$BACKUP_DIR/.project_hash"
 PROJECT_KEEP="${PROJECT_KEEP:-5}"
 DB_KEEP="${DB_KEEP:-15}"
 
+DOMAIN="${DOMAIN:-unknown}"
+
 DATE=$(date +%F_%H-%M)
 PROJECT_BACKUP="$BACKUP_DIR/project/DreamSeed_$DATE.tar.gz"
 DB_BACKUP="$BACKUP_DIR/db/db_${DB_NAME}_$DATE.sql.gz"
