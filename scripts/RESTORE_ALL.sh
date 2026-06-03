@@ -394,7 +394,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
 
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
     if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
-        [[ "$PROJECT_DIR" == "/var/www/html" ]] || { echo "ERROR: PROJECT_DIR must be /var/www/html, got: $PROJECT_DIR"; exit 1; }
+        [[ "$PROJECT_DIR" =~ ^/var/www/[^/]+$ ]] || { echo "ERROR: PROJECT_DIR must be /var/www/<name>, got: $PROJECT_DIR"; exit 1; }
         sudo rm -rf "$PROJECT_DIR"
         sudo mv "$TEMP_EXTRACT/$(basename "$PROJECT_DIR")" "$PROJECT_DIR"
         sudo rm -rf "$TEMP_EXTRACT"
