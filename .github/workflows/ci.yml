@@ -13,45 +13,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      shell: ${{ steps.filter.outputs.shell }}
-      python: ${{ steps.filter.outputs.python }}
-      ansible: ${{ steps.filter.outputs.ansible }}
-      terraform: ${{ steps.filter.outputs.terraform }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Detect changed paths
-        id: filter
-        run: |
-          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
-
-          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
-            git diff --name-only 4b825dc642cb6eb9a060e54bf899d1546a8b0e3 HEAD > /tmp/changed.txt
-          elif git cat-file -e "$BASE" 2>/dev/null; then
-            git diff --name-only "$BASE" HEAD > /tmp/changed.txt
-          else
-            git diff --name-only HEAD~1 HEAD > /tmp/changed.txt
-          fi
-
-          grep -qE '\.sh$' /tmp/changed.txt \
-            && echo "shell=true" >> "$GITHUB_OUTPUT" || echo "shell=false" >> "$GITHUB_OUTPUT"
-          grep -qE '^scripts/.*\.py$' /tmp/changed.txt \
-            && echo "python=true" >> "$GITHUB_OUTPUT" || echo "python=false" >> "$GITHUB_OUTPUT"
-          grep -qE '^ansible(-roles)?/' /tmp/changed.txt \
-            && echo "ansible=true" >> "$GITHUB_OUTPUT" || echo "ansible=false" >> "$GITHUB_OUTPUT"
-          grep -qE '^terraform/' /tmp/changed.txt \
-            && echo "terraform=true" >> "$GITHUB_OUTPUT" || echo "terraform=false" >> "$GITHUB_OUTPUT"
-
   shellcheck:
     name: ShellCheck
-    needs: changes
-    if: needs.changes.outputs.shell == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -66,8 +29,6 @@ jobs:
 
   ruff:
     name: Python Lint
-    needs: changes
-    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -77,8 +38,6 @@ jobs:
 
   ansible-lint:
     name: Ansible Lint
-    needs: changes
-    if: needs.changes.outputs.ansible == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -95,8 +54,6 @@ jobs:
 
   terraform-checks:
     name: Terraform Lint + Validate
-    needs: changes
-    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -114,8 +71,6 @@ jobs:
 
   trivy:
     name: Terraform Security
-    needs: changes
-    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
