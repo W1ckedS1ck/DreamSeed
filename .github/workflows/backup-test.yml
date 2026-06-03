@@ -187,7 +187,7 @@ jobs:
           echo "DNS: test.dreamseed.online -> $SERVER_IP"
 
           echo "Waiting for SSH on $SERVER_IP..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if ssh -o ConnectTimeout=5 ubuntu@$SERVER_IP "exit 0" 2>/dev/null; then
               echo "SSH is ready"
               break
@@ -337,7 +337,7 @@ jobs:
 
       - name: Archive Lynis report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lynis-report
           path: /tmp/lynis-report.dat
