@@ -55,6 +55,9 @@ def get_size(filepath_or_bytes):
         return "-"
 
 def get_env():
+    env = os.environ.get('ENV', '')
+    if env:
+        return env
     hostname = subprocess.check_output(['hostname'], text=True).strip()
     if 'prod' in hostname:
         return "prod"
@@ -213,6 +216,12 @@ def main():
 
                         resp = requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
                                   json=send_kwargs)
+                        if resp.status_code == 429:
+                            retry_after = resp.json().get('parameters', {}).get('retry_after', 5)
+                            log.warning("Telegram 429 rate limit, retrying after %ds", retry_after)
+                            time.sleep(retry_after)
+                            resp = requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
+                                      json=send_kwargs)
                         if not resp.json().get('ok'):
                             log.warning("Telegram API error: %s", resp.text)
 

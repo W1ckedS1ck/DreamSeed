@@ -87,6 +87,13 @@
       changed_when: false
       failed_when: restore_archive_check.rc != 0
 
+    - name: Validate web_root before destructive operation
+      ansible.builtin.fail:
+        msg: "Refusing to rm -rf '{{ web_root }}': path is empty, root, or /var/www"
+      when: >
+        web_root == '' or web_root == '/' or
+        web_root == '/var/www' or web_root == '/var/www/'
+
     - name: Extract project
       become: true
       ansible.builtin.shell:

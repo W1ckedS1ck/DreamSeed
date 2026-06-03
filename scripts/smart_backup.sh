@@ -10,7 +10,7 @@ load_env "$SCRIPT_DIR/.env"
 # ====== Settings ======
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
-HASH_FILE="$BACKUP_DIR/.project_hash"
+MARKER_FILE="$BACKUP_DIR/.project_marker"
 
 PROJECT_KEEP="${PROJECT_KEEP:-5}"
 DB_KEEP="${DB_KEEP:-15}"
@@ -60,15 +60,18 @@ echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
 
-CURRENT_HASH=$(set -o pipefail; sudo find "$PROJECT_DIR" -type f \
-    ! -path "*/core/cache/*" \
-    ! -path "*/core/backup/*" \
-    -print0 | xargs -0 sudo md5sum 2>/dev/null | sort | md5sum | awk '{print $1}') || CURRENT_HASH=""
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Hash: $(echo "${CURRENT_HASH:-empty}" | head -c 12)..." >> "$LOG_FILE"
+if [[ -f "$MARKER_FILE" ]]; then
+    CHANGED=$(sudo find "$PROJECT_DIR" -type f \
+        ! -path "*/core/cache/*" \
+        ! -path "*/core/backup/*" \
+        -newer "$MARKER_FILE" -print -quit 2>/dev/null)
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')" >> "$LOG_FILE"
+else
+    CHANGED="initial"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: first run" >> "$LOG_FILE"
+fi
 
-PREVIOUS_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
-
-if [ "$CURRENT_HASH" = "$PREVIOUS_HASH" ] && [ -n "$PREVIOUS_HASH" ]; then
+if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
     if sudo tar -czf "$PROJECT_BACKUP" \
@@ -78,7 +81,7 @@ else
        sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP"
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
-        echo "$CURRENT_HASH" > "$HASH_FILE"
+        touch "$MARKER_FILE"
         PROJECT_STATUS="✅ Project backed up"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"
     else

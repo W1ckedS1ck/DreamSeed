@@ -100,11 +100,13 @@ jobs:
       - name: Restore latest backup
         id: restore
         run: |
+          SCRIPTS_DIR=$(grep -E '^scripts_dir_remote:' ansible/group_vars/all.yml | sed "s/.*: *\"//;s/\"$//")
+          SCRIPTS_DIR="${SCRIPTS_DIR:-/home/ubuntu/Scripts}"
           ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=10 \
               -i ~/.ssh/Vitali.pem \
               ubuntu@${{ steps.server-ip.outputs.ip }} \
-              "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest"
+              "bash ${SCRIPTS_DIR}/RESTORE_ALL.sh --auto-latest"
 
       - name: Health check
         id: health

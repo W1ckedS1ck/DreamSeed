@@ -42,10 +42,14 @@ check_services() {
     echo ""
     echo "  ▸ Post-deploy checks"
 
+    local scripts_dir_remote
+    scripts_dir_remote=$(grep -E '^scripts_dir_remote:' "$SCRIPT_DIR/ansible/group_vars/all.yml" | sed "s/.*: *\"//;s/\"$//")
+    scripts_dir_remote="${scripts_dir_remote:-/home/ubuntu/Scripts}"
+
     local output
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "bash /home/ubuntu/Scripts/check_services.sh" 2>&1)
+        "bash ${scripts_dir_remote}/check_services.sh" 2>&1)
     local rc=$?
 
     echo "$output"

@@ -72,6 +72,10 @@ rotate_logs() {
     local max="${MAX_LOG_FILES:-10}" f
     while IFS= read -r f; do rm -f "$f"; done < <(ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +$((max + 1))) 2>/dev/null || true
     while IFS= read -r f; do rm -f "$f"; done < <(ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +$((max + 1))) 2>/dev/null || true
+    # Rotate deploy_history.log if too large (keep last 500 lines)
+    if [[ -f "$LOG_DIR/deploy_history.log" && $(wc -l < "$LOG_DIR/deploy_history.log") -gt 500 ]]; then
+        mv "$LOG_DIR/deploy_history.log" "$LOG_DIR/deploy_history.old.log" 2>/dev/null || true
+    fi
 }
 
 print_summary() {
