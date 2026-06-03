@@ -4,8 +4,8 @@ set -euo pipefail
 # ====== Prevent concurrent executions ======
 LOCK_FILE="/tmp/restore_all.lock"
 exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    echo "ERROR: Restore already in progress ($LOCK_FILE)"
+if ! timeout 3600 flock -x 9; then
+    echo "ERROR: Restore already in progress or timeout exceeded ($LOCK_FILE)"
     exit 1
 fi
 trap 'exec 9>&-' EXIT

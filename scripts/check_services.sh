@@ -58,7 +58,7 @@ if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     fail=1
     tables=0
 else
-    tables=$(mysql -N "$DB_NAME" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();" 2>/dev/null || echo "0")
+    tables=$(mysql -N -- -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\`$DB_NAME\`;" "$DB_NAME" 2>/dev/null || echo "0")
 fi
 if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
 elif [[ "$tables" -ge 1 ]]; then echo "  ⚠ DB: only $tables tables"
