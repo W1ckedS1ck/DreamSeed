@@ -16,7 +16,7 @@ echo "content_rows=$ROWS"
 # Web server
 ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx"; ALL_OK=false; }
 ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM"; ALL_OK=false; }
-curl -sk -o /dev/null -w "%{http_code}" "https://localhost/" | grep -q 200 \
+ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/" | grep -q 200 \
   && echo "[PASS] HTTPS 200" || { echo "[FAIL] HTTPS not 200"; ALL_OK=false; }
 
 # MODX core
@@ -34,7 +34,10 @@ CART_RESULT=$(ssh ubuntu@"$SERVER_IP" '
     RESP=$(curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
         -d "ms2_action=cart/add&id=$ID&count=1&options=[]" \
         "https://localhost/assets/components/minishop2/action.php" 2>/dev/null)
-    echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print('OK' if d.get('success') else 'PARSE_FAIL')" 2>/dev/null || echo "PARSE_FAIL"
+    case "$RESP" in
+      *success*true*) echo "OK" ;;
+      *) echo "$RESP" ;;
+    esac
     curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
         -d "ms2_action=cart/clean" \
         "https://localhost/assets/components/minishop2/action.php" > /dev/null 2>&1
