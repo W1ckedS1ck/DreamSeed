@@ -18,9 +18,9 @@ preflight_checks() {
     local env_src; env_src=$(resolve_env_file "$ENV_FILE")
     validate_env_file "$env_src"
 
-    local saved_opts; saved_opts="$(set +o)"
+    local err_exit; err_exit="$(set -o | grep '^set -o errexit')"
     set -a; source "$env_src"; set +a
-    eval "$saved_opts"
+    [[ "$err_exit" == "set -o errexit" ]] && set -e || set +e
 
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then

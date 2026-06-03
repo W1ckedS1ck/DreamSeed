@@ -117,7 +117,7 @@ select_backup() {
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
         local selected="${files[$((choice-1))]}"
         echo -e "${GREEN}Selected:${NC} $(basename "$selected")"
-        declare -g "$result_var"="$selected"
+        eval "$result_var=\$selected"
         return 0
     else
         echo -e "${RED}Invalid selection!${NC}"
@@ -174,7 +174,7 @@ select_backup_cloud() {
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" /tmp/ 2>&1
         if [ -f "$temp_file" ]; then
             echo -e "${GREEN}✓ Downloaded to $temp_file${NC}"
-            declare -g "$result_var"="$temp_file"
+            eval "$result_var=\$temp_file"
             return 0
         else
             echo -e "${RED}✗ Download failed!${NC}"

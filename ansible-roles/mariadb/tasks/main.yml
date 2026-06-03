@@ -37,6 +37,14 @@
     state: absent
     login_unix_socket: /run/mysqld/mysqld.sock
 
+- name: Remove IPv6 root access
+  become: true
+  community.mysql.mysql_user:
+    name: root
+    host: "::1"
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+
 - name: Flush handlers (apply config, restart MariaDB)
   ansible.builtin.meta: flush_handlers
 

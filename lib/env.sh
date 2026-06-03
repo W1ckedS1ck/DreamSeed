@@ -61,6 +61,5 @@ export_tf_env() {
         fi
     }
     export TF_VAR_environment="$TARGET"
-    export TF_WORKSPACE="$TF_WORKSPACE"
     export TF_TOKEN_app_terraform_io="${TF_API_TOKEN:-}"
 }
