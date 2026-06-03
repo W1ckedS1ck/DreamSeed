@@ -93,60 +93,16 @@ jobs:
             echo "IdentityFile ~/.ssh/deploy_key"
           } > ~/.ssh/config
 
-      - name: Upload deploy key to Hetzner and export TF vars
-        env:
-          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      - name: Load secrets and export TF vars
         run: |
-          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
-          PUB_KEY=$(cat ~/.ssh/deploy_key.pub)
-          FINGERPRINT=$(ssh-keygen -lf ~/.ssh/deploy_key.pub | awk '{print $2}')
-
-          # Delete any existing SSH key with same fingerprint from Hetzner
-          RESP=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $HCLOUD_TOKEN" \
-            "https://api.hetzner.cloud/v1/ssh_keys")
-          HTTP_CODE=$(echo "$RESP" | tail -1)
-          BODY=$(echo "$RESP" | sed '$d')
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "$BODY" | jq -r --arg fp "$FINGERPRINT" \
-              '.ssh_keys[] | select(.fingerprint == $fp) | .id' \
-              > /tmp/hcloud_key_to_delete.txt 2>/dev/null || true
-            if [ -s /tmp/hcloud_key_to_delete.txt ]; then
-              while IFS= read -r KEY_ID; do
-                echo "Removing existing key with same fingerprint (id=$KEY_ID)..."
-                curl -s -o /dev/null -w '  HTTP %{http_code}\n' -X DELETE \
-                  -H "Authorization: Bearer $HCLOUD_TOKEN" \
-                  "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID"
-              done < /tmp/hcloud_key_to_delete.txt
-            else
-              echo "No existing key with this fingerprint found"
-            fi
-          else
-            echo "WARN: list ssh_keys returned HTTP $HTTP_CODE"
-          fi
-
-          # Upload deploy_key
-          echo "Uploading deploy_key to Hetzner..."
-          HTTP_CODE=$(curl -s -o /tmp/hcloud_upload_resp.json -w '%{http_code}' \
-            -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"deploy_key\",\"public_key\":\"$PUB_KEY\"}" \
-            "https://api.hetzner.cloud/v1/ssh_keys")
-          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "Uploaded successfully"
-          else
-            echo "Upload failed (HTTP $HTTP_CODE):"
-            cat /tmp/hcloud_upload_resp.json 2>/dev/null || true
-            exit 1
-          fi
           source secrets/.env
           echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_public_key=" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=deploy_key" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
