@@ -173,26 +173,26 @@
     - modx_check.query_result is defined
     - modx_check.query_result[0][0].cnt | default(0) | int > 0
 
-- name: Enable MODX database query caching (cache_db)
+- name: Set MODX database query caching (cache_db)
   community.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
-      VALUES ('cache_db', '1', 'combo-boolean', 'core', 'caching', NOW())
-      ON DUPLICATE KEY UPDATE `value` = '1', `editedon` = NOW()
+      VALUES ('cache_db', '{{ modx_cache_db | default("0") }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db | default("0") }}', `editedon` = NOW()
   when:
     - modx_check.query_result is defined
     - modx_check.query_result[0][0].cnt | default(0) | int > 0
 
-- name: Enable MODX session data caching (cache_db_session)
+- name: Set MODX session data caching (cache_db_session)
   community.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
-      VALUES ('cache_db_session', '1', 'combo-boolean', 'core', 'caching', NOW())
-      ON DUPLICATE KEY UPDATE `value` = '1', `editedon` = NOW()
+      VALUES ('cache_db_session', '{{ modx_cache_db_session | default("0") }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db_session | default("0") }}', `editedon` = NOW()
   when:
     - modx_check.query_result is defined
     - modx_check.query_result[0][0].cnt | default(0) | int > 0
