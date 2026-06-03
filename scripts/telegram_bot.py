@@ -144,7 +144,7 @@ def cmd_backups():
         msg = f"🖥 *Last 5 Projects* — {escape_md2(env)}\n\n"
         msg += '\n'.join([f"{format_backup_name(f)} ({get_size(f'{BACKUP_DIR}/project/{f}')})" for f in proj_files])
 
-        msg += f"\n\n🗄 *Last 5 DB* — {env}\n\n"
+        msg += f"\n\n🗄 *Last 5 DB* — {escape_md2(env)}\n\n"
         msg += '\n'.join([f"{format_backup_name(f, DB_PREFIX)} ({get_size(f'{BACKUP_DIR}/db/{f}')})" for f in db_files])
 
         return msg
