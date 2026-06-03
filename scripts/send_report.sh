@@ -44,14 +44,9 @@ LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
 
 # ====== DAILY REPORT ======
 if [ "$REPORT_TYPE" = "daily" ]; then
-    set +o pipefail
-    PROJ_1_SIZE=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null | cut -f1)
-    [[ ${PIPESTATUS[0]} -eq 0 ]] || PROJ_1_SIZE="ERROR"
-    DB_1_SIZE=$(du -h "$(echo "$DB_FILES" | head -1)" 2>/dev/null | cut -f1)
-    [[ ${PIPESTATUS[0]} -eq 0 ]] || DB_1_SIZE="ERROR"
-    DB_2_SIZE=$(du -h "$(echo "$DB_FILES" | sed -n '2p')" 2>/dev/null | cut -f1)
-    [[ ${PIPESTATUS[0]} -eq 0 ]] || DB_2_SIZE="ERROR"
-    set -o pipefail
+    _du_out=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null) && PROJ_1_SIZE=$(echo "$_du_out" | cut -f1) || PROJ_1_SIZE="ERROR"
+    _du_out=$(du -h "$(echo "$DB_FILES" | head -1)" 2>/dev/null) && DB_1_SIZE=$(echo "$_du_out" | cut -f1) || DB_1_SIZE="ERROR"
+    _du_out=$(du -h "$(echo "$DB_FILES" | sed -n '2p')" 2>/dev/null) && DB_2_SIZE=$(echo "$_du_out" | cut -f1) || DB_2_SIZE="ERROR"
 
     PROJ_1=$(format_name "$(echo "$PROJ_FILES" | head -1)")
     DB_1=$(format_name "$(echo "$DB_FILES" | head -1)")

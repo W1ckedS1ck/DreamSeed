@@ -84,7 +84,7 @@ if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     fail=1
     tables=0
 else
-    tables=$(mysql -N -- -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\`$DB_NAME\`;" "$DB_NAME" 2>/dev/null || echo "0")
+    tables=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\`$DB_NAME\`;" -- "$DB_NAME" 2>/dev/null || echo "0")
     export_metric "database_tables{database=\"$DB_NAME\"} $tables"
 fi
 if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
