@@ -76,4 +76,34 @@ TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT COUNT(*) FROM i
 CS_TIMER=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active check-site.timer" 2>/dev/null || echo "inactive")
 [ "$CS_TIMER" = "active" ] && echo "[PASS] check_site.timer" || echo "[WARN] check_site.timer: $CS_TIMER"
 
+# Monitoring — Grafana
+ssh ubuntu@"$SERVER_IP" "systemctl is-active grafana-server" 2>/dev/null \
+  && echo "[PASS] Grafana running" || echo "[WARN] Grafana not running"
+
+# Monitoring — vmagent
+VMAGENT=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active vmagent" 2>/dev/null || echo "inactive")
+[ "$VMAGENT" = "active" ] && echo "[PASS] vmagent running" || echo "[WARN] vmagent: $VMAGENT"
+
+# Monitoring — mysqld_exporter
+ssh ubuntu@"$SERVER_IP" "systemctl is-active mysqld_exporter" 2>/dev/null \
+  && echo "[PASS] MySQLd Exporter running" || echo "[WARN] MySQLd Exporter not running"
+
+# Monitoring — nginx_exporter (or apache_exporter for Apache)
+NE2=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx-prometheus-exporter 2>/dev/null || systemctl is-active apache_exporter 2>/dev/null || echo inactive")
+[ "$NE2" = "active" ] && echo "[PASS] Web exporter running" || echo "[WARN] Web exporter: $NE2"
+
+# Backup — cron job installed
+CRON_OK=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null | grep -q smart_backup && echo OK || echo MISSING" 2>/dev/null || echo "MISSING")
+[ "$CRON_OK" = "OK" ] && echo "[PASS] Backup cron installed" || echo "[WARN] Backup cron: $CRON_OK"
+
+# Backup — telegram-bot service
+ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" 2>/dev/null \
+  && echo "[PASS] Telegram bot running" || echo "[WARN] Telegram bot not running"
+
+# Security — fail2ban custom jails
+F2B_ADMIN=$(ssh ubuntu@"$SERVER_IP" "fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned' && echo OK || echo MISSING" 2>/dev/null || echo "MISSING")
+[ "$F2B_ADMIN" = "OK" ] && echo "[PASS] fail2ban modx-admin jail" || echo "[WARN] fail2ban modx-admin: $F2B_ADMIN"
+F2B_GRAFANA=$(ssh ubuntu@"$SERVER_IP" "fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned' && echo OK || echo MISSING" 2>/dev/null || echo "MISSING")
+[ "$F2B_GRAFANA" = "OK" ] && echo "[PASS] fail2ban grafana jail" || echo "[WARN] fail2ban grafana: $F2B_GRAFANA"
+
 $ALL_OK || exit 1
