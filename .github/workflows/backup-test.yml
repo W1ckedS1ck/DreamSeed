@@ -97,28 +97,41 @@ jobs:
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          # Generate public key from deploy key
           ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
           PUB_KEY=$(cat ~/.ssh/deploy_key.pub)
 
           # Delete old deploy_key from Hetzner if exists
-          OLD_ID=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
-            "https://api.hetzner.cloud/v1/ssh_keys?name=deploy_key" \
-            | python3 -c "import sys,json; r=json.load(sys.stdin).get('ssh_keys',[]); print(r[0]['id'] if r else '')" 2>/dev/null || true)
-          if [ -n "$OLD_ID" ]; then
-            echo "Removing old deploy_key from Hetzner (id=$OLD_ID)..."
-            curl -sf -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" \
-              "https://api.hetzner.cloud/v1/ssh_keys/$OLD_ID" > /dev/null || true
+          RESP=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys?name=deploy_key")
+          HTTP_CODE=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | sed '$d')
+          if [ "$HTTP_CODE" = "200" ]; then
+            KEY_ID=$(echo "$BODY" | python3 -c "import sys,json; r=json.load(sys.stdin).get('ssh_keys',[]); print(r[0]['id']) if r else ''" 2>/dev/null || true)
+            if [ -n "$KEY_ID" ]; then
+              echo "Removing old deploy_key from Hetzner (id=$KEY_ID)..."
+              curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+                -H "Authorization: Bearer $HCLOUD_TOKEN" \
+                "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID"
+              echo ""
+            fi
+          elif [ "$HTTP_CODE" != "404" ]; then
+            echo "WARN: list ssh_keys returned $HTTP_CODE"
           fi
 
-          # Upload fresh deploy_key to Hetzner
+          # Upload fresh deploy_key
           echo "Uploading deploy_key to Hetzner..."
-          curl -sf -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
+          HTTP_CODE=$(curl -s -o /tmp/hcloud_upload_resp.json -w '%{http_code}' \
+            -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"name\":\"deploy_key\",\"public_key\":\"$PUB_KEY\"}" \
-            "https://api.hetzner.cloud/v1/ssh_keys" > /dev/null && echo "Uploaded successfully"
-
-          # Export Terraform vars
+            "https://api.hetzner.cloud/v1/ssh_keys")
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Uploaded successfully"
+          else
+            echo "Upload failed (HTTP $HTTP_CODE):"
+            cat /tmp/hcloud_upload_resp.json 2>/dev/null || true
+            exit 1
+          fi
           source secrets/.env
           echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
