@@ -118,6 +118,7 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
+  failed_when: false
 
 - name: Setup daily GDrive upload cron
   ansible.builtin.cron:
@@ -127,6 +128,7 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
+  failed_when: false
 
 - name: Setup daily report cron
   ansible.builtin.cron:
@@ -137,6 +139,7 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
+  failed_when: false
 
 - name: Setup weekly report cron
   ansible.builtin.cron:
@@ -148,6 +151,7 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
+  failed_when: false
 
 - name: Setup session cleanup cron (daily, 7-day retention)
   ansible.builtin.cron:
@@ -161,6 +165,7 @@
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
+  failed_when: false
 
 - name: Setup backup verification cron (daily at 4 AM)
   ansible.builtin.cron:
@@ -171,6 +176,7 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
+  failed_when: false
 
 - name: Check if MODX is installed (modx_system_settings table exists)
   community.mysql.mysql_query:
