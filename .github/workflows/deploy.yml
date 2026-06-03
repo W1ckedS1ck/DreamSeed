@@ -81,6 +81,8 @@ jobs:
           HCLOUD_TOKEN=$HCLOUD_TOKEN
           GRAFANA_PASS=$GRAFANA_PASS
           BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN
+          SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/Vitali.pem
+          SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/Vitali.pub
           ENVEOF
           chmod 600 secrets/.env
 
