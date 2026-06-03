@@ -100,7 +100,7 @@ run_tflint() {
         local tf_dir="terraform/$dir"
         [[ ! -d "$tf_dir" ]] && continue
         echo "    Checking $dir..."
-        if tflint --chdir="$tf_dir" --init 2>/dev/null && tflint --chdir="$tf_dir"; then
+        if tflint --chdir="$tf_dir" --init && tflint --chdir="$tf_dir"; then
             print_ok "$dir — clean"
         else
             print_fail "$dir — issues found"

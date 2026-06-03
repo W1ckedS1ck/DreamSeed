@@ -10,6 +10,11 @@ load_env "$SCRIPT_DIR/.env"
 DOMAIN="${DOMAIN:-}"
 DB_NAME="${DB_NAME:-modx_db}"
 
+export_metric() {
+    local metric="$1" value="$2"
+    echo "$metric $value" | curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+}
+
 # Auto-detect web server
 if systemctl is-active nginx &>/dev/null; then
     WEB_SVC="nginx"
@@ -32,21 +37,41 @@ fail=0
 # --- Services ---
 for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "victoria-metrics" "grafana-server" "telegram-bot"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
-    if [[ "$st" == "active" ]]; then echo "  ✓ $s"
-    else echo "  ✗ $s — $st"; fail=1; fi
+    if [[ "$st" == "active" ]]; then
+        echo "  ✓ $s"
+        export_metric "service_status{service=\"$s\"} 1"
+    else
+        echo "  ✗ $s — $st"
+        export_metric "service_status{service=\"$s\"} 0"
+        fail=1
+    fi
 done
 
 # --- Site HTTP ---
 if [[ -n "$DOMAIN" ]]; then
     http=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/" 2>/dev/null || echo "000")
-    if [[ "$http" == "200" || "$http" == "301" ]]; then echo "  ✓ HTTP $http $DOMAIN"
-    else echo "  ✗ HTTP $http $DOMAIN — site not serving"; fail=1; fi
+    if [[ "$http" == "200" || "$http" == "301" ]]; then
+        echo "  ✓ HTTP $http $DOMAIN"
+        export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 1"
+    else
+        echo "  ✗ HTTP $http $DOMAIN — site not serving"
+        export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 0"
+        fail=1
+    fi
 fi
 
 # --- SSL ---
-if certbot certificates 2>/dev/null | grep -q "VALID"; then echo "  ✓ SSL: letsencrypt"
-elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; then echo "  ⚠ SSL: self-signed (dev)"
-else echo "  ✗ SSL: no certificate"; fail=1; fi
+if certbot certificates 2>/dev/null | grep -q "VALID"; then
+    echo "  ✓ SSL: letsencrypt"
+    export_metric "ssl_certificate_valid{provider=\"letsencrypt\"} 1"
+elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; then
+    echo "  ⚠ SSL: self-signed (dev)"
+    export_metric "ssl_certificate_valid{provider=\"self-signed\"} 1"
+else
+    echo "  ✗ SSL: no certificate"
+    export_metric "ssl_certificate_valid{provider=\"none\"} 0"
+    fail=1
+fi
 
 # --- MODX ---
 if [[ -f /var/www/html/index.php ]]; then echo "  ✓ MODX: index.php"
@@ -55,10 +80,12 @@ else echo "  ✗ MODX: index.php missing"; fail=1; fi
 # --- Database ---
 if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     echo "  ✗ DB: invalid name format"
+    export_metric "database_tables{database=\"$DB_NAME\"} 0"
     fail=1
     tables=0
 else
     tables=$(mysql -N -- -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\`$DB_NAME\`;" "$DB_NAME" 2>/dev/null || echo "0")
+    export_metric "database_tables{database=\"$DB_NAME\"} $tables"
 fi
 if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
 elif [[ "$tables" -ge 1 ]]; then echo "  ⚠ DB: only $tables tables"
@@ -66,8 +93,14 @@ else echo "  ✗ DB: no tables"; fail=1; fi
 
 # --- VictoriaMetrics ---
 vm=$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
-if [[ "$vm" == "OK" ]]; then echo "  ✓ VictoriaMetrics"
-else echo "  ✗ VictoriaMetrics"; fail=1; fi
+if [[ "$vm" == "OK" ]]; then
+    echo "  ✓ VictoriaMetrics"
+    export_metric "victoria_metrics_up 1"
+else
+    echo "  ✗ VictoriaMetrics"
+    export_metric "victoria_metrics_up 0"
+    fail=1
+fi
 
 # --- Exporters (retry 5 times × 2s — port may still be binding) ---
 _check_ep() {
@@ -97,5 +130,12 @@ else echo "  ✗ cron: backup not set"; fail=1; fi
 jails=$(fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
 if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
 else echo "  ⚠ fail2ban: no jails ($jails)"; fi
+
+# --- Export overall health status ---
+if [[ $fail -eq 0 ]]; then
+    export_metric "dreamseed_health_overall 1"
+else
+    export_metric "dreamseed_health_overall 0"
+fi
 
 exit $fail
