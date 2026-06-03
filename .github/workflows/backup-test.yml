@@ -107,6 +107,22 @@ jobs:
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_key_name=" >> "$GITHUB_ENV"
 
+      - name: Cleanup stale SSH keys from previous runs
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+        run: |
+          KEY_NAME="dreamseed-ci-${TARGET}"
+          KEY_ID=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys?name=$KEY_NAME" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin).get('ssh_keys',[]); print(r[0]['id'] if r else '')" 2>/dev/null || true)
+          if [ -n "$KEY_ID" ]; then
+            echo "Deleting stale SSH key $KEY_NAME (id=$KEY_ID)..."
+            curl -sf -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" \
+              "https://api.hetzner.cloud/v1/ssh_keys/$KEY_ID" > /dev/null && echo "Deleted" || echo "Failed to delete"
+          else
+            echo "No stale SSH key found for $KEY_NAME"
+          fi
+
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
 
