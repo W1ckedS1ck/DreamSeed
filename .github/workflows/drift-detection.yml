@@ -59,16 +59,11 @@ jobs:
       - name: Notify drift
         if: steps.plan.outputs.exit_code == '2'
         env:
-          ENV_B64: ${{ secrets.ENV_FILE_BASE64 }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          echo "$ENV_B64" | base64 -d > /tmp/.env && source /tmp/.env && rm -f /tmp/.env
-          echo "::add-mask::$TG_TOKEN"
-          echo "::add-mask::$TG_CHAT_ID"
-          echo "::add-mask::$TG_THREAD_ID"
-          echo "::add-mask::$DB_PASS"
-          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
-          echo "::add-mask::$HCLOUD_TOKEN"
           MSG="🔴 *Drift detected* — AWS prod
           🔗 $RUN_URL
           📅 $(date '+%Y-%m-%d %H:%M')"

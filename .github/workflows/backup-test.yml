@@ -45,13 +45,47 @@ jobs:
           fi
           echo "Target: $TARGET"
 
-      - uses: ./.github/actions/setup-secrets
-        with:
-          env-file-b64: ${{ secrets.ENV_FILE_BASE64 }}
-          vault-pass: ${{ secrets.VAULT_PASSWORD }}
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          rclone-conf-b64: ${{ secrets.RCLONE_CONF_BASE64 }}
-          setup-ssh-config: 'true'
+      - name: Setup secrets
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          GRAFANA_PASS: ${{ secrets.GRAFANA_PASS }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+          RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
+        run: |
+          mkdir -p secrets ~/.ssh
+
+          cat > secrets/.env << 'ENVEOF'
+          TG_TOKEN=$TG_TOKEN
+          TG_CHAT_ID=$TG_CHAT_ID
+          TG_THREAD_ID=$TG_THREAD_ID
+          DB_PASS=$DB_PASS
+          CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
+          CLOUDFLARE_ZONE_ID=$CF_ZONE_ID
+          HCLOUD_TOKEN=$HCLOUD_TOKEN
+          GRAFANA_PASS=$GRAFANA_PASS
+          ENVEOF
+          chmod 600 secrets/.env
+
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/Vitali.pem
+          chmod 600 ~/.ssh/Vitali.pem
+
+          echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
+          chmod 600 ~/.vault_pass_dreamseed
+
+          [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
+
+          # SSH config
+          {
+            echo "StrictHostKeyChecking accept-new"
+            echo "IdentityFile ~/.ssh/Vitali.pem"
+          } > ~/.ssh/config
 
       - name: Load secrets and export TF vars
         run: |
