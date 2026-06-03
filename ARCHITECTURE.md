@@ -13,7 +13,7 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      backup tfstate → ssh-keygen -R
        │
        ├─ 3. Wait for SSH
-       │      AWS: 40×10s | Hetzner: 90×2s polling
+       │      AWS: 40×10s | Hetzner: 20×1s polling
        │
        ├─ 4. Wait for cloud-init
        │      timeout 300s + 15×2s fallback
@@ -70,16 +70,17 @@ Cloudflare Proxy (Full SSL)
 ```
 secrets/.env (plaintext, gitignored)
    │
-   ├─ ansible-vault encrypt → CI (base64 GitHub Secret)
-   │                              │
-   │                              ▼ deploy.yml / backup-test.yml
-   │                              echo "$ENV_FILE_B64" | base64 -d
-   │                              │
-   │                              ▼
-   │                              deploy.sh → VAULT_TMP (mktemp, 0600)
-   │                              │
-   │                              ▼
-   │                              ansible-playbook --extra-vars @VAULT_TMP
+   ├─ CI (GitHub Actions)
+   │   │
+   │   ├─ deploy.yml / backup-test.yml
+   │   │   env: block with individual ${{ secrets.* }}
+   │   │        → creates secrets/.env from env vars
+   │   │        → copies SSH key, vault password, rclone.conf
+   │   │
+   │   └─ deploy.sh → VAULT_TMP (mktemp, 0600)
+   │                  │
+   │                  ▼
+   │                  ansible-playbook --extra-vars @VAULT_TMP
    │
    └─ Server-side: /home/ubuntu/Scripts/.env (0600)
 ```
@@ -91,7 +92,7 @@ secrets/.env (plaintext, gitignored)
 ```
 smart_backup.sh (hourly via cron)
    │
-   ├─ Project: md5 hash check → skip if unchanged
+   ├─ Project: find -newer marker → skip if unchanged
    │            tar.gz → rotate keep 5
    │
    ├─ Database: mysqldump via ~/.my.cnf → gzip → rotate keep 15
@@ -144,7 +145,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                 │  :3000       │           │  (hosted metrics)│
                                 │              │           │                  │
                                 │ 6 dashboards │           │ Logs Overview    │
-                                │ 11 alert rules│          │ Traffic Analysis  │
+                                                                 │ 15 alert rules│          │ Traffic Analysis  │
                                 └──────┬───────┘           │ SM checks        │
                                        │                    └──────────────────┘
                                        │ Telegram contact point
@@ -167,7 +168,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 11 rules)
+### Alert Rules (Grafana — 15 rules)
 
 | Alert | Condition | Response |
 |-------|-----------|----------|
@@ -258,7 +259,7 @@ DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
 ├── audit-secrets.sh       # Pre-push secret leakage check
 ├── .github/
-│   ├── actions/           # Composite actions: setup-secrets, setup-terraform, setup-ansible
+│   ├── actions/           # Composite actions: setup-terraform, setup-ansible
 │   └── workflows/         # 6 workflows + Renovate + Infracost App
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
