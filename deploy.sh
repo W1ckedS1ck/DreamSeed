@@ -319,33 +319,36 @@ INVEOF
 
     VAULT_TMP=$(mktemp); chmod 600 "$VAULT_TMP"
     {
-        echo "db_pass: '$(yaml_escape "$DB_PASS")'"
-        echo "server_ip: \"${SERVER_IP}\""
-        echo "web_server: \"${WEB_SERVER}\""
-        echo "domain: \"${DEPLOY_DOMAIN}\""
-        if [[ "$TARGET" == "prod" ]]; then
-            echo "domain_www: true"
-            echo "dev_write_perms: false"
-        else
-            echo "domain_www: false"
-            echo "dev_write_perms: true"
-        fi
-        echo "php_version: \"${PHP_VERSION}\""
-        echo "secrets_dir: \"${SCRIPT_DIR}/secrets\""
-        echo "configs_dir: \"${SCRIPT_DIR}/configs\""
-        echo "scripts_dir: \"${SCRIPT_DIR}/scripts\""
-        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && echo "cloudflare_api_token: '$(yaml_escape "$CLOUDFLARE_API_TOKEN")'"
-        [[ -n "${GRAFANA_PASS:-}" ]] && echo "grafana_admin_password: '$(yaml_escape "$GRAFANA_PASS")'"
-        [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && echo "ssh_public_key_path: \"${SSH_PUBLIC_KEY_PATH}\""
-        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && echo "grafana_cloud_url: '$(yaml_escape "$GRAFANA_CLOUD_URL")'"
-        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && echo "grafana_cloud_username: '$(yaml_escape "$GRAFANA_CLOUD_USERNAME")'"
-        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && echo "grafana_cloud_token: '$(yaml_escape "$GRAFANA_CLOUD_TOKEN")'"
-        [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]] && {
-            echo "additional_ssh_keys:"
+        printf '{\n'
+        printf '  "db_pass": %s,\n' "$(json_escape "$DB_PASS")"
+        printf '  "server_ip": %s,\n' "$(json_escape "$SERVER_IP")"
+        printf '  "web_server": %s,\n' "$(json_escape "$WEB_SERVER")"
+        printf '  "domain": %s,\n' "$(json_escape "$DEPLOY_DOMAIN")"
+        printf '  "domain_www": %s,\n' "$([[ "$TARGET" == "prod" ]] && echo "true" || echo "false")"
+        printf '  "dev_write_perms": %s,\n' "$([[ "$TARGET" == "prod" ]] && echo "false" || echo "true")"
+        printf '  "php_version": %s,\n' "$(json_escape "$PHP_VERSION")"
+        printf '  "secrets_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/secrets")"
+        printf '  "configs_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/configs")"
+        printf '  "scripts_dir": %s' "$(json_escape "$SCRIPT_DIR/scripts")"
+        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && printf ',\n  "cloudflare_api_token": %s' "$(json_escape "$CLOUDFLARE_API_TOKEN")"
+        [[ -n "${GRAFANA_PASS:-}" ]] && printf ',\n  "grafana_admin_password": %s' "$(json_escape "$GRAFANA_PASS")"
+        [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && printf ',\n  "ssh_public_key_path": %s' "$(json_escape "$SSH_PUBLIC_KEY_PATH")"
+        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && printf ',\n  "grafana_cloud_url": %s' "$(json_escape "$GRAFANA_CLOUD_URL")"
+        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && printf ',\n  "grafana_cloud_username": %s' "$(json_escape "$GRAFANA_CLOUD_USERNAME")"
+        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && printf ',\n  "grafana_cloud_token": %s' "$(json_escape "$GRAFANA_CLOUD_TOKEN")"
+        if [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]]; then
+            printf ',\n  "additional_ssh_keys": ['
+            local first=true
             while IFS= read -r key; do
-                [[ -n "$key" ]] && echo "  - '$(yaml_escape "$key")'"
+                [[ -n "$key" ]] && {
+                    $first || printf ','
+                    printf '\n    %s' "$(json_escape "$key")"
+                    first=false
+                }
             done <<< "$ADDITIONAL_SSH_KEYS"
-        }
+            printf '\n  ]'
+        fi
+        printf '\n}\n'
     } > "$VAULT_TMP"
 
     # Strip Better Stack keys for non-prod

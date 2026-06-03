@@ -52,10 +52,8 @@ cleanup() {
     [[ -n "${LOCK_FILE:-}" && -d "${LOCK_FILE:-}" ]] && rmdir "$LOCK_FILE" 2>/dev/null || true
 }
 
-yaml_escape() {
-    local val="$1"
-    val="${val//\'/\'\'}"
-    printf '%s' "$val"
+json_escape() {
+    python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$1"
 }
 
 write_deploy_history() {
