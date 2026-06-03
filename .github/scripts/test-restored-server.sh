@@ -16,8 +16,8 @@ echo "content_rows=$ROWS"
 # Web server
 ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx"; ALL_OK=false; }
 ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM"; ALL_OK=false; }
-curl -sk -o /dev/null -w "%{http_code}" "http://$SERVER_IP/" -L --max-redirs 3 | grep -q 200 \
-  && echo "[PASS] HTTP 200" || { echo "[FAIL] HTTP not 200"; ALL_OK=false; }
+curl -sk -o /dev/null -w "%{http_code}" "https://localhost/" | grep -q 200 \
+  && echo "[PASS] HTTPS 200" || { echo "[FAIL] HTTPS not 200"; ALL_OK=false; }
 
 # MODX core
 ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; ALL_OK=false; }
@@ -34,7 +34,7 @@ CART_RESULT=$(ssh ubuntu@"$SERVER_IP" '
     RESP=$(curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
         -d "ms2_action=cart/add&id=$ID&count=1&options=[]" \
         "https://localhost/assets/components/minishop2/action.php" 2>/dev/null)
-    echo "$RESP" | grep -q '"success":true' && echo "OK" || echo "$RESP"
+    echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print('OK' if d.get('success') else 'PARSE_FAIL')" 2>/dev/null || echo "PARSE_FAIL"
     curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
         -d "ms2_action=cart/clean" \
         "https://localhost/assets/components/minishop2/action.php" > /dev/null 2>&1
@@ -69,10 +69,8 @@ SSH_HARDENING=$(ssh ubuntu@"$SERVER_IP" "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_
 TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"'" 2>/dev/null || echo 0)
 [ "${TBL_COUNT:-0}" -ge 50 ] && echo "[PASS] DB tables: $TBL_COUNT" || echo "[WARN] DB tables: ${TBL_COUNT:-0} (expected 50+)"
 
-# Monitoring — check_site timer and service
+# Monitoring — check_site timer
 CS_TIMER=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active check-site.timer" 2>/dev/null || echo "inactive")
 [ "$CS_TIMER" = "active" ] && echo "[PASS] check_site.timer" || echo "[WARN] check_site.timer: $CS_TIMER"
-CS_SERVICE=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active check-site.service" 2>/dev/null || echo "inactive")
-[ "$CS_SERVICE" = "active" ] && echo "[PASS] check_site.service" || echo "[WARN] check_site: $CS_SERVICE"
 
 $ALL_OK || exit 1

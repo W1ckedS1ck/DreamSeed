@@ -89,31 +89,31 @@ groups:
           summary: >-
             {% raw %}Disk < 10% free (mountpoint: {{ $labels.mountpoint }}){% endraw %}
 
-{{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
+{{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
           summary: ""
 
-{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
+{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
           summary: ""
 
 {% if web_server == "apache" %}
-{{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
+{{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
           summary: ""
 {% endif %}
 
 {% if web_server == "nginx" %}
-{{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '1m', 'OK', 'Error') }}
+{{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
           summary: ""
 {% endif %}
 
-{{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'OK', 'Error') }}
+{{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'Alerting', 'Error') }}
         annotations:
           summary: Website is not responding (HTTP != 200)
 
-{{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '2m', 'OK', 'Error') }}
+{{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '2m', 'Alerting', 'Error') }}
         annotations:
           summary: ""
 
@@ -136,11 +136,11 @@ groups:
           summary: >-
             {% raw %}SSL cert expires in {{ $values.A }} days on {{ $labels.instance }}{% endraw %}
 
-{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '2m', 'OK', 'Error') }}
+{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '2m', 'Alerting', 'Error') }}
         annotations:
           summary: ""
 
-{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '2m', 'OK', 'Error') }}
+{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '2m', 'Alerting', 'Error') }}
         annotations:
           summary: >-
             miniShop2 write probe failed — DB INSERT/delete check. See check_site.sh hourly metrics (ms2_endpoint_ok, ms2_tables_ok, admin_login_ok)

@@ -43,7 +43,7 @@ check_services() {
     echo "  ▸ Post-deploy checks"
 
     local scripts_dir_remote
-    scripts_dir_remote=$(grep -E '^scripts_dir_remote:' "$SCRIPT_DIR/ansible/group_vars/all.yml" | sed "s/.*: *\"//;s/\"$//")
+    scripts_dir_remote=$(python3 -c "import yaml,sys; d=yaml.safe_load(open('$SCRIPT_DIR/ansible/group_vars/all.yml')); print(d.get('scripts_dir_remote', ''))" 2>/dev/null)
     scripts_dir_remote="${scripts_dir_remote:-/home/ubuntu/Scripts}"
 
     local output
