@@ -24,22 +24,21 @@ jobs:
       terraform: ${{ steps.filter.outputs.terraform }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+      - name: Detect changed paths
         id: filter
-        with:
-          filters: |
-            shell:
-              - '*.sh'
-              - 'scripts/**/*.sh'
-              - 'lib/**/*.sh'
-              - '.github/scripts/**/*.sh'
-            python:
-              - 'scripts/**/*.py'
-            ansible:
-              - 'ansible/**/*.yml'
-              - 'ansible-roles/**/*.yml'
-            terraform:
-              - 'terraform/**'
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          git diff --name-only "$BASE" HEAD 2>/dev/null > /tmp/changed.txt || \
+            git diff --name-only HEAD~1 HEAD > /tmp/changed.txt
+
+          grep -qE '\.sh$' /tmp/changed.txt \
+            && echo "shell=true" >> "$GITHUB_OUTPUT" || echo "shell=false" >> "$GITHUB_OUTPUT"
+          grep -qE '^scripts/.*\.py$' /tmp/changed.txt \
+            && echo "python=true" >> "$GITHUB_OUTPUT" || echo "python=false" >> "$GITHUB_OUTPUT"
+          grep -qE '^ansible(-roles)?/' /tmp/changed.txt \
+            && echo "ansible=true" >> "$GITHUB_OUTPUT" || echo "ansible=false" >> "$GITHUB_OUTPUT"
+          grep -qE '^terraform/' /tmp/changed.txt \
+            && echo "terraform=true" >> "$GITHUB_OUTPUT" || echo "terraform=false" >> "$GITHUB_OUTPUT"
 
   shellcheck:
     name: ShellCheck

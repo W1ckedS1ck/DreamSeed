@@ -207,8 +207,6 @@ jobs:
           chmod 600 /tmp/test_vault.yml
 
       - name: Deploy Base packages
-
-      - name: Deploy Base packages
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml
 
       - name: Deploy Nginx
