@@ -24,6 +24,7 @@ env:
 
 jobs:
   test-restore:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     name: Test backup restoration (${{ inputs.environment || 'hetzner' }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
