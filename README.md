@@ -8,7 +8,7 @@
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
-![Terraform](https://img.shields.io/badge/Terraform-1.9%2B-7B42BC?logo=terraform)
+![Terraform / OpenTofu](https://img.shields.io/badge/Terraform-1.9%2B-7B42BC?logo=terraform)
 ![Ansible](https://img.shields.io/badge/Ansible-13%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
@@ -62,15 +62,15 @@ I own **everything below the application layer** — provisioning, configuration
 ## 🧰 Tech Stack
 
 | Layer | Tools |
-|---|---|
-| **Infrastructure** | Terraform · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud |
+|---|---|---|
+| **Infrastructure** | Terraform / OpenTofu · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 11 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 15 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (6 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · OpenTofu · Trivy · gitleaks · Renovate |
+| **CI/CD** | GitHub Actions (6 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · Trivy · gitleaks · pre-commit · Renovate |
 
 ---
 
@@ -114,6 +114,9 @@ Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). 
 
 # Development on AWS with Apache
 ./deploy.sh dev-aws -a
+
+# Parallel mode (4-phase Ansible) — ~30% faster on sequential deploys
+./deploy.sh prod -n -p
 
 # Reconfigure an existing server (skip provisioning)
 ./deploy.sh prod -n -i 1.2.3.4
