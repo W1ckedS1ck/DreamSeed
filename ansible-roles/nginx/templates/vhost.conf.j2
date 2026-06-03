@@ -37,6 +37,11 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
+    location ^~ /core {
+        deny all;
+        return 404;
+    }
+
     location ~ /\.ht {
         deny all;
     }
