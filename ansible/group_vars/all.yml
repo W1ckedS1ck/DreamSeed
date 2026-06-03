@@ -61,6 +61,12 @@ grafana_cloud_username: ""
 grafana_cloud_token: ""
 
 # ========================
+#  MODX cache settings
+# ========================
+modx_cache_db: "0"
+modx_cache_db_session: "1"
+
+# ========================
 #  Directories
 # ========================
 web_root: "/var/www/html"
