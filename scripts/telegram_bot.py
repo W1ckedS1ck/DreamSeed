@@ -183,8 +183,22 @@ def main():
                             log.warning("Ignored message from unauthorized chat: %s", chat_id)
                             continue
 
-                        text = msg.get('text', '').split('@')[0]
-                        handler = commands.get(text)
+                        # Ignore replies to the bot's own messages
+                        if 'reply_to_message' in msg:
+                            reply_from = msg['reply_to_message'].get('from', {})
+                            if reply_from.get('is_bot', False):
+                                continue
+
+                        text = msg.get('text', '')
+                        command_text = text.split('@')[0]
+                        entities = msg.get('entities', [])
+                        for entity in entities:
+                            if entity.get('type') == 'bot_command':
+                                entity_text = text[entity['offset']:entity['offset'] + entity['length']]
+                                command_text = entity_text.split('@')[0]
+                                break
+
+                        handler = commands.get(command_text)
                         t0 = time.time()
                         if handler:
                             response = handler()
