@@ -94,18 +94,14 @@ jobs:
         run: |
           PUB_KEY=$(cat ~/.ssh/Vitali.pub)
 
-          # Delete any key from Hetzner with same public key
-          curl -s -H "Authorization: Bearer $HCLOUD_TOKEN" \
-            "https://api.hetzner.cloud/v1/ssh_keys" | jq -r --arg pub "$PUB_KEY" \
-            '.ssh_keys[] | select(.public_key == $pub) | .id' \
-            > /tmp/hcloud_key_to_delete.txt 2>/dev/null || true
-          if [ -s /tmp/hcloud_key_to_delete.txt ]; then
-            while IFS= read -r KID; do
-              echo "Deleting existing key with same content (id=$KID)..."
-              curl -s -o /dev/null -w '  HTTP %{http_code}\n' -X DELETE \
-                -H "Authorization: Bearer $HCLOUD_TOKEN" \
-                "https://api.hetzner.cloud/v1/ssh_keys/$KID"
-            done < /tmp/hcloud_key_to_delete.txt
+          # Delete existing deploy-run key by name (handles stale keys regardless of content)
+          EXISTING_ID=$(curl -s -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys?name=deploy-run" | jq -r '.ssh_keys[0].id // empty')
+          if [ -n "$EXISTING_ID" ]; then
+            echo "Deleting existing deploy-run key (id=$EXISTING_ID)..."
+            curl -s -o /dev/null -w '  HTTP %{http_code}\n' -X DELETE \
+              -H "Authorization: Bearer $HCLOUD_TOKEN" \
+              "https://api.hetzner.cloud/v1/ssh_keys/$EXISTING_ID"
           fi
 
           # Upload fresh key
@@ -187,7 +183,7 @@ jobs:
           echo "DNS: test.dreamseed.online -> $SERVER_IP"
 
           echo "Waiting for SSH on $SERVER_IP..."
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             if ssh -o ConnectTimeout=5 ubuntu@$SERVER_IP "exit 0" 2>/dev/null; then
               echo "SSH is ready"
               break

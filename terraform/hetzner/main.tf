@@ -68,6 +68,6 @@ resource "hcloud_server" "main" {
   user_data = <<EOF
 #!/bin/bash
 hostnamectl set-hostname dreamseed-${var.environment}
-apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+apt-get update -qq
 EOF
 }
