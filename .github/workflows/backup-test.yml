@@ -119,8 +119,7 @@ jobs:
           TF_VAR_environment: test
         run: |
           terraform apply -auto-approve -no-color \
-            -var="environment=test" \
-            -var="ssh_key_name=deploy-run"
+            -var="environment=test"
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
 
       - name: Capture server SSH host key
