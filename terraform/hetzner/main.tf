@@ -69,6 +69,10 @@ resource "hcloud_server" "main" {
 #!/bin/bash
 set -e
 hostnamectl set-hostname dreamseed-${var.environment}
+if ! id ubuntu &>/dev/null; then
+  useradd -m -s /bin/bash -G sudo ubuntu
+  echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
+fi
 mkdir -p /home/ubuntu/.ssh
 echo '${var.ssh_public_key}' >> /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
