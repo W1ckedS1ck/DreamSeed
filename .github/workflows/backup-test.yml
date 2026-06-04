@@ -82,52 +82,22 @@ jobs:
 
           [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
-          # SSH config
-          {
-            echo "StrictHostKeyChecking accept-new"
-            echo "IdentityFile ~/.ssh/Vitali.pem"
-          } > ~/.ssh/config
+          # SSH config (match main branch approach)
+          echo "StrictHostKeyChecking no" > ~/.ssh/config
+          echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
+          echo "IdentityFile ~/.ssh/Vitali.pem" >> ~/.ssh/config
 
-      - name: Sync SSH key to Hetzner and export TF vars
-        env:
-          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      - name: Load secrets and export TF vars
         run: |
-          PUB_KEY=$(cat ~/.ssh/Vitali.pub)
-
-          # Delete existing deploy-run key by name (handles stale keys regardless of content)
-          EXISTING_ID=$(curl -s -H "Authorization: Bearer $HCLOUD_TOKEN" \
-            "https://api.hetzner.cloud/v1/ssh_keys?name=deploy-run" | jq -r '.ssh_keys[0].id // empty')
-          if [ -n "$EXISTING_ID" ]; then
-            echo "Deleting existing deploy-run key (id=$EXISTING_ID)..."
-            curl -s -o /dev/null -w '  HTTP %{http_code}\n' -X DELETE \
-              -H "Authorization: Bearer $HCLOUD_TOKEN" \
-              "https://api.hetzner.cloud/v1/ssh_keys/$EXISTING_ID"
-          fi
-
-          # Upload fresh key
-          echo "Uploading deploy key to Hetzner..."
-          HTTP_CODE=$(curl -s -o /tmp/hcloud_upload_resp.json -w '%{http_code}' \
-            -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"deploy-run\",\"public_key\":\"$PUB_KEY\"}" \
-            "https://api.hetzner.cloud/v1/ssh_keys")
-          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "Uploaded successfully"
-          else
-            echo "Upload failed (HTTP $HTTP_CODE):"
-            cat /tmp/hcloud_upload_resp.json 2>/dev/null || true
-            exit 1
-          fi
-
           source secrets/.env
           echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
-          # TF_VAR_* env vars are NOT forwarded to TFC remote execution.
-          # We pass ssh_key_name via -var flag in terraform apply instead.
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/Vitali.pub)" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
