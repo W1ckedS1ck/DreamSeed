@@ -108,7 +108,7 @@ _check_ep() {
     local raw
     for i in $(seq 1 5); do
         raw=$(curl -sf --max-time 3 "http://127.0.0.1:$p/metrics" 2>/dev/null) || { sleep 2; continue; }
-        if echo "$raw" | grep -q "$k" 2>/dev/null; then
+        if grep -q "$k" <<< "$raw" 2>/dev/null; then
             echo "  ✓ $n"; return 0
         fi
         sleep 2
