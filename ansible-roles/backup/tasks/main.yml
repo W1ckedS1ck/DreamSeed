@@ -1,4 +1,42 @@
 ---
+- name: Check if rclone config exists locally
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/rclone.conf"
+  register: rclone_config_stat
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Create rclone config directory
+  ansible.builtin.file:
+    path: "/home/ubuntu/.config/rclone"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0700"
+  when: rclone_config_stat.stat.exists
+
+- name: Upload rclone config
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/rclone.conf"
+    dest: "/home/ubuntu/.config/rclone/rclone.conf"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  when: rclone_config_stat.stat.exists
+
+- name: Create root MySQL config for cron jobs
+  ansible.builtin.copy:
+    content: |
+      [mysql]
+      user=root
+      password={{ db_pass }}
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+
 - name: Create backup directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -21,11 +59,13 @@
   loop:
     - smart_backup.sh
     - upload_backups_to_gdrive.sh
+    - verify_backups.sh
     - RESTORE_ALL.sh
     - send_report.sh
     - test_tg.sh
     - common_functions.sh
     - env_loader.py
+    - check_services.sh
 
 - name: Upload Telegram bot script
   ansible.builtin.copy:
@@ -50,6 +90,7 @@
     owner: root
     group: root
     mode: "0644"
+  become: true
   notify: Reload systemd and restart bot
 
 - name: Render server .env (whitelist only — no cloud credentials)
@@ -59,15 +100,14 @@
     owner: ubuntu
     group: ubuntu
     mode: "0600"
-
-- name: Flush handlers
-  ansible.builtin.meta: flush_handlers
+  no_log: true
 
 - name: Enable bot service
   ansible.builtin.systemd:
     name: telegram-bot
     enabled: yes
     state: started
+  become: true
 
 
 - name: Setup hourly backup cron
@@ -77,6 +117,8 @@
     job: "{{ scripts_dir_remote }}/smart_backup.sh"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
+  failed_when: false
 
 - name: Setup daily GDrive upload cron
   ansible.builtin.cron:
@@ -85,6 +127,8 @@
     job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
+  failed_when: false
 
 - name: Setup daily report cron
   ansible.builtin.cron:
@@ -94,6 +138,8 @@
     job: "{{ scripts_dir_remote }}/send_report.sh daily"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
+  failed_when: false
 
 - name: Setup weekly report cron
   ansible.builtin.cron:
@@ -104,54 +150,95 @@
     job: "{{ scripts_dir_remote }}/send_report.sh weekly"
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
+  failed_when: false
 
-- name: Setup session cleanup cron (every 3 days)
+- name: Setup session cleanup cron (daily, 7-day retention)
   ansible.builtin.cron:
     name: "DreamSeed session cleanup"
     minute: "42"
     hour: "4"
-    day: "*/3"
     job: >
       mysql -u root {{ db_name }} -e
-      "DELETE FROM modx_session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY));"
-      2>/dev/null || true
+      "DELETE FROM {{ db_prefix | default('modx_') }}session WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
+      2>&1 | logger -t session-cleanup
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
+  failed_when: false
+
+- name: Setup backup verification cron (daily at 4 AM)
+  ansible.builtin.cron:
+    name: "DreamSeed backup verification"
+    minute: "0"
+    hour: "4"
+    job: "{{ scripts_dir_remote }}/verify_backups.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+  become: true
+  failed_when: false
 
 - name: Check if MODX is installed (modx_system_settings table exists)
-  become: true
-  community.mysql.mysql_query:
+  ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = 'modx_system_settings'"
   register: modx_check
-  ignore_errors: true
-
-- name: Update MODX session_gc_maxlifetime to 6 hours
   become: true
-  community.mysql.mysql_query:
+  failed_when: false
+
+- name: Update MODX session_gc_maxlifetime to 24 hours
+  ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
       INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
-  when: modx_check is not failed and modx_check.query_result[0][0] | int > 0
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Set MODX database query caching (cache_db)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('cache_db', '{{ modx_cache_db | default("0") }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db | default("0") }}', `editedon` = NOW()
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Set MODX session data caching (cache_db_session)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO {{ db_name }}.modx_system_settings (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('cache_db_session', '{{ modx_cache_db_session | default("0") }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db_session | default("0") }}', `editedon` = NOW()
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Wait for VictoriaMetrics to accept writes
-  become: true
   ansible.builtin.uri:
     url: "http://127.0.0.1:8428/health"
   register: vm_health
-  retries: 12
+  retries: 30
   delay: 2
   until: vm_health.status == 200
   changed_when: false
 
 - name: Push initial cron heartbeat to VictoriaMetrics
-  become: true
   ansible.builtin.shell:
     cmd: |
+      set -o pipefail
       for i in 1 2 3; do
         echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break

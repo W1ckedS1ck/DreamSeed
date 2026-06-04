@@ -1,3 +1,13 @@
+locals {
+  use_dynamic_ip   = var.primary_ip_name == ""
+  use_existing_key = var.ssh_key_name != ""
+  labels = {
+    environment = var.environment
+    service     = "DreamSeed"
+    managed_by  = "terraform"
+  }
+}
+
 data "hcloud_ssh_key" "default" {
   count = local.use_existing_key ? 1 : 0
   name  = var.ssh_key_name
@@ -10,27 +20,28 @@ resource "hcloud_ssh_key" "ci_key" {
 }
 
 resource "hcloud_firewall" "web" {
-  name = "dreamseed-fw-${var.environment}"
+  name   = "dreamseed-fw-${var.environment}"
+  labels = local.labels
 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "22"
-    source_ips = ["0.0.0.0/0"] # IPv4 only
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "80"
-    source_ips = ["0.0.0.0/0"] # IPv4 only
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "443"
-    source_ips = ["0.0.0.0/0"] # IPv4 only
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
 }
 
@@ -44,25 +55,28 @@ resource "hcloud_server" "main" {
   server_type  = var.server_type
   image        = "ubuntu-24.04"
   location     = var.location
+  labels       = local.labels
   ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
   firewall_ids = [hcloud_firewall.web.id]
 
   public_net {
     ipv4_enabled = true
+    ipv6_enabled = true
     ipv4         = local.use_dynamic_ip ? null : data.hcloud_primary_ip.main[0].id
   }
 
-  user_data = <<-EOF
-    #!/bin/bash
-    useradd -m -s /bin/bash -G sudo ubuntu
-    mkdir -p /home/ubuntu/.ssh
-    cp /root/.ssh/authorized_keys /home/ubuntu/.ssh/
-    chown -R ubuntu:ubuntu /home/ubuntu/.ssh
-    chmod 700 /home/ubuntu/.ssh
-    chmod 600 /home/ubuntu/.ssh/authorized_keys
-    echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu
-    echo 'PermitRootLogin no' > /etc/ssh/sshd_config.d/disable-root.conf
-    systemctl restart ssh
-    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
-  EOF
+  user_data = <<EOF
+#!/bin/bash
+set -e
+hostnamectl set-hostname dreamseed-${var.environment}
+if ! id ubuntu &>/dev/null; then
+  useradd -m -s /bin/bash -G sudo ubuntu
+  echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
+fi
+mkdir -p /home/ubuntu/.ssh
+echo '${var.ssh_public_key}' >> /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+apt-get update -qq
+EOF
 }

@@ -1,51 +1,12 @@
 ---
-- name: Set Apache Exporter desired version
-  ansible.builtin.set_fact:
-    monitoring_ae_version: "{{ monitoring_apache_version }}"
-
-- name: Check if Apache Exporter is installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/apache_exporter
-  register: monitoring_ae_bin
-
-- name: Get current Apache Exporter version
-  ansible.builtin.command: /usr/local/bin/apache_exporter --version
-  changed_when: false
-  failed_when: false
-  register: monitoring_ae_current_version
-  when: monitoring_ae_bin.stat.exists
-
 - name: Install/Upgrade Apache Exporter
-  when: >
-    not monitoring_ae_bin.stat.exists or
-    monitoring_ae_version not in (monitoring_ae_current_version.stdout | default(''))
-  block:
-    - name: Download Apache Exporter
-      ansible.builtin.get_url:
-        url: "https://github.com/Lusitaniae/apache_exporter/releases/download/v{{ monitoring_ae_version }}/apache_exporter-{{ monitoring_ae_version }}.linux-amd64.tar.gz"
-        dest: /tmp/apache_exporter.tar.gz
-        mode: "0644"
-
-    - name: Extract Apache Exporter
-      ansible.builtin.unarchive:
-        src: /tmp/apache_exporter.tar.gz
-        dest: /tmp/
-        remote_src: true
-
-    - name: Install Apache Exporter binary
-      ansible.builtin.copy:
-        src: "/tmp/apache_exporter-{{ monitoring_ae_version }}.linux-amd64/apache_exporter"
-        dest: /usr/local/bin/apache_exporter
-        mode: "0755"
-        remote_src: true
-
-    - name: Cleanup Apache Exporter temp files
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/apache_exporter.tar.gz
-        - "/tmp/apache_exporter-{{ monitoring_ae_version }}.linux-amd64"
+  ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: apache_exporter
+    monitor_bin_path: /usr/local/bin/apache_exporter
+    monitor_version: "{{ monitoring_apache_version }}"
+    monitor_download_url: "https://github.com/Lusitaniae/apache_exporter/releases/download/v{{ monitoring_apache_version }}/apache_exporter-{{ monitoring_apache_version }}.linux-amd64.tar.gz"
+    monitor_extracted_binary: "/tmp/apache_exporter-{{ monitoring_apache_version }}.linux-amd64/apache_exporter"
 
 - name: Create apache_exporter user
   ansible.builtin.user:
@@ -53,6 +14,7 @@
     system: true
     create_home: false
     shell: /bin/false
+  become: true
 
 - name: Deploy Apache Exporter service
   ansible.builtin.copy:
@@ -71,4 +33,5 @@
       [Install]
       WantedBy=multi-user.target
     mode: "0644"
+  become: true
   notify: Restart Apache Exporter

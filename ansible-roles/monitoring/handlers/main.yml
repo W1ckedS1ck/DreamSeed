@@ -1,4 +1,8 @@
 ---
+- name: Reload systemd
+  become: true
+  ansible.builtin.command: systemctl daemon-reload
+
 - name: Restart Node Exporter
   become: true
   ansible.builtin.systemd:

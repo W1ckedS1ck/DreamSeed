@@ -1,10 +1,21 @@
 #!/bin/bash
+set -euo pipefail
+
+# ====== Prevent concurrent executions ======
+LOCK_FILE="/tmp/restore_all.lock"
+exec 9>"$LOCK_FILE"
+if ! timeout 3600 flock -x 9; then
+    echo "ERROR: Restore already in progress or timeout exceeded ($LOCK_FILE)"
+    exit 1
+fi
+trap 'exec 9>&-' EXIT
 
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
+DB_PREFIX="${DB_PREFIX:-modx_}"
 
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
@@ -41,6 +52,8 @@ START_TIME=$(date +%s)
 
 SERVICES_STOPPED=0
 cleanup_trap() {
+    rm -rf /tmp/restore_* 2>/dev/null || true
+    # Keep pre_restore_* snapshots on exit (only clean explicit restore temp dirs)
     if [ "$SERVICES_STOPPED" -eq 1 ]; then
         if [ "$MODE" = "interactive" ]; then
             echo ""
@@ -77,7 +90,7 @@ select_backup() {
     local result_var="$3"
 
     local files=()
-    mapfile -t files < <(ls -1t "$dir"/$pattern 2>/dev/null)
+    while IFS= read -r f; do files+=("$f"); done < <(find "$dir" -maxdepth 1 -name "$pattern" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
 
     if [ ${#files[@]} -eq 0 ]; then
         echo -e "${RED}No backups found in $dir${NC}"
@@ -104,8 +117,70 @@ select_backup() {
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
         local selected="${files[$((choice-1))]}"
         echo -e "${GREEN}Selected:${NC} $(basename "$selected")"
-        declare -g "$result_var"="$selected"
+        eval "$result_var=\$selected"
         return 0
+    else
+        echo -e "${RED}Invalid selection!${NC}"
+        return 1
+    fi
+}
+
+select_backup_cloud() {
+    local remote_path="$1"
+    local pattern="$2"
+    local result_var="$3"
+
+    local files=()
+    while IFS= read -r f; do files+=("$f"); done < <(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/" --files-only --format tps 2>/dev/null | grep "$pattern" | sort -t';' -k1 -r || true)
+
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "${RED}No backups found on GDrive ($remote_path)${NC}"
+        return 1
+    fi
+
+    echo -e "${YELLOW}Available backups (GDrive):${NC}"
+    echo ""
+    for i in "${!files[@]}"; do
+        local line="${files[$i]}"
+        local name="${line#*;}"
+        name="${name%;*}"
+        local size="${line##*;}"
+        local size_str=""
+        if [ "$size" -gt 1048576 ]; then
+            size_str="$((size / 1048576))MB"
+        else
+            size_str="$((size / 1024))KB"
+        fi
+        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "$name")  ${CYAN}[$size_str]${NC}"
+    done
+    echo ""
+
+    local choice
+    read -r -p "Select number (Enter = skip): " choice
+    echo ""
+
+    if [ -z "$choice" ]; then
+        echo -e "${YELLOW}Skipped.${NC}"
+        return 0
+    fi
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
+        local line="${files[$((choice-1))]}"
+        local selected_name="${line#*;}"
+        selected_name="${selected_name%;*}"
+        echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")"
+        echo -e "${YELLOW}Downloading...${NC}"
+        local temp_dir; temp_dir=$(mktemp -d /tmp/restore_XXXXXX)
+        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
+        local temp_file="$temp_dir/$(basename "$selected_name")"
+        if [ -f "$temp_file" ]; then
+            echo -e "${GREEN}✓ Downloaded to $temp_file${NC}"
+            eval "$result_var=\$temp_file"
+            return 0
+        else
+            echo -e "${RED}✗ Download failed!${NC}"
+            return 1
+        fi
     else
         echo -e "${RED}Invalid selection!${NC}"
         return 1
@@ -116,6 +191,25 @@ select_backup() {
 if [ "$MODE" != "--auto-latest" ]; then
     # ====== Header ======
     print_header "Restore DreamSeed"
+
+    # ================================================
+    # STEP 0: Choose source (local or cloud)
+    # ================================================
+    echo -e "${YELLOW}Source:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1${NC}) Local backups"
+    echo -e "  ${GREEN}2${NC}) GDrive (cloud)"
+    echo ""
+    read -r -p "Your choice: " SOURCE_CHOICE
+    echo ""
+    case "$SOURCE_CHOICE" in
+        1) SOURCE="local" ;;
+        2) SOURCE="cloud" ;;
+        *) echo -e "${YELLOW}Default: local${NC}"; SOURCE="local"; echo "" ;;
+    esac
+
+    ENV_SUFFIX=""
+    [ "$ENV" != "prod" ] && ENV_SUFFIX="-$ENV"
 
     # ================================================
     # STEP 1: What to restore?
@@ -136,11 +230,19 @@ if [ "$MODE" != "--auto-latest" ]; then
     # STEP 2: Select backup files
     # ================================================
     if [ "$RESTORE_PROJECT" -eq 1 ]; then
-        select_backup "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+        if [ "$SOURCE" = "cloud" ]; then
+            select_backup_cloud "project${ENV_SUFFIX}" "DreamSeed_" "SELECTED_PROJECT" || exit 1
+        else
+            select_backup "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+        fi
     fi
 
     if [ "$RESTORE_DB" -eq 1 ]; then
-        select_backup "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
+        if [ "$SOURCE" = "cloud" ]; then
+            select_backup_cloud "db${ENV_SUFFIX}" "db_" "SELECTED_DB" || exit 1
+        else
+            select_backup "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
+        fi
     fi
 
     echo ""
@@ -175,8 +277,8 @@ else
     RESTORE_PROJECT=1
     RESTORE_DB=1
 
-    SELECTED_PROJECT=$(ls -1t "$BACKUP_DIR/project/DreamSeed_"*.tar.gz 2>/dev/null | head -n1)
-    SELECTED_DB=$(ls -1t "$BACKUP_DIR/db/db_"*.sql.gz 2>/dev/null | head -n1)
+    SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
         echo "Local backups not found, trying Google Drive..."
@@ -187,8 +289,8 @@ else
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
             --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3
 
-        SELECTED_PROJECT=$(ls -1t "$BACKUP_DIR/project/DreamSeed_"*.tar.gz 2>/dev/null | head -n1)
-        SELECTED_DB=$(ls -1t "$BACKUP_DIR/db/db_"*.sql.gz 2>/dev/null | head -n1)
+        SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     fi
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
@@ -247,6 +349,39 @@ echo -e "${GREEN}✓ Services stopped${NC}"
 echo ""
 
 # ================================================
+# STEP 5.5: Backup current state (emergency snapshot)
+# ================================================
+if [ "$MODE" = "interactive" ]; then
+    echo -e "${YELLOW}[1.5] Backing up current state...${NC}"
+else
+    echo "Backing up current state..."
+fi
+
+PRE_RESTORE_BACKUP_DIR="/tmp/pre_restore_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$PRE_RESTORE_BACKUP_DIR"
+
+if [ -n "$SELECTED_DB" ]; then
+    BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
+    if mysqldump "$DB_NAME" 2>/dev/null | gzip > "$BACKUP_DB_FILE"; then
+        echo -e "${GREEN}✓ Database snapshot: $(du -h "$BACKUP_DB_FILE" | cut -f1)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Database snapshot failed (continuing)${NC}"
+    fi
+fi
+
+if [ -n "$SELECTED_PROJECT" ]; then
+    BACKUP_PROJ_FILE="$PRE_RESTORE_BACKUP_DIR/project_snapshot.tar.gz"
+    if sudo tar -czf "$BACKUP_PROJ_FILE" -C /var/www . 2>/dev/null; then
+        echo -e "${GREEN}✓ Project snapshot: $(du -h "$BACKUP_PROJ_FILE" | cut -f1)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Project snapshot failed (continuing)${NC}"
+    fi
+fi
+
+echo -e "${CYAN}Emergency snapshot saved to: $PRE_RESTORE_BACKUP_DIR${NC}"
+echo ""
+
+# ================================================
 # STEP 6: Restore project
 # ================================================
 PROJECT_STATUS="⏭️ Skipped"
@@ -259,9 +394,8 @@ if [ -n "$SELECTED_PROJECT" ]; then
     fi
 
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
-    sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"
-
-    if [ $? -eq 0 ]; then
+    if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
+        [[ "$PROJECT_DIR" =~ ^/var/www/[^/]+$ ]] || { echo "ERROR: PROJECT_DIR must be /var/www/<name>, got: $PROJECT_DIR"; exit 1; }
         sudo rm -rf "$PROJECT_DIR"
         sudo mv "$TEMP_EXTRACT/$(basename "$PROJECT_DIR")" "$PROJECT_DIR"
         sudo rm -rf "$TEMP_EXTRACT"
@@ -297,17 +431,14 @@ if [ -n "$SELECTED_DB" ]; then
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)
 
     TEMP_SQL=$(mktemp /tmp/restore_XXXXXX.sql)
-    gunzip -c "$SELECTED_DB" > "$TEMP_SQL"
-
-    if [ $? -ne 0 ]; then
+    chmod 600 "$TEMP_SQL"
+    if ! gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"
         echo -e "${RED}✗ Failed to decompress archive!${NC}"
     else
-        mysql "$DB_NAME" < "$TEMP_SQL"
-
-        if [ $? -eq 0 ]; then
-            mysql "$DB_NAME" -e "TRUNCATE TABLE modx_session;" 2>/dev/null
+        if mysql "$DB_NAME" < "$TEMP_SQL"; then
+            mysql "$DB_NAME" -e "TRUNCATE TABLE ${DB_PREFIX}session;" 2>/dev/null
 
             COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM modx_site_content;" 2>/dev/null || echo "0")
             LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)
@@ -382,8 +513,8 @@ else
     echo "Starting services..."
 fi
 
-SERVICES_STOPPED=0
 if sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>&1; then
+    SERVICES_STOPPED=0
     echo -e "${GREEN}✓ Services started${NC}"
 else
     echo -e "${RED}✗ Failed to start services${NC}"

@@ -1,50 +1,60 @@
-# Claude local state (not for git)
-.claude/
-
-# Opencode local state (not for git)
-.opencode/
-
-# Secrets (never commit)
+# Secrets
 secrets/
 .env
 .env.local
+*.pem
+*.key
 
-# Terraform state (never commit)
+# Terraform state, cache & plans
 *.tfstate*
+*.tfplan
+*.tfplan.json
 .terraform/
-terraform/.terraform/
-terraform/*.tfstate*
+crash.log
+override.tf
+override.tf.json
+terraform/*/terraform.tfvars
 
 # Ansible
 *.retry
 ansible/inventory/hosts-*.yml
+.ansible/
 
-# Logs and temporary files
+# Agent/tool local state
+.claude/
+.opencode/
+.codemie/
+
+# Logs
 logs/
 *.log
-/tmp/
 
-# System
+# System & editors
 .DS_Store
 .vscode/
 .idea/
-*.swp
-*.swo
+*.sw?
+*~
+
+# Python
 __pycache__/
 *.pyc
-
-# Project instructions (internal)
-CLAUDE.md
-
-# Documentation (local snapshots)
-Docs/
-
-# Systemd service files (contain environment variables)
-*.service
-node_modules
-
-# Ansible fact cache and collections
-.ansible/
-
-# Linter cache
 .ruff_cache/
+venv/
+.venv/
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
+
+# Internal
+CLAUDE.md
+Docs/
+*.service
+
+# Grafana dashboard cache
+terraform/grafana/.dashboards/
+# Generated audit files
+AUDIT_*
+*.json

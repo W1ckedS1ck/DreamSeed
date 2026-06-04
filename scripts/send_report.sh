@@ -1,10 +1,17 @@
 #!/bin/bash
+set -euo pipefail
+
+# Validate required commands
+for cmd in find rclone du cut date grep printf; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+done
 
 # Path for cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
@@ -14,8 +21,8 @@ REPORT_TYPE="${1:-daily}"  # daily or weekly
 # ====== Settings ======
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 RCLONE_REMOTE="gdrive"
-LOCAL_PROJ_KEEP=5
-LOCAL_DB_KEEP=15
+LOCAL_PROJ_KEEP="${BACKUP_PROJECT_KEEP:-5}"
+LOCAL_DB_KEEP="${BACKUP_DB_KEEP:-15}"
 
 ENV=$(detect_env)
 ENV_DISPLAY=$(format_env_display "$ENV")
@@ -28,35 +35,25 @@ DB_FILES=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p
 PROJ_COUNT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' 2>/dev/null | wc -l)
 DB_COUNT=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' 2>/dev/null | wc -l)
 
-CLOUD_PROJ=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
-CLOUD_DB=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | wc -l | tr -d ' ')
-
-LAST_GDRIVE_PROJ=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" 2>/dev/null | tail -1)")
-LAST_GDRIVE_DB=$(format_name "$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" 2>/dev/null | tail -1)")
-
-send_html() {
-    local msg="$1"
-    local thread_arg=()
-    [[ -n "$TG_THREAD_ID" ]] && thread_arg=(-d "message_thread_id=$TG_THREAD_ID")
-    curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-         -d chat_id="$TG_CHAT_ID" \
-         "${thread_arg[@]}" \
-         -d parse_mode="HTML" \
-         -d text="$msg"
-}
+_proj_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort)
+_db_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort)
+CLOUD_PROJ=$(printf '%s' "$_proj_list" | grep -c '.' || true)
+CLOUD_DB=$(printf '%s' "$_db_list" | grep -c '.' || true)
+LAST_GDRIVE_PROJ=$(format_name "$(printf '%s' "$_proj_list" | tail -1)")
+LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
 
 # ====== DAILY REPORT ======
 if [ "$REPORT_TYPE" = "daily" ]; then
-    PROJ_1_SIZE=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null | cut -f1)
-    DB_1_SIZE=$(du -h "$(echo "$DB_FILES" | head -1)" 2>/dev/null | cut -f1)
-    DB_2_SIZE=$(du -h "$(echo "$DB_FILES" | sed -n '2p')" 2>/dev/null | cut -f1)
+    _du_out=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null) && PROJ_1_SIZE=$(echo "$_du_out" | cut -f1) || PROJ_1_SIZE="ERROR"
+    _du_out=$(du -h "$(echo "$DB_FILES" | head -1)" 2>/dev/null) && DB_1_SIZE=$(echo "$_du_out" | cut -f1) || DB_1_SIZE="ERROR"
+    _du_out=$(du -h "$(echo "$DB_FILES" | sed -n '2p')" 2>/dev/null) && DB_2_SIZE=$(echo "$_du_out" | cut -f1) || DB_2_SIZE="ERROR"
 
     PROJ_1=$(format_name "$(echo "$PROJ_FILES" | head -1)")
     DB_1=$(format_name "$(echo "$DB_FILES" | head -1)")
     DB_2=$(format_name "$(echo "$DB_FILES" | sed -n '2p')")
 
-    MSG="<b>DAILY REPORT</b>
-$(date +%d.%m) - $ENV_DISPLAY"
+    MSG="*DAILY REPORT*
+$(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
 
     if [ "$PROJ_COUNT" -ge 1 ]; then
         MSG+="
@@ -94,24 +91,14 @@ $(date +%d.%m) - $ENV_DISPLAY"
 
     MSG+="
 
-$(date '+%d.%m.%Y %H:%M')"
+$(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
 
-    send_html "$MSG"
+    send_tg "$MSG"
 
 # ====== WEEKLY REPORT ======
 elif [ "$REPORT_TYPE" = "weekly" ]; then
-    # Expected GDrive uploads in a week: 7 days x 2 types = 14
-    WEEKLY_EXPECTED=14
-    TOTAL_CLOUD=$((CLOUD_PROJ + CLOUD_DB))
-
-    if [ "$TOTAL_CLOUD" -ge "$WEEKLY_EXPECTED" ]; then
-        SUCCESS_RATE="100%"
-    else
-        SUCCESS_RATE="$((TOTAL_CLOUD * 100 / WEEKLY_EXPECTED))%"
-    fi
-
-    MSG="<b>WEEKLY REPORT</b>
-$(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
+    MSG="*WEEKLY REPORT*
+$(escape_md2 "$(date -d '-7 days' +%d.%m)")-$(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
 
     if [ "$PROJ_COUNT" -ge 1 ]; then
         MSG+="
@@ -133,10 +120,9 @@ $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
 
     MSG+="
 
-🎯 Cloud upload rate: $SUCCESS_RATE
-$(date '+%d.%m.%Y %H:%M')"
+$(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
 
-    send_html "$MSG"
+    send_tg "$MSG"
 
 else
     echo "Usage: $0 {daily|weekly}"
@@ -160,6 +146,4 @@ if [[ "$REPORT_TYPE" == "daily" ]]; then
 elif [[ "$REPORT_TYPE" == "weekly" ]]; then
     _bs_key="${BETTERUPTIME_REPORT_WEEKLY_KEY:-}"
 fi
-if [[ -n "$_bs_key" ]]; then
-    curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/$_bs_key" > /dev/null 2>&1
-fi
+ping_heartbeat "$_bs_key"

@@ -25,7 +25,6 @@ variable "primary_ip_name" {
 variable "environment" {
   description = "Deployment environment (prod, dev-hetz, etc.) — used in resource names to avoid conflicts"
   type        = string
-  default     = "prod"
 }
 
 variable "server_type" {
@@ -38,9 +37,4 @@ variable "location" {
   description = "Hetzner datacenter location (nbg1, fsn1, hel1, etc.)"
   type        = string
   default     = "nbg1"
-}
-
-locals {
-  use_dynamic_ip   = var.primary_ip_name == ""
-  use_existing_key = var.ssh_key_name != ""
 }

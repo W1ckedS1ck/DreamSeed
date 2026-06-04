@@ -7,7 +7,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Reload Nginx
+  notify: Reload Nginx (ssl)
 
 - name: Enable SSL site
   become: true
@@ -15,7 +15,8 @@
     src: "/etc/nginx/sites-available/{{ domain }}-ssl.conf"
     dest: "/etc/nginx/sites-enabled/{{ domain }}-ssl.conf"
     state: link
-  notify: Reload Nginx
+    force: true
+  notify: Reload Nginx (ssl)
 
 - name: Test Nginx configuration
   become: true

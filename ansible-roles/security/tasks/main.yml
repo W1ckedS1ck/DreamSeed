@@ -63,6 +63,12 @@
     - {path: /etc/at.deny, mode: "0600"}
 
 # --- Authorized Keys ---
+- name: Validate additional SSH public keys
+  ansible.builtin.shell:
+    cmd: "echo '{{ item }}' | ssh-keygen -l -f /dev/stdin > /dev/null 2>&1"
+  changed_when: false
+  loop: "{{ additional_ssh_keys | default([]) }}"
+
 - name: Add additional SSH public keys
   become: true
   ansible.posix.authorized_key:
@@ -117,6 +123,7 @@
   ansible.builtin.command: fail2ban-client -t
   register: fail2ban_test
   changed_when: false
+  failed_when: fail2ban_test.rc != 0
 
 - name: Apply Fail2ban configuration
   ansible.builtin.meta: flush_handlers
@@ -160,7 +167,7 @@
 - name: Install PAM password strength checking
   become: true
   ansible.builtin.apt:
-    name: libpam-passwdqc
+    name: libpam-pwquality
     state: present
 
 - name: Disable core dumps (limits)
@@ -228,11 +235,11 @@
     mode: "{{ item.mode }}"
     recurse: true
   loop:
-    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "0755"}
-    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "0755"}
-    - {path: "{{ web_root }}/core/model", owner: root, mode: "0750"}
-    - {path: "{{ web_root }}/core/components", owner: root, mode: "0750"}
-  when: modx_config_file.stat.exists and not (dev_write_perms | default(false))
+    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "u=rwX,g=rwX,o=rX"}
+    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "u=rwX,g=rwX,o=rX"}
+    - {path: "{{ web_root }}/core/model", owner: root, mode: "u=rwX,g=rwX,o="}
+    - {path: "{{ web_root }}/core/components", owner: root, mode: "u=rwX,g=rwX,o="}
+  when: modx_config_file.stat.exists
 
 # --- Developer Write Permissions ---
 - name: Add ubuntu user to www-data group
@@ -241,13 +248,10 @@
     name: ubuntu
     groups: www-data
     append: true
-  when: dev_write_perms | default(false)
 
-- name: Allow group write access to web root for developers
+- name: Set setgid so new files inherit www-data group
   become: true
-  ansible.builtin.shell:
-    cmd: |
-      find "{{ web_root }}" -type d -exec chmod g+rwxs {} +
-      find "{{ web_root }}" -type f -exec chmod g+rw {} +
-  changed_when: true
-  when: dev_write_perms | default(false)
+  ansible.builtin.file:
+    path: "{{ web_root }}"
+    state: directory
+    mode: g+s

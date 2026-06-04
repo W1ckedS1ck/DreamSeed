@@ -1,0 +1,15 @@
+name: Setup Terraform
+description: Checkout, setup Terraform, cache providers
+
+inputs:
+  terraform-version:
+    description: Terraform version to install
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@v4
+      with:
+        terraform_version: ${{ inputs.terraform-version }}

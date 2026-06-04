@@ -1,28 +1,30 @@
 ---
-- name: Check if rclone config exists
-  ansible.builtin.stat:
-    path: "{{ secrets_dir }}/rclone.conf"
-  register: rclone_config_stat
-  delegate_to: localhost
-  delegate_facts: true
-
-- name: Create rclone config directory
+- name: Ensure rclone config directory exists
   ansible.builtin.file:
-    path: "/home/ubuntu/.config/rclone"
+    path: /home/ubuntu/.config/rclone
     state: directory
     owner: ubuntu
     group: ubuntu
     mode: "0700"
-  when: rclone_config_stat.stat.exists
+  when:
+    - secrets_dir is defined
+    - secrets_dir | length > 0
 
-- name: Upload rclone config
+- name: Upload rclone config if not on server yet
   ansible.builtin.copy:
     src: "{{ secrets_dir }}/rclone.conf"
-    dest: "/home/ubuntu/.config/rclone/rclone.conf"
+    dest: /home/ubuntu/.config/rclone/rclone.conf
     owner: ubuntu
     group: ubuntu
     mode: "0600"
-  when: rclone_config_stat.stat.exists
+  when:
+    - secrets_dir is defined
+    - secrets_dir | length > 0
+
+- name: Check if rclone config exists on server
+  ansible.builtin.stat:
+    path: /home/ubuntu/.config/rclone/rclone.conf
+  register: rclone_config_remote
 
 # ========================
 #  Restore Project
@@ -40,12 +42,18 @@
       Fix: add rclone.conf to secrets/ and re-run deploy with -i <IP>.
   when:
     - not restore_site_exists.stat.exists
-    - not rclone_config_stat.stat.exists
+    - not rclone_config_remote.stat.exists
+
+# NOTE: Dev environments (dev-aws, dev-hetz) intentionally restore backups
+# from prod (gdrive:DreamSeed/backups/project/ and db/). There is no
+# separate backup pipeline for dev — dev always pulls latest prod data.
+# This is by design, not a bug. If you change these paths, make sure dev
+# still gets prod data, not dev-specific backups.
 
 - name: Restore project from Google Drive
   when:
     - not restore_site_exists.stat.exists
-    - rclone_config_stat.stat.exists
+    - rclone_config_remote.stat.exists
   block:
     - name: Find latest project backup
       ansible.builtin.shell:
@@ -78,6 +86,13 @@
       register: restore_archive_check
       changed_when: false
       failed_when: restore_archive_check.rc != 0
+
+    - name: Validate web_root before destructive operation
+      ansible.builtin.fail:
+        msg: "Refusing to rm -rf '{{ web_root }}': path is empty, root, or /var/www"
+      when: >
+        web_root == '' or web_root == '/' or
+        web_root == '/var/www' or web_root == '/var/www/'
 
     - name: Extract project
       become: true
@@ -128,10 +143,13 @@
   ansible.builtin.set_fact:
     restore_db_needs_restore: "{{ (restore_db_tables.stdout | default('0') | int) < 2 }}"
 
+# NOTE: See the project-restore block above — same logic applies: dev always
+# restores from prod backups. Paths are intentionally prod-only.
+
 - name: Restore database from Google Drive
   when:
     - restore_db_needs_restore
-    - rclone_config_stat.stat.exists
+    - rclone_config_remote.stat.exists
   block:
     - name: Find latest DB backup
       ansible.builtin.shell:
@@ -161,7 +179,9 @@
           set -o pipefail
           gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql {{ db_name }}
         executable: /bin/bash
+      register: restore_db_result
       changed_when: false
+      failed_when: restore_db_result.rc != 0
 
     - name: Verify database restore (expect 50+ tables)
       ansible.builtin.shell:

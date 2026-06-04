@@ -36,6 +36,7 @@
     src: /etc/nginx/sites-available/default
     dest: /etc/nginx/sites-enabled/default
     state: link
+    force: true
   notify: Reload Nginx
 
 - name: Deploy MODX vhost config
@@ -52,6 +53,7 @@
     src: "/etc/nginx/sites-available/{{ domain }}"
     dest: "/etc/nginx/sites-enabled/{{ domain }}"
     state: link
+    force: true
   notify: Reload Nginx
 
 - name: Test nginx configuration

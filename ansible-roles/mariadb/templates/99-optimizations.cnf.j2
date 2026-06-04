@@ -1,0 +1,16 @@
+# Managed by Ansible
+# Optimizations generated dynamically based on available memory.
+# innodb_buffer_pool_size = 25% of RAM
+# innodb_log_file_size = 20% of buffer pool
+[mysqld]
+bind-address = 127.0.0.1
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+innodb_flush_method = O_DIRECT
+skip-name-resolve=ON
+tmp_table_size=64M
+max_heap_table_size=64M
+join_buffer_size=2M
+sort_buffer_size=2M
+innodb_buffer_pool_size={{ [ansible_facts['memtotal_mb'] // 4, 64] | max }}M
+innodb_log_file_size={{ [ansible_facts['memtotal_mb'] // 4 // 5, 12] | max }}M

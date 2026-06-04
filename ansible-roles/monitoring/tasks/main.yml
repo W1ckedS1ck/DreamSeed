@@ -10,6 +10,25 @@
   ansible.builtin.include_tasks: nginx_exporter.yml
   when: web_server == "nginx"
 
+- name: Remove stale web exporter on web server switch
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  become: true
+  failed_when: false
+  loop: "{{ ['nginx_exporter'] if web_server == 'apache' else ['apache_exporter'] }}"
+
+- name: Remove stale web exporter binary on web server switch
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop: >
+    {{ ['/usr/local/bin/nginx-prometheus-exporter']
+       if web_server == 'apache'
+       else ['/usr/local/bin/apache_exporter'] }}
+
 - name: MySQL Exporter
   ansible.builtin.include_tasks: mysql_exporter.yml
   when: db_pass | default('') | length > 0
@@ -17,12 +36,8 @@
 - name: VictoriaMetrics
   ansible.builtin.include_tasks: victoria.yml
 
-- name: vmagent (Grafana Cloud)
+- name: Vmagent (Grafana Cloud)
   ansible.builtin.include_tasks: vmagent.yml
-
-- name: Reload systemd once
-  ansible.builtin.systemd:
-    daemon_reload: true
 
 - name: Flush handler restarts
   ansible.builtin.meta: flush_handlers
@@ -41,6 +56,7 @@
     name: "{{ item }}"
     state: started
     enabled: true
+  become: true
   loop: "{{ _monitoring_services }}"
 
 - name: Check site

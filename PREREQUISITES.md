@@ -13,7 +13,6 @@ These are checked by `deploy.sh` on every run:
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible` |
-| `dig` (bind9-dnsutils) | DNS propagation check during SSL setup | `brew install bind` or `apt install dnsutils` |
 | `python3` | Run Ansible and scripts | https://python.org |
 
 ### Ansible collections & Python deps
@@ -23,7 +22,7 @@ These are checked by `deploy.sh` on every run:
 pip install -r ansible/requirements-deploy.txt
 
 # Collections (for MariaDB and POSIX modules)
-ansible-galaxy collection install community.mysql ansible.posix
+ansible-galaxy collection install ansible.mysql ansible.posix
 ```
 
 ## Cloud credentials (in secrets/.env)

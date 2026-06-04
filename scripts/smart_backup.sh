@@ -1,4 +1,10 @@
 #!/bin/bash
+set -euo pipefail
+
+# Validate required commands
+for cmd in curl tar gzip find mysqldump; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+done
 
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,29 +15,16 @@ load_env "$SCRIPT_DIR/.env"
 # ====== Settings ======
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
-HASH_FILE="$BACKUP_DIR/.project_hash"
+MARKER_FILE="$BACKUP_DIR/.project_marker"
 
-PROJECT_KEEP="${PROJECT_KEEP:-5}"
-DB_KEEP="${DB_KEEP:-15}"
+PROJECT_KEEP="${BACKUP_PROJECT_KEEP:-${PROJECT_KEEP:-5}}"
+DB_KEEP="${BACKUP_DB_KEEP:-${DB_KEEP:-15}}"
+
+DOMAIN="${DOMAIN:-unknown}"
 
 DATE=$(date +%F_%H-%M)
 PROJECT_BACKUP="$BACKUP_DIR/project/DreamSeed_$DATE.tar.gz"
 DB_BACKUP="$BACKUP_DIR/db/db_${DB_NAME}_$DATE.sql.gz"
-
-rotate_files() {
-    local pattern="$1"
-    local keep="$2"
-    local dir
-    dir=$(dirname "$pattern")
-    local glob
-    glob=$(basename "$pattern")
-    mapfile -t files < <(find "$dir" -maxdepth 1 -name "$glob" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
-    if [ "${#files[@]}" -gt "$keep" ]; then
-        for ((i=keep; i<${#files[@]}; i++)); do
-            rm -f "${files[i]}"
-        done
-    fi
-}
 
 mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db" "$BACKUP_DIR/logs"
 LOG_FILE="$BACKUP_DIR/logs/backup_$(date +%Y-%m-%d).log"
@@ -56,27 +49,39 @@ echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
 
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
+MARKER_LOCK="/tmp/smart_backup_marker.lock"
+exec 8>"$MARKER_LOCK"
 
-CURRENT_HASH=$(set -o pipefail; sudo find "$PROJECT_DIR" -type f \
-    ! -path "*/core/cache/*" \
-    ! -path "*/core/backup/*" \
-    -print0 | xargs -0 sudo md5sum 2>/dev/null | sort | md5sum | awk '{print $1}') || CURRENT_HASH=""
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Hash: $(echo "${CURRENT_HASH:-empty}" | head -c 12)..." >> "$LOG_FILE"
+if ! flock -n 8; then
+    echo "Marker check already in progress (lock: $MARKER_LOCK)" >&2
+    exit 1
+fi
+trap 'exec 8>&-' EXIT
 
-PREVIOUS_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
+if [[ -f "$MARKER_FILE" ]]; then
+    CHANGED=$(sudo find "$PROJECT_DIR" -type f \
+        ! -path "*/core/cache/*" \
+        ! -path "*/core/backup/*" \
+        -newer "$MARKER_FILE" -print -quit 2>/dev/null)
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')" >> "$LOG_FILE"
+else
+    CHANGED="initial"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: first run" >> "$LOG_FILE"
+fi
 
-if [ "$CURRENT_HASH" = "$PREVIOUS_HASH" ] && [ -n "$PREVIOUS_HASH" ]; then
+if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
     if sudo tar -czf "$PROJECT_BACKUP" \
         --exclude="html/core/cache" \
         --exclude="html/core/backup" \
-        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" >> "$LOG_FILE" 2>&1 && \
-       sudo tar -tzf "$PROJECT_BACKUP" >> "$LOG_FILE" 2>&1; then
-        sudo chown ubuntu:ubuntu "$PROJECT_BACKUP"
-        echo "$CURRENT_HASH" > "$HASH_FILE"
+        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
+       sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
+        sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
         PROJECT_STATUS="✅ Project backed up"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"
+        touch "$MARKER_FILE"
     else
         rm -f "$PROJECT_BACKUP"
         PROJECT_STATUS="❌ Project backup failed"
@@ -89,9 +94,12 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
 
-mysqldump "$DB_NAME" | gzip > "$DB_BACKUP"
+set +o pipefail
+mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$DB_BACKUP"
+DUMP_RC=("${PIPESTATUS[@]}")
+set -o pipefail
 
-if [ "${PIPESTATUS[0]}" -eq 0 ] && [ -s "$DB_BACKUP" ]; then
+if [ "${DUMP_RC[0]}" -eq 0 ] && [ "${DUMP_RC[1]}" -eq 0 ] && [ -s "$DB_BACKUP" ]; then
     DB_STATUS="✅ Database backed up"
     rotate_files "$BACKUP_DIR/db/db_${DB_NAME}_*.sql.gz" "$DB_KEEP"
 else
@@ -120,10 +128,10 @@ if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
     # Ping external watchdog on success
     if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
-        if curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/${BETTERUPTIME_BACKUP_KEY}" > /dev/null 2>&1; then
+        if ping_heartbeat "$BETTERUPTIME_BACKUP_KEY"; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >> "$LOG_FILE"
         else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ curl failed" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ failed" >> "$LOG_FILE"
         fi
     else
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)" >> "$LOG_FILE"

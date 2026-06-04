@@ -1,6 +1,11 @@
+locals {
+  environment_tag = var.environment == "prod" ? "Prod" : "Dev"
+  service_tag     = "DreamSeed"
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477", "839968031152"]
+  owners      = ["099720109477"]
 
   filter {
     name   = "name"
@@ -19,9 +24,7 @@ resource "aws_key_pair" "deploy" {
   public_key = file(pathexpand(var.ssh_public_key_path))
 
   tags = {
-    Name        = "dreamseed-key-${var.environment}"
-    Environment = local.environment_tag
-    Service     = local.service_tag
+    Name = "dreamseed-key-${var.environment}"
   }
 }
 
@@ -62,9 +65,7 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name        = "dreamseed-sg-${var.environment}"
-    Environment = local.environment_tag
-    Service     = local.service_tag
+    Name = "dreamseed-sg-${var.environment}"
   }
 }
 
@@ -72,39 +73,39 @@ resource "aws_instance" "web" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.deploy.key_name
-  security_groups             = [aws_security_group.web.name]
+  vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = var.elastic_ip_allocation_id == ""
 
   root_block_device {
-    volume_size = 30
+    volume_size = var.root_volume_size
     volume_type = "gp3"
     encrypted   = true
     tags = {
-      Name        = "dreamseed-${var.environment}-root"
-      Environment = local.environment_tag
-      Service     = local.service_tag
+      Name = "dreamseed-${var.environment}-root"
     }
   }
 
-  user_data = <<-EOF
-  #!/bin/bash
-  hostnamectl set-hostname dreamseed-${var.environment}
-  sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  systemctl restart sshd
-  apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
-  EOF
+  user_data = <<EOF
+#!/bin/bash
+hostnamectl set-hostname dreamseed-${var.environment}
+sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+systemctl restart ssh
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+EOF
 
   metadata_options {
     http_tokens = "required"
   }
 
-  ebs_optimized = true
+  ebs_optimized               = true
+  disable_api_termination     = var.environment == "prod"
+
+  # prevent_destroy intentionally omitted — Terraform 1.11+ rejects variables in lifecycle.
+  # Prod protection uses disable_api_termination above.
 
   tags = {
-    Name        = "dreamseed-${var.environment}"
-    Environment = local.environment_tag
-    Service     = local.service_tag
+    Name = "dreamseed-${var.environment}"
   }
 }
 

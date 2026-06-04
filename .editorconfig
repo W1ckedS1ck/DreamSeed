@@ -11,6 +11,15 @@ insert_final_newline = true
 [*.{yml,yaml}]
 indent_size = 2
 
+[*.{tf,tfvars,hcl}]
+indent_size = 2
+
+[*.json]
+indent_size = 2
+
+[*.sh]
+indent_size = 4
+
 [Makefile]
 indent_style = tab
 

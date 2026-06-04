@@ -5,7 +5,7 @@
   ],
   "schedule": ["before 9am on monday"],
   "labels": ["dependencies", "renovate"],
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy"],
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit"],
   "terraform": {
     "managerFilePatterns": [
       "terraform/.*\\.tf$"
@@ -68,9 +68,57 @@
       "depNameTemplate": "grafana/grafana",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track apache_exporter version",
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_apache_version: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "Lusitaniae/apache_exporter",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track vmagent version",
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_vmagent_version: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track gitleaks version",
+      "fileMatch": ["^\\.github/workflows/ci\\.yml$"],
+      "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track tflint-ruleset-aws version",
+      "fileMatch": ["^terraform/aws/\\.tflint\\.hcl$"],
+      "matchStrings": ["version = \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "terraform-linters/tflint-ruleset-aws",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
+    {
+      "description": "Pin GitHub Actions to commit SHAs for security",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      "description": "Group VictoriaMetrics server and vmagent — always released together",
+      "matchPackageNames": ["VictoriaMetrics/VictoriaMetrics"],
+      "matchManagers": ["custom.regex"],
+      "groupName": "VictoriaMetrics",
+      "labels": ["dependencies", "monitoring"]
+    },
     {
       "description": "Group all non-major Terraform provider updates",
       "matchManagers": ["terraform"],

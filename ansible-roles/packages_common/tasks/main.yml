@@ -36,17 +36,13 @@
       - fail2ban
       - jq
       - rclone
+      - ssl-cert
       - unzip
       - bind9-dnsutils
       - python3-pymysql
     state: present
   environment:
     DEBIAN_FRONTEND: noninteractive
-
-- name: Clean apt cache to save space
-  become: true
-  ansible.builtin.apt:
-    clean: true
 
 - name: Check if swap file exists
   become: true
@@ -80,7 +76,7 @@
   when: not swapfile_stat.stat.exists
   changed_when: true
   register: swap_enable_result
-  ignore_errors: true
+  failed_when: false
 
 - name: Warn if swap enable failed
   ansible.builtin.debug:

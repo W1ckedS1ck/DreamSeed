@@ -4,10 +4,122 @@
     src: check_site.sh.j2
     dest: /usr/local/bin/check_site.sh
     mode: "0755"
+  become: true
 
-- name: Setup check_site cron job
-  ansible.builtin.cron:
-    name: "Check site availability"
-    minute: "*"
-    job: "/usr/local/bin/check_site.sh"
-    state: "{{ monitoring_cron_enabled | ternary('present', 'absent') }}"
+- name: Deploy check_site systemd timer
+  ansible.builtin.template:
+    src: check-site.timer.j2
+    dest: /etc/systemd/system/check-site.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Deploy check_site systemd service
+  ansible.builtin.template:
+    src: check-site.service.j2
+    dest: /etc/systemd/system/check-site.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Enable and start check_site timer
+  ansible.builtin.systemd:
+    name: check-site.timer
+    state: started
+    enabled: true
+  become: true
+  when: monitoring_cron_enabled | bool
+
+- name: Stop and disable check_site timer when disabled
+  ansible.builtin.systemd:
+    name: check-site.timer
+    state: stopped
+    enabled: false
+  become: true
+  when: not monitoring_cron_enabled | bool
+
+- name: Remove check_site unit files when disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/systemd/system/check-site.timer
+    - /etc/systemd/system/check-site.service
+  notify: Reload systemd
+  when: not monitoring_cron_enabled | bool
+
+# --- check_services timer (every 5 min) — refreshes database_tables, service_status, dreamseed_health_overall ---
+
+- name: Ensure scripts directory exists
+  ansible.builtin.file:
+    path: "{{ scripts_dir_remote }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  become: true
+  when: monitoring_cron_enabled | bool
+
+- name: Upload check_services.sh (if not already present)
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/check_services.sh"
+    dest: "{{ scripts_dir_remote }}/check_services.sh"
+    mode: "0755"
+  become: true
+  when: monitoring_cron_enabled | bool
+
+- name: Deploy check_services systemd timer
+  ansible.builtin.template:
+    src: check-services.timer.j2
+    dest: /etc/systemd/system/check-services.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Deploy check_services systemd service
+  ansible.builtin.template:
+    src: check-services.service.j2
+    dest: /etc/systemd/system/check-services.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Enable and start check_services timer
+  ansible.builtin.systemd:
+    name: check-services.timer
+    state: started
+    enabled: true
+  become: true
+  when: monitoring_cron_enabled | bool
+
+- name: Stop and disable check_services timer when disabled
+  ansible.builtin.systemd:
+    name: check-services.timer
+    state: stopped
+    enabled: false
+  become: true
+  when: not monitoring_cron_enabled | bool
+
+- name: Remove check_services unit files when disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/systemd/system/check-services.timer
+    - /etc/systemd/system/check-services.service
+  notify: Reload systemd
+  when: not monitoring_cron_enabled | bool

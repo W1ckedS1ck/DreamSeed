@@ -21,13 +21,13 @@ variable "elastic_ip_allocation_id" {
   default     = ""
 }
 
+variable "root_volume_size" {
+  description = "Root EBS volume size in GB"
+  type        = number
+  default     = 30
+}
+
 variable "environment" {
   description = "Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts"
   type        = string
-  default     = "prod"
-}
-
-locals {
-  environment_tag = var.environment == "prod" ? "Prod" : "Dev"
-  service_tag     = "DreamSeed"
 }

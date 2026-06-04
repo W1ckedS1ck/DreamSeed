@@ -1,0 +1,8 @@
+---
+- name: Deploy scrape config
+  ansible.builtin.template:
+    src: scrape.yml.j2
+    dest: "{{ _scrape_dest }}"
+    mode: "0644"
+  become: true
+  notify: "{{ _scrape_notify }}"

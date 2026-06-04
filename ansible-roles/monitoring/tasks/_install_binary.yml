@@ -1,0 +1,56 @@
+---
+# Shared binary installer for monitoring exporters.
+# Usage:
+#   - name: Install Foo Exporter
+#     ansible.builtin.include_tasks: _install_binary.yml
+#     vars:
+#       monitor_bin_name: "foo_exporter"
+#       monitor_bin_path: "/usr/local/bin/foo_exporter"
+#       monitor_version: "{{ monitoring_foo_version }}"
+#       monitor_download_url: "https://github.com/org/foo_exporter/releases/download/v{{ monitor_version }}/..."
+#       monitor_extracted_binary: "/tmp/foo_exporter-{{ monitor_version }}.linux-amd64/foo_exporter"
+
+- name: "Check if {{ monitor_bin_name }} is installed"
+  ansible.builtin.stat:
+    path: "{{ monitor_bin_path }}"
+  register: _monitor_bin
+
+- name: "Get current {{ monitor_bin_name }} version"
+  ansible.builtin.command: "{{ monitor_bin_path }} --version"
+  changed_when: false
+  failed_when: false
+  register: _monitor_current_version
+  when: _monitor_bin.stat.exists
+
+- name: "Install/Upgrade {{ monitor_bin_name }}"
+  when: >
+    not _monitor_bin.stat.exists or
+    monitor_version not in (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')).split()
+  block:
+    - name: "Download {{ monitor_bin_name }}"
+      ansible.builtin.get_url:
+        url: "{{ monitor_download_url }}"
+        dest: "/tmp/{{ monitor_bin_name }}.tar.gz"
+        mode: "0644"
+
+    - name: "Extract {{ monitor_bin_name }}"
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ monitor_bin_name }}.tar.gz"
+        dest: /tmp/
+        remote_src: true
+
+    - name: "Install {{ monitor_bin_name }} binary"
+      ansible.builtin.copy:
+        src: "{{ monitor_extracted_binary }}"
+        dest: "{{ monitor_bin_path }}"
+        mode: "0755"
+        remote_src: true
+      become: true
+
+    - name: "Cleanup {{ monitor_bin_name }} temp files"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/{{ monitor_bin_name }}.tar.gz"
+        - "{{ monitor_extracted_dir | default(monitor_extracted_binary | dirname) }}"

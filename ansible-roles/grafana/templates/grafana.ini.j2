@@ -11,7 +11,7 @@ enable_gzip = true
 
 [security]
 admin_user = admin
-admin_password = {{ grafana_admin_password }}
+# Password set via GF_SECURITY_ADMIN_PASSWORD in systemd EnvironmentFile
 
 [users]
 viewers_can_edit = false
@@ -25,9 +25,6 @@ check_for_updates = false
 check_for_plugin_updates = false
 
 [database]
-{% if grafana_db_type | default('sqlite') == 'sqlite' %}
-# Default SQLite — no configuration needed
-{% endif %}
 versions_to_keep = 5
 max_connections = 0
 

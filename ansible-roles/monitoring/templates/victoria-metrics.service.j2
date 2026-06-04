@@ -11,6 +11,7 @@ ExecStart=/usr/local/bin/victoria-metrics \
   -httpListenAddr=127.0.0.1:8428 \
   -promscrape.config=/etc/victoria-metrics/scrape.yml
 Restart=always
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target

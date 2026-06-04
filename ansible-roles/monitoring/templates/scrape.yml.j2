@@ -1,6 +1,6 @@
 # Managed by Ansible
 global:
-  scrape_interval: 15s
+  scrape_interval: {{ _scrape_interval | default('15s') }}
 
 scrape_configs:
   - job_name: node
