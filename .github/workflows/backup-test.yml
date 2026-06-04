@@ -386,13 +386,15 @@ jobs:
           SECS=$(( ELAPSED % 60 ))
           FAIL_DETAIL=""
           [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_DETAIL=" ⚠️ $FAILS"
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 BackupRestorationTest $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
-            "Restore $(ok $RESTORE) | $SUMMARY | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
-            "Destroy $(ok_destroy $DESTROY) | 🛡 Hardening ${LYNIS_SCORE:-?}/100${FAIL_DETAIL}")
+            "Restore    $(ok $RESTORE)" \
+            "Tests      $SUMMARY      DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
+            "Hardening  ${LYNIS_SCORE:-?}/100" \
+            "Destroy    $(ok_destroy $DESTROY)${FAIL_DETAIL}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
