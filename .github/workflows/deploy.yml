@@ -104,7 +104,7 @@ jobs:
 
             # Use existing "Vitali" key and Primary IP in Hetzner Cloud
             echo "HETZNER_SSH_KEY_NAME=Vitali"
-            echo "HETZNER_PRIMARY_IP_NAME=vitalikuts.online"
+            echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
           } > secrets/.env
           chmod 600 secrets/.env
 
