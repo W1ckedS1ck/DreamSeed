@@ -8,6 +8,11 @@ locals {
   }
 }
 
+data "hcloud_ssh_key" "default" {
+  count = local.use_existing_key ? 1 : 0
+  name  = var.ssh_key_name
+}
+
 resource "hcloud_ssh_key" "ci_key" {
   count      = local.use_existing_key ? 0 : 1
   name       = "dreamseed-ci-${var.environment}"
@@ -51,7 +56,7 @@ resource "hcloud_server" "main" {
   image        = "ubuntu-24.04"
   location     = var.location
   labels       = local.labels
-  ssh_keys     = local.use_existing_key ? [var.ssh_key_name] : [hcloud_ssh_key.ci_key[0].name]
+  ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
   firewall_ids = [hcloud_firewall.web.id]
 
   public_net {
@@ -62,7 +67,12 @@ resource "hcloud_server" "main" {
 
   user_data = <<EOF
 #!/bin/bash
+set -e
 hostnamectl set-hostname dreamseed-${var.environment}
+mkdir -p /home/ubuntu/.ssh
+echo '${var.ssh_public_key}' >> /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 apt-get update -qq
 EOF
 }
