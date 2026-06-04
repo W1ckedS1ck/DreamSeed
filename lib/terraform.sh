@@ -16,14 +16,26 @@ cleanup_stale_ssh_key() {
     fingerprint=$(ssh-keygen -lf "$pub_key" 2>/dev/null | awk '{print $2}') || return 0
     echo "    Checking for stale SSH key with fingerprint: ${fingerprint}"
     local ids
-    ids=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
-        "https://api.hetzner.cloud/v1/ssh_keys" 2>/dev/null \
-        | python3 -c "
-import json,sys
+    ids=$(python3 -c "
+import json,urllib.request,sys
 fp=sys.argv[1]
-d=json.load(sys.stdin)
-matches=[str(k['id']) for k in d.get('ssh_keys',[]) if k.get('fingerprint')==fp]
-print(' '.join(matches))" "$fingerprint" 2>/dev/null || true)
+token=sys.argv[2]
+page=1
+matches=[]
+while True:
+    req=urllib.request.Request(f'https://api.hetzner.cloud/v1/ssh_keys?page={page}&per_page=50')
+    req.add_header('Authorization', f'Bearer {token}')
+    resp=urllib.request.urlopen(req)
+    d=json.load(resp)
+    for k in d.get('ssh_keys',[]):
+        if k.get('fingerprint')==fp:
+            matches.append(str(k['id']))
+    meta=d.get('meta',{}).get('pagination',{})
+    if page>=meta.get('last_page',1):
+        break
+    page+=1
+print(' '.join(matches))
+" "$fingerprint" "$HCLOUD_TOKEN" 2>/dev/null || true)
     if [[ -n "$ids" ]]; then
         for id in $ids; do
             curl -sf -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" \
