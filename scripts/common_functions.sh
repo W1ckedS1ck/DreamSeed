@@ -101,3 +101,17 @@ prune_cloud_backups() {
 escape_md2() {
     echo "$1" | sed 's/[_*[\]()~`>#+=|{}.!@:-]/\\&/g'
 }
+
+rotate_files() {
+    local pattern="$1"
+    local keep="$2"
+    local dir glob
+    dir=$(dirname "$pattern")
+    glob=$(basename "$pattern")
+    mapfile -t files < <(find "$dir" -maxdepth 1 -name "$glob" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
+    if [ "${#files[@]}" -gt "$keep" ]; then
+        for ((i=keep; i<${#files[@]}; i++)); do
+            rm -f "${files[i]}"
+        done
+    fi
+}
