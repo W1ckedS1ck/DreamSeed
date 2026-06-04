@@ -22,7 +22,7 @@ These are checked by `deploy.sh` on every run:
 pip install -r ansible/requirements-deploy.txt
 
 # Collections (for MariaDB and POSIX modules)
-ansible-galaxy collection install community.mysql ansible.posix
+ansible-galaxy collection install ansible.mysql ansible.posix
 ```
 
 ## Cloud credentials (in secrets/.env)

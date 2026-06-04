@@ -179,7 +179,7 @@
   failed_when: false
 
 - name: Check if MODX is installed (modx_system_settings table exists)
-  community.mysql.mysql_query:
+  ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = 'modx_system_settings'"
@@ -188,7 +188,7 @@
   failed_when: false
 
 - name: Update MODX session_gc_maxlifetime to 24 hours
-  community.mysql.mysql_query:
+  ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -201,7 +201,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Set MODX database query caching (cache_db)
-  community.mysql.mysql_query:
+  ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -214,7 +214,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Set MODX session data caching (cache_db_session)
-  community.mysql.mysql_query:
+  ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
