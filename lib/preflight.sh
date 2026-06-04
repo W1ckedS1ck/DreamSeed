@@ -13,16 +13,24 @@ check_prerequisites() {
 }
 
 preflight_checks() {
+    echo "DEBUG: preflight_checks started" >&2
+    set -x
     check_prerequisites
 
+    echo "DEBUG: env_src" >&2
     local env_src; env_src=$(resolve_env_file "$ENV_FILE")
+    echo "DEBUG: validate_env_file" >&2
     validate_env_file "$env_src"
 
+    echo "DEBUG: restore_errexit" >&2
     local restore_errexit
     restore_errexit=$(set +o | grep -E 'set [-+]o errexit' || true)
+    echo "DEBUG: sourcing env" >&2
     set +e
     set -a; source "$env_src"; set +a
     [[ -n "$restore_errexit" ]] && eval "$restore_errexit"
+
+    echo "DEBUG: source done" >&2
 
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
@@ -37,6 +45,8 @@ preflight_checks() {
 
     apply_target_vars
 
+    echo "DEBUG: checking vars" >&2
+
     # Load Grafana Cloud credentials (PROD_ for prod, DEV_ for all dev)
     local gc_pfx="DEV"
     [[ "$TARGET" == "prod" ]] && gc_pfx="PROD"
@@ -48,16 +58,21 @@ preflight_checks() {
     GRAFANA_CLOUD_TOKEN="${!gc_token:-}"
     export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
 
+    echo "DEBUG: SSH_KEY check" >&2
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
+    echo "DEBUG: SSH_KEY1=[$SSH_KEY]" >&2
     SSH_KEY="${SSH_KEY/#\~/$HOME}"
+    echo "DEBUG: SSH_KEY2=[$SSH_KEY]" >&2
     if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
     if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
 
+    echo "DEBUG: DB_PASS check" >&2
     if [[ "$DESTROY_MODE" == "false" ]]; then
         if [[ -z "${DB_PASS:-}" ]]; then echo "Error: DB_PASS not set"; exit 1; fi
         if [[ -z "${GRAFANA_PASS:-}" ]]; then echo "Error: GRAFANA_PASS not set"; exit 1; fi
     fi
 
+    echo "DEBUG: HCLOUD_TOKEN check" >&2
     if [[ "$TF_PROVIDER" == "aws" ]]; then
         if [[ -z "${AWS_ACCESS_KEY:-}" || -z "${AWS_SECRET_KEY:-}" ]]; then echo "Error: AWS credentials required"; exit 1; fi
         : "${AWS_REGION:=us-west-1}"
@@ -70,4 +85,6 @@ preflight_checks() {
     if [[ "$SKIP_TERRAFORM" == "false" && ! -f "$TF_DIR/main.tf" ]]; then
         echo "Error: $TF_DIR/main.tf not found"; exit 1
     fi
+    echo "DEBUG: preflight_checks done" >&2
+    set +x
 }
