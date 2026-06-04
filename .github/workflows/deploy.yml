@@ -100,7 +100,7 @@ jobs:
             echo "BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
-            echo "ADDITIONAL_SSH_KEYS=$USER_SSH_PUBLIC_KEY"
+            echo "ADDITIONAL_SSH_KEYS=\"$USER_SSH_PUBLIC_KEY\""
           } > secrets/.env
           chmod 600 secrets/.env
 
