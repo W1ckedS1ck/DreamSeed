@@ -46,7 +46,8 @@ DB_BACKUP=$(find "$BACKUP_DIR/db" -maxdepth 1 -name "db_${DB_NAME}_*.sql.gz" -pr
 
 if [[ -n "$DB_BACKUP" && -f "$DB_BACKUP" ]]; then
     if gunzip -t "$DB_BACKUP" > /dev/null 2>&1; then
-        if zcat "$DB_BACKUP" 2>/dev/null | head -1000 | grep "CREATE TABLE\|INSERT INTO" > /dev/null 2>&1; then
+        sql_head=$(zcat "$DB_BACKUP" 2>/dev/null | head -1000) || true
+        if grep -q "CREATE TABLE\|INSERT INTO" <<< "$sql_head" 2>/dev/null; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ DB backup OK: $(basename "$DB_BACKUP")" >> "$LOG_FILE"
             LOCAL_OK=$((LOCAL_OK == 1 ? 1 : 0))
         else
