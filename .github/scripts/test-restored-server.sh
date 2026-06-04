@@ -130,13 +130,21 @@ GRAFANA_ALERTS=$(ssh ubuntu@"$SERVER_IP" "curl -sf -u admin:\$(sudo cat /etc/gra
 # ====== Checks end ======
 } 2>&1
 P=0 F=0 W=0
+FAIL_ITEMS=""
 while IFS= read -r line; do
   echo "$line"
   case "$line" in
     *'[PASS]'*) ((P++));;
-    *'[FAIL]'*) ((F++));;
+    *'[FAIL]'*)
+      ((F++))
+      item="${line#*[FAIL] }"
+      item="${item%% *}"
+      [ -n "$FAIL_ITEMS" ] && FAIL_ITEMS="$FAIL_ITEMS, " || true
+      FAIL_ITEMS="${FAIL_ITEMS}${item}"
+      ;;
     *'[WARN]'*) ((W++));;
   esac
 done
 echo "test_summary=P:${P} F:${F} W:${W}"
+echo "test_fails=${FAIL_ITEMS:-none}"
 [ "$F" -eq 0 ]
