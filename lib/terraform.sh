@@ -7,46 +7,6 @@ _tf() { ( cd "$TF_DIR" && "$TERRAFORM" "$@" ); }
 
 # Clean up stale CI SSH key from Hetzner Cloud before terraform apply
 # to avoid "SSH key not unique (uniqueness_error)"
-cleanup_stale_ssh_key() {
-    [[ "$TF_PROVIDER" != "hetzner" || -z "${HCLOUD_TOKEN:-}" || -n "${HETZNER_SSH_KEY_NAME:-}" ]] && return 0
-    local pub_key
-    pub_key="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
-    [[ ! -r "$pub_key" ]] && return 0
-    local fingerprint
-    fingerprint=$(ssh-keygen -lf "$pub_key" 2>/dev/null | awk '{print $2}') || return 0
-    echo "    Checking for stale SSH key (fingerprint: ${fingerprint})"
-    local all_keys key_id api_fps
-    all_keys=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
-        "https://api.hetzner.cloud/v1/ssh_keys?per_page=50" 2>/dev/null || echo '{"ssh_keys":[]}')
-    api_fps=$(echo "$all_keys" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-for k in d.get('ssh_keys',[]):
-    print(f'  API key {k.get(\"id\")}: {k.get(\"fingerprint\")} (name={k.get(\"name\")})')
-" 2>/dev/null || echo "    FAILED to parse API response")
-    if echo "$api_fps" | grep -v "^$"; then
-        echo "    Available keys:"
-        echo "$api_fps"
-    fi
-    key_id=$(echo "$all_keys" | python3 -c "
-import json,sys
-fp=sys.argv[1]
-d=json.load(sys.stdin)
-for k in d.get('ssh_keys',[]):
-    if k.get('fingerprint')==fp:
-        print(k['id'])
-        sys.exit(0)
-print('')
-" "$fingerprint" 2>/dev/null || true)
-    if [[ -n "$key_id" ]]; then
-        echo "    Found stale key ID: ${key_id} — importing into state"
-        _tf import hcloud_ssh_key.ci_key[0] "$key_id" >> "$DEPLOY_TF_LOG" 2>&1 || \
-            echo "    Import failed (may already be in state)"
-    else
-        echo "    No stale key found"
-    fi
-}
-
 terraform_select_workspace() {
     local ws="$TF_WORKSPACE"
     (

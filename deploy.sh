@@ -245,8 +245,6 @@ main() {
         local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
 
-        cleanup_stale_ssh_key
-
         local ok=false
         for try in 1 2; do
             # shellcheck disable=SC2086

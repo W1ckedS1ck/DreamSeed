@@ -101,6 +101,9 @@ jobs:
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
             echo "ADDITIONAL_SSH_KEYS=\"$USER_SSH_PUBLIC_KEY\""
+
+            # Use existing "Vitali" key in Hetzner Cloud (CI deploy key is the same RSA key)
+            echo "HETZNER_SSH_KEY_NAME=Vitali"
           } > secrets/.env
           chmod 600 secrets/.env
 
