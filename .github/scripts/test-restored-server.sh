@@ -12,7 +12,7 @@ ALL_OK=true
 # Database
 ssh ubuntu@"$SERVER_IP" "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || { echo "[FAIL] MariaDB"; ALL_OK=false; }
 ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || { echo "[FAIL] DB connect"; ALL_OK=false; }
-ROWS=$(ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'")
+ROWS=$(ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'" 2>/dev/null || echo 0)
 echo "content_rows=$ROWS"
 [ "${ROWS:-0}" -gt 0 ] && echo "[PASS] Content rows: $ROWS" || { echo "[FAIL] No content rows"; ALL_OK=false; }
 
@@ -109,19 +109,18 @@ F2B_ADMIN=$(ssh ubuntu@"$SERVER_IP" "fail2ban-client status modx-admin 2>/dev/nu
 F2B_GRAFANA=$(ssh ubuntu@"$SERVER_IP" "fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned' && echo OK || echo MISSING" 2>/dev/null || echo "MISSING")
 [ "$F2B_GRAFANA" = "OK" ] && echo "[PASS] fail2ban grafana jail" || echo "[WARN] fail2ban grafana: $F2B_GRAFANA"
 
-# NOTE: ALL_OK is set inside but not visible outside (pipe = subshell).
+# NOTE: Counters are tracked and summary printed at the end.
 # Exit code 1 is propagated by [ "$F" -eq 0 ] below.
 # ====== Checks end ======
-} 2>&1 | {
-  P=0 F=0 W=0
-  while IFS= read -r line; do
-    echo "$line"
-    case "$line" in
-      *'[PASS]'*) ((P++));;
-      *'[FAIL]'*) ((F++));;
-      *'[WARN]'*) ((W++));;
-    esac
-  done
-  echo "test_summary=P:${P} F:${F} W:${W}"
-  [ "$F" -eq 0 ]
-}
+} 2>&1
+P=0 F=0 W=0
+while IFS= read -r line; do
+  echo "$line"
+  case "$line" in
+    *'[PASS]'*) ((P++));;
+    *'[FAIL]'*) ((F++));;
+    *'[WARN]'*) ((W++));;
+  esac
+done
+echo "test_summary=P:${P} F:${F} W:${W}"
+[ "$F" -eq 0 ]

@@ -344,7 +344,7 @@ jobs:
 
       - name: Terraform Destroy
         id: destroy
-        if: always()
+        if: success()
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
