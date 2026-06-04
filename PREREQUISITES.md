@@ -9,7 +9,7 @@ These are checked by `deploy.sh` on every run:
 | Tool | Required for | Install |
 |------|-------------|---------|
 | `terraform` or `tofu` (OpenTofu) | Provision cloud servers (AWS EC2 / Hetzner) | https://developer.hashicorp.com/terraform/install |
-| `ansible-playbook` | Configure server (all 7 playbooks) | `pip install ansible` |
+| `ansible-playbook` | Configure server (all 7 playbooks) | `pip install ansible==14.0.0` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible` |
@@ -38,6 +38,17 @@ All targets require:
 - `SSH_PUBLIC_KEY_PATH` — path to your SSH public key
 - `DB_PASS` — MariaDB password
 - `GRAFANA_PASS` — Grafana admin password
+- `TG_TOKEN` — Telegram bot token
+- `TG_CHAT_ID` — Telegram chat ID for alerts
+
+Hetzner dev additionally:
+- `HETZNER_SSH_KEY_NAME` — name of existing SSH key in Hetzner Cloud (e.g. `Vitali`)
+- `HETZNER_PRIMARY_IP_NAME` — name of existing Primary IP (optional, uses dynamic IP if empty)
+
+Grafana Cloud (per target):
+- `DEV_GRAFANA_CLOUD_URL` — Prometheus push endpoint
+- `DEV_GRAFANA_CLOUD_USERNAME` — instance ID
+- `DEV_GRAFANA_CLOUD_TOKEN` — vmagent token
 
 ## Site restore (secrets/rclone.conf)
 

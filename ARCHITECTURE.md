@@ -13,7 +13,7 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      backup tfstate → ssh-keygen -R
        │
        ├─ 3. Wait for SSH
-       │      AWS: 40×10s | Hetzner: 20×1s polling
+        │      AWS: 40×10s | Hetzner: 90×2s polling
        │
        ├─ 4. Wait for cloud-init
        │      timeout 300s + 15×2s fallback
@@ -31,11 +31,12 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      07 Security ── SSH, fail2ban, sysctl, MODX perms
        │
         └─ 7. Post-deploy checks
-               systemctl is-active (6 services + Telegram bot)
+               systemctl is-active (7 services + mysqld_exporter)
                curl https://$DOMAIN/ → 200|301
-               SSL, MODX index.php, DB tables, VictoriaMetrics health
-               Exporters (node, mysql, nginx/apache), vmagent, fail2ban
-               Backup cron installed
+               SSL (Cloudflare/LE/self-signed), MODX index.php, DB tables
+               VictoriaMetrics health, node + mysql + nginx/apache exporters, vmagent
+               fail2ban (7 jails), cron backup, MySQL write probe
+               → Push to VM: database_tables, dreamseed_health_overall
 ```
 
 ---
@@ -134,6 +135,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 │  nginx/apache_exporter      │ scrape: 15s     │            └───────┬───────┘
 │  mysqld_exporter            └────────┬────────┘                    │
 │  check_site.sh (every 1m)           │                             │
+│  check_services.sh (every 5m)       │                             │
 │  smart_backup.sh (heartbeat)        │                             │
 
 └─────────────────────────────────────┘                             │
@@ -168,21 +170,28 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 15 rules)
+### Alert Rules (Grafana — 18 rules)
 
-| Alert | Condition | Response |
-|-------|-----------|----------|
-| CPU >85% | 5m avg | Check processes |
-| RAM >90% | 5m avg | Check OOM |
-| Disk <10% | 5m | Cleanup / resize |
-| MySQL down | 1m | Check mariadb |
-| Web server down (Nginx/Apache) | 1m | Check nginx.service / apache2 |
-| PHP-FPM down | 1m | Check php*-fpm |
-| Site down | 2m | Check HTTP 200 |
-| MODX Core missing | 2m | Check /manager/ & core files |
-| VictoriaMetrics down | 1m | Check victoria-metrics |
-| Backup cron stale | >120 min | Check smart_backup.sh |
-| Site check cron stale | >3 min | Check check_site.sh |
+| Alert | Condition | Description |
+|-------|-----------|-------------|
+| High CPU | >85% 5m | CPU usage spike |
+| High RAM | >90% 5m | Memory pressure |
+| Low Disk Space | <10% free | Disk full risk |
+| MySQL Down | mysql_up == 0 | MariaDB not running |
+| Nginx/Apache Down | nginx_up / apache_up == 0 | Web server down |
+| PHP-FPM Down | php_fpm_up == 0 | FPM process/socket failed |
+| Site Down | site_up != 1 | HTTP not 200 |
+| MODX Core Missing | modx_core_ok == 0 | Core files missing |
+| VictoriaMetrics Down | victoria_up == 0 | VM health failed |
+| Backup Cron Stale | >70 min since last run | Backup not running |
+| Site Check Stale | >3 min since last run | check_site.sh dead |
+| SSL Cert Expiring | <7 days remaining | Cert about to expire |
+| Admin Login Failed | admin_login_ok == 0 | /manager/ inaccessible |
+| MiniShop2 Write Failed | db_write_ok == 0 | MySQL INSERT/delete probe |
+| Overall Health Failed | dreamseed_health_overall == 0 | Composite check |
+| Site HTTP Status Critical | site_http_status != 1 | Non-200 response |
+| Database Tables Low | <50 tables in modx_db | Restore or migration issue |
+| Backup Verification Failed | backup_verification_ok == 0 | GDrive backup check |
 
 ### External Monitoring (Better Stack — cloud)
 
@@ -241,10 +250,14 @@ Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
   daily                                  (AWS prod only)
 
 Schedule Mon 10:00 Backup Test           Provision Hetzner → Ansible deploy
-  manual                                 → Tests (DB/Web/MODX/cart/SMTP)
-                                         → DAST scan (nuclei)
-                                         → Lynis audit → Destroy
-                                         → Telegram report
+   manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
+                                          → DAST scan (nuclei)
+                                          → Lynis audit
+                                          → check_services (timers, fail2ban, exporters)
+                                          → Grafana alert rules check (≥15)
+                                          → Vagrant remote write errors == 0
+                                          → GDrive backup check
+                                          → Destroy → Telegram report (P/F/W summary)
 
 Bot events         Renovate              Dependency updates (auto PRs)
                    Infracost App         Cost estimate comments on PRs
