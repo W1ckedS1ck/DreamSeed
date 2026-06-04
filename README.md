@@ -1,12 +1,12 @@
 # 🌱 DreamSeed
 
-![CI](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/ci.yml/badge.svg)
-![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg)
-![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
-![BackupRestorationTest](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/backup-test.yml/badge.svg)
+![CI](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/ci.yml/badge.svg?branch=dev)
+![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg?branch=dev)
+![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg?branch=dev)
+![BackupRestorationTest](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/backup-test.yml/badge.svg?branch=dev)
 ![Gitleaks](https://img.shields.io/badge/Gitleaks-passed-00C853?logo=gitleaks)
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
-![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
+![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/dev)
 
 ![Terraform / OpenTofu](https://img.shields.io/badge/Terraform-1.9%2B-7B42BC?logo=terraform)
 ![Ansible](https://img.shields.io/badge/Ansible-13%2B-EE0000?logo=ansible)
