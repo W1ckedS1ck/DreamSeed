@@ -69,6 +69,9 @@ jobs:
           echo "::add-mask::${{ secrets.VAULT_PASSWORD }}"
           echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}"
           echo "::add-mask::${{ secrets.USER_SSH_PUBLIC_KEY }}"
+          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_URL }}"
+          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
+          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}"
 
       - name: Setup secrets
         env:
@@ -85,6 +88,9 @@ jobs:
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
           RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
+          DEV_GRAFANA_CLOUD_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
+          DEV_GRAFANA_CLOUD_USERNAME: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
+          DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
         run: |
           mkdir -p secrets ~/.ssh
 
@@ -101,6 +107,10 @@ jobs:
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
             echo "ADDITIONAL_SSH_KEYS=\"$USER_SSH_PUBLIC_KEY\""
+
+            echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_URL"
+            echo "DEV_GRAFANA_CLOUD_USERNAME=$DEV_GRAFANA_CLOUD_USERNAME"
+            echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
 
             # Use existing "Vitali" key and Primary IP in Hetzner Cloud
             echo "HETZNER_SSH_KEY_NAME=Vitali"
