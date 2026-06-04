@@ -73,10 +73,13 @@ if ! id ubuntu &>/dev/null; then
   useradd -m -s /bin/bash -G sudo ubuntu
   echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
 fi
-mkdir -p /home/ubuntu/.ssh
-echo '${var.ssh_public_key}' >> /home/ubuntu/.ssh/authorized_keys
-chmod 600 /home/ubuntu/.ssh/authorized_keys
-chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 apt-get update -qq
 EOF
+}
+
+check "workspace_valid_for_hetzner" {
+  assert {
+    condition     = contains(["dev-hetz"], terraform.workspace)
+    error_message = "Hetzner provider can only be used with workspace dev-hetz (got: ${terraform.workspace})"
+  }
 }

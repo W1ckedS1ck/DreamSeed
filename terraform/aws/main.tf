@@ -98,8 +98,8 @@ EOF
     http_tokens = "required"
   }
 
-  ebs_optimized               = true
-  disable_api_termination     = var.environment == "prod"
+  ebs_optimized           = true
+  disable_api_termination = var.environment == "prod"
 
   # prevent_destroy intentionally omitted — Terraform 1.11+ rejects variables in lifecycle.
   # Prod protection uses disable_api_termination above.
@@ -118,4 +118,11 @@ resource "aws_eip_association" "web" {
   count         = var.elastic_ip_allocation_id != "" ? 1 : 0
   allocation_id = data.aws_eip.reserved[0].id
   instance_id   = aws_instance.web.id
+}
+
+check "workspace_valid_for_aws" {
+  assert {
+    condition     = contains(["prod", "dev-aws"], terraform.workspace)
+    error_message = "AWS provider can only be used with workspace prod or dev-aws (got: ${terraform.workspace})"
+  }
 }

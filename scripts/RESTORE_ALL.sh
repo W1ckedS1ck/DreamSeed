@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
-DB_PREFIX="${DB_PREFIX:-modx_}"
+MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
 
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
@@ -207,7 +207,6 @@ if [ "$MODE" != "--auto-latest" ]; then
     esac
 
     ENV_SUFFIX=""
-    [ "$ENV" != "prod" ] && ENV_SUFFIX="-$ENV"
 
     # ================================================
     # STEP 1: What to restore?
@@ -397,13 +396,21 @@ if [ -n "$SELECTED_PROJECT" ]; then
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
     if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
         [[ "$PROJECT_DIR" =~ ^/var/www/[^/]+$ ]] || { echo "ERROR: PROJECT_DIR must be /var/www/<name>, got: $PROJECT_DIR"; exit 1; }
-        sudo rm -rf "$PROJECT_DIR"
-        sudo mv "$TEMP_EXTRACT/$(basename "$PROJECT_DIR")" "$PROJECT_DIR"
-        sudo rm -rf "$TEMP_EXTRACT"
-        sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
-        sudo chown -R www-data:www-data "$PROJECT_DIR"
-        PROJECT_STATUS="✅ $(basename "$SELECTED_PROJECT")"
-        echo -e "${GREEN}✓ Project restored${NC}"
+        extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
+        if [[ ! -d "$extracted_dir" ]]; then
+            echo -e "${RED}✗ Archive structure mismatch: expected '$extracted_dir' not found${NC}"
+            sudo rm -rf "$TEMP_EXTRACT"
+            PROJECT_STATUS="❌ Archive structure error"
+            echo -e "${RED}✗ Project restore failed!${NC}"
+        else
+            sudo rm -rf "$PROJECT_DIR"
+            sudo mv "$extracted_dir" "$PROJECT_DIR"
+            sudo rm -rf "$TEMP_EXTRACT"
+            sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
+            sudo chown -R www-data:www-data "$PROJECT_DIR"
+            PROJECT_STATUS="✅ $(basename "$SELECTED_PROJECT")"
+            echo -e "${GREEN}✓ Project restored${NC}"
+        fi
     else
         sudo rm -rf "$TEMP_EXTRACT"
         PROJECT_STATUS="❌ Error"
@@ -428,8 +435,8 @@ if [ -n "$SELECTED_DB" ]; then
         echo "Restoring database..."
     fi
 
-    COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM modx_site_content;" 2>/dev/null || echo "0")
-    LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)
+    COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
+    LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null)
 
     TEMP_SQL=$(mktemp /tmp/restore_XXXXXX.sql)
     chmod 600 "$TEMP_SQL"
@@ -439,10 +446,10 @@ if [ -n "$SELECTED_DB" ]; then
         echo -e "${RED}✗ Failed to decompress archive!${NC}"
     else
         if mysql "$DB_NAME" < "$TEMP_SQL"; then
-            mysql "$DB_NAME" -e "TRUNCATE TABLE ${DB_PREFIX}session;" 2>/dev/null
+            mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null
 
-            COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM modx_site_content;" 2>/dev/null || echo "0")
-            LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM modx_site_content;" 2>/dev/null)
+            COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
+            LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null)
 
             DIFF=$((COUNT_AFTER - COUNT_BEFORE))
             DIFF_STR=""

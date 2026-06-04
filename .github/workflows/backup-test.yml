@@ -83,7 +83,7 @@ jobs:
           [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
           # SSH config (match main branch approach)
-          echo "StrictHostKeyChecking no" > ~/.ssh/config
+          echo "StrictHostKeyChecking accept-new" > ~/.ssh/config
           echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
           echo "IdentityFile ~/.ssh/Vitali.pem" >> ~/.ssh/config
 

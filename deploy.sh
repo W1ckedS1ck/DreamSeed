@@ -260,8 +260,14 @@ main() {
 
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
-        _tf state pull > "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate" 2>/dev/null || true
-        ls -1t "$bk/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+        local tmp_bk; tmp_bk=$(mktemp)
+        if _tf state pull > "$tmp_bk" 2>/dev/null && [[ -s "$tmp_bk" ]]; then
+            mv "$tmp_bk" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+            ls -1t "$bk/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+        else
+            rm -f "$tmp_bk"
+            echo "  ⚠ tfstate backup failed (empty or error)" | tee -a "$LOG"
+        fi
         step_ok
     else
         step_start "Using existing server"
@@ -327,7 +333,7 @@ INVEOF
         printf '  "php_version": %s,\n' "$(json_escape "$PHP_VERSION")"
         printf '  "secrets_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/secrets")"
         printf '  "configs_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/configs")"
-        printf '  "scripts_dir": %s' "$(json_escape "$SCRIPT_DIR/scripts")"
+        printf '  "scripts_dir": %s,\n  "environment": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
         [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && printf ',\n  "cloudflare_api_token": %s' "$(json_escape "$CLOUDFLARE_API_TOKEN")"
         [[ -n "${GRAFANA_PASS:-}" ]] && printf ',\n  "grafana_admin_password": %s' "$(json_escape "$GRAFANA_PASS")"
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && printf ',\n  "ssh_public_key_path": %s' "$(json_escape "$SSH_PUBLIC_KEY_PATH")"

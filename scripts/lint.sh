@@ -351,4 +351,4 @@ case "$MODE" in
     *)                   echo "Unknown mode"; usage; exit 1 ;;
 esac
 
-print_summary
+print_summary || exit 1

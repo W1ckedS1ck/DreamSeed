@@ -29,6 +29,7 @@ resolve_env_file() {
         [[ ! -f "$pw" ]] && { echo "Error: vault password file not found: $pw" >&2; exit 1; }
         local tmp; tmp=$(mktemp); chmod 600 "$tmp"
         ansible-vault view "$f" --vault-password-file "$pw" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
+        [[ -s "$tmp" ]] || { echo "Error: vault decrypted file is empty" >&2; exit 1; }
         ENV_DECRYPTED_TMP="$tmp"
         printf '%s' "$tmp"
     else
