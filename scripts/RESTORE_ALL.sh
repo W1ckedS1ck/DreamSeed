@@ -87,40 +87,39 @@ show_menu() {
 select_backup() {
     local dir="$1"
     local pattern="$2"
-    local result_var="$3"
 
     local files=()
     while IFS= read -r f; do files+=("$f"); done < <(find "$dir" -maxdepth 1 -name "$pattern" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
 
     if [ ${#files[@]} -eq 0 ]; then
-        echo -e "${RED}No backups found in $dir${NC}"
+        echo -e "${RED}No backups found in $dir${NC}" >&2
         return 1
     fi
 
-    echo -e "${YELLOW}Available backups:${NC}"
-    echo ""
+    echo -e "${YELLOW}Available backups:${NC}" >&2
+    echo "" >&2
     for i in "${!files[@]}"; do
         SIZE=$(du -h "${files[$i]}" | cut -f1)
-        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "${files[$i]}")  ${CYAN}[$SIZE]${NC}"
+        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "${files[$i]}")  ${CYAN}[$SIZE]${NC}" >&2
     done
-    echo ""
+    echo "" >&2
 
     local choice
-    read -r -p "Select number (Enter = skip): " choice
-    echo ""
+    read -r -p "Select number (Enter = skip): " choice >&2
+    echo "" >&2
 
     if [ -z "$choice" ]; then
-        echo -e "${YELLOW}Skipped.${NC}"
+        echo -e "${YELLOW}Skipped.${NC}" >&2
         return 0
     fi
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
         local selected="${files[$((choice-1))]}"
-        echo -e "${GREEN}Selected:${NC} $(basename "$selected")"
-        eval "$result_var=\$selected"
+        echo -e "${GREEN}Selected:${NC} $(basename "$selected")" >&2
+        echo "$selected"
         return 0
     else
-        echo -e "${RED}Invalid selection!${NC}"
+        echo -e "${RED}Invalid selection!${NC}" >&2
         return 1
     fi
 }
@@ -128,18 +127,17 @@ select_backup() {
 select_backup_cloud() {
     local remote_path="$1"
     local pattern="$2"
-    local result_var="$3"
 
     local files=()
     while IFS= read -r f; do files+=("$f"); done < <(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/" --files-only --format tps 2>/dev/null | grep "$pattern" | sort -t';' -k1 -r || true)
 
     if [ ${#files[@]} -eq 0 ]; then
-        echo -e "${RED}No backups found on GDrive ($remote_path)${NC}"
+        echo -e "${RED}No backups found on GDrive ($remote_path)${NC}" >&2
         return 1
     fi
 
-    echo -e "${YELLOW}Available backups (GDrive):${NC}"
-    echo ""
+    echo -e "${YELLOW}Available backups (GDrive):${NC}" >&2
+    echo "" >&2
     for i in "${!files[@]}"; do
         local line="${files[$i]}"
         local name="${line#*;}"
@@ -151,16 +149,16 @@ select_backup_cloud() {
         else
             size_str="$((size / 1024))KB"
         fi
-        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "$name")  ${CYAN}[$size_str]${NC}"
+        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "$name")  ${CYAN}[$size_str]${NC}" >&2
     done
-    echo ""
+    echo "" >&2
 
     local choice
-    read -r -p "Select number (Enter = skip): " choice
-    echo ""
+    read -r -p "Select number (Enter = skip): " choice >&2
+    echo "" >&2
 
     if [ -z "$choice" ]; then
-        echo -e "${YELLOW}Skipped.${NC}"
+        echo -e "${YELLOW}Skipped.${NC}" >&2
         return 0
     fi
 
@@ -168,21 +166,21 @@ select_backup_cloud() {
         local line="${files[$((choice-1))]}"
         local selected_name="${line#*;}"
         selected_name="${selected_name%;*}"
-        echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")"
-        echo -e "${YELLOW}Downloading...${NC}"
+        echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")" >&2
+        echo -e "${YELLOW}Downloading...${NC}" >&2
         local temp_dir; temp_dir=$(mktemp -d /tmp/restore_XXXXXX)
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
         local temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
-            echo -e "${GREEN}✓ Downloaded to $temp_file${NC}"
-            eval "$result_var=\$temp_file"
+            echo -e "${GREEN}✓ Downloaded to $temp_file${NC}" >&2
+            echo "$temp_file"
             return 0
         else
-            echo -e "${RED}✗ Download failed!${NC}"
+            echo -e "${RED}✗ Download failed!${NC}" >&2
             return 1
         fi
     else
-        echo -e "${RED}Invalid selection!${NC}"
+        echo -e "${RED}Invalid selection!${NC}" >&2
         return 1
     fi
 }
@@ -231,17 +229,17 @@ if [ "$MODE" != "--auto-latest" ]; then
     # ================================================
     if [ "$RESTORE_PROJECT" -eq 1 ]; then
         if [ "$SOURCE" = "cloud" ]; then
-            select_backup_cloud "project${ENV_SUFFIX}" "DreamSeed_" "SELECTED_PROJECT" || exit 1
+            SELECTED_PROJECT=$(select_backup_cloud "project${ENV_SUFFIX}" "DreamSeed_") || exit 1
         else
-            select_backup "$BACKUP_DIR/project" "*.tar.gz" "SELECTED_PROJECT" || exit 1
+            SELECTED_PROJECT=$(select_backup "$BACKUP_DIR/project" "*.tar.gz") || exit 1
         fi
     fi
 
     if [ "$RESTORE_DB" -eq 1 ]; then
         if [ "$SOURCE" = "cloud" ]; then
-            select_backup_cloud "db${ENV_SUFFIX}" "db_" "SELECTED_DB" || exit 1
+            SELECTED_DB=$(select_backup_cloud "db${ENV_SUFFIX}" "db_") || exit 1
         else
-            select_backup "$BACKUP_DIR/db" "*.sql.gz" "SELECTED_DB" || exit 1
+            SELECTED_DB=$(select_backup "$BACKUP_DIR/db" "*.sql.gz") || exit 1
         fi
     fi
 
@@ -284,6 +282,9 @@ else
         echo "Local backups not found, trying Google Drive..."
         mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db"
 
+        # IMPORTANT: Auto-latest mode ALWAYS restores from PROD backups, regardless of environment.
+        # Dev servers MUST use prod data. This is intentional — do not add ENV_SUFFIX here.
+        # Interactive mode (above) uses ENV_SUFFIX to allow selecting env-specific backups.
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
             --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \

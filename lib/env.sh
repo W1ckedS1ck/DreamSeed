@@ -4,13 +4,17 @@
 
 validate_env_file() {
     local f="$1" n=0 required=("DB_PASS" "GRAFANA_PASS" "TG_TOKEN" "TG_CHAT_ID")
+    if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
+        echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
+        exit 1
+    fi
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((n++)) || true
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
         [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || { echo "Invalid env format at $f:$n: $line" >&2; exit 1; }
     done < "$f"
+    source "$f" 2>/dev/null || true
     for req in "${required[@]}"; do
-        source "$f" 2>/dev/null || true
         local val="${!req:-}"
         [[ -z "$val" ]] && { echo "Error: required var $req is empty or undefined in $f" >&2; exit 1; }
     done

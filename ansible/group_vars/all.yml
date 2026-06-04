@@ -25,6 +25,10 @@ php_version: "{{ ansible_facts.php_version | default('8.3') }}"  # auto-detected
 #  Backup
 # ========================
 backup_cron_enabled: true
+backup_project_keep: 5
+backup_db_keep: 15
+cloud_project_keep: 10
+cloud_db_keep: 20
 
 # ========================
 #  Cloudflare

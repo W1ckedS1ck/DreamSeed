@@ -10,11 +10,6 @@ load_env "$SCRIPT_DIR/.env"
 DOMAIN="${DOMAIN:-}"
 DB_NAME="${DB_NAME:-modx_db}"
 
-export_metric() {
-    local payload="$1"
-    echo "$payload" | curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
-}
-
 # Auto-detect web server
 if systemctl is-active nginx &>/dev/null; then
     WEB_SVC="nginx"

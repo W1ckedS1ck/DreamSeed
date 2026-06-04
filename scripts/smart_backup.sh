@@ -41,7 +41,6 @@ if ! flock -n 9; then
     echo "Backup already running (lock: $LOCK_FILE)" >&2
     exit 1
 fi
-trap 'exec 9>&-' EXIT
 
 # Cron heartbeat — always fires, even if backup fails
 echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
@@ -56,7 +55,7 @@ if ! flock -n 8; then
     echo "Marker check already in progress (lock: $MARKER_LOCK)" >&2
     exit 1
 fi
-trap 'exec 8>&-' EXIT
+trap 'exec 9>&-; exec 8>&-' EXIT
 
 if [[ -f "$MARKER_FILE" ]]; then
     CHANGED=$(sudo find "$PROJECT_DIR" -type f \

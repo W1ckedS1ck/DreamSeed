@@ -258,8 +258,6 @@ main() {
         SERVER_IP=$(_tf output -raw server_ipv4 2>&1 | tee -a "$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
 
-        ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
-
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
         _tf state pull > "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate" 2>/dev/null || true

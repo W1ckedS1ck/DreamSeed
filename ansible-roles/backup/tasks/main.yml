@@ -62,7 +62,6 @@
     - verify_backups.sh
     - RESTORE_ALL.sh
     - send_report.sh
-    - test_tg.sh
     - common_functions.sh
     - env_loader.py
     - check_services.sh

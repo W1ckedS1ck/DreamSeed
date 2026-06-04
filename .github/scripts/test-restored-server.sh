@@ -4,27 +4,27 @@
 set -euo pipefail
 
 SERVER_IP="${1:?Usage: $0 <SERVER_IP>}"
-ALL_OK=true
+DB_NAME="${DB_NAME:-modx_db}"
 
 {
 # ====== Checks start ======
 
 # Database
-ssh ubuntu@"$SERVER_IP" "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || { echo "[FAIL] MariaDB"; ALL_OK=false; }
-ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT 1'" && echo "[PASS] DB connect" || { echo "[FAIL] DB connect"; ALL_OK=false; }
-ROWS=$(ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content'" 2>/dev/null || echo 0)
+ssh ubuntu@"$SERVER_IP" "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || echo "[FAIL] MariaDB"
+ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT 1'" && echo "[PASS] DB connect" || echo "[FAIL] DB connect"
+ROWS=$(ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT COUNT(*) FROM modx_site_content'" 2>/dev/null || echo 0)
 echo "content_rows=$ROWS"
-[ "${ROWS:-0}" -gt 0 ] && echo "[PASS] Content rows: $ROWS" || { echo "[FAIL] No content rows"; ALL_OK=false; }
+[ "${ROWS:-0}" -gt 0 ] && echo "[PASS] Content rows: $ROWS" || echo "[FAIL] No content rows"
 
 # Web server
-ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx" && echo "[PASS] Nginx running" || { echo "[FAIL] Nginx"; ALL_OK=false; }
-ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || { echo "[FAIL] PHP-FPM"; ALL_OK=false; }
+ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx" && echo "[PASS] Nginx running" || echo "[FAIL] Nginx"
+ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm" && echo "[PASS] PHP-FPM running" || echo "[FAIL] PHP-FPM"
 ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/" | grep -q 200 \
-  && echo "[PASS] HTTPS 200" || { echo "[FAIL] HTTPS not 200"; ALL_OK=false; }
+  && echo "[PASS] HTTPS 200" || echo "[FAIL] HTTPS not 200"
 
 # MODX core
-ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || { echo "[FAIL] Config missing"; ALL_OK=false; }
-ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || { echo "[FAIL] Assets missing"; ALL_OK=false; }
+ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || echo "[FAIL] Config missing"
+ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || echo "[FAIL] Assets missing"
 
 # Keyword check
 KEYWORDS=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 10 https://localhost/ 2>/dev/null | grep -coi 'Lucky Bamboo\|bonsai\|sakura\|maple\|oak\|pine\|willow\|cypress\|Dreamers\|Wheel of Life'" 2>/dev/null || echo 0)
@@ -32,7 +32,8 @@ KEYWORDS=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 10 https://localhost/ 2>
 
 # Cart test (add product via miniShop2, then clean)
 CART_RESULT=$(ssh ubuntu@"$SERVER_IP" '
-    ID=$(mysql modx_db -N -e "SELECT id FROM modx_site_content WHERE class_key=\"msProduct\" AND published=1 AND deleted=0 LIMIT 1")
+    DB_NAME="'"$DB_NAME"'"
+    ID=$(mysql "$DB_NAME" -N -e "SELECT id FROM modx_site_content WHERE class_key=\"msProduct\" AND published=1 AND deleted=0 LIMIT 1")
     [ -z "$ID" ] && echo "NO_PRODUCT" && exit 0
     RESP=$(curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
         -d "ms2_action=cart/add&id=$ID&count=1&options=[]" \
@@ -48,7 +49,7 @@ CART_RESULT=$(ssh ubuntu@"$SERVER_IP" '
 case "$CART_RESULT" in
     OK) echo "[PASS] Cart add + clean OK" ;;
     NO_PRODUCT) echo "[WARN] No products in DB" ;;
-    *) echo "[FAIL] Cart: $CART_RESULT"; ALL_OK=false ;;
+    *) echo "[FAIL] Cart: $CART_RESULT" ;;
 esac
 
 # SMTP
@@ -72,16 +73,16 @@ SSH_HARDENING=$(ssh ubuntu@"$SERVER_IP" "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_
 [ "$SSH_HARDENING" = "OK" ] && echo "[PASS] SSH hardening" || echo "[WARN] SSH hardening: $SSH_HARDENING"
 
 # Database — table count
-TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"'" 2>/dev/null || echo 0)
+TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"$DB_NAME\"'" 2>/dev/null || echo 0)
 [ "${TBL_COUNT:-0}" -ge 50 ] && echo "[PASS] DB tables: $TBL_COUNT" || echo "[WARN] DB tables: ${TBL_COUNT:-0} (expected 50+)"
 
 # Monitoring — check_site timer (every minute)
 CS_TIMER=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active check-site.timer" 2>/dev/null || echo "inactive")
-[ "$CS_TIMER" = "active" ] && echo "[PASS] check_site.timer" || echo "[FAIL] check_site.timer: $CS_TIMER"; ALL_OK=false
+[ "$CS_TIMER" = "active" ] && echo "[PASS] check_site.timer" || echo "[FAIL] check_site.timer: $CS_TIMER"
 
 # Monitoring — check_services timer (every 5 min, updated database_tables & dreamseed_health_overall)
 CSRV_TIMER=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active check-services.timer" 2>/dev/null || echo "inactive")
-[ "$CSRV_TIMER" = "active" ] && echo "[PASS] check-services.timer" || echo "[FAIL] check-services.timer: $CSRV_TIMER"; ALL_OK=false
+[ "$CSRV_TIMER" = "active" ] && echo "[PASS] check-services.timer" || echo "[FAIL] check-services.timer: $CSRV_TIMER"
 
 # Monitoring — Grafana
 ssh ubuntu@"$SERVER_IP" "systemctl is-active grafana-server" 2>/dev/null \
@@ -97,7 +98,7 @@ ssh ubuntu@"$SERVER_IP" "systemctl is-active mysqld_exporter" 2>/dev/null \
 
 # Monitoring — vmagent remote write errors (0 = data reaching Grafana Cloud)
 VMA_ERRS=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8429/metrics 2>/dev/null | grep 'vmagent_remotewrite_errors_total' | grep -o '[0-9]*$'" 2>/dev/null || echo "NO_DATA")
-[ "$VMA_ERRS" = "0" ] && echo "[PASS] vmagent remote write: 0 errors" || echo "[FAIL] vmagent remote write errors: $VMA_ERRS"; ALL_OK=false
+[ "$VMA_ERRS" = "0" ] && echo "[PASS] vmagent remote write: 0 errors" || echo "[FAIL] vmagent remote write errors: $VMA_ERRS"
 
 # Monitoring — nginx_exporter (or apache_exporter for Apache)
 NE2=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx-prometheus-exporter 2>/dev/null || systemctl is-active apache_exporter 2>/dev/null || echo inactive")
@@ -109,7 +110,7 @@ CRON_OK=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null | grep -q smart_backup
 
 # Backup — cloud sync reachable (GDrive has backups for restore)
 GDRIVE_OK=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
-[ "$GDRIVE_OK" != "NO_BACKUPS" ] && echo "[PASS] GDrive backups: $(echo $GDRIVE_OK | tr -d '\n')" || echo "[FAIL] GDrive backups: not found — disaster recovery broken"; ALL_OK=false
+[ "$GDRIVE_OK" != "NO_BACKUPS" ] && echo "[PASS] GDrive backups: $(echo $GDRIVE_OK | tr -d '\n')" || echo "[FAIL] GDrive backups: not found — disaster recovery broken"
 
 # Backup — telegram-bot service
 ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" 2>/dev/null \
@@ -117,16 +118,14 @@ ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" 2>/dev/null \
 
 # Security — fail2ban custom jails (use sudo — ubuntu needs root)
 F2B_ADMIN=$(ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned' && echo OK || echo MISSING" 2>/dev/null || echo "MISSING")
-[ "$F2B_ADMIN" = "OK" ] && echo "[PASS] fail2ban modx-admin jail" || echo "[FAIL] fail2ban modx-admin: $F2B_ADMIN"; ALL_OK=false
+[ "$F2B_ADMIN" = "OK" ] && echo "[PASS] fail2ban modx-admin jail" || echo "[FAIL] fail2ban modx-admin: $F2B_ADMIN"
 F2B_GRAFANA=$(ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned' && echo OK || echo MISSING" 2>/dev/null || echo "MISSING")
-[ "$F2B_GRAFANA" = "OK" ] && echo "[PASS] fail2ban grafana jail" || echo "[FAIL] fail2ban grafana: $F2B_GRAFANA"; ALL_OK=false
+[ "$F2B_GRAFANA" = "OK" ] && echo "[PASS] fail2ban grafana jail" || echo "[FAIL] fail2ban grafana: $F2B_GRAFANA"
 
-# Monitoring — Grafana alert rules provisioned (18 rules expected)
-GRAFANA_ALERTS=$(ssh ubuntu@"$SERVER_IP" "curl -sf -u admin:\$(sudo cat /etc/grafana/.admin_password 2>/dev/null) http://localhost:3000/api/v1/provisioning/alert-rules 2>/dev/null | grep -c '\"uid\"' 2>/dev/null || echo 0")
-[ "${GRAFANA_ALERTS:-0}" -ge 15 ] && echo "[PASS] Grafana alert rules: $GRAFANA_ALERTS" || echo "[WARN] Grafana alert rules: $GRAFANA_ALERTS (expected 15+)"
+# Monitoring — Grafana admin password set (flag file created by grafana role)
+GRAFANA_FLAG=$(ssh ubuntu@"$SERVER_IP" "test -f /etc/grafana/.admin_password_set && echo OK || echo MISSING" 2>/dev/null || echo "MISSING")
+[ "$GRAFANA_FLAG" = "OK" ] && echo "[PASS] Grafana admin password set" || echo "[WARN] Grafana password: $GRAFANA_FLAG"
 
-# NOTE: Counters are tracked and summary printed at the end.
-# Exit code 1 is propagated by [ "$F" -eq 0 ] below.
 # ====== Checks end ======
 } 2>&1
 P=0 F=0 W=0

@@ -115,3 +115,8 @@ rotate_files() {
         done
     fi
 }
+
+export_metric() {
+    local payload="$1"
+    echo "$payload" | curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+}

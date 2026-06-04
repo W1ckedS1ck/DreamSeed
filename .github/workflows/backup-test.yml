@@ -232,7 +232,7 @@ jobs:
         id: service_tests
         run: |
           set -o pipefail
-          ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
+          DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
             | tee /dev/stderr | grep -E '^(content_rows|test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
 
       - name: DAST scan (nuclei)
