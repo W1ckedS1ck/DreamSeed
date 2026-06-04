@@ -18,7 +18,7 @@ terraform_init_if_needed() {
     local ws
     ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
     if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$ws" != "$TF_WORKSPACE" ]]; then
-        _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
+        TF_WORKSPACE="$TF_WORKSPACE" _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
     fi
 }
 
