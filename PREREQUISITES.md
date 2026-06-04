@@ -27,11 +27,11 @@ ansible-galaxy collection install ansible.mysql ansible.posix
 
 ## Cloud credentials (in secrets/.env)
 
-| Target | Provider | Required env vars |
-|--------|----------|-------------------|
-| `prod` | AWS | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
-| `dev-aws` | AWS | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION` |
-| `dev-hetz` | Hetzner | `HCLOUD_TOKEN` |
+| Target | Current backend | Required env vars |
+|--------|-----------------|-------------------|
+| `prod` | AWS EC2 | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
+| `dev1` (`dev-aws`) | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION` |
+| `dev2` (`dev-hetz`) | Hetzner Cloud | `HCLOUD_TOKEN` |
 
 All targets require:
 - `SSH_PRIVATE_KEY_PATH` — path to your SSH private key

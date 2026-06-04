@@ -109,10 +109,10 @@ Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). 
 # Production on AWS with Nginx (requires confirmation)
 ./deploy.sh prod -n
 
-# Development on Hetzner with Nginx
+# Dev environment 1 (Nginx)
 ./deploy.sh dev-hetz -n
 
-# Development on AWS with Apache
+# Dev environment 2 (Apache)
 ./deploy.sh dev-aws -a
 
 # Parallel mode (4-phase Ansible) — ~30% faster on sequential deploys
