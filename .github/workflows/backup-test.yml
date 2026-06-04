@@ -369,6 +369,7 @@ jobs:
           set +a
 
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
+          ok_destroy() { [ "$1" = "success" ] && echo "✅" || { [ "$1" = "skipped" ] && echo "⏭️"; }; }
           ok_dast() { [ -z "$1" ] && echo "❓" || { [ "$1" -eq 0 ] && echo "✅" || echo "❌"; }; }
           RESTORE="${{ steps.deploy_db.outcome }}"
           TESTS="${{ steps.service_tests.outcome }}"
@@ -391,7 +392,7 @@ jobs:
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
             "Restore $(ok $RESTORE) | $SUMMARY | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
-            "Destroy $(ok $DESTROY) | 🛡 Hardening ${LYNIS_SCORE:-?}/100${FAIL_DETAIL}")
+            "Destroy $(ok_destroy $DESTROY) | 🛡 Hardening ${LYNIS_SCORE:-?}/100${FAIL_DETAIL}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
