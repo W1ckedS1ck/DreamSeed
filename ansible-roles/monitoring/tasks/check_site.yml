@@ -57,6 +57,16 @@
 
 # --- check_services timer (every 5 min) — refreshes database_tables, service_status, dreamseed_health_overall ---
 
+- name: Ensure scripts directory exists
+  ansible.builtin.file:
+    path: "{{ scripts_dir_remote }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  become: true
+  when: monitoring_cron_enabled | bool
+
 - name: Upload check_services.sh (if not already present)
   ansible.builtin.copy:
     src: "{{ scripts_dir }}/check_services.sh"
