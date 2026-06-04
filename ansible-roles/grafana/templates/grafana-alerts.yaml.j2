@@ -91,22 +91,22 @@ groups:
 
 {{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
-          summary: ""
+          summary: MariaDB service is not running
 
 {{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
-          summary: ""
+          summary: PHP-FPM socket/process check failed
 
 {% if web_server == "apache" %}
 {{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
-          summary: ""
+          summary: Apache service is not running
 {% endif %}
 
 {% if web_server == "nginx" %}
 {{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '1m', 'Alerting', 'Error') }}
         annotations:
-          summary: ""
+          summary: Nginx service is not running
 {% endif %}
 
 {{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'Alerting', 'Error') }}
@@ -115,11 +115,11 @@ groups:
 
 {{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '2m', 'Alerting', 'Error') }}
         annotations:
-          summary: ""
+          summary: MODX core files (config.core.php / modx.class.php) missing
 
 {{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'OK', 'Alerting') }}
         annotations:
-          summary: ""
+          summary: VictoriaMetrics health check failed
 
 {{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '5m', 'Alerting', 'Error') }}
         annotations:
@@ -138,7 +138,7 @@ groups:
 
 {{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '2m', 'Alerting', 'Error') }}
         annotations:
-          summary: ""
+          summary: Admin panel (/manager/) not responding with MODX content
 
 {{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '2m', 'Alerting', 'Error') }}
         annotations:
