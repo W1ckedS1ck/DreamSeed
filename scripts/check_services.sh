@@ -105,8 +105,10 @@ fi
 # --- Exporters (retry 5 times × 2s — port may still be binding) ---
 _check_ep() {
     local p=$1 k=$2 n=$3
+    local raw
     for i in $(seq 1 5); do
-        if curl -sf --max-time 3 "http://127.0.0.1:$p/metrics" | grep -q "$k" 2>/dev/null; then
+        raw=$(curl -sf --max-time 3 "http://127.0.0.1:$p/metrics" 2>/dev/null) || { sleep 2; continue; }
+        if echo "$raw" | grep -q "$k" 2>/dev/null; then
             echo "  ✓ $n"; return 0
         fi
         sleep 2
