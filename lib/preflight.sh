@@ -12,33 +12,19 @@ check_prerequisites() {
     if [[ ${#missing[@]} -gt 0 ]]; then echo "Missing: ${missing[*]}"; exit 1; fi
 }
 
-trap_preflight() {
-    echo "TRAP_ERR at line $1: command exited non-zero" >&2
-}
 preflight_checks() {
-    trap 'trap_preflight $LINENO' ERR
-
-    echo "DBG: check_prerequisites" >&2
     check_prerequisites
 
-    echo "DBG: resolve_env_file" >&2
     local env_src; env_src=$(resolve_env_file "$ENV_FILE")
-    echo "DBG: env_src=$env_src" >&2
-
-    echo "DBG: validate_env_file" >&2
     validate_env_file "$env_src"
 
-    echo "DBG: restore_errexit" >&2
     local restore_errexit
     restore_errexit=$(set +o | grep -E 'set [-+]o errexit' || true)
-
-    echo "DBG: sourcing env" >&2
     set +e
     set -a; source "$env_src"; set +a
     [[ -n "$restore_errexit" ]] && eval "$restore_errexit"
 
-    echo "DBG: source done" >&2
-
+    # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
             env_src=$(resolve_env_file "$ENV_FILE")
@@ -51,7 +37,7 @@ preflight_checks() {
 
     apply_target_vars
 
-    echo "DBG: gc vars" >&2
+    # Load Grafana Cloud credentials (PROD_ for prod, DEV_ for all dev)
     local gc_pfx="DEV"
     [[ "$TARGET" == "prod" ]] && gc_pfx="PROD"
     local gc_url="${gc_pfx}_GRAFANA_CLOUD_URL"
@@ -62,21 +48,16 @@ preflight_checks() {
     GRAFANA_CLOUD_TOKEN="${!gc_token:-}"
     export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
 
-    echo "DBG: SSH_KEY check" >&2
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
-    echo "DBG: SSH_KEY1=[$SSH_KEY]" >&2
     SSH_KEY="${SSH_KEY/#\~/$HOME}"
-    echo "DBG: SSH_KEY2=[$SSH_KEY]" >&2
     if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
     if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
 
-    echo "DBG: DB_PASS check" >&2
     if [[ "$DESTROY_MODE" == "false" ]]; then
         if [[ -z "${DB_PASS:-}" ]]; then echo "Error: DB_PASS not set"; exit 1; fi
         if [[ -z "${GRAFANA_PASS:-}" ]]; then echo "Error: GRAFANA_PASS not set"; exit 1; fi
     fi
 
-    echo "DBG: HCLOUD_TOKEN check" >&2
     if [[ "$TF_PROVIDER" == "aws" ]]; then
         if [[ -z "${AWS_ACCESS_KEY:-}" || -z "${AWS_SECRET_KEY:-}" ]]; then echo "Error: AWS credentials required"; exit 1; fi
         : "${AWS_REGION:=us-west-1}"
@@ -89,6 +70,4 @@ preflight_checks() {
     if [[ "$SKIP_TERRAFORM" == "false" && ! -f "$TF_DIR/main.tf" ]]; then
         echo "Error: $TF_DIR/main.tf not found"; exit 1
     fi
-    echo "DBG: preflight_checks done" >&2
-    trap - ERR
 }

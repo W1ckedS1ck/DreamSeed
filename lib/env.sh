@@ -14,6 +14,7 @@ validate_env_file() {
         local val="${!req:-}"
         [[ -z "$val" ]] && { echo "Error: required var $req is empty or undefined in $f" >&2; exit 1; }
     done
+    return 0
 }
 
 resolve_env_file() {
