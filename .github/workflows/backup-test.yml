@@ -233,7 +233,7 @@ jobs:
         run: |
           set -o pipefail
           ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
-            | tee /dev/stderr | grep '^content_rows=' >> "$GITHUB_OUTPUT"
+            | tee /dev/stderr | grep -E '^(content_rows|test_summary)=' >> "$GITHUB_OUTPUT"
 
       - name: DAST scan (nuclei)
         id: dast
@@ -374,6 +374,7 @@ jobs:
           TESTS="${{ steps.service_tests.outcome }}"
           DESTROY="${{ steps.destroy.outcome }}"
           ROWS="${{ steps.service_tests.outputs.content_rows }}"
+          SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
           DAST_COUNT="${{ steps.dast.outputs.dast_count }}"
           LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
 
@@ -386,7 +387,7 @@ jobs:
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
-            "Restore $(ok $RESTORE) | Tests $(ok $TESTS) (${ROWS:-?} rows) | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
+            "Restore $(ok $RESTORE) | $SUMMARY | DAST $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
             "Destroy $(ok $DESTROY) | 🛡 Hardening ${LYNIS_SCORE:-?}/100")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
