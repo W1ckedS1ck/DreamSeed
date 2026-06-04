@@ -215,6 +215,9 @@ if [ "$MODE" != "--auto-latest" ]; then
     read -r -p "Your choice: " MENU_CHOICE
     echo ""
 
+    SELECTED_PROJECT=""
+    SELECTED_DB=""
+
     case "$MENU_CHOICE" in
         1) RESTORE_PROJECT=1; RESTORE_DB=0 ;;
         2) RESTORE_PROJECT=0; RESTORE_DB=1 ;;

@@ -35,9 +35,9 @@
 |--------|-------|
 | Deploy time | ~15-25 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
-| Backup frequency (RPO) | 1 hour → Google Drive, 15/5 versions retained |
-| Uptime coverage | 15 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
-| CI checks per push | 8 parallel jobs (lint → security → validate) |
+| Backup frequency (RPO) | 1 hour → Google Drive, 5/15 versions retained |
+| Uptime coverage | 18 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
+| CI checks per push | 7 parallel jobs (lint → security → validate) |
 | Cloud cost | Tracked via Infracost GitHub App on every PR |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
@@ -51,8 +51,8 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
-- **Observability** — VictoriaMetrics + Grafana stack with 15 alert rules (CPU, RAM, Disk, MySQL, Nginx, Apache, PHP-FPM, MODX Core, site availability, VictoriaMetrics, backup cron, site check cron, SSL expiry, admin login, cart write). Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
-- **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 15/5 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
+- **Observability** — VictoriaMetrics + Grafana stack with 18 alert rules (CPU, RAM, Disk, MySQL, PHP-FPM, Nginx/Apache, site down, MODX Core, VictoriaMetrics, backup cron, site check cron, SSL expiry, admin login, MiniShop2 write, overall health, site HTTP status, DB tables, backup verify). Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
 - **CI/CD** — 7 parallel GitHub Actions jobs: ShellCheck, ruff, ansible-lint, Terraform checks (lint+validate), Trivy, gitleaks, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
@@ -67,7 +67,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 15 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 18 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
 | **CI/CD** | GitHub Actions (6 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · Trivy · gitleaks · pre-commit · Renovate |
@@ -186,7 +186,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 - Full sysctl hardening (ICMP redirects, martian logging, core dumps disabled)
 
 ### 📊 Full Observability — Auto-Provisioned
-Grafana dashboards, datasources, **and 15 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
+Grafana dashboards, datasources, **and 18 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 **Internal (Grafana + VictoriaMetrics on-server):**
 
@@ -194,13 +194,13 @@ Grafana dashboards, datasources, **and 15 alert rules** deployed automatically �
 - **Nginx Prometheus Exporter** (`:9113`) / **Apache Exporter** (`:9117`) — web server health
 - **MySQLd Exporter** (`:9104`) — queries, connections, slave status
 - **VictoriaMetrics** (`:8428`) — 3-month retention, 15s scrape interval
-- **Grafana** (`:3000`) — 6 provisioned dashboards, 15 alert rules → Telegram
+- **Grafana** (`:3000`) — 6 provisioned dashboards, 18 alert rules → Telegram
 - **check_site.sh** (cron, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
 **Grafana Cloud (hosted metrics):**
 - **vmagent** (`:8429`) — VictoriaMetrics agent, scrapes on-server exporters and remote-writes to Grafana Cloud
 - **Grafana Cloud dashboards** — "Logs Overview" (6 panels) + "Traffic Analysis" (4 panels)
-- **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 9 global regions + SSL checks from 3 regions
+- **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 4 global regions + SSL checks from 3 regions
 
 **External (Better Stack cloud-hosted):**
 - **3 HTTP monitors** — `dreamseed.online` (HTTP 200 + keyword check + Grafana endpoint), 3min interval, 4 global regions
