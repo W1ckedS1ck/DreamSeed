@@ -158,18 +158,18 @@ jobs:
           sleep 15
 
           echo "Waiting for SSH on $SERVER_IP..."
-          for i in $(seq 1 10); do
-            if ssh -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>/dev/null; then
+          for i in $(seq 1 30); do
+            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>/dev/null; then
               echo "SSH is ready (attempt $i)"
               break
             fi
-            echo "Attempt $i/10 - waiting..."
-            [ "$i" -eq 10 ] && {
+            echo "Attempt $i/30 - waiting..."
+            [ "$i" -eq 30 ] && {
               echo "SSH never became available. Verbose output:"
-              ssh -v -o ConnectTimeout=10 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>&1 || true
+              ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>&1 || true
               exit 1
             }
-            sleep 5
+            sleep 3
           done
 
           echo "Waiting for cloud-init to finish..."
