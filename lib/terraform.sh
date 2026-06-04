@@ -5,6 +5,26 @@
 # Terraform shortcut — runs tf in the correct provider dir
 _tf() { ( cd "$TF_DIR" && "$TERRAFORM" "$@" ); }
 
+# Clean up stale CI SSH key from Hetzner Cloud before terraform apply
+# to avoid "SSH key not unique (uniqueness_error)"
+cleanup_stale_ssh_key() {
+    [[ "$TF_PROVIDER" != "hetzner" || -z "${HCLOUD_TOKEN:-}" || -n "${HETZNER_SSH_KEY_NAME:-}" ]] && return 0
+    local key_name="dreamseed-ci-${TF_WORKSPACE}"
+    echo "    Cleaning stale SSH key: ${key_name}"
+    local key_id
+    key_id=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+        "https://api.hetzner.cloud/v1/ssh_keys?name=${key_name}" 2>/dev/null \
+        | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['ssh_keys'][0]['id'] if d.get('ssh_keys') else '')" 2>/dev/null || true)
+    if [[ -n "$key_id" ]]; then
+        curl -sf -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys/${key_id}" >/dev/null 2>&1 && \
+            echo "    Deleted stale key ${key_name} (ID: ${key_id})" || \
+            echo "    Warning: could not delete key ${key_name}"
+    else
+        echo "    No stale key found"
+    fi
+}
+
 terraform_select_workspace() {
     local ws="$TF_WORKSPACE"
     (
