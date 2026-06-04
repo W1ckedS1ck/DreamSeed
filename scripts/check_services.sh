@@ -35,7 +35,7 @@ done
 fail=0
 
 # --- Services ---
-for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "victoria-metrics" "grafana-server" "telegram-bot"; do
+for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "mysqld_exporter" "victoria-metrics" "grafana-server" "telegram-bot"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"
@@ -115,7 +115,7 @@ _check_ep() {
 }
 
 _check_ep 9100 node_ node_exporter || fail=1
-_check_ep 9104 mysql_ mysql_exporter || true
+_check_ep 9104 mysql_ mysqld_exporter || true
 [[ "$WEB_SVC" == "nginx" ]] && _check_ep 9113 nginx_ nginx_exporter || true
 [[ "$WEB_SVC" == "apache2" ]] && _check_ep 9117 apache_ apache_exporter || true
 if systemctl is-active vmagent &>/dev/null; then
