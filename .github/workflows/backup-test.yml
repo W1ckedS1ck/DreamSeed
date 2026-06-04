@@ -61,16 +61,16 @@ jobs:
         run: |
           mkdir -p secrets ~/.ssh
 
-          cat > secrets/.env << ENVEOF
-          TG_TOKEN=$TG_TOKEN
-          TG_CHAT_ID=$TG_CHAT_ID
-          TG_THREAD_ID=$TG_THREAD_ID
-          DB_PASS=$DB_PASS
-          CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
-          CLOUDFLARE_ZONE_ID=$CF_ZONE_ID
-          HCLOUD_TOKEN=$HCLOUD_TOKEN
-          GRAFANA_PASS=$GRAFANA_PASS
-          ENVEOF
+          {
+            echo "TG_TOKEN=$TG_TOKEN"
+            echo "TG_CHAT_ID=$TG_CHAT_ID"
+            echo "TG_THREAD_ID=$TG_THREAD_ID"
+            echo "DB_PASS=$DB_PASS"
+            echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
+            echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
+            echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
+            echo "GRAFANA_PASS=$GRAFANA_PASS"
+          } > secrets/.env
           chmod 600 secrets/.env
 
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/Vitali.pem

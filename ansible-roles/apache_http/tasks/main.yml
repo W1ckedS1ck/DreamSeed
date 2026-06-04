@@ -57,7 +57,6 @@
   ansible.builtin.command: a2ensite 000-catch-all.conf
   register: apache_http_catch_all_result
   changed_when: "'enabled' in apache_http_catch_all_result.stdout"
-  failed_when: false
   notify: Reload Apache HTTP
 
 - name: Disable default Ubuntu site
@@ -80,7 +79,6 @@
   ansible.builtin.command: "a2ensite {{ domain }}.conf"
   register: apache_http_ensite_result
   changed_when: "'Enabling' in apache_http_ensite_result.stdout"
-  failed_when: false
 
 - name: Validate Apache config
   become: true

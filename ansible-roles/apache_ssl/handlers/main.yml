@@ -1,5 +1,5 @@
 ---
-- name: Reload Apache SSL
+- name: Reload Apache HTTP
   become: true
   ansible.builtin.systemd:
     name: apache2
