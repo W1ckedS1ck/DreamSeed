@@ -61,7 +61,10 @@ if [[ -n "$DOMAIN" ]]; then
 fi
 
 # --- SSL ---
-if certbot certificates 2>/dev/null | grep -q "VALID"; then
+if curl -sfk --max-time 5 "https://$DOMAIN/" > /dev/null 2>&1; then
+    echo "  ✓ SSL: Cloudflare (edge)"
+    export_metric "ssl_certificate_valid{provider=\"cloudflare\"} 1"
+elif certbot certificates 2>/dev/null | grep -q "VALID"; then
     echo "  ✓ SSL: letsencrypt"
     export_metric "ssl_certificate_valid{provider=\"letsencrypt\"} 1"
 elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; then

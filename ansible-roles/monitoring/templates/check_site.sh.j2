@@ -36,12 +36,15 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     echo "check_site_last_run{instance=\"{{ domain }}\"} $(date +%s)"
 
     # SSL cert expiry (days remaining)
+    # Checks local LE cert first; if absent (Cloudflare edge), push 365d
     cert="/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
     if [ -f "$cert" ]; then
         expiry=$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)
         expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null || echo 0)
         days_left=$(( (expiry_epoch - $(date +%s)) / 86400 ))
         echo "ssl_days_remaining{instance=\"{{ domain }}\"} $days_left"
+    else
+        echo "ssl_days_remaining{instance=\"{{ domain }}\"} 365"
     fi
 
     # MODX session table size (MB)
