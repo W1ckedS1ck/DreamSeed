@@ -8,11 +8,6 @@ locals {
   }
 }
 
-data "hcloud_ssh_key" "default" {
-  count = local.use_existing_key ? 1 : 0
-  name  = var.ssh_key_name
-}
-
 resource "hcloud_ssh_key" "ci_key" {
   count      = local.use_existing_key ? 0 : 1
   name       = "dreamseed-ci-${var.environment}"
