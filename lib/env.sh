@@ -58,7 +58,8 @@ export_tf_env() {
         [[ -n "${HETZNER_LOCATION:-}" ]] && export TF_VAR_location="$HETZNER_LOCATION"
         [[ -n "${HETZNER_SSH_KEY_NAME:-}" ]] && export TF_VAR_ssh_key_name="$HETZNER_SSH_KEY_NAME"
         [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && export TF_VAR_primary_ip_name="$HETZNER_PRIMARY_IP_NAME"
-        if [[ -z "${HETZNER_SSH_KEY_NAME:-}" && -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
+        # Always inject public key into cloud-init user_data so ubuntu user can SSH
+        if [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
             local pk; pk="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
             if [[ -r "$pk" ]]; then
                 local pk_content; pk_content="$(<"$pk")"
