@@ -9,17 +9,28 @@ _tf() { ( cd "$TF_DIR" && "$TERRAFORM" "$@" ); }
 # to avoid "SSH key not unique (uniqueness_error)"
 cleanup_stale_ssh_key() {
     [[ "$TF_PROVIDER" != "hetzner" || -z "${HCLOUD_TOKEN:-}" || -n "${HETZNER_SSH_KEY_NAME:-}" ]] && return 0
-    local key_name="dreamseed-ci-${TF_WORKSPACE}"
-    echo "    Cleaning stale SSH key: ${key_name}"
-    local key_id
-    key_id=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
-        "https://api.hetzner.cloud/v1/ssh_keys?name=${key_name}" 2>/dev/null \
-        | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['ssh_keys'][0]['id'] if d.get('ssh_keys') else '')" 2>/dev/null || true)
-    if [[ -n "$key_id" ]]; then
-        curl -sf -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" \
-            "https://api.hetzner.cloud/v1/ssh_keys/${key_id}" >/dev/null 2>&1 && \
-            echo "    Deleted stale key ${key_name} (ID: ${key_id})" || \
-            echo "    Warning: could not delete key ${key_name}"
+    local pub_key
+    pub_key="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
+    [[ ! -r "$pub_key" ]] && return 0
+    local fingerprint
+    fingerprint=$(ssh-keygen -lf "$pub_key" 2>/dev/null | awk '{print $2}') || return 0
+    echo "    Checking for stale SSH key with fingerprint: ${fingerprint}"
+    local ids
+    ids=$(curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+        "https://api.hetzner.cloud/v1/ssh_keys" 2>/dev/null \
+        | python3 -c "
+import json,sys
+fp=sys.argv[1]
+d=json.load(sys.stdin)
+matches=[str(k['id']) for k in d.get('ssh_keys',[]) if k.get('fingerprint')==fp]
+print(' '.join(matches))" "$fingerprint" 2>/dev/null || true)
+    if [[ -n "$ids" ]]; then
+        for id in $ids; do
+            curl -sf -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" \
+                "https://api.hetzner.cloud/v1/ssh_keys/${id}" >/dev/null 2>&1 && \
+                echo "    Deleted stale key ID: ${id}" || \
+                echo "    Warning: could not delete key ID: ${id}"
+        done
     else
         echo "    No stale key found"
     fi
