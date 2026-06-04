@@ -124,9 +124,10 @@ jobs:
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
+          # TF_VAR_* env vars are NOT forwarded to TFC remote execution.
+          # We pass ssh_key_name via -var flag in terraform apply instead.
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=deploy-run" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
@@ -148,7 +149,8 @@ jobs:
           TF_VAR_environment: test
         run: |
           terraform apply -auto-approve -no-color \
-            -var="environment=test"
+            -var="environment=test" \
+            -var="ssh_key_name=deploy-run"
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
 
       - name: Capture server SSH host key
