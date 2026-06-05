@@ -97,7 +97,6 @@ jobs:
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible

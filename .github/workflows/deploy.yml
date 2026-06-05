@@ -122,8 +122,7 @@ jobs:
             echo "PROD_GRAFANA_CLOUD_USERNAME=$PROD_GRAFANA_CLOUD_USERNAME"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
 
-            # Use existing "Vitali" key and Primary IP in Hetzner Cloud
-            echo "HETZNER_SSH_KEY_NAME=Vitali"
+            # Use existing Primary IP in Hetzner Cloud; SSH key is auto-generated from CI pubkey
             echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
           } > secrets/.env
           chmod 600 secrets/.env
