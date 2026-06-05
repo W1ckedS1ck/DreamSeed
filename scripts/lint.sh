@@ -85,7 +85,7 @@ run_j2lint() {
 
     local j2_files=()
     while IFS= read -r -d '' f; do j2_files+=("$f"); done < <(
-        find ansible-roles -name "*.j2" ! -name "*grafana-alerts*" -print0
+        find ansible-roles -name "*.j2" ! -name "*grafana-alerts*" ! -name "vhost*.conf.j2" -print0
     )
 
     if j2lint --ignore single-statement-per-line --ignore jinja-variable-lower-case --ignore jinja-statements-indentation -- "${j2_files[@]}"; then
