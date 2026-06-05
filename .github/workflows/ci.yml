@@ -53,6 +53,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+          cache: pip
       - name: Lint Jinja2 templates
         run: |
           pip install j2lint==1.2.0 --quiet
@@ -71,6 +72,10 @@ jobs:
       - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
+      - uses: actions/cache@v5
+        with:
+          path: ~/.tflint.d/plugins
+          key: tflint-plugins-${{ runner.os }}-${{ hashFiles('.tflint.hcl') }}
       - name: Check terraform formatting
         run: |
           terraform fmt -check -recursive terraform/aws
@@ -138,6 +143,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+          cache: pip
       - uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
@@ -155,4 +161,4 @@ jobs:
           pip install pre-commit
           pre-commit run --all-files --show-diff-on-failure
       - name: Validate Renovate config
-        run: npx --yes --package renovate -- renovate-config-validator
+        run: npx --yes @renovatebot/config-validator
