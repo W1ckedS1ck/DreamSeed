@@ -158,7 +158,7 @@ groups:
           summary: >-
             {% raw %}Database {{ $labels.database }} has {{ $values.A }} tables (expected ≥50){% endraw %}
 
-{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 300, 1, 'lt', '75m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 300, 1, 'lt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
