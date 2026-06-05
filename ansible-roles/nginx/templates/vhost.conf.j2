@@ -1,7 +1,8 @@
 server {
     listen 80;
     listen [::]:80;
-    server_name {{ domain }}{% if domain_www | default(true) %} www.{{ domain }}{% endif %};
+    server_name {{ domain }}
+    {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
 
     root {{ web_root }};
     index index.php index.html index.htm;

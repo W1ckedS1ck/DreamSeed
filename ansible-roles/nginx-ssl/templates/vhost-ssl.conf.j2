@@ -1,7 +1,8 @@
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name {{ domain }}{% if domain_www | default(true) %} www.{{ domain }}{% endif %};
+    server_name {{ domain }}
+    {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
 
     root {{ web_root }};
     index index.php index.html index.htm;
