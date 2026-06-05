@@ -30,8 +30,8 @@ ansible-galaxy collection install ansible.mysql ansible.posix
 | Target | Current backend | Required env vars |
 |--------|-----------------|-------------------|
 | `prod` | AWS EC2 | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
-| `dev1` (`dev-aws`) | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION` |
-| `dev2` (`dev-hetz`) | Hetzner Cloud | `HCLOUD_TOKEN` |
+| `dev-aws` | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION`, `DEV_AWS_EIP` |
+| `dev-hetz` | Hetzner Cloud | `HCLOUD_TOKEN` |
 
 All targets require:
 - `SSH_PRIVATE_KEY_PATH` — path to your SSH private key
@@ -40,15 +40,21 @@ All targets require:
 - `GRAFANA_PASS` — Grafana admin password
 - `TG_TOKEN` — Telegram bot token
 - `TG_CHAT_ID` — Telegram chat ID for alerts
+- `TG_THREAD_ID` — Telegram topic/thread ID for alerts
+- `OWNER` — display name for Telegram reports
+- `TF_API_TOKEN` — Terraform Cloud API token
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 challenge)
+- `CLOUDFLARE_ZONE_ID` — Cloudflare zone ID
+- `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
 
 Hetzner dev additionally:
 - `HETZNER_SSH_KEY_NAME` — name of existing SSH key in Hetzner Cloud (e.g. `Vitali`)
 - `HETZNER_PRIMARY_IP_NAME` — name of existing Primary IP (optional, uses dynamic IP if empty)
 
 Grafana Cloud (per target):
-- `DEV_GRAFANA_CLOUD_URL` — Prometheus push endpoint
-- `DEV_GRAFANA_CLOUD_USERNAME` — instance ID
-- `DEV_GRAFANA_CLOUD_TOKEN` — vmagent token
+- `DEV_GRAFANA_CLOUD_URL` or `PROD_GRAFANA_CLOUD_URL` — Prometheus push endpoint
+- `DEV_GRAFANA_CLOUD_USERNAME` or `PROD_GRAFANA_CLOUD_USERNAME` — instance ID
+- `DEV_GRAFANA_CLOUD_TOKEN` or `PROD_GRAFANA_CLOUD_TOKEN` — vmagent token
 
 ## Site restore (secrets/rclone.conf)
 

@@ -146,9 +146,9 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                 │   Grafana    │           │  Grafana Cloud   │
                                 │  :3000       │           │  (hosted metrics)│
                                 │              │           │                  │
-                                │ 6 dashboards │           │ Logs Overview    │
-                                                                 │ 15 alert rules│          │ Traffic Analysis  │
-                                └──────┬───────┘           │ SM checks        │
+                                 │ 5 dashboards │           │ 4 community       │
+                                                                  │ 16 alert rules│          │ dashboards (gnet   │
+                                 └──────┬───────┘           │ IDs 1860/7362/   │
                                        │                    └──────────────────┘
                                        │ Telegram contact point
                                        ▼
@@ -170,28 +170,26 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 18 rules)
+### Alert Rules (Grafana — 16 rules)
 
-| Alert | Condition | Description |
-|-------|-----------|-------------|
-| High CPU | >85% 5m | CPU usage spike |
-| High RAM | >90% 5m | Memory pressure |
-| Low Disk Space | <10% free | Disk full risk |
-| MySQL Down | mysql_up == 0 | MariaDB not running |
-| Nginx/Apache Down | nginx_up / apache_up == 0 | Web server down |
-| PHP-FPM Down | php_fpm_up == 0 | FPM process/socket failed |
-| Site Down | site_up != 1 | HTTP not 200 |
-| MODX Core Missing | modx_core_ok == 0 | Core files missing |
-| VictoriaMetrics Down | victoria_up == 0 | VM health failed |
-| Backup Cron Stale | >70 min since last run | Backup not running |
-| Site Check Stale | >3 min since last run | check_site.sh dead |
-| SSL Cert Expiring | <7 days remaining | Cert about to expire |
-| Admin Login Failed | admin_login_ok == 0 | /manager/ inaccessible |
-| MiniShop2 Write Failed | db_write_ok == 0 | MySQL INSERT/delete probe |
-| Overall Health Failed | dreamseed_health_overall == 0 | Composite check |
-| Site HTTP Status Critical | site_http_status != 1 | Non-200 response |
-| Database Tables Low | <50 tables in modx_db | Restore or migration issue |
-| Backup Verification Failed | backup_verification_ok == 0 | GDrive backup check |
+| Alert | Severity | Condition | Interval / noData |
+|-------|----------|-----------|-------------------|
+| High CPU | warning | >85% 5m | 15s scrape, for: 5m |
+| High RAM | warning | >90% 5m | 15s scrape, for: 5m |
+| Low Disk Space | warning | <10% free | 15s scrape, for: 5m |
+| MySQL Down | critical | mysql_up == 0 | 15s scrape, for: 2m |
+| Nginx/Apache Down | critical | nginx_up == 0 | 15s scrape, for: 2m |
+| PHP-FPM Down | critical | php_fpm_up == 0 | 1m push, for: 2m |
+| Site Down | critical | site_up != 1 | 1m push, for: 2m |
+| MODX Core Missing | critical | modx_core_ok == 0 | 1m push, for: 5m |
+| VictoriaMetrics Down | critical | victoria_up == 0 | 15s scrape, for: 1m |
+| Backup Cron Stale | warning | >70 min since last run | 1h heartbeat, for: 10m |
+| Site Check Stale | warning | >3 min since last run | 1m heartbeat, for: 1m |
+| SSL Cert Expiring | info | <7 days remaining | 1m push, for: 1h |
+| Admin Login Failed | warning | admin_login_ok == 0 | 15m probe, for: 6m |
+| MiniShop2 Write Failed | warning | db_write_ok == 0 | 15m probe, for: 6m |
+| Database Tables Low | info | <50 tables in modx_db | 15m push, for: 6m |
+| Backup Verification Failed | warning | backup_verification_ok == 0 | 24h cron, for: 5m |
 
 ### External Monitoring (Better Stack — cloud)
 
@@ -237,8 +235,8 @@ Layer 5 — Secrets:
 ```
 Trigger            Workflow              Jobs
 ───────            ────────              ────
-Push / PR          CI                    ShellCheck, ruff, ansible-lint,
-                                          Terraform checks (tflint+validate),
+Push / PR          CI                    ShellCheck, ansible-lint, j2lint,
+                                           Terraform checks (tflint+validate+fmt),
                                           Trivy, gitleaks, pre-commit
                     ────────── 7 parallel ──────────
 
@@ -254,9 +252,8 @@ Schedule Mon 10:00 Backup Test           Provision Hetzner → Ansible deploy
                                           → DAST scan (nuclei)
                                           → Lynis audit
                                           → check_services (timers, fail2ban, exporters)
-                                          → Grafana alert rules check (≥15)
-                                          → Vagrant remote write errors == 0
-                                          → GDrive backup check
+                                           → Grafana alert rules check (≥16)
+                                           → GDrive backup check
                                           → Destroy → Telegram report (P/F/W summary)
 
 Bot events         Renovate              Dependency updates (auto PRs)
