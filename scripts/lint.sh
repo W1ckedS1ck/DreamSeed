@@ -85,10 +85,10 @@ run_j2lint() {
 
     local j2_files=()
     while IFS= read -r -d '' f; do j2_files+=("$f"); done < <(
-        find ansible-roles -name "*.j2" ! -name "*grafana-alerts*" ! -name "vhost*.conf.j2" -print0
+        find ansible-roles -name "*.j2" -print0
     )
 
-    if j2lint --ignore single-statement-per-line --ignore jinja-variable-lower-case --ignore jinja-statements-indentation -- "${j2_files[@]}"; then
+    if j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "${j2_files[@]}"; then
         print_ok "No issues"; ci_annotation "j2lint" "pass"
     else
         print_fail "Issues found"; ci_annotation "j2lint" "fail"

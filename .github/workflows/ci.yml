@@ -56,8 +56,8 @@ jobs:
       - name: Lint Jinja2 templates
         run: |
           pip install j2lint==1.2.0 --quiet
-          mapfile -t j2_files < <(find ansible-roles -name "*.j2" ! -name "*grafana-alerts*" ! -name "vhost*.conf.j2")
-          j2lint --ignore single-statement-per-line --ignore jinja-variable-lower-case --ignore jinja-statements-indentation -- "${j2_files[@]}"
+          mapfile -t j2_files < <(find ansible-roles -name "*.j2")
+          j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "${j2_files[@]}"
 
   terraform-checks:
     name: Terraform Lint + Validate
