@@ -125,7 +125,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Run actionlint
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@v1.7.12
 
   pre-commit:
     name: Pre-commit
@@ -153,4 +153,4 @@ jobs:
           pip install pre-commit
           pre-commit run --all-files --show-diff-on-failure
       - name: Validate Renovate config
-        run: npx --yes @renovatebot/config-validator renovate.json
+        run: npx --yes --package renovate -- renovate-config-validator
