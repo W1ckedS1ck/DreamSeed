@@ -123,12 +123,16 @@ run_terraform_validate() {
     for dir in terraform/aws terraform/hetzner terraform/grafana; do
         [[ ! -d "$dir" ]] && continue
         echo "    Validating $dir..."
-        local var_args=""
+        # Use TF_VAR_ env vars (works with both terraform and tofu validate)
         if [[ "$dir" == *"grafana" ]]; then
-            var_args='-var=grafana_cloud_url=http://x -var=grafana_cloud_token=x -var=sm_access_token=x -var=sm_enabled=false -var=domain=x -var=sm_url=x'
+            export TF_VAR_grafana_cloud_url="http://x"
+            export TF_VAR_grafana_cloud_token="x"
+            export TF_VAR_sm_access_token="x"
+            export TF_VAR_sm_enabled="false"
+            export TF_VAR_domain="x"
+            export TF_VAR_sm_url="x"
         fi
-        # shellcheck disable=SC2086
-        if "$tf" -chdir="$dir" init -backend=false 2>/dev/null && "$tf" -chdir="$dir" validate $var_args; then
+        if "$tf" -chdir="$dir" init -backend=false 2>/dev/null && "$tf" -chdir="$dir" validate; then
             print_ok "$dir — valid"
         else
             print_fail "$dir — validation failed"
