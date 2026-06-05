@@ -44,6 +44,7 @@
         for: {{ for_dur }}
 {% endmacro %}
 
+# Updated 2026-06-05 — severity grouping + tuned for/noDataState
 apiVersion: 1
 
 contactPoints:
@@ -55,7 +56,7 @@ contactPoints:
         settings:
           bottoken: "{{ grafana_telegram_token }}"
           chatid: "{{ grafana_telegram_chat_id }}"
-          message: "{% raw %}{{ if .Alerts.Firing }}{{ if eq (index .Alerts.Firing 0).Labels.severity \"critical\" }}🔴{{ else if eq (index .Alerts.Firing 0).Labels.severity \"warning\" }}🟡{{ else }}ℹ️{{ end }} {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity | upper }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity | upper }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
+          message: "{% raw %}{{ if .Alerts.Firing }}{{ if eq (index .Alerts.Firing 0).Labels.severity \"critical\" }}🔴{{ else if eq (index .Alerts.Firing 0).Labels.severity \"warning\" }}🟡{{ else }}ℹ️{{ end }} {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
         disableResolveMessage: false
 
 policies:
@@ -75,91 +76,89 @@ groups:
     interval: 1m
     rules:
 
-{% set critical = 'critical' %}
-
-{{ alert_body('high-cpu', 'High CPU', '100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)', 300, 85, 'gt', '5m', 'OK', 'Error', warning) }}
+{{ alert_body('high-cpu', 'High CPU', '100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)', 300, 85, 'gt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: CPU usage > 85% for 5 min
 
-{{ alert_body('high-ram', 'High RAM', '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)', 300, 90, 'gt', '5m', 'OK', 'Error', warning) }}
+{{ alert_body('high-ram', 'High RAM', '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)', 300, 90, 'gt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: RAM usage > 90%
 
-{{ alert_body('low-disk', 'Low Disk Space', '100 * node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"}', 300, 10, 'lt', '5m', 'OK', 'Error', warning) }}
+{{ alert_body('low-disk', 'Low Disk Space', '100 * node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",mountpoint="/"}', 300, 10, 'lt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Disk < 10% free (mountpoint: {{ $labels.mountpoint }}){% endraw %}
 
-{{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
+{{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: MariaDB service is not running
 
-{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
+{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: PHP-FPM socket/process check failed
 
 {% if web_server == "apache" %}
-{{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
+{{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: Apache service is not running
 {% endif %}
 
 {% if web_server == "nginx" %}
-{{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
+{{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: Nginx service is not running
 {% endif %}
 
-{{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
+{{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: Website is not responding (HTTP != 200)
 
-{{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '5m', 'OK', 'Error', critical) }}
+{{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '5m', 'OK', 'Error', 'critical') }}
         annotations:
           summary: MODX core files (config.core.php / modx.class.php) missing
 
-{{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'Alerting', 'Alerting', critical) }}
+{{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'Alerting', 'Alerting', 'critical') }}
         annotations:
           summary: VictoriaMetrics health check failed
 
-{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '10m', 'Alerting', 'Error', warning) }}
+{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Backup cron hasn't run for 1h on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
 
-{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '5m', 'OK', 'Error', warning) }}
+{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: Site health check hasn't run for >3 min
 
-{{ alert_body('ssl-expiry', 'SSL Cert Expiring Soon', 'ssl_days_remaining', 86400, 7, 'lt', '1h', 'Alerting', 'Alerting', info) }}
+{{ alert_body('ssl-expiry', 'SSL Cert Expiring Soon', 'ssl_days_remaining', 86400, 7, 'lt', '1h', 'Alerting', 'Alerting', 'info') }}
         annotations:
           summary: >-
             {% raw %}SSL cert expires in {{ $values.A }} days on {{ $labels.instance }}{% endraw %}
 
-{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '6m', 'OK', 'Error', warning) }}
+{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: Admin panel (/manager/) not responding with MODX content
 
-{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '6m', 'OK', 'Error', warning) }}
+{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             miniShop2 write probe failed — DB INSERT/delete check
 
-{{ alert_body('health-overall', 'Overall Health Check Failed', 'dreamseed_health_overall', 60, 1, 'lt', '6m', 'OK', 'Error', warning) }}
+{{ alert_body('health-overall', 'Overall Health Check Failed', 'dreamseed_health_overall', 60, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: DreamSeed health check detected failure — review service status dashboard
 
-{{ alert_body('site-http-down', 'Site HTTP Status Critical', 'site_http_status', 60, 1, 'lt', '6m', 'OK', 'Error', warning) }}
+{{ alert_body('site-http-down', 'Site HTTP Status Critical', 'site_http_status', 60, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Site not responding with 200/301 on {{ $labels.domain }} (HTTP {{ $labels.code }}){% endraw %}
 
-{{ alert_body('db-tables-low', 'Database Tables Below Threshold', 'database_tables', 300, 50, 'lt', '6m', 'OK', 'Error', info) }}
+{{ alert_body('db-tables-low', 'Database Tables Below Threshold', 'database_tables', 300, 50, 'lt', '6m', 'OK', 'Error', 'info') }}
         annotations:
           summary: >-
             {% raw %}Database {{ $labels.database }} has {{ $values.A }} tables (expected ≥50){% endraw %}
 
-{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 300, 1, 'lt', '75m', 'Alerting', 'Error', warning) }}
+{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 300, 1, 'lt', '75m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
