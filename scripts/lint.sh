@@ -55,10 +55,7 @@ run_shellcheck() {
 
     local sh_files=()
     while IFS= read -r -d '' f; do sh_files+=("$f"); done < <(
-        find . -maxdepth 1 -name "*.sh" -print0
-        find lib -maxdepth 1 -name "*.sh" -print0
-        find scripts -maxdepth 1 -name "*.sh" -print0
-        find .github/scripts -maxdepth 1 -name "*.sh" -print0 2>/dev/null || true
+        find . -name "*.sh" -not -path "./.git/*" -not -path "./secrets/*" -print0
     )
 
     if shellcheck --severity=error "${sh_files[@]}"; then
