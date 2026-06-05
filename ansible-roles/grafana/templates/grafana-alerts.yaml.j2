@@ -55,14 +55,14 @@ contactPoints:
         settings:
           bottoken: "{{ grafana_telegram_token }}"
           chatid: "{{ grafana_telegram_chat_id }}"
-          message: "{% raw %}{{ if .Alerts.Firing }}🔴 *[{{ .GroupLabels.severity | upper }}] {{ len .Alerts.Firing }} alert(s)*\n🌐 {{ .GroupLabels.env }}{{ range .Alerts.Firing }}\n• {{ .Labels.alertname }}{{ if .Annotations.summary }} — {{ .Annotations.summary }}{{ end }}{{ end }}{{ end }}{{ if and .Alerts.Resolved (not .Alerts.Firing) }}✅ *[{{ .GroupLabels.severity | upper }}] All resolved*\n🌐 {{ .GroupLabels.env }}{{ end }}{% endraw %}"
+          message: "{% raw %}{{ if .Alerts.Firing }}{{ if eq (index .Alerts.Firing 0).Labels.severity \"critical\" }}🔴{{ else if eq (index .Alerts.Firing 0).Labels.severity \"warning\" }}🟡{{ else }}ℹ️{{ end }} {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity | upper }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity | upper }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
         disableResolveMessage: false
 
 policies:
   - orgId: 1
     receiver: Telegram
     group_by:
-      - severity
+      - alertname
       - env
     group_wait: 30s
     group_interval: 1m
