@@ -136,8 +136,7 @@
     {
       "description": "Pin GitHub Actions to commit SHAs for security",
       "matchManagers": ["github-actions"],
-      "pinDigests": true,
-      "addDigestComments": true
+      "pinDigests": true
     },
     {
       "description": "Group VictoriaMetrics server and vmagent — always released together",
