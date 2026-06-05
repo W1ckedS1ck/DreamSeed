@@ -99,8 +99,14 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
             else
                 echo "db_write_ok{instance=\"{{ domain }}\"} 0"
             fi
-        else
-            echo "db_write_ok{instance=\"{{ domain }}\"} -1"
         fi
+        # db_write_ok is not pushed when ms2 schema absent — noDataState: OK on alert side
+
+        # DB table count (schema integrity check, runs every 15 min)
+        # Skip push on mysql error so noDataState: OK prevents false alert when DB is down
+        _db_tables=$(mysql --socket=/run/mysqld/mysqld.sock -Nse "
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema='{{ db_name | replace("'", "''") }}';" 2>/dev/null)
+        [ -n "$_db_tables" ] && echo "database_tables{instance=\"{{ domain }}\",database=\"{{ db_name }}\"} $_db_tables"
     fi
 } | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1

@@ -68,6 +68,11 @@ policies:
     group_wait: 30s
     group_interval: 1m
     repeat_interval: 4h
+    routes:
+      - matchers:
+          - severity = critical
+        receiver: Telegram
+        repeat_interval: 1h
 
 groups:
   - orgId: 1
@@ -124,41 +129,32 @@ groups:
 {{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
-            {% raw %}Backup cron hasn't run for 1h on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
+            {% raw %}Backup cron hasn't run for 70 min on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
 
-{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '5m', 'OK', 'Error', 'warning') }}
+{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '1m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: Site health check hasn't run for >3 min
 
 {{ alert_body('ssl-expiry', 'SSL Cert Expiring Soon', 'ssl_days_remaining', 86400, 7, 'lt', '1h', 'Alerting', 'Alerting', 'info') }}
         annotations:
           summary: >-
-            {% raw %}SSL cert expires in {{ $values.A }} days on {{ $labels.instance }}{% endraw %}
+            {% raw %}SSL cert expires in {{ $values.A.Value }} days on {{ $labels.instance }}{% endraw %}
 
-{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
+{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 900, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: Admin panel (/manager/) not responding with MODX content
 
-{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
+{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 900, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             miniShop2 write probe failed — DB INSERT/delete check
 
-{{ alert_body('health-overall', 'Overall Health Check Failed', 'dreamseed_health_overall', 60, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
-        annotations:
-          summary: DreamSeed health check detected failure — review service status dashboard
-
-{{ alert_body('site-http-down', 'Site HTTP Status Critical', 'site_http_status', 60, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
+{{ alert_body('db-tables-low', 'Database Tables Below Threshold', 'database_tables', 900, 50, 'lt', '6m', 'OK', 'Error', 'info') }}
         annotations:
           summary: >-
-            {% raw %}Site not responding with 200/301 on {{ $labels.domain }} (HTTP {{ $labels.code }}){% endraw %}
+            {% raw %}Database {{ $labels.database }} has {{ $values.A.Value }} tables (expected ≥50){% endraw %}
 
-{{ alert_body('db-tables-low', 'Database Tables Below Threshold', 'database_tables', 300, 50, 'lt', '6m', 'OK', 'Error', 'info') }}
-        annotations:
-          summary: >-
-            {% raw %}Database {{ $labels.database }} has {{ $values.A }} tables (expected ≥50){% endraw %}
-
-{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 300, 1, 'lt', '5m', 'OK', 'Error', 'warning') }}
+{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 86400, 1, 'lt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
