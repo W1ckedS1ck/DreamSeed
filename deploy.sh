@@ -278,15 +278,20 @@ main() {
         SSH_ATTEMPTS=90; SSH_INTERVAL=2
     fi
     step_start "Wait for SSH ($SERVER_IP)"
-    for ((i=1; i<=SSH_ATTEMPTS; i++)); do
-        if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-            -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
-            break
+    local ssh_err="" attempt=0
+    for ((attempt=1; attempt<=SSH_ATTEMPTS; attempt++)); do
+        ssh_err=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+            -o BatchMode=yes -o PasswordAuthentication=no \
+            -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>&1) && break
+        if [[ $((attempt % 10)) -eq 1 ]]; then
+            local err_line
+            err_line=$(echo "$ssh_err" | grep -iE '(Permission denied|Connection refused|Connection timed out|Could not resolve|Host key verification)' | head -1)
+            [[ -n "$err_line" ]] && echo -e "\n  ⚠ $err_line"
         fi
-        [[ $i -eq $SSH_ATTEMPTS ]] && step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s"
         printf "."; sleep "$SSH_INTERVAL"
     done
     echo ""
+    [[ $attempt -gt $SSH_ATTEMPTS ]] && step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s — $(echo "$ssh_err" | head -1)"
     step_ok
 
     # ----- Wait for cloud-init -----
