@@ -55,6 +55,7 @@ export_tf_env() {
         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
         export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
         export AWS_DEFAULT_REGION="$AWS_REGION"
+        [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
         [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
     }
     [[ "$TF_PROVIDER" == "hetzner" ]] && {

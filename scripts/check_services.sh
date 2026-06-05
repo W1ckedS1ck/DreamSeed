@@ -115,9 +115,13 @@ _check_ep() {
 }
 
 _check_ep 9100 node_ node_exporter || fail=1
-_check_ep 9104 mysql_ mysqld_exporter || true
-[[ "$WEB_SVC" == "nginx" ]] && _check_ep 9113 nginx_ nginx_exporter || true
-[[ "$WEB_SVC" == "apache2" ]] && _check_ep 9117 apache_ apache_exporter || true
+_check_ep 9104 mysql_ mysqld_exporter || fail=1
+if [[ "$WEB_SVC" == "nginx" ]]; then
+    _check_ep 9113 nginx_ nginx_exporter || fail=1
+fi
+if [[ "$WEB_SVC" == "apache2" ]]; then
+    _check_ep 9117 apache_ apache_exporter || fail=1
+fi
 if systemctl is-active vmagent &>/dev/null; then
     _check_ep 8429 vmagent_ vmagent || echo "  ⚠ vmagent running but no metrics"
 fi

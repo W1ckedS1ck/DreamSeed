@@ -56,6 +56,7 @@ run_shellcheck() {
     local sh_files=()
     while IFS= read -r -d '' f; do sh_files+=("$f"); done < <(
         find . -maxdepth 1 -name "*.sh" -print0
+        find lib -maxdepth 1 -name "*.sh" -print0
         find scripts -maxdepth 1 -name "*.sh" -print0
         find .github/scripts -maxdepth 1 -name "*.sh" -print0 2>/dev/null || true
     )
@@ -96,11 +97,12 @@ run_tflint() {
     group_start "TFLint"
     if ! tool_available tflint; then print_skip "tflint not installed"; group_end; return 0; fi
 
+    local tf_config="$SCRIPT_DIR/.tflint.hcl"
     for dir in aws hetzner grafana; do
         local tf_dir="terraform/$dir"
         [[ ! -d "$tf_dir" ]] && continue
         echo "    Checking $dir..."
-        if tflint --chdir="$tf_dir" --init && tflint --chdir="$tf_dir"; then
+        if tflint --chdir="$tf_dir" --config="$tf_config" --init && tflint --chdir="$tf_dir" --config="$tf_config"; then
             print_ok "$dir — clean"
         else
             print_fail "$dir — issues found"
@@ -194,18 +196,27 @@ run_secrets_audit() {
         print_ok "No .env files tracked"
     fi
 
-    if git ls-files 2>/dev/null | grep -qP '\.(pem|key|rsa)$'; then
+    if git ls-files 2>/dev/null | grep -qE '\.(pem|key|rsa)$'; then
         print_fail "Private key files tracked in git"
         ((issues++))
     else
         print_ok "No private keys tracked"
     fi
 
-    # Hardcoded secrets in tracked code
-    local patterns=("password=\"" "token=\"" "TG_TOKEN=" "AWS_SECRET" "api_key=" "private_key" "Authorization: Bearer")
+    # Hardcoded secrets in tracked code (line-level filtering to avoid false positives)
+    local patterns=("password=\"" "token=\"" "TG_TOKEN=" "AWS_SECRET_KEY=" "AWS_SECRET_ACCESS_KEY=" "api_key=" "private_key" "Authorization: Bearer")
     local found=0
     for pat in "${patterns[@]}"; do
-        if git grep -l "$pat" HEAD 2>/dev/null | grep -v "^secrets/" | grep -v "{{ " > /dev/null; then
+        if git grep -n "$pat" HEAD 2>/dev/null | \
+            grep -v "^HEAD:secrets/" | \
+            grep -v "\.example:" | \
+            grep -v "^HEAD:\.github/" | \
+            grep -v "^HEAD:audit-secrets.sh:" | \
+            grep -v "^HEAD:scripts/lint.sh:" | \
+            grep -v "\.md:" | \
+            grep -v "{{ " | \
+            grep -v '\$' | \
+            grep -q "." 2>/dev/null; then
             ((found++))
         fi
     done

@@ -49,7 +49,7 @@ cleanup() {
     [[ -n "${VAULT_TMP:-}" && -f "${VAULT_TMP:-}" ]] && rm -f "$VAULT_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
-    [[ -n "${LOCK_FILE:-}" && -d "${LOCK_FILE:-}" ]] && rm -rf "$LOCK_FILE" 2>/dev/null || true
+    [[ -n "${LOCK_FILE:-}" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
 }
 
 json_escape() {

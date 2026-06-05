@@ -20,6 +20,7 @@ load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
     while IFS= read -r line; do
+        line="${line#export }"
         [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
         local key="${line%%=*}" value="${line#*=}"
         # Strip matching outer quotes (single or double)
