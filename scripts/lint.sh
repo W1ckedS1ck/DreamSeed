@@ -15,6 +15,7 @@ TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
     "ruff:ruff:pip install ruff"
     "ansible-lint:ansible-lint:pip install ansible-lint"
+    "j2lint:j2lint:pip install j2lint"
     "tflint:tflint:brew install tflint"
     "gitleaks:gitleaks:brew install gitleaks"
     "trivy:trivy:brew install trivy"
@@ -74,6 +75,23 @@ run_ruff() {
         print_ok "No issues"; ci_annotation "Ruff" "pass"
     else
         print_fail "Issues found"; ci_annotation "Ruff" "fail"
+    fi
+    group_end
+}
+
+run_j2lint() {
+    group_start "j2lint (Jinja2 Templates)"
+    if ! tool_available j2lint; then print_skip "j2lint not installed"; group_end; return 0; fi
+
+    local j2_files=()
+    while IFS= read -r -d '' f; do j2_files+=("$f"); done < <(
+        find ansible-roles -name "*.j2" -print0
+    )
+
+    if j2lint "${j2_files[@]}"; then
+        print_ok "No issues"; ci_annotation "j2lint" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "j2lint" "fail"
     fi
     group_end
 }
@@ -291,6 +309,7 @@ OPTIONS:
   --shellcheck        Run only shellcheck
   --ruff              Run only ruff
   --ansible-lint      Run only ansible-lint
+  --j2lint            Run only j2lint (Jinja2 templates)
   --tflint            Run only tflint
   --validate-terraform Run only terraform validate
   --gitleaks          Run only gitleaks (working tree)
@@ -312,6 +331,7 @@ run_fast() {
     run_shellcheck
     run_ruff
     run_ansible_lint
+    run_j2lint
 }
 
 run_full() {
@@ -335,6 +355,7 @@ while [[ $# -gt 0 ]]; do
         --shellcheck)        MODE="shellcheck"; shift ;;
         --ruff)              MODE="ruff"; shift ;;
         --ansible-lint)      MODE="ansible-lint"; shift ;;
+        --j2lint)            MODE="j2lint"; shift ;;
         --tflint)            MODE="tflint"; shift ;;
         --validate-terraform) MODE="terraform-validate"; shift ;;
         --gitleaks)          MODE="gitleaks"; shift ;;
@@ -353,6 +374,7 @@ case "$MODE" in
     shellcheck)          run_shellcheck ;;
     ruff)                run_ruff ;;
     ansible-lint)        run_ansible_lint ;;
+    j2lint)              run_j2lint ;;
     tflint)              run_tflint ;;
     terraform-validate)  run_terraform_validate ;;
     gitleaks)            run_gitleaks ;;

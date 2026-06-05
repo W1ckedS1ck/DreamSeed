@@ -44,6 +44,20 @@ jobs:
           pip install -r ansible/requirements.txt --quiet
           bash scripts/lint.sh --ci --ansible-lint
 
+  j2lint:
+    name: Jinja2 Templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Lint Jinja2 templates
+        run: |
+          pip install j2lint==1.2.0 --quiet
+          find ansible-roles -name "*.j2" -print0 | xargs -0 j2lint
+
   terraform-checks:
     name: Terraform Lint + Validate
     runs-on: ubuntu-latest
@@ -56,6 +70,10 @@ jobs:
       - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
+      - name: Check terraform formatting
+        run: |
+          terraform fmt -check -recursive terraform/aws
+          terraform fmt -check -recursive terraform/hetzner
       - name: Run tflint
         run: bash scripts/lint.sh --ci --tflint
       - name: Validate all providers

@@ -121,6 +121,15 @@
       "depNameTemplate": "terraform-linters/tflint",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track j2lint version in CI",
+      "fileMatch": ["^\\.github/workflows/ci\\.yml$"],
+      "matchStrings": ["pip install j2lint==(?<currentValue>[\\d.]+)"],
+      "depNameTemplate": "aristanetworks/j2lint",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
