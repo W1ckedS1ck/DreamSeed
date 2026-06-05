@@ -36,6 +36,15 @@
   become: true
   when: monitoring_cron_enabled | bool
 
+- name: Clear hourly marker to force fresh probes after deploy
+  ansible.builtin.file:
+    path: /tmp/.check_site_hour
+    state: absent
+  become: true
+  when: monitoring_cron_enabled | bool
+  changed_when: false
+  failed_when: false
+
 - name: Stop and disable check_site timer when disabled
   ansible.builtin.systemd:
     name: check-site.timer
