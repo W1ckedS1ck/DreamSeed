@@ -5,7 +5,8 @@ After=network.target
 
 [Service]
 User=vmagent
-WorkingDirectory=/etc/vmagent
+Group=vmagent
+WorkingDirectory=/var/lib/vmagent
 EnvironmentFile=/etc/vmagent/credentials.env
 ExecStart=/usr/local/bin/vmagent \
   -remoteWrite.url=${VM_CLOUD_URL} \
