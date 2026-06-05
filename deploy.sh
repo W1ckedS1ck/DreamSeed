@@ -391,6 +391,12 @@ INVEOF
 
         # Phase 4: Grafana (sequential — needs VictoriaMetrics up)
         step_start "Grafana"
+        echo "    Waiting for VictoriaMetrics health..."
+        for ((vm_retry=1; vm_retry<=15; vm_retry++)); do
+            if curl -sf --max-time 3 "http://${SERVER_IP}:8428/health" | grep -q "OK" 2>/dev/null; then break; fi
+            [[ $vm_retry -eq 15 ]] && echo "  ⚠ VictoriaMetrics not responding, continuing anyway"
+            sleep 2
+        done
         run_ansible "playbook-06-grafana.yml" "Grafana" || step_fail "Grafana failed"
         step_ok
     else

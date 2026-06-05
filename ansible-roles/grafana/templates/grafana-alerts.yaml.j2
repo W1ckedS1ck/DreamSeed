@@ -76,8 +76,6 @@ groups:
     rules:
 
 {% set critical = 'critical' %}
-{% set warning = 'warning' %}
-{% set info = 'info' %}
 
 {{ alert_body('high-cpu', 'High CPU', '100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)', 300, 85, 'gt', '5m', 'OK', 'Error', warning) }}
         annotations:
@@ -92,22 +90,22 @@ groups:
           summary: >-
             {% raw %}Disk < 10% free (mountpoint: {{ $labels.mountpoint }}){% endraw %}
 
-{{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '1m', 'Alerting', 'Error', critical) }}
+{{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
         annotations:
           summary: MariaDB service is not running
 
-{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '1m', 'Alerting', 'Error', critical) }}
+{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
         annotations:
           summary: PHP-FPM socket/process check failed
 
 {% if web_server == "apache" %}
-{{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '1m', 'Alerting', 'Error', critical) }}
+{{ alert_body('apache-down', 'Apache Down', 'apache_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
         annotations:
           summary: Apache service is not running
 {% endif %}
 
 {% if web_server == "nginx" %}
-{{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '1m', 'Alerting', 'Error', critical) }}
+{{ alert_body('nginx-down', 'Nginx Down', 'nginx_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
         annotations:
           summary: Nginx service is not running
 {% endif %}
@@ -116,20 +114,20 @@ groups:
         annotations:
           summary: Website is not responding (HTTP != 200)
 
-{{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '2m', 'Alerting', 'Error', critical) }}
+{{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '5m', 'OK', 'Error', critical) }}
         annotations:
           summary: MODX core files (config.core.php / modx.class.php) missing
 
-{{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'OK', 'Alerting', critical) }}
+{{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'Alerting', 'Alerting', critical) }}
         annotations:
           summary: VictoriaMetrics health check failed
 
-{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '5m', 'Alerting', 'Error', warning) }}
+{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '10m', 'Alerting', 'Error', warning) }}
         annotations:
           summary: >-
             {% raw %}Backup cron hasn't run for 1h on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
 
-{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '2m', 'Alerting', 'Error', warning) }}
+{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '5m', 'OK', 'Error', warning) }}
         annotations:
           summary: Site health check hasn't run for >3 min
 
@@ -138,30 +136,30 @@ groups:
           summary: >-
             {% raw %}SSL cert expires in {{ $values.A }} days on {{ $labels.instance }}{% endraw %}
 
-{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '2m', 'Alerting', 'Error', warning) }}
+{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 180, 1, 'lt', '6m', 'OK', 'Error', warning) }}
         annotations:
           summary: Admin panel (/manager/) not responding with MODX content
 
-{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '2m', 'Alerting', 'Error', warning) }}
+{{ alert_body('cart-add', 'MiniShop2 Write Failed', 'db_write_ok', 180, 1, 'lt', '6m', 'OK', 'Error', warning) }}
         annotations:
           summary: >-
             miniShop2 write probe failed — DB INSERT/delete check
 
-{{ alert_body('health-overall', 'Overall Health Check Failed', 'dreamseed_health_overall', 60, 1, 'lt', '1m', 'Alerting', 'Error', warning) }}
+{{ alert_body('health-overall', 'Overall Health Check Failed', 'dreamseed_health_overall', 60, 1, 'lt', '6m', 'OK', 'Error', warning) }}
         annotations:
           summary: DreamSeed health check detected failure — review service status dashboard
 
-{{ alert_body('site-http-down', 'Site HTTP Status Critical', 'site_http_status', 60, 1, 'lt', '1m', 'Alerting', 'Error', warning) }}
+{{ alert_body('site-http-down', 'Site HTTP Status Critical', 'site_http_status', 60, 1, 'lt', '6m', 'OK', 'Error', warning) }}
         annotations:
           summary: >-
             {% raw %}Site not responding with 200/301 on {{ $labels.domain }} (HTTP {{ $labels.code }}){% endraw %}
 
-{{ alert_body('db-tables-low', 'Database Tables Below Threshold', 'database_tables', 300, 50, 'lt', '2m', 'Alerting', 'Error', info) }}
+{{ alert_body('db-tables-low', 'Database Tables Below Threshold', 'database_tables', 300, 50, 'lt', '6m', 'OK', 'Error', info) }}
         annotations:
           summary: >-
             {% raw %}Database {{ $labels.database }} has {{ $values.A }} tables (expected ≥50){% endraw %}
 
-{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 300, 1, 'lt', '1h', 'Alerting', 'Error', warning) }}
+{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 300, 1, 'lt', '75m', 'Alerting', 'Error', warning) }}
         annotations:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
