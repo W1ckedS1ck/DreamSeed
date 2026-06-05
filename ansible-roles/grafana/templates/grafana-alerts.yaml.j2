@@ -56,7 +56,7 @@ contactPoints:
         settings:
           bottoken: "{{ grafana_telegram_token }}"
           chatid: "{{ grafana_telegram_chat_id }}"
-          message: "{% raw %}{{ if .Alerts.Firing }}{{ if eq (index .Alerts.Firing 0).Labels.severity \"critical\" }}🔴{{ else if eq (index .Alerts.Firing 0).Labels.severity \"warning\" }}🟡{{ else }}ℹ️{{ end }} {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
+          message: "{% raw %}{{ if .Alerts.Firing }}🔴 {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
         disableResolveMessage: false
 
 policies:
