@@ -118,6 +118,15 @@ jobs:
       - name: Secret Scan (full history)
         run: bash scripts/lint.sh --ci --gitleaks-full-history
 
+  actionlint:
+    name: GitHub Actions Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run actionlint
+        uses: rhysd/actionlint@v1
+
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
@@ -143,3 +152,5 @@ jobs:
         run: |
           pip install pre-commit
           pre-commit run --all-files --show-diff-on-failure
+      - name: Validate Renovate config
+        run: npx --yes @renovatebot/config-validator renovate.json

@@ -16,6 +16,7 @@ TOOLS=(
     "ruff:ruff:pip install ruff"
     "ansible-lint:ansible-lint:pip install ansible-lint"
     "j2lint:j2lint:pip install j2lint"
+    "actionlint:actionlint:brew install actionlint"
     "tflint:tflint:brew install tflint"
     "gitleaks:gitleaks:brew install gitleaks"
     "trivy:trivy:brew install trivy"
@@ -92,6 +93,30 @@ run_j2lint() {
         print_ok "No issues"; ci_annotation "j2lint" "pass"
     else
         print_fail "Issues found"; ci_annotation "j2lint" "fail"
+    fi
+    group_end
+}
+
+run_actionlint() {
+    group_start "actionlint (GitHub Actions)"
+    if ! tool_available actionlint; then print_skip "actionlint not installed"; group_end; return 0; fi
+
+    if actionlint; then
+        print_ok "No issues"; ci_annotation "actionlint" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "actionlint" "fail"
+    fi
+    group_end
+}
+
+run_renovate_validate() {
+    group_start "Renovate Config Validator"
+    if ! tool_available npx; then print_skip "npx not installed"; group_end; return 0; fi
+
+    if npx --yes @renovatebot/config-validator renovate.json 2>&1; then
+        print_ok "renovate.json valid"; ci_annotation "Renovate" "pass"
+    else
+        print_fail "renovate.json invalid"; ci_annotation "Renovate" "fail"
     fi
     group_end
 }
@@ -310,6 +335,8 @@ OPTIONS:
   --ruff              Run only ruff
   --ansible-lint      Run only ansible-lint
   --j2lint            Run only j2lint (Jinja2 templates)
+  --actionlint        Run only actionlint (GitHub Actions workflows)
+  --renovate          Run only renovate config validator
   --tflint            Run only tflint
   --validate-terraform Run only terraform validate
   --gitleaks          Run only gitleaks (working tree)
@@ -332,6 +359,8 @@ run_fast() {
     run_ruff
     run_ansible_lint
     run_j2lint
+    run_actionlint
+    run_renovate_validate
 }
 
 run_full() {
@@ -356,6 +385,8 @@ while [[ $# -gt 0 ]]; do
         --ruff)              MODE="ruff"; shift ;;
         --ansible-lint)      MODE="ansible-lint"; shift ;;
         --j2lint)            MODE="j2lint"; shift ;;
+        --actionlint)        MODE="actionlint"; shift ;;
+        --renovate)          MODE="renovate"; shift ;;
         --tflint)            MODE="tflint"; shift ;;
         --validate-terraform) MODE="terraform-validate"; shift ;;
         --gitleaks)          MODE="gitleaks"; shift ;;
@@ -375,6 +406,8 @@ case "$MODE" in
     ruff)                run_ruff ;;
     ansible-lint)        run_ansible_lint ;;
     j2lint)              run_j2lint ;;
+    actionlint)          run_actionlint ;;
+    renovate)            run_renovate_validate ;;
     tflint)              run_tflint ;;
     terraform-validate)  run_terraform_validate ;;
     gitleaks)            run_gitleaks ;;
