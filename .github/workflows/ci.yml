@@ -56,7 +56,7 @@ jobs:
       - name: Lint Jinja2 templates
         run: |
           pip install j2lint==1.2.0 --quiet
-          find ansible-roles -name "*.j2" -print0 | xargs -0 j2lint --ignore single-statement-per-line,jinja-variable-lower-case
+          find ansible-roles -name "*.j2" -print0 | xargs -0 j2lint --ignore single-statement-per-line --ignore jinja-variable-lower-case
 
   terraform-checks:
     name: Terraform Lint + Validate
