@@ -15,7 +15,6 @@
 ![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
-
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, under 10 minutes.
 
@@ -175,9 +174,11 @@ DreamSeed/
 ## ✨ Infrastructure Highlights
 
 ### 🎛️ Multi-Cloud, Single Command
+
 Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner** — each with its own Terraform module, unified Ansible layer. Zero playbook changes between clouds. The deployer doesn't care which cloud runs underneath.
 
 ### 🔐 Secure by Default
+
 - SSH: no passwords, no root, no agent forwarding, MaxAuthTries 3, LogLevel VERBOSE
 - Fail2ban with **custom MODX admin login filter** — bans brute-force on `/manager/`
 - Fail2ban with **custom Grafana login filter** — catches failed auth attempts
@@ -186,6 +187,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 - Full sysctl hardening (ICMP redirects, martian logging, core dumps disabled)
 
 ### 📊 Full Observability — Auto-Provisioned
+
 Grafana dashboards, datasources, **and 18 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 **Internal (Grafana + VictoriaMetrics on-server):**
@@ -198,17 +200,20 @@ Grafana dashboards, datasources, **and 18 alert rules** deployed automatically �
 - **check_site.sh** (cron, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
 **Grafana Cloud (hosted metrics):**
+
 - **vmagent** (`:8429`) — VictoriaMetrics agent, scrapes on-server exporters and remote-writes to Grafana Cloud
 - **Grafana Cloud dashboards** — 4 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Nginx 17452, VictoriaMetrics 10229)
 - **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 4 global regions + SSL checks from 3 regions
 
 **External (Better Stack cloud-hosted):**
+
 - **3 HTTP monitors** — `dreamseed.online` (HTTP 200 + keyword check + Grafana endpoint), 3min interval, 4 global regions
 - **4 cron heartbeats** — backup (1h/5m), gdrive-upload (24h/30m), report-daily (24h/30m), report-weekly (7d/1h)
 - **Public status page** — `status.dreamseed.online` with live uptime history
 - **Telegram alerts** via separate webhooks for incident start and resolve
 
 ### 💾 Real Backups, Tested Restores
+
 - **Local:** hourly project (hash-checked, skip if unchanged) + DB dump (always), rotated 5/15 versions
 - **Cloud:** hourly upload to Google Drive via rclone, rotated 10 project + 100 DB versions
 - **Restore:** `RESTORE_ALL.sh --auto-latest` — downloads latest backup from GDrive, extracts, restores DB, clears cache, restarts services. **Full CI verification every week** (`backup-test.yml`)
@@ -229,6 +234,7 @@ Grafana dashboards, datasources, **and 18 alert rules** deployed automatically �
 CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt) · **Trivy** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
 
 ### 🛑 Production Safeguards
+
 - **Deploy:** manual `[y/N]` confirmation before touching production
 - **Destroy:** three-step — two `[y/N]` prompts + typing `destroy prod`
 - **Rollback:** requires typing `rollback prod` in the workflow input
@@ -260,6 +266,8 @@ All environments are fully monitored, backed up, and behind Cloudflare proxy.
 
 ---
 
+<!-- markdownlint-disable MD033 -->
 <p align="center">
 Infrastructure engineered by <a href="https://github.com/W1ckedS1ck">Vitali Kuts</a> · DreamSeed — <em>A promise to follow your dream</em>
 </p>
+<!-- markdownlint-enable MD033 -->
