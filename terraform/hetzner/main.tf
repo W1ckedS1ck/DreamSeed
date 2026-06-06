@@ -75,9 +75,9 @@ if ! id ubuntu &>/dev/null; then
 fi
 mkdir -p /home/ubuntu/.ssh
 echo '${var.ssh_public_key}' >> /home/ubuntu/.ssh/authorized_keys
-%{ for key in var.additional_ssh_keys ~}
+%{for key in var.additional_ssh_keys~}
 echo '${key}' >> /home/ubuntu/.ssh/authorized_keys
-%{ endfor ~}
+%{endfor~}
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 apt-get update -qq
