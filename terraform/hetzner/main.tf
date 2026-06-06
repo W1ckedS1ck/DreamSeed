@@ -86,7 +86,7 @@ EOF
 
 check "workspace_valid_for_hetzner" {
   assert {
-    condition     = contains(["dev-hetz"], terraform.workspace)
-    error_message = "Hetzner provider can only be used with workspace dev-hetz (got: ${terraform.workspace})"
+    condition     = contains(["dev-hetz", "test"], terraform.workspace)
+    error_message = "Hetzner provider can only be used with workspace dev-hetz or test (got: ${terraform.workspace})"
   }
 }

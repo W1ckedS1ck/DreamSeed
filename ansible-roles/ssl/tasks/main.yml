@@ -31,39 +31,41 @@
   register: ssl_cert_file
 
 # --- Certbot DNS Challenge (CloudFlare) ---
-- name: Install CloudFlare DNS certbot plugin
-  become: true
-  ansible.builtin.apt:
-    name: python3-certbot-dns-cloudflare
-    state: present
-  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
+- block:
+    - name: Install CloudFlare DNS certbot plugin
+      become: true
+      ansible.builtin.apt:
+        name: python3-certbot-dns-cloudflare
+        state: present
+      when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
-- name: Deploy CloudFlare credentials file
-  become: true
-  no_log: true
-  ansible.builtin.copy:
-    dest: /etc/letsencrypt/cloudflare.ini
-    content: |
-      dns_cloudflare_api_token = {{ cloudflare_api_token }}
-    mode: "0600"
-  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
+    - name: Deploy CloudFlare credentials file
+      become: true
+      no_log: true
+      ansible.builtin.copy:
+        dest: /etc/letsencrypt/cloudflare.ini
+        content: |
+          dns_cloudflare_api_token = {{ cloudflare_api_token }}
+        mode: "0600"
+      when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
-- name: Obtain SSL certificate via DNS CloudFlare
-  become: true
-  ansible.builtin.command: >
-    certbot certonly
-    --dns-cloudflare
-    --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
-    {% if ssl_staging | default(false) %}--staging{% endif %}
-    -d {{ domain }}{% if domain_www | default(true) %}
-    -d www.{{ domain }}{% endif %}
-    --non-interactive
-    --agree-tos
-    -m {{ admin_email }}
-    --rsa-key-size 4096
-  when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
-  register: ssl_certbot_result
-  failed_when: false
+    - name: Obtain SSL certificate via DNS CloudFlare
+      become: true
+      ansible.builtin.command: >
+        certbot certonly
+        --dns-cloudflare
+        --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
+        {% if ssl_staging | default(false) %}--staging{% endif %}
+        -d {{ domain }}{% if domain_www | default(true) %}
+        -d www.{{ domain }}{% endif %}
+        --non-interactive
+        --agree-tos
+        -m {{ admin_email }}
+        --rsa-key-size 4096
+      when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
+      register: ssl_certbot_result
+      failed_when: false
+  when: cloudflare_enabled | default(true) | bool
 
 # --- Final cert status ---
 - name: Re-check certificate after certbot

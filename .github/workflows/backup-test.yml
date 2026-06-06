@@ -209,6 +209,7 @@ jobs:
           web_server: nginx
           domain: test.dreamseed.online
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
+          cloudflare_enabled: false
           EOF
           chmod 600 /tmp/test_vault.yml
 

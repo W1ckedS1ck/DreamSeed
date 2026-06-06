@@ -85,3 +85,8 @@ configs_dir: "{{ playbook_dir }}/../configs"
 # ========================
 dev_write_perms: false
 additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per line)
+
+# ========================
+#  SSL
+# ========================
+cloudflare_enabled: true  # false → skip certbot, use self-signed (for test servers)
