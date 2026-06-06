@@ -344,7 +344,7 @@ jobs:
           echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
           if [ "$RC" -ne 0 ]; then
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
-            ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null; echo '---'; ls -la /home/ubuntu/backups/project/ 2>/dev/null; echo '---'; ls -la /home/ubuntu/backups/db/ 2>/dev/null" 2>&1 || true
+            ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null; echo '===Remote files==='; find /home/ubuntu/backups/ -type f 2>/dev/null | head -10; echo '===Script exists==='; ls -la /home/ubuntu/Scripts/RESTORE_ALL.sh /home/ubuntu/Scripts/common_functions.sh 2>&1; echo '===ENV==='; grep 'ENV=\|BACKUP_DIR\|DB_NAME' /home/ubuntu/Scripts/.env 2>/dev/null" 2>&1 || true
           fi
 
       - name: Verify restored content
@@ -402,6 +402,11 @@ jobs:
           echo "restore_content_rows=$ROWS" >> "$GITHUB_OUTPUT"
           echo "restore_table_count=$TBL_COUNT" >> "$GITHUB_OUTPUT"
           echo "restore_http_code=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+
+          if [ "${ROWS:-0}" -eq 0 ] || [ "${TBL_COUNT:-0}" -lt 50 ]; then
+            echo "::error::Restore verification failed — no content restored"
+            exit 1
+          fi
 
       - name: Run full service tests
         id: service_tests
