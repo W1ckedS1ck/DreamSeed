@@ -83,7 +83,8 @@
     msg: "WARNING: swapon /swapfile failed — system has no swap. Under memory pressure OOM killer may kill PHP/DB. Fix: check filesystem or kernel params."
   when:
     - not swapfile_stat.stat.exists
-    - swap_enable_result is failed
+    - swap_enable_result.rc is defined
+    - swap_enable_result.rc != 0
 
 - name: Add swap to fstab
   become: true

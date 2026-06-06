@@ -13,7 +13,7 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      backup tfstate → ssh-keygen -R
        │
        ├─ 3. Wait for SSH
-       │      AWS: 40×10s | Hetzner: 20×1s polling
+        │      AWS: 40×10s | Hetzner: 90×2s polling
        │
        ├─ 4. Wait for cloud-init
        │      timeout 300s + 15×2s fallback
@@ -31,11 +31,12 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      07 Security ── SSH, fail2ban, sysctl, MODX perms
        │
         └─ 7. Post-deploy checks
-               systemctl is-active (6 services + Telegram bot)
+               systemctl is-active (7 services + mysqld_exporter)
                curl https://$DOMAIN/ → 200|301
-               SSL, MODX index.php, DB tables, VictoriaMetrics health
-               Exporters (node, mysql, nginx/apache), vmagent, fail2ban
-               Backup cron installed
+               SSL (Cloudflare/LE/self-signed), MODX index.php, DB tables
+               VictoriaMetrics health, node + mysql + nginx/apache exporters, vmagent
+               fail2ban (7 jails), cron backup, MySQL write probe
+               → Push to VM: database_tables, dreamseed_health_overall
 ```
 
 ---
@@ -134,6 +135,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 │  nginx/apache_exporter      │ scrape: 15s     │            └───────┬───────┘
 │  mysqld_exporter            └────────┬────────┘                    │
 │  check_site.sh (every 1m)           │                             │
+│  check_services.sh (every 5m)       │                             │
 │  smart_backup.sh (heartbeat)        │                             │
 
 └─────────────────────────────────────┘                             │
@@ -144,9 +146,9 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                 │   Grafana    │           │  Grafana Cloud   │
                                 │  :3000       │           │  (hosted metrics)│
                                 │              │           │                  │
-                                │ 6 dashboards │           │ Logs Overview    │
-                                                                 │ 15 alert rules│          │ Traffic Analysis  │
-                                └──────┬───────┘           │ SM checks        │
+                                 │ 5 dashboards │           │ 4 community       │
+                                                                  │ 16 alert rules│          │ dashboards (gnet   │
+                                 └──────┬───────┘           │ IDs 1860/7362/   │
                                        │                    └──────────────────┘
                                        │ Telegram contact point
                                        ▼
@@ -168,21 +170,26 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 15 rules)
+### Alert Rules (Grafana — 16 rules)
 
-| Alert | Condition | Response |
-|-------|-----------|----------|
-| CPU >85% | 5m avg | Check processes |
-| RAM >90% | 5m avg | Check OOM |
-| Disk <10% | 5m | Cleanup / resize |
-| MySQL down | 1m | Check mariadb |
-| Web server down (Nginx/Apache) | 1m | Check nginx.service / apache2 |
-| PHP-FPM down | 1m | Check php*-fpm |
-| Site down | 2m | Check HTTP 200 |
-| MODX Core missing | 2m | Check /manager/ & core files |
-| VictoriaMetrics down | 1m | Check victoria-metrics |
-| Backup cron stale | >120 min | Check smart_backup.sh |
-| Site check cron stale | >3 min | Check check_site.sh |
+| Alert | Severity | Condition | Interval / noData |
+|-------|----------|-----------|-------------------|
+| High CPU | warning | >85% 5m | 15s scrape, for: 5m |
+| High RAM | warning | >90% 5m | 15s scrape, for: 5m |
+| Low Disk Space | warning | <10% free | 15s scrape, for: 5m |
+| MySQL Down | critical | mysql_up == 0 | 15s scrape, for: 2m |
+| Nginx/Apache Down | critical | nginx_up == 0 | 15s scrape, for: 2m |
+| PHP-FPM Down | critical | php_fpm_up == 0 | 1m push, for: 2m |
+| Site Down | critical | site_up != 1 | 1m push, for: 2m |
+| MODX Core Missing | critical | modx_core_ok == 0 | 1m push, for: 5m |
+| VictoriaMetrics Down | critical | victoria_up == 0 | 15s scrape, for: 1m |
+| Backup Cron Stale | warning | >70 min since last run | 1h heartbeat, for: 10m |
+| Site Check Stale | warning | >3 min since last run | 1m heartbeat, for: 1m |
+| SSL Cert Expiring | info | <7 days remaining | 1m push, for: 1h |
+| Admin Login Failed | warning | admin_login_ok == 0 | 15m probe, for: 6m |
+| MiniShop2 Write Failed | warning | db_write_ok == 0 | 15m probe, for: 6m |
+| Database Tables Low | info | <50 tables in modx_db | 15m push, for: 6m |
+| Backup Verification Failed | warning | backup_verification_ok == 0 | 24h cron, for: 5m |
 
 ### External Monitoring (Better Stack — cloud)
 
@@ -228,8 +235,8 @@ Layer 5 — Secrets:
 ```
 Trigger            Workflow              Jobs
 ───────            ────────              ────
-Push / PR          CI                    ShellCheck, ruff, ansible-lint,
-                                          Terraform checks (tflint+validate),
+Push / PR          CI                    ShellCheck, ansible-lint, j2lint,
+                                           Terraform checks (tflint+validate+fmt),
                                           Trivy, gitleaks, pre-commit
                     ────────── 7 parallel ──────────
 
@@ -241,10 +248,13 @@ Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
   daily                                  (AWS prod only)
 
 Schedule Mon 10:00 Backup Test           Provision Hetzner → Ansible deploy
-  manual                                 → Tests (DB/Web/MODX/cart/SMTP)
-                                         → DAST scan (nuclei)
-                                         → Lynis audit → Destroy
-                                         → Telegram report
+   manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
+                                          → DAST scan (nuclei)
+                                          → Lynis audit
+                                          → check_services (timers, fail2ban, exporters)
+                                           → Grafana alert rules check (≥16)
+                                           → GDrive backup check
+                                          → Destroy → Telegram report (P/F/W summary)
 
 Bot events         Renovate              Dependency updates (auto PRs)
                    Infracost App         Cost estimate comments on PRs

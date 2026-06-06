@@ -1,11 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":dependencyDashboard"
   ],
   "schedule": ["before 9am on monday"],
   "labels": ["dependencies", "renovate"],
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit"],
+  "configMigration": true,
+  "osvVulnerabilityAlerts": true,
+  "major": {
+    "dependencyDashboardApproval": true
+  },
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit", "regex"],
   "terraform": {
     "managerFilePatterns": [
       "terraform/.*\\.tf$"
@@ -27,10 +33,8 @@
     {
       "customType": "regex",
       "description": "Track node_exporter version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_node_version: \"(?<currentValue>.*?)\""],
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_node_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
       "depNameTemplate": "prometheus/node_exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -38,10 +42,8 @@
     {
       "customType": "regex",
       "description": "Track nginx-prometheus-exporter version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_nginx_version: \"(?<currentValue>.*?)\""],
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_nginx_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
       "depNameTemplate": "nginxinc/nginx-prometheus-exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -49,10 +51,8 @@
     {
       "customType": "regex",
       "description": "Track mysqld_exporter version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_mysql_version: \"(?<currentValue>.*?)\""],
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_mysql_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
       "depNameTemplate": "prometheus/mysqld_exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -60,10 +60,8 @@
     {
       "customType": "regex",
       "description": "Track VictoriaMetrics version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_vm_version: \"(?<currentValue>.*?)\""],
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_vm_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -71,10 +69,8 @@
     {
       "customType": "regex",
       "description": "Track Grafana version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["grafana_version: \"(?<currentValue>.*?)\""],
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["grafana_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
       "depNameTemplate": "grafana/grafana",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -82,10 +78,8 @@
     {
       "customType": "regex",
       "description": "Track apache_exporter version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_apache_version: \"(?<currentValue>.*?)\""],
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_apache_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
       "depNameTemplate": "Lusitaniae/apache_exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -93,10 +87,8 @@
     {
       "customType": "regex",
       "description": "Track vmagent version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_vmagent_version: \"(?<currentValue>.*?)\""],
+      "fileMatch": ["^ansible/group_vars/all\\.yml$"],
+      "matchStrings": ["monitoring_vmagent_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -104,9 +96,7 @@
     {
       "customType": "regex",
       "description": "Track gitleaks version",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
+      "fileMatch": ["^\\.github/workflows/ci\\.yml$"],
       "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
       "depNameTemplate": "gitleaks/gitleaks",
       "datasourceTemplate": "github-releases",
@@ -114,12 +104,36 @@
     },
     {
       "customType": "regex",
-      "description": "Track tflint-ruleset-aws version",
-      "managerFilePatterns": [
-        "/^terraform/aws/\\.tflint\\.hcl$/"
-      ],
-      "matchStrings": ["version = \"(?<currentValue>.*?)\""],
-      "depNameTemplate": "terraform-linters/tflint-ruleset-aws",
+      "description": "Track tflint plugin versions (.tflint.hcl)",
+      "fileMatch": ["^\\.tflint\\.hcl$"],
+      "matchStrings": ["renovate: depName=(?<depName>.*?)\n.*?version = \"(?<currentValue>.*?)\""],
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track Terraform version in CI",
+      "fileMatch": ["^\\.github/workflows/(ci|grafana-cloud)\\.yml$"],
+      "matchStrings": ["TF_VERSION: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "hashicorp/terraform",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track tflint version in CI",
+      "fileMatch": ["^\\.github/workflows/ci\\.yml$"],
+      "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "terraform-linters/tflint",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track j2lint version in CI",
+      "fileMatch": ["^\\.github/workflows/ci\\.yml$"],
+      "matchStrings": ["pip install j2lint==(?<currentValue>[\\d.]+)"],
+      "depNameTemplate": "aristanetworks/j2lint",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
     }

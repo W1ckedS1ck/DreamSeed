@@ -62,10 +62,8 @@
     - verify_backups.sh
     - RESTORE_ALL.sh
     - send_report.sh
-    - test_tg.sh
     - common_functions.sh
     - env_loader.py
-    - check_services.sh
 
 - name: Upload Telegram bot script
   ansible.builtin.copy:
@@ -118,7 +116,6 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
-  failed_when: false
 
 - name: Setup daily GDrive upload cron
   ansible.builtin.cron:
@@ -128,7 +125,6 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
-  failed_when: false
 
 - name: Setup daily report cron
   ansible.builtin.cron:
@@ -139,7 +135,6 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
-  failed_when: false
 
 - name: Setup weekly report cron
   ansible.builtin.cron:
@@ -151,7 +146,6 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
-  failed_when: false
 
 - name: Setup session cleanup cron (daily, 7-day retention)
   ansible.builtin.cron:
@@ -165,7 +159,6 @@
     user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
-  failed_when: false
 
 - name: Setup backup verification cron (daily at 4 AM)
   ansible.builtin.cron:
@@ -176,7 +169,6 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
-  failed_when: false
 
 - name: Check if MODX is installed (modx_system_settings table exists)
   ansible.mysql.mysql_query:

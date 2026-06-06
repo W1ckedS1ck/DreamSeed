@@ -47,6 +47,13 @@
         remote_src: true
       become: true
 
+    - name: "Restart {{ monitor_bin_name }} service"
+      ansible.builtin.systemd:
+        name: "{{ monitor_service_name | default(monitor_bin_name) }}"
+        state: restarted
+      become: true
+      when: _monitor_bin.stat.exists
+
     - name: "Cleanup {{ monitor_bin_name }} temp files"
       ansible.builtin.file:
         path: "{{ item }}"

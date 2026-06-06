@@ -33,8 +33,18 @@
     name: check-site.timer
     state: started
     enabled: true
+    daemon_reload: true
   become: true
   when: monitoring_cron_enabled | bool
+
+- name: Clear probe marker to force fresh probes after deploy
+  ansible.builtin.file:
+    path: /tmp/.check_site_probe
+    state: absent
+  become: true
+  when: monitoring_cron_enabled | bool
+  changed_when: false
+  failed_when: false
 
 - name: Stop and disable check_site timer when disabled
   ansible.builtin.systemd:
@@ -102,6 +112,7 @@
     name: check-services.timer
     state: started
     enabled: true
+    daemon_reload: true
   become: true
   when: monitoring_cron_enabled | bool
 

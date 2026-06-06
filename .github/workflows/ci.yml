@@ -2,14 +2,15 @@ name: CI
 
 on:
   pull_request:
+    branches: [main]
   push:
     branches: [main, dev]
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 env:
+  TF_VERSION: "1.11.4"
+  TFLINT_VERSION: "v0.63.1"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -18,31 +19,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@v6
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: '.'
           severity: error
           ignore_paths: >-
             .git
 
-  ruff:
-    name: Python Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - name: Run ruff
-        uses: chartboost/ruff-action@e18ae971ccee1b2d7bbef113930f00c670b78da4 # v1
-
   ansible-lint:
     name: Ansible Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
           cache: pip
@@ -52,18 +44,39 @@ jobs:
           pip install -r ansible/requirements.txt --quiet
           bash scripts/lint.sh --ci --ansible-lint
 
+  j2lint:
+    name: Jinja2 Templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: pip
+      - name: Lint Jinja2 templates
+        run: |
+          pip install j2lint==1.2.0 --quiet
+          mapfile -t j2_files < <(find ansible-roles -name "*.j2")
+          j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "${j2_files[@]}"
+
   terraform-checks:
     name: Terraform Lint + Validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: latest
-      - uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6
+          terraform_version: ${{ env.TF_VERSION }}
+      - uses: terraform-linters/setup-tflint@v6
         with:
-          tflint_version: latest
+          tflint_version: ${{ env.TFLINT_VERSION }}
+          cache: true
+      - name: Check terraform formatting
+        run: |
+          terraform fmt -check -recursive terraform/aws
+          terraform fmt -check -recursive terraform/hetzner
       - name: Run tflint
         run: bash scripts/lint.sh --ci --tflint
       - name: Validate all providers
@@ -74,15 +87,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - name: Cache Trivy DB
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        with:
-          path: ~/.cache/trivy
-          key: trivy-db-${{ runner.os }}
-          restore-keys: trivy-db-${{ runner.os }}
+      - uses: actions/checkout@v6
       - name: Run Trivy
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: terraform
@@ -94,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Install gitleaks
@@ -107,16 +114,33 @@ jobs:
       - name: Secret Scan (full history)
         run: bash scripts/lint.sh --ci --gitleaks-full-history
 
+  actionlint:
+    name: GitHub Actions Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run actionlint
+        uses: rhysd/actionlint@v1.7.12
+        with:
+          args: -shellcheck=
+
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+          cache: pip
+      - uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: npm-renovate-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: npm-renovate-${{ runner.os }}-
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -132,3 +156,5 @@ jobs:
         run: |
           pip install pre-commit
           pre-commit run --all-files --show-diff-on-failure
+      - name: Validate Renovate config
+        run: npx --yes --package renovate -- renovate-config-validator

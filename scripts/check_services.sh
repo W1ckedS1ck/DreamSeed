@@ -10,11 +10,6 @@ load_env "$SCRIPT_DIR/.env"
 DOMAIN="${DOMAIN:-}"
 DB_NAME="${DB_NAME:-modx_db}"
 
-export_metric() {
-    local payload="$1"
-    echo "$payload" | curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
-}
-
 # Auto-detect web server
 if systemctl is-active nginx &>/dev/null; then
     WEB_SVC="nginx"
@@ -64,7 +59,7 @@ fi
 if curl -sfk --max-time 5 "https://$DOMAIN/" > /dev/null 2>&1; then
     echo "  ✓ SSL: Cloudflare (edge)"
     export_metric "ssl_certificate_valid{provider=\"cloudflare\"} 1"
-elif certbot certificates 2>/dev/null | grep -q "VALID"; then
+elif certbot certificates 2>/dev/null | grep -q "^  Certificate Name:"; then
     echo "  ✓ SSL: letsencrypt"
     export_metric "ssl_certificate_valid{provider=\"letsencrypt\"} 1"
 elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; then
@@ -87,7 +82,7 @@ if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     fail=1
     tables=0
 else
-    tables=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" 2>/dev/null || echo "0")
+    tables=$(mysql --defaults-group=monitoring -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" 2>/dev/null || echo "0")
     export_metric "database_tables{database=\"$DB_NAME\"} $tables"
 fi
 if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
@@ -120,9 +115,13 @@ _check_ep() {
 }
 
 _check_ep 9100 node_ node_exporter || fail=1
-_check_ep 9104 mysql_ mysqld_exporter || true
-[[ "$WEB_SVC" == "nginx" ]] && _check_ep 9113 nginx_ nginx_exporter || true
-[[ "$WEB_SVC" == "apache2" ]] && _check_ep 9117 apache_ apache_exporter || true
+_check_ep 9104 mysql_ mysqld_exporter || fail=1
+if [[ "$WEB_SVC" == "nginx" ]]; then
+    _check_ep 9113 nginx_ nginx_exporter || fail=1
+fi
+if [[ "$WEB_SVC" == "apache2" ]]; then
+    _check_ep 9117 apache_ apache_exporter || fail=1
+fi
 if systemctl is-active vmagent &>/dev/null; then
     _check_ep 8429 vmagent_ vmagent || echo "  ⚠ vmagent running but no metrics"
 fi

@@ -2,7 +2,7 @@
 # Better Stack Uptime inventory — lists monitors, heartbeats, and status pages.
 # Portfolio documentation script. Read-only, no side effects.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common_functions.sh

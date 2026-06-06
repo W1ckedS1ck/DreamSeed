@@ -61,21 +61,21 @@ jobs:
         run: |
           mkdir -p secrets ~/.ssh
 
-          cat > secrets/.env << ENVEOF
-          TG_TOKEN=$TG_TOKEN
-          TG_CHAT_ID=$TG_CHAT_ID
-          TG_THREAD_ID=$TG_THREAD_ID
-          DB_PASS=$DB_PASS
-          CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
-          CLOUDFLARE_ZONE_ID=$CF_ZONE_ID
-          HCLOUD_TOKEN=$HCLOUD_TOKEN
-          GRAFANA_PASS=$GRAFANA_PASS
-          ENVEOF
+          {
+            echo "TG_TOKEN=$TG_TOKEN"
+            echo "TG_CHAT_ID=$TG_CHAT_ID"
+            echo "TG_THREAD_ID=$TG_THREAD_ID"
+            echo "DB_PASS=$DB_PASS"
+            echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
+            echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
+            echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
+            echo "GRAFANA_PASS=$GRAFANA_PASS"
+          } > secrets/.env
           chmod 600 secrets/.env
 
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/Vitali.pem
-          chmod 600 ~/.ssh/Vitali.pem
-          ssh-keygen -y -f ~/.ssh/Vitali.pem > ~/.ssh/Vitali.pub
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
 
           echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
           chmod 600 ~/.vault_pass_dreamseed
@@ -83,9 +83,9 @@ jobs:
           [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
           # SSH config (match main branch approach)
-          echo "StrictHostKeyChecking no" > ~/.ssh/config
+          echo "StrictHostKeyChecking accept-new" > ~/.ssh/config
           echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
-          echo "IdentityFile ~/.ssh/Vitali.pem" >> ~/.ssh/config
+          echo "IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
 
       - name: Load secrets and export TF vars
         run: |
@@ -95,7 +95,7 @@ jobs:
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/Vitali.pub)" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
 
@@ -193,7 +193,7 @@ jobs:
               dreamseed:
                 ansible_host: ${SERVER_IP}
                 ansible_user: ubuntu
-                ansible_ssh_private_key_file: ~/.ssh/Vitali.pem
+                ansible_ssh_private_key_file: ~/.ssh/deploy_key
                 ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
             vars:
               web_server: nginx
@@ -209,6 +209,7 @@ jobs:
           web_server: nginx
           domain: test.dreamseed.online
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
+          cloudflare_enabled: false
           EOF
           chmod 600 /tmp/test_vault.yml
 
@@ -232,7 +233,7 @@ jobs:
         id: service_tests
         run: |
           set -o pipefail
-          ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
+          DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
             | tee /dev/stderr | grep -E '^(content_rows|test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
 
       - name: DAST scan (nuclei)
@@ -337,14 +338,14 @@ jobs:
           echo "============================================"
           echo "❌ Tests failed — server kept for debugging"
           echo "Server IP: ${{ steps.terraform.outputs.server_ipv4 }}"
-          echo "SSH: ssh -i ~/.ssh/Vitali.pem ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
           echo "Domain: https://test.dreamseed.online/"
           echo "Destroy manually when done: gh workflow run deploy.yml -f environment=dev-hetz -f action=destroy -f confirm='destroy dev'"
           echo "============================================"
 
       - name: Terraform Destroy
         id: destroy
-        if: success()
+        if: always() && steps.terraform.outputs.server_ipv4 != ''
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}

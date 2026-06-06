@@ -25,12 +25,15 @@
 
 - name: Create vmagent directories
   ansible.builtin.file:
-    path: /etc/vmagent
+    path: "{{ item }}"
     state: directory
     owner: vmagent
     group: vmagent
     mode: "0755"
   become: true
+  loop:
+    - /etc/vmagent
+    - /var/lib/vmagent
   when: _vmagent_enabled
 
 - name: Deploy vmagent credentials file
@@ -65,22 +68,17 @@
   notify: Restart vmagent
   when: _vmagent_enabled
 
-- name: Stop and disable vmagent before removal
+- name: Check if vmagent binary exists (was installed previously)
+  ansible.builtin.stat:
+    path: /usr/local/bin/vmagent
+  register: _vmagent_binary
+  when: not _vmagent_enabled
+
+- name: Stop and disable vmagent if disabled
   ansible.builtin.systemd:
     name: vmagent
     state: stopped
     enabled: false
   become: true
   failed_when: false
-  when: not _vmagent_enabled
-
-- name: Remove vmagent if disabled
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  become: true
-  loop:
-    - /etc/systemd/system/vmagent.service
-    - /etc/vmagent/scrape.yml
-    - /etc/vmagent/credentials.env
-  when: not _vmagent_enabled
+  when: not _vmagent_enabled and _vmagent_binary.stat.exists

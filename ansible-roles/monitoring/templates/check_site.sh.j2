@@ -51,11 +51,11 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     session_size=$(mysql --socket=/run/mysqld/mysqld.sock -se "SELECT ROUND(((data_length+index_length)/1024/1024),2) FROM information_schema.tables WHERE table_schema='{{ db_name | replace("'", "''") }}' AND table_name='{{ (db_prefix | default('modx_')) | replace("'", "''") }}session';" 2>/dev/null || echo 0)
     echo "modx_session_size_mb{instance=\"{{ domain }}\"} ${session_size:-0}"
 
-    # Hourly checks (readiness probes — run once per hour, not every minute)
-    _hour_marker="/tmp/.check_site_hour"
-    _cur_hour=$(date +%Y%m%d%H)
-    if [ "$(cat "$_hour_marker" 2>/dev/null)" != "$_cur_hour" ]; then
-        echo "$_cur_hour" > "$_hour_marker"
+    # Periodic probes (run every 15 min, not every minute)
+    _probe_marker="/tmp/.check_site_probe"
+    _cur_block=$(( $(date +%s) / 900 ))
+    if [ "$(cat "$_probe_marker" 2>/dev/null)" != "$_cur_block" ]; then
+        echo "$_cur_block" > "$_probe_marker"
 
         # 1. Admin login check (/manager/ returns 200 with MODX content)
         if curl -sk --max-time 10 "https://{{ domain }}/manager/" 2>/dev/null | grep -qi "modx\|login"; then
@@ -99,8 +99,14 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
             else
                 echo "db_write_ok{instance=\"{{ domain }}\"} 0"
             fi
-        else
-            echo "db_write_ok{instance=\"{{ domain }}\"} -1"
         fi
+        # db_write_ok is not pushed when ms2 schema absent — noDataState: OK on alert side
+
+        # DB table count (schema integrity check, runs every 15 min)
+        # Skip push on mysql error so noDataState: OK prevents false alert when DB is down
+        _db_tables=$(mysql --socket=/run/mysqld/mysqld.sock -Nse "
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema='{{ db_name | replace("'", "''") }}';" 2>/dev/null)
+        [ -n "$_db_tables" ] && echo "database_tables{instance=\"{{ domain }}\",database=\"{{ db_name }}\"} $_db_tables"
     fi
 } | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1

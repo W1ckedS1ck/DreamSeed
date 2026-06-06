@@ -42,9 +42,6 @@ jobs:
           echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
           chmod 600 ~/.vault_pass_dreamseed
 
-      - name: Install ansible-core
-        run: pip install ansible-core --quiet
-
       - name: Get server IP
         id: server-ip
         env:

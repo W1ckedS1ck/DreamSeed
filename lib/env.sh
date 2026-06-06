@@ -4,13 +4,17 @@
 
 validate_env_file() {
     local f="$1" n=0 required=("DB_PASS" "GRAFANA_PASS" "TG_TOKEN" "TG_CHAT_ID")
+    if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
+        echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
+        exit 1
+    fi
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((n++)) || true
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
         [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || { echo "Invalid env format at $f:$n: $line" >&2; exit 1; }
     done < "$f"
+    source "$f" 2>/dev/null || true
     for req in "${required[@]}"; do
-        source "$f" 2>/dev/null || true
         local val="${!req:-}"
         [[ -z "$val" ]] && { echo "Error: required var $req is empty or undefined in $f" >&2; exit 1; }
     done
@@ -25,6 +29,7 @@ resolve_env_file() {
         [[ ! -f "$pw" ]] && { echo "Error: vault password file not found: $pw" >&2; exit 1; }
         local tmp; tmp=$(mktemp); chmod 600 "$tmp"
         ansible-vault view "$f" --vault-password-file "$pw" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
+        [[ -s "$tmp" ]] || { echo "Error: vault decrypted file is empty" >&2; exit 1; }
         ENV_DECRYPTED_TMP="$tmp"
         printf '%s' "$tmp"
     else
@@ -50,6 +55,7 @@ export_tf_env() {
         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
         export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
         export AWS_DEFAULT_REGION="$AWS_REGION"
+        [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
         [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
     }
     [[ "$TF_PROVIDER" == "hetzner" ]] && {

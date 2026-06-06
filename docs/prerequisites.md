@@ -8,12 +8,12 @@ These are checked by `deploy.sh` on every run:
 
 | Tool | Required for | Install |
 |------|-------------|---------|
-| `terraform` or `tofu` (OpenTofu) | Provision cloud servers (AWS EC2 / Hetzner) | https://developer.hashicorp.com/terraform/install |
-| `ansible-playbook` | Configure server (all 7 playbooks) | `pip install ansible` |
+| `terraform` or `tofu` (OpenTofu) | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
+| `ansible-playbook` | Configure server (all 7 playbooks) | `pip install ansible==14.0.0` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible` |
-| `python3` | Run Ansible and scripts | https://python.org |
+| `python3` | Run Ansible and scripts | <https://python.org> |
 
 ### Ansible collections & Python deps
 
@@ -27,17 +27,37 @@ ansible-galaxy collection install ansible.mysql ansible.posix
 
 ## Cloud credentials (in secrets/.env)
 
-| Target | Provider | Required env vars |
-|--------|----------|-------------------|
-| `prod` | AWS | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
-| `dev-aws` | AWS | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION` |
-| `dev-hetz` | Hetzner | `HCLOUD_TOKEN` |
+| Target | Current backend | Required env vars |
+|--------|-----------------|-------------------|
+| `prod` | AWS EC2 | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
+| `dev-aws` | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION`, `DEV_AWS_EIP` |
+| `dev-hetz` | Hetzner Cloud | `HCLOUD_TOKEN` |
 
 All targets require:
+
 - `SSH_PRIVATE_KEY_PATH` — path to your SSH private key
 - `SSH_PUBLIC_KEY_PATH` — path to your SSH public key
 - `DB_PASS` — MariaDB password
 - `GRAFANA_PASS` — Grafana admin password
+- `TG_TOKEN` — Telegram bot token
+- `TG_CHAT_ID` — Telegram chat ID for alerts
+- `TG_THREAD_ID` — Telegram topic/thread ID for alerts
+- `OWNER` — display name for Telegram reports
+- `TF_API_TOKEN` — Terraform Cloud API token
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 challenge)
+- `CLOUDFLARE_ZONE_ID` — Cloudflare zone ID
+- `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
+
+Hetzner dev additionally:
+
+- `HETZNER_SSH_KEY_NAME` — name of existing SSH key in Hetzner Cloud (e.g. `Vitali`)
+- `HETZNER_PRIMARY_IP_NAME` — name of existing Primary IP (optional, uses dynamic IP if empty)
+
+Grafana Cloud (per target):
+
+- `DEV_GRAFANA_CLOUD_URL` or `PROD_GRAFANA_CLOUD_URL` — Prometheus push endpoint
+- `DEV_GRAFANA_CLOUD_USERNAME` or `PROD_GRAFANA_CLOUD_USERNAME` — instance ID
+- `DEV_GRAFANA_CLOUD_TOKEN` or `PROD_GRAFANA_CLOUD_TOKEN` — vmagent token
 
 ## Site restore (secrets/rclone.conf)
 
@@ -48,15 +68,19 @@ Without it, the deploy will finish (all services configured) but **the site will
 The deploy will fail at the final health check with "HTTP 403 — site not serving".
 
 To get this file, ask a team member who has rclone configured with GDrive access, or run:
+
 ```bash
 rclone config
 ```
+
 and set up a remote named `gdrive` pointing to the DreamSeed backups folder.
 
 You can also deploy without restore support and restore later:
+
 ```bash
 ./deploy.sh <target> -n -i <server-ip>
 ```
+
 after adding `rclone.conf`.
 
 ## Pre-commit hooks (recommended)

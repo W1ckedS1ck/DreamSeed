@@ -72,6 +72,9 @@ jobs:
           echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}"
           echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
           echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}"
+          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}"
+          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
+          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}"
 
       - name: Setup secrets
         env:
@@ -91,6 +94,9 @@ jobs:
           DEV_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}
           DEV_GRAFANA_CLOUD_USERNAME: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
+          PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
+          PROD_GRAFANA_CLOUD_USERNAME: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
+          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
         run: |
           mkdir -p secrets ~/.ssh
 
@@ -111,6 +117,10 @@ jobs:
             echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_PUSH_URL"
             echo "DEV_GRAFANA_CLOUD_USERNAME=$DEV_GRAFANA_CLOUD_USERNAME"
             echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
+
+            echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_PUSH_URL"
+            echo "PROD_GRAFANA_CLOUD_USERNAME=$PROD_GRAFANA_CLOUD_USERNAME"
+            echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
 
             # Use existing "Vitali" key and Primary IP in Hetzner Cloud
             echo "HETZNER_SSH_KEY_NAME=Vitali"
@@ -174,8 +184,7 @@ jobs:
           fi
 
           export CI_DESTROY_CONFIRM=yes
-          WEB_FLAG="${{ inputs.web_server == 'apache' && '-a' || '-n' }}"
-          ./deploy.sh "$ENV" $WEB_FLAG -x
+          ./deploy.sh "$ENV" -x
 
       - name: Notify failure
         if: failure()

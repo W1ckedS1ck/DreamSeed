@@ -20,6 +20,7 @@ load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
     while IFS= read -r line; do
+        line="${line#export }"
         [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
         local key="${line%%=*}" value="${line#*=}"
         # Strip matching outer quotes (single or double)
@@ -99,7 +100,7 @@ prune_cloud_backups() {
 }
 
 escape_md2() {
-    echo "$1" | sed 's/[_*[\]()~`>#+=|{}.!@:-]/\\&/g'
+    echo "$1" | sed 's/[_*\[\]()~`>#+=|{}.!@:-]/\\&/g'
 }
 
 rotate_files() {
@@ -114,4 +115,9 @@ rotate_files() {
             rm -f "${files[i]}"
         done
     fi
+}
+
+export_metric() {
+    local payload="$1"
+    echo "$payload" | curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 }

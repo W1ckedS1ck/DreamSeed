@@ -1,11 +1,11 @@
-# Secrets
+# ─── Secrets & credentials ───────────────────────────────────────────
 secrets/
 .env
 .env.local
 *.pem
 *.key
 
-# Terraform state, cache & plans
+# ─── Terraform ────────────────────────────────────────────────────────
 *.tfstate*
 *.tfplan
 *.tfplan.json
@@ -14,47 +14,38 @@ crash.log
 override.tf
 override.tf.json
 terraform/*/terraform.tfvars
+terraform/grafana/.dashboards/
 
-# Ansible
+# ─── Ansible ──────────────────────────────────────────────────────────
 *.retry
 ansible/inventory/hosts-*.yml
 .ansible/
 
-# Agent/tool local state
+# ─── Agent / tool local state ─────────────────────────────────────────
 .claude/
 .opencode/
 .codemie/
 
-# Logs
+# ─── Logs ─────────────────────────────────────────────────────────────
 logs/
 *.log
 
-# System & editors
+# ─── Editors & OS ─────────────────────────────────────────────────────
 .DS_Store
 .vscode/
 .idea/
 *.sw?
 *~
+*.service
 
-# Python
+# ─── Python ───────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 .ruff_cache/
 venv/
 .venv/
 
-# Node.js
-node_modules/
-package-lock.json
-yarn.lock
-
-# Internal
+# ─── Internal docs & audit ───────────────────────────────────────────
 CLAUDE.md
-Docs/
-*.service
-
-# Grafana dashboard cache
-terraform/grafana/.dashboards/
-# Generated audit files
+docs/private/
 AUDIT_*
-*.json

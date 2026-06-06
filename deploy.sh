@@ -150,16 +150,12 @@ main() {
     resolve_target
 
     LOCK_FILE="/tmp/deploy-${TARGET}.lock"
-    mkdir "$LOCK_FILE" 2>/dev/null || {
-        if [[ -f "$LOCK_FILE/pid" ]] && kill -0 "$(cat "$LOCK_FILE/pid")" 2>/dev/null; then
-            echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE/pid"))"
-            exit 1
-        fi
-        echo "Warning: removing stale lock for $TARGET"
-        rmdir "$LOCK_FILE" 2>/dev/null || true
-        mkdir "$LOCK_FILE"
-    }
-    echo "$$" > "$LOCK_FILE/pid"
+    exec 200>"$LOCK_FILE"
+    if ! flock -n 200; then
+        echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE" 2>/dev/null || echo "unknown"))"
+        exit 1
+    fi
+    echo "$$" > "$LOCK_FILE"
 
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
     echo "  Target:     $TARGET"
@@ -258,12 +254,16 @@ main() {
         SERVER_IP=$(_tf output -raw server_ipv4 2>&1 | tee -a "$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
 
-        ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
-
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
-        _tf state pull > "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate" 2>/dev/null || true
-        ls -1t "$bk/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+        local tmp_bk; tmp_bk=$(mktemp)
+        if _tf state pull > "$tmp_bk" 2>/dev/null && [[ -s "$tmp_bk" ]]; then
+            mv "$tmp_bk" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+            ls -1t "$bk/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+        else
+            rm -f "$tmp_bk"
+            echo "  ⚠ tfstate backup failed (empty or error)" | tee -a "$LOG"
+        fi
         step_ok
     else
         step_start "Using existing server"
@@ -278,15 +278,20 @@ main() {
         SSH_ATTEMPTS=90; SSH_INTERVAL=2
     fi
     step_start "Wait for SSH ($SERVER_IP)"
-    for ((i=1; i<=SSH_ATTEMPTS; i++)); do
-        if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-            -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
-            break
+    local ssh_err="" attempt=0
+    for ((attempt=1; attempt<=SSH_ATTEMPTS; attempt++)); do
+        ssh_err=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+            -o BatchMode=yes -o PasswordAuthentication=no \
+            -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>&1) && break
+        if [[ $((attempt % 10)) -eq 1 ]]; then
+            local err_line
+            err_line=$(echo "$ssh_err" | grep -iE '(Permission denied|Connection refused|Connection timed out|Could not resolve|Host key verification)' | head -1)
+            [[ -n "$err_line" ]] && echo -e "\n  ⚠ $err_line"
         fi
-        [[ $i -eq $SSH_ATTEMPTS ]] && step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s"
         printf "."; sleep "$SSH_INTERVAL"
     done
     echo ""
+    [[ $attempt -gt $SSH_ATTEMPTS ]] && step_fail "SSH not ready after $((SSH_ATTEMPTS * SSH_INTERVAL))s — $(echo "$ssh_err" | head -1)"
     step_ok
 
     # ----- Wait for cloud-init -----
@@ -329,7 +334,7 @@ INVEOF
         printf '  "php_version": %s,\n' "$(json_escape "$PHP_VERSION")"
         printf '  "secrets_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/secrets")"
         printf '  "configs_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/configs")"
-        printf '  "scripts_dir": %s' "$(json_escape "$SCRIPT_DIR/scripts")"
+        printf '  "scripts_dir": %s,\n  "environment": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
         [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && printf ',\n  "cloudflare_api_token": %s' "$(json_escape "$CLOUDFLARE_API_TOKEN")"
         [[ -n "${GRAFANA_PASS:-}" ]] && printf ',\n  "grafana_admin_password": %s' "$(json_escape "$GRAFANA_PASS")"
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && printf ',\n  "ssh_public_key_path": %s' "$(json_escape "$SSH_PUBLIC_KEY_PATH")"
@@ -386,6 +391,12 @@ INVEOF
 
         # Phase 4: Grafana (sequential — needs VictoriaMetrics up)
         step_start "Grafana"
+        echo "    Waiting for VictoriaMetrics health..."
+        for ((vm_retry=1; vm_retry<=15; vm_retry++)); do
+            if curl -sf --max-time 3 "http://${SERVER_IP}:8428/health" | grep -q "OK" 2>/dev/null; then break; fi
+            [[ $vm_retry -eq 15 ]] && echo "  ⚠ VictoriaMetrics not responding, continuing anyway"
+            sleep 2
+        done
         run_ansible "playbook-06-grafana.yml" "Grafana" || step_fail "Grafana failed"
         step_ok
     else

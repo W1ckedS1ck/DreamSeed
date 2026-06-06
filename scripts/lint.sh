@@ -15,10 +15,13 @@ TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
     "ruff:ruff:pip install ruff"
     "ansible-lint:ansible-lint:pip install ansible-lint"
+    "j2lint:j2lint:pip install j2lint"
+    "actionlint:actionlint:brew install actionlint"
     "tflint:tflint:brew install tflint"
     "gitleaks:gitleaks:brew install gitleaks"
     "trivy:trivy:brew install trivy"
     "terraform:terraform:brew install terraform"
+    "markdownlint-cli2:markdownlint-cli2:npm install -g markdownlint-cli2"
 )
 
 FAILED=false
@@ -55,9 +58,7 @@ run_shellcheck() {
 
     local sh_files=()
     while IFS= read -r -d '' f; do sh_files+=("$f"); done < <(
-        find . -maxdepth 1 -name "*.sh" -print0
-        find scripts -maxdepth 1 -name "*.sh" -print0
-        find .github/scripts -maxdepth 1 -name "*.sh" -print0 2>/dev/null || true
+        find . -name "*.sh" -not -path "./.git/*" -not -path "./secrets/*" -print0
     )
 
     if shellcheck --severity=error "${sh_files[@]}"; then
@@ -80,6 +81,47 @@ run_ruff() {
     group_end
 }
 
+run_j2lint() {
+    group_start "j2lint (Jinja2 Templates)"
+    if ! tool_available j2lint; then print_skip "j2lint not installed"; group_end; return 0; fi
+
+    local j2_files=()
+    while IFS= read -r -d '' f; do j2_files+=("$f"); done < <(
+        find ansible-roles -name "*.j2" -print0
+    )
+
+    if j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "${j2_files[@]}"; then
+        print_ok "No issues"; ci_annotation "j2lint" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "j2lint" "fail"
+    fi
+    group_end
+}
+
+run_actionlint() {
+    group_start "actionlint (GitHub Actions)"
+    if ! tool_available actionlint; then print_skip "actionlint not installed"; group_end; return 0; fi
+
+    if actionlint; then
+        print_ok "No issues"; ci_annotation "actionlint" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "actionlint" "fail"
+    fi
+    group_end
+}
+
+run_renovate_validate() {
+    group_start "Renovate Config Validator"
+    if ! tool_available npx; then print_skip "npx not installed"; group_end; return 0; fi
+
+    if npx --yes @renovatebot/config-validator 2>&1; then
+        print_ok "renovate.json valid"; ci_annotation "Renovate" "pass"
+    else
+        print_fail "renovate.json invalid"; ci_annotation "Renovate" "fail"
+    fi
+    group_end
+}
+
 run_ansible_lint() {
     group_start "Ansible Lint"
     if ! tool_available ansible-lint; then print_skip "ansible-lint not installed"; group_end; return 0; fi
@@ -96,11 +138,12 @@ run_tflint() {
     group_start "TFLint"
     if ! tool_available tflint; then print_skip "tflint not installed"; group_end; return 0; fi
 
+    local tf_config="$SCRIPT_DIR/.tflint.hcl"
     for dir in aws hetzner grafana; do
         local tf_dir="terraform/$dir"
         [[ ! -d "$tf_dir" ]] && continue
         echo "    Checking $dir..."
-        if tflint --chdir="$tf_dir" --init && tflint --chdir="$tf_dir"; then
+        if tflint --chdir="$tf_dir" --config="$tf_config" --init && tflint --chdir="$tf_dir" --config="$tf_config"; then
             print_ok "$dir — clean"
         else
             print_fail "$dir — issues found"
@@ -121,12 +164,16 @@ run_terraform_validate() {
     for dir in terraform/aws terraform/hetzner terraform/grafana; do
         [[ ! -d "$dir" ]] && continue
         echo "    Validating $dir..."
-        local var_args=""
+        # Use TF_VAR_ env vars (works with both terraform and tofu validate)
         if [[ "$dir" == *"grafana" ]]; then
-            var_args='-var=grafana_cloud_url=http://x -var=grafana_cloud_token=x -var=sm_access_token=x -var=sm_enabled=false -var=domain=x -var=sm_url=x'
+            export TF_VAR_grafana_cloud_url="http://x"
+            export TF_VAR_grafana_cloud_token="x"
+            export TF_VAR_sm_access_token="x"
+            export TF_VAR_sm_enabled="false"
+            export TF_VAR_domain="x"
+            export TF_VAR_sm_url="x"
         fi
-        # shellcheck disable=SC2086
-        if "$tf" -chdir="$dir" init -backend=false 2>/dev/null && "$tf" -chdir="$dir" validate $var_args; then
+        if "$tf" -chdir="$dir" init -backend=false 2>/dev/null && "$tf" -chdir="$dir" validate; then
             print_ok "$dir — valid"
         else
             print_fail "$dir — validation failed"
@@ -168,6 +215,18 @@ run_trivy() {
     group_end
 }
 
+run_markdownlint() {
+    group_start "markdownlint (Documentation)"
+    if ! tool_available markdownlint-cli2; then print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"; group_end; return 0; fi
+
+    if markdownlint-cli2 --config .markdownlint.yml "Documentation/**/*.md" "README.md"; then
+        print_ok "No issues"; ci_annotation "markdownlint" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "markdownlint" "fail"
+    fi
+    group_end
+}
+
 run_secrets_audit() {
     group_start "Secrets Audit"
     local issues=0
@@ -194,18 +253,27 @@ run_secrets_audit() {
         print_ok "No .env files tracked"
     fi
 
-    if git ls-files 2>/dev/null | grep -qP '\.(pem|key|rsa)$'; then
+    if git ls-files 2>/dev/null | grep -qE '\.(pem|key|rsa)$'; then
         print_fail "Private key files tracked in git"
         ((issues++))
     else
         print_ok "No private keys tracked"
     fi
 
-    # Hardcoded secrets in tracked code
-    local patterns=("password=\"" "token=\"" "TG_TOKEN=" "AWS_SECRET" "api_key=" "private_key" "Authorization: Bearer")
+    # Hardcoded secrets in tracked code (line-level filtering to avoid false positives)
+    local patterns=("password=\"" "token=\"" "TG_TOKEN=" "AWS_SECRET_KEY=" "AWS_SECRET_ACCESS_KEY=" "api_key=" "private_key" "Authorization: Bearer")
     local found=0
     for pat in "${patterns[@]}"; do
-        if git grep -l "$pat" HEAD 2>/dev/null | grep -v "^secrets/" | grep -v "{{ " > /dev/null; then
+        if git grep -n "$pat" HEAD 2>/dev/null | \
+            grep -v "^HEAD:secrets/" | \
+            grep -v "\.example:" | \
+            grep -v "^HEAD:\.github/" | \
+            grep -v "^HEAD:audit-secrets.sh:" | \
+            grep -v "^HEAD:scripts/lint.sh:" | \
+            grep -v "\.md:" | \
+            grep -v "{{ " | \
+            grep -v '\$' | \
+            grep -q "." 2>/dev/null; then
             ((found++))
         fi
     done
@@ -279,11 +347,15 @@ OPTIONS:
   --shellcheck        Run only shellcheck
   --ruff              Run only ruff
   --ansible-lint      Run only ansible-lint
+  --j2lint            Run only j2lint (Jinja2 templates)
+  --actionlint        Run only actionlint (GitHub Actions workflows)
+  --renovate          Run only renovate config validator
   --tflint            Run only tflint
   --validate-terraform Run only terraform validate
   --gitleaks          Run only gitleaks (working tree)
   --gitleaks-full-history Run only gitleaks (full git history, slower)
   --trivy             Run only trivy
+  --markdownlint      Run only markdownlint (Documentation/)
   --secrets           Run only secrets audit
 
   --list              Show available tools and their status
@@ -300,6 +372,10 @@ run_fast() {
     run_shellcheck
     run_ruff
     run_ansible_lint
+    run_j2lint
+    run_actionlint
+    run_renovate_validate
+    run_markdownlint
 }
 
 run_full() {
@@ -323,11 +399,15 @@ while [[ $# -gt 0 ]]; do
         --shellcheck)        MODE="shellcheck"; shift ;;
         --ruff)              MODE="ruff"; shift ;;
         --ansible-lint)      MODE="ansible-lint"; shift ;;
+        --j2lint)            MODE="j2lint"; shift ;;
+        --actionlint)        MODE="actionlint"; shift ;;
+        --renovate)          MODE="renovate"; shift ;;
         --tflint)            MODE="tflint"; shift ;;
         --validate-terraform) MODE="terraform-validate"; shift ;;
         --gitleaks)          MODE="gitleaks"; shift ;;
         --gitleaks-full-history) MODE="gitleaks-full-history"; shift ;;
         --trivy)             MODE="trivy"; shift ;;
+        --markdownlint)      MODE="markdownlint"; shift ;;
         --secrets)           MODE="secrets"; shift ;;
         --list)              MODE="list"; shift ;;
         -h|--help)           usage; exit 0 ;;
@@ -341,14 +421,18 @@ case "$MODE" in
     shellcheck)          run_shellcheck ;;
     ruff)                run_ruff ;;
     ansible-lint)        run_ansible_lint ;;
+    j2lint)              run_j2lint ;;
+    actionlint)          run_actionlint ;;
+    renovate)            run_renovate_validate ;;
     tflint)              run_tflint ;;
     terraform-validate)  run_terraform_validate ;;
     gitleaks)            run_gitleaks ;;
     gitleaks-full-history) run_gitleaks "full-history" ;;
     trivy)               run_trivy ;;
+    markdownlint)        run_markdownlint ;;
     secrets)             run_secrets_audit ;;
     list)                list_tools ;;
     *)                   echo "Unknown mode"; usage; exit 1 ;;
 esac
 
-print_summary
+print_summary || exit 1

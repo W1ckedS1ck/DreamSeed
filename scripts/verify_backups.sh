@@ -9,11 +9,6 @@ BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 DB_NAME="${DB_NAME:-modx_db}"
 DOMAIN="${DOMAIN:-unknown}"
 
-export_metric() {
-    local payload="$1"
-    echo "$payload" | curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
-}
-
 LOG_FILE="$BACKUP_DIR/logs/verify_$(date +%Y-%m-%d).log"
 mkdir -p "$BACKUP_DIR/logs"
 

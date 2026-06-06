@@ -25,6 +25,10 @@ php_version: "{{ ansible_facts.php_version | default('8.3') }}"  # auto-detected
 #  Backup
 # ========================
 backup_cron_enabled: true
+backup_project_keep: 5
+backup_db_keep: 15
+cloud_project_keep: 10
+cloud_db_keep: 100
 
 # ========================
 #  Cloudflare
@@ -41,7 +45,7 @@ cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 #  Monitoring (Grafana + VictoriaMetrics)
 # ========================
 grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('12.4.3', true) }}"
-grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') or fail('GRAFANA_PASS env var is required') }}"
+grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
 grafana_memory_limit: "400MiB"
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.11.1', true) }}"
@@ -81,3 +85,8 @@ configs_dir: "{{ playbook_dir }}/../configs"
 # ========================
 dev_write_perms: false
 additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per line)
+
+# ========================
+#  SSL
+# ========================
+cloudflare_enabled: true  # false → skip certbot, use self-signed (for test servers)

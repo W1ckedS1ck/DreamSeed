@@ -6,7 +6,7 @@
 # Requires BETTERUPTIME_API_TOKEN in secrets/.env.
 # TG_TOKEN, TG_CHAT_ID are optional — if set, also sets up webhooks.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common_functions.sh
