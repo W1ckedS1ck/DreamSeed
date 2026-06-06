@@ -21,7 +21,7 @@ There are 2 layers of linting:
 | 6 | **Trivy** | CI | Security misconfigurations in `terraform/` | IaC Security |
 | 7 | **gitleaks** | CI | Secret scanning across full git history | Git |
 | 8 | **pre-commit** | CI + local | YAML, large files, merge conflicts, keys | Git hooks |
-| 9 | **markdownlint-cli2** | local + CI | `Documentation/**/*.md`, `README.md` | Markdown |
+| 9 | **markdownlint-cli2** | local + CI | `docs/**/*.md`, `README.md` | Markdown |
 
 ---
 

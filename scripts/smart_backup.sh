@@ -44,7 +44,7 @@ fi
 
 # Cron heartbeat — always fires, even if backup fails
 echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
-    curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
+    curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
@@ -117,7 +117,7 @@ fi
 
 if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
     echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
-        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1
+        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
     # Ping external watchdog on success
     if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
         if ping_heartbeat "$BETTERUPTIME_BACKUP_KEY"; then

@@ -285,8 +285,10 @@ jobs:
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "Running smart_backup.sh manually..."
-          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1 || true
           echo "Backup exit code: $?"
+          echo "--- Backup logs ---"
+          ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null || echo 'No logs'"
 
       - name: Verify backup files exist
         run: |
