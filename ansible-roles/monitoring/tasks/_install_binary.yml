@@ -32,6 +32,11 @@
         url: "{{ monitor_download_url }}"
         dest: "/tmp/{{ monitor_bin_name }}.tar.gz"
         mode: "0644"
+        timeout: 120
+      register: _download
+      until: _download is succeeded
+      retries: 3
+      delay: 10
 
     - name: "Extract {{ monitor_bin_name }}"
       ansible.builtin.unarchive:
