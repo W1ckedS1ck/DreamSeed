@@ -26,7 +26,7 @@ jobs:
   test-restore:
     name: Test backup restoration (${{ inputs.environment || 'hetzner' }})
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
 
     steps:
       - uses: actions/checkout@v6
@@ -58,6 +58,12 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
           RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          DEV_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}
+          DEV_GRAFANA_CLOUD_USERNAME: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
+          DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
+          PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
+          PROD_GRAFANA_CLOUD_USERNAME: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
+          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
         run: |
           mkdir -p secrets ~/.ssh
 
@@ -70,6 +76,16 @@ jobs:
             echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
             echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
             echo "GRAFANA_PASS=$GRAFANA_PASS"
+            echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
+            echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
+            echo "HETZNER_SSH_KEY_NAME=Vitali"
+            echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
+            echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_PUSH_URL"
+            echo "DEV_GRAFANA_CLOUD_USERNAME=$DEV_GRAFANA_CLOUD_USERNAME"
+            echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
+            echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_PUSH_URL"
+            echo "PROD_GRAFANA_CLOUD_USERNAME=$PROD_GRAFANA_CLOUD_USERNAME"
+            echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
           } > secrets/.env
           chmod 600 secrets/.env
 
@@ -82,7 +98,6 @@ jobs:
 
           [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
-          # SSH config (match main branch approach)
           echo "StrictHostKeyChecking accept-new" > ~/.ssh/config
           echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
           echo "IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
@@ -154,7 +169,6 @@ jobs:
           fi
           echo "DNS: test.dreamseed.online -> $SERVER_IP"
 
-          # Brief sleep: sshd starts before cloud-init injects authorized_keys
           sleep 15
 
           echo "Waiting for SSH on $SERVER_IP..."
@@ -208,28 +222,176 @@ jobs:
           server_ip: "${{ steps.terraform.outputs.server_ipv4 }}"
           web_server: nginx
           domain: test.dreamseed.online
+          domain_www: false
+          environment: test
+          php_version: "8.3"
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
           cloudflare_enabled: false
+          grafana_admin_password: "${GRAFANA_PASS}"
+          scripts_dir: "${PWD}/scripts"
+          secrets_dir: "${PWD}/secrets"
+          configs_dir: "${PWD}/configs"
+          ssh_public_key_path: "${HOME}/.ssh/deploy_key.pub"
           EOF
           chmod 600 /tmp/test_vault.yml
 
       - name: Deploy Base packages
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml
 
-      - name: Deploy Nginx
+      - name: Deploy Nginx + PHP + SSL
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-02-web.yml -e @/tmp/test_vault.yml
 
-      - name: Deploy Database
-        id: deploy_db
+      - name: Deploy Database & Restore
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml
 
       - name: Deploy Monitoring
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-04-monitor.yml -e @/tmp/test_vault.yml
 
+      - name: Deploy Backup
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-05-backup.yml -e @/tmp/test_vault.yml
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+
+      - name: Deploy Grafana
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-06-grafana.yml -e @/tmp/test_vault.yml
+
       - name: Deploy Security
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-07-security.yml -e @/tmp/test_vault.yml
 
-      - name: Run service tests
+      - name: Wait for stack to settle
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          # Wait for VictoriaMetrics to accept writes
+          for i in $(seq 1 30); do
+            vm_ok=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8428/health 2>/dev/null || echo 'not_ready'" 2>/dev/null || echo "not_ready")
+            [ "$vm_ok" = "OK" ] && echo "VictoriaMetrics ready" && break
+            [ "$i" -eq 30 ] && echo "Warning: VictoriaMetrics not ready"
+            sleep 2
+          done
+          # Wait for services to fully start
+          sleep 10
+
+      - name: Record initial content count
+        id: initial_content
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ROWS=$(ssh ubuntu@"$SERVER_IP" \
+            "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo 0")
+          echo "content_rows_before=$ROWS" >> "$GITHUB_OUTPUT"
+          echo "Initial content rows: $ROWS"
+
+      - name: Create backup via smart_backup.sh
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "Running smart_backup.sh manually..."
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1
+          echo "Backup exit code: $?"
+
+      - name: Verify backup files exist
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Local backups ==="
+          ssh ubuntu@"$SERVER_IP" "ls -lh /home/ubuntu/backups/project/ 2>/dev/null || echo 'No project backups'"
+          ssh ubuntu@"$SERVER_IP" "ls -lh /home/ubuntu/backups/db/ 2>/dev/null || echo 'No DB backups'"
+          PROJ_COUNT=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/project/DreamSeed_*.tar.gz 2>/dev/null | wc -l" || echo 0)
+          DB_COUNT=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/db/db_*.sql.gz 2>/dev/null | wc -l" || echo 0)
+          echo "Project backups: $PROJ_COUNT"
+          echo "DB backups: $DB_COUNT"
+          if [ "$PROJ_COUNT" -lt 1 ] || [ "$DB_COUNT" -lt 1 ]; then
+            echo "::error::Backup creation failed — no backup files found"
+            exit 1
+          fi
+          echo "project_count=$PROJ_COUNT" >> "$GITHUB_OUTPUT"
+          echo "db_count=$DB_COUNT" >> "$GITHUB_OUTPUT"
+        id: verify_backup
+
+      - name: Destroy data — simulate disaster
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Destroying data to simulate disaster ==="
+          # Drop all tables (SET FOREIGN_KEY_CHECKS=0 needed for InnoDB FK constraints)
+          ssh ubuntu@"$SERVER_IP" \
+            "mysql modx_db -N -e 'SET FOREIGN_KEY_CHECKS=0; SELECT CONCAT(\"DROP TABLE IF EXISTS \", table_name, \";\") FROM information_schema.tables WHERE table_schema=\"modx_db\"' | mysql modx_db" 2>&1
+          SSH_EXIT=$?
+          echo "DROP TABLES exit code: $SSH_EXIT"
+          # Remove project files
+          ssh ubuntu@"$SERVER_IP" "sudo rm -rf /var/www/html/* /var/www/html/.* 2>/dev/null; sudo rmdir /var/www/html 2>/dev/null; echo 'Project files destroyed'"
+          # Verify destruction
+          TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" \
+            "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"' 2>/dev/null || echo 0")
+          echo "Tables after destruction: $TBL_COUNT (expect 0)"
+          FILE_COUNT=$(ssh ubuntu@"$SERVER_IP" "ls -1 /var/www/html/ 2>/dev/null | wc -l" || echo 0)
+          echo "Files in web_root after destruction: $FILE_COUNT (expect 0)"
+
+      - name: Restore from backup via RESTORE_ALL.sh
+        id: restore
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Running RESTORE_ALL.sh --auto-latest ==="
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
+          RC=$?
+          echo "RESTORE_ALL exit code: $RC"
+          echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
+          [ "$RC" -ne 0 ] && echo "::error::RESTORE_ALL.sh failed"
+
+      - name: Verify restored content
+        id: verify_content
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Verifying restored content ==="
+
+          # Site HTTP
+          HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" \
+            "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/" 2>/dev/null || echo "000")
+          echo "site_http=$HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
+            echo "[PASS] Site HTTP $HTTP_CODE"
+          else
+            echo "[FAIL] Site returned HTTP $HTTP_CODE"
+          fi
+
+          # MODX index.php
+          if ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/index.php" 2>/dev/null; then
+            echo "[PASS] index.php exists"
+          else
+            echo "[FAIL] index.php missing"
+          fi
+
+          # MODX config
+          if ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" 2>/dev/null; then
+            echo "[PASS] config exists"
+          else
+            echo "[FAIL] config missing"
+          fi
+
+          # DB content rows
+          ROWS=$(ssh ubuntu@"$SERVER_IP" \
+            "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo 0")
+          echo "content_rows=$ROWS"
+          ROWS_BEFORE="${{ steps.initial_content.outputs.content_rows_before }}"
+          echo "Before: $ROWS_BEFORE, After: $ROWS"
+          if [ "${ROWS:-0}" -gt 0 ]; then
+            echo "[PASS] DB content restored ($ROWS rows)"
+          else
+            echo "[FAIL] DB content empty"
+          fi
+
+          # DB table count
+          TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" \
+            "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"'" 2>/dev/null || echo 0)
+          echo "table_count=$TBL_COUNT"
+          if [ "${TBL_COUNT:-0}" -ge 50 ]; then
+            echo "[PASS] DB tables: $TBL_COUNT"
+          else
+            echo "[FAIL] DB tables: ${TBL_COUNT:-0} (expected 50+)"
+          fi
+
+          echo "restore_content_rows=$ROWS" >> "$GITHUB_OUTPUT"
+          echo "restore_table_count=$TBL_COUNT" >> "$GITHUB_OUTPUT"
+          echo "restore_http_code=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Run full service tests
         id: service_tests
         run: |
           set -o pipefail
@@ -341,6 +503,15 @@ jobs:
           echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
           echo "Domain: https://test.dreamseed.online/"
           echo "Destroy manually when done: gh workflow run deploy.yml -f environment=dev-hetz -f action=destroy -f confirm='destroy dev'"
+          echo ""
+          echo "=== FAIL diagnostics ==="
+          echo "1. Backup not created → check smart_backup.sh logs:"
+          echo "   ssh ubuntu@${{ steps.terraform.outputs.server_ipv4 }} 'cat /home/ubuntu/backups/logs/backup_*.log | tail -30'"
+          echo "2. RESTORE_ALL failed → SSH and run manually:"
+          echo "   ssh ubuntu@${{ steps.terraform.outputs.server_ipv4 }} 'bash -x /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest 2>&1 | tail -50'"
+          echo "3. Service test failed → check which:"
+          echo "   grep FAIL /tmp/restore_test_output.txt 2>/dev/null || true"
+          echo "4. VM logs: ssh ubuntu@${{ steps.terraform.outputs.server_ipv4 }} 'sudo journalctl -u victoria-metrics --no-pager -n 30'"
           echo "============================================"
 
       - name: Terraform Destroy
@@ -352,7 +523,6 @@ jobs:
           TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
-          # TFC exits 1 even on successful destroy — use || true and check log
           terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log || true
           sync
           if grep -q "Destroy complete" /tmp/tf_destroy.log; then
@@ -360,7 +530,6 @@ jobs:
           else
             echo "Destroy exit (ignored — TFC exit code 1 bug)"
           fi
-          # SSH key cleanup not needed — uses existing key (Vitali), not CI-generated
 
       - name: Send Telegram report
         if: always()
@@ -372,14 +541,20 @@ jobs:
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           ok_destroy() { [ "$1" = "success" ] && echo "✅" || { [ "$1" = "skipped" ] && echo "⏭️"; }; }
           ok_dast() { [ -z "$1" ] && echo "❓" || { [ "$1" -eq 0 ] && echo "✅" || echo "❌"; }; }
-          RESTORE="${{ steps.deploy_db.outcome }}"
+
+          RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
+          RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
+
           TESTS="${{ steps.service_tests.outcome }}"
           DESTROY="${{ steps.destroy.outcome }}"
-          ROWS="${{ steps.service_tests.outputs.content_rows }}"
+          ROWS="${{ steps.verify_content.outputs.restore_content_rows }}"
+          TABLES="${{ steps.verify_content.outputs.restore_table_count }}"
+          HTTP_CODE="${{ steps.verify_content.outputs.restore_http_code }}"
           SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
           FAILS="${{ steps.service_tests.outputs.test_fails }}"
           DAST_COUNT="${{ steps.dast.outputs.dast_count }}"
           LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
+          BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+${{ steps.verify_backup.outputs.db_count }}"
 
           [ "${{ job.status }}" = "success" ] && STATUS="✅" || STATUS="❌"
           ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
@@ -387,16 +562,19 @@ jobs:
           SECS=$(( ELAPSED % 60 ))
           FAIL_DETAIL=""
           [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_DETAIL=" ⚠️ $FAILS"
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
-            "📦 BackupRestorationTest $STATUS" \
+          HARDENING_OK="❌"; [ -n "$LYNIS_SCORE" ] && [ "$LYNIS_SCORE" -ge 65 ] 2>/dev/null && HARDENING_OK="✅"
+
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "📦 *Backup Restoration Test* $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "" \
-            "Restore    $(ok $RESTORE)" \
-            "Tests      $(ok $TESTS) $SUMMARY" \
-            "DAST       $(ok_dast $DAST_COUNT) (${DAST_COUNT:-?})" \
-            "Hardening  ${LYNIS_SCORE:-?}/100" \
-            "Destroy    $(ok_destroy $DESTROY)${FAIL_DETAIL}")
+            "Backup     ✅ ${BACKUP_FILES} files" \
+            "Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?})" \
+            "Tests      $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
+            "DAST       $(ok_dast $DAST_COUNT) ${DAST_COUNT:-0} issues" \
+            "Hardening  $HARDENING_OK ${LYNIS_SCORE:-?}/100" \
+            "Destroy    $(ok_destroy $DESTROY)")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \

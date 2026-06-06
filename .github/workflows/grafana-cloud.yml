@@ -59,6 +59,10 @@ jobs:
           fi
           echo "TF_VAR_sm_enabled=$SM_ENABLED" >> $GITHUB_ENV
 
+      - name: Init dashboards cache
+        working-directory: terraform/grafana
+        run: bash init-dashboards.sh
+
       - name: Terraform Init
         working-directory: terraform/grafana
         run: terraform init -upgrade=false

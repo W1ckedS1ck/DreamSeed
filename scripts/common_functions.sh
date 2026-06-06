@@ -19,10 +19,12 @@ BACKUP_DB_KEEP="${BACKUP_DB_KEEP:-15}"
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
+    local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPPS|BASH_FUNC_.*)$'
     while IFS= read -r line; do
         line="${line#export }"
         [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
         local key="${line%%=*}" value="${line#*=}"
+        [[ "$key" =~ $blocked_vars ]] && continue
         # Strip matching outer quotes (single or double)
         if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
             value="${BASH_REMATCH[1]}"
