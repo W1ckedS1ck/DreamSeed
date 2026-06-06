@@ -284,16 +284,16 @@ jobs:
       - name: Create backup via smart_backup.sh
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          echo "=== Checking environment ==="
-          ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/Scripts/.env 2>/dev/null && echo '--- ENV OK ---' || echo 'NO .ENV'" || true
-          ssh ubuntu@"$SERVER_IP" "ls -la /home/ubuntu/backups/ 2>&1; echo '---'; ls -la /home/ubuntu/backups/logs/ 2>&1 || true" || true
           echo "=== Running smart_backup.sh ==="
-          ssh ubuntu@"$SERVER_IP" "bash -x /home/ubuntu/Scripts/smart_backup.sh 2>&1 | tail -30" 2>&1 || true
-          echo "Backup exit code: $?"
+          set +e
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1
+          RC=$?
+          set -e
+          echo "Backup exit code: $RC"
           echo "--- Backup files ---"
-          ssh ubuntu@"$SERVER_IP" "find /home/ubuntu/backups/ -name '*.tar.gz' -o -name '*.sql.gz' 2>/dev/null | head -10 || echo 'No backup files found'" || true
+          ssh ubuntu@"$SERVER_IP" "find /home/ubuntu/backups/ -name '*.tar.gz' -o -name '*.sql.gz' 2>/dev/null | head -10 || echo 'No backup files found'" 2>&1 || true
           echo "--- Backup logs ---"
-          ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null || echo 'No log files'" || true
+          ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null || echo 'No log files'" 2>&1 || true
 
       - name: Verify backup files exist
         run: |
@@ -336,11 +336,17 @@ jobs:
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
-          ssh ubuntu@"$SERVER_IP" "bash -x /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest 2>&1" 2>&1 || true
+          set +e
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
           RC=$?
+          set -e
           echo "RESTORE_ALL exit code: $RC"
           echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
-          [ "$RC" -ne 0 ] && echo "::error::RESTORE_ALL.sh failed"
+          if [ "$RC" -ne 0 ]; then
+            echo "::error::RESTORE_ALL.sh failed (exit $RC)"
+            # Show backup logs on failure
+            ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null; echo '---'; ls -la /home/ubuntu/backups/project/ 2>/dev/null; echo '---'; ls -la /home/ubuntu/backups/db/ 2>/dev/null" 2>&1 || true
+          fi
 
       - name: Verify restored content
         id: verify_content
