@@ -21,6 +21,7 @@ There are 2 layers of linting:
 | 6 | **Trivy** | CI | Security misconfigurations in `terraform/` | IaC Security |
 | 7 | **gitleaks** | CI | Secret scanning across full git history | Git |
 | 8 | **pre-commit** | CI + local | YAML, large files, merge conflicts, keys | Git hooks |
+| 9 | **markdownlint-cli2** | local + CI | `Documentation/**/*.md`, `README.md` | Markdown |
 
 ---
 
@@ -69,6 +70,12 @@ There are 2 layers of linting:
 **Type:** pre-commit hook runner.
 **Catches:** invalid YAML, files >10MB, merge conflict markers (`<<<<<<<`), accidentally added private keys, missing shebangs.
 
+### 9. markdownlint-cli2 (Markdown)
+
+**Type:** Markdown linter.
+**Catches:** missing blank lines around headings/lists, multiple consecutive blank lines, inline HTML, bare URLs, inconsistent formatting.
+**Config:** `.markdownlint.yml` at repo root.
+
 ---
 
 ## Tool Mapping
@@ -80,6 +87,7 @@ PROJECT CODE
 ├── Ansible (.yml)      → ansible-lint
 ├── Terraform (.tf)     → tflint + terraform validate
 │   └── Security        → Trivy
+├── Markdown (.md)      → markdownlint-cli2
 └── Git history         → gitleaks
     └── Commit hooks    → pre-commit
 ```
