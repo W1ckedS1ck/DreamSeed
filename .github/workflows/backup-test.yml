@@ -323,7 +323,7 @@ jobs:
           SSH_EXIT=$?
           echo "DROP TABLES exit code: $SSH_EXIT"
           # Remove project files
-          ssh ubuntu@"$SERVER_IP" "sudo rm -rf /var/www/html/* /var/www/html/.* 2>/dev/null; sudo rmdir /var/www/html 2>/dev/null; echo 'Project files destroyed'"
+          ssh ubuntu@"$SERVER_IP" "sudo rm -rf /var/www/html/* 2>/dev/null; sudo find /var/www/html -maxdepth 1 -name '.*' -not -name '.' -not -name '..' -delete 2>/dev/null; sudo rmdir /var/www/html 2>/dev/null; echo 'Project files destroyed'"
           # Verify destruction
           TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"' 2>/dev/null || echo 0")

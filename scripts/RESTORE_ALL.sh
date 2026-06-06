@@ -35,10 +35,10 @@ PHP_FPM=$(systemctl list-units --type=service --state=running 2>/dev/null \
 
 if [ "$WEB_SERVICE" = "nginx" ]; then
     SITE_DOMAIN=$(grep -rh "server_name" /etc/nginx/sites-enabled/ 2>/dev/null \
-        | grep -v "server_name _" | awk '{print $2}' | tr -d ';' | head -1)
+        | grep -v "server_name _" | awk '{print $2}' | tr -d ';' | head -1 || true)
 else
     SITE_DOMAIN=$(grep -rh "ServerName" /etc/apache2/sites-enabled/ 2>/dev/null \
-        | awk '{print $2}' | head -1)
+        | awk '{print $2}' | head -1 || true)
 fi
 SITE_URL="https://${SITE_DOMAIN:-localhost}"
 
