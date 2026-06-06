@@ -21,6 +21,7 @@ TOOLS=(
     "gitleaks:gitleaks:brew install gitleaks"
     "trivy:trivy:brew install trivy"
     "terraform:terraform:brew install terraform"
+    "markdownlint-cli2:markdownlint-cli2:npm install -g markdownlint-cli2"
 )
 
 FAILED=false
@@ -214,6 +215,18 @@ run_trivy() {
     group_end
 }
 
+run_markdownlint() {
+    group_start "markdownlint (Documentation)"
+    if ! tool_available markdownlint-cli2; then print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"; group_end; return 0; fi
+
+    if markdownlint-cli2 --config .markdownlint.yml "Documentation/**/*.md" "README.md"; then
+        print_ok "No issues"; ci_annotation "markdownlint" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "markdownlint" "fail"
+    fi
+    group_end
+}
+
 run_secrets_audit() {
     group_start "Secrets Audit"
     local issues=0
@@ -342,6 +355,7 @@ OPTIONS:
   --gitleaks          Run only gitleaks (working tree)
   --gitleaks-full-history Run only gitleaks (full git history, slower)
   --trivy             Run only trivy
+  --markdownlint      Run only markdownlint (Documentation/)
   --secrets           Run only secrets audit
 
   --list              Show available tools and their status
@@ -361,6 +375,7 @@ run_fast() {
     run_j2lint
     run_actionlint
     run_renovate_validate
+    run_markdownlint
 }
 
 run_full() {
@@ -392,6 +407,7 @@ while [[ $# -gt 0 ]]; do
         --gitleaks)          MODE="gitleaks"; shift ;;
         --gitleaks-full-history) MODE="gitleaks-full-history"; shift ;;
         --trivy)             MODE="trivy"; shift ;;
+        --markdownlint)      MODE="markdownlint"; shift ;;
         --secrets)           MODE="secrets"; shift ;;
         --list)              MODE="list"; shift ;;
         -h|--help)           usage; exit 0 ;;
@@ -413,6 +429,7 @@ case "$MODE" in
     gitleaks)            run_gitleaks ;;
     gitleaks-full-history) run_gitleaks "full-history" ;;
     trivy)               run_trivy ;;
+    markdownlint)        run_markdownlint ;;
     secrets)             run_secrets_audit ;;
     list)                list_tools ;;
     *)                   echo "Unknown mode"; usage; exit 1 ;;

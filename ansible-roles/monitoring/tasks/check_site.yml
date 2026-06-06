@@ -33,6 +33,7 @@
     name: check-site.timer
     state: started
     enabled: true
+    daemon_reload: true
   become: true
   when: monitoring_cron_enabled | bool
 
@@ -111,6 +112,7 @@
     name: check-services.timer
     state: started
     enabled: true
+    daemon_reload: true
   become: true
   when: monitoring_cron_enabled | bool
 

@@ -26,6 +26,13 @@ repos:
       - id: ruff
         types: [python]
 
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.22.1
+    hooks:
+      - id: markdownlint-cli2
+        args: ["--config", ".markdownlint.yml"]
+        files: \.(md|markdown)$
+
   - repo: local
     hooks:
       - id: gitleaks
