@@ -149,13 +149,15 @@ main() {
     parse_args "$@"
     resolve_target
 
-    LOCK_FILE="/tmp/deploy-${TARGET}.lock"
-    exec 200>"$LOCK_FILE"
-    if ! flock -n 200; then
-        echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE" 2>/dev/null || echo "unknown"))"
-        exit 1
+    if command -v flock &>/dev/null; then
+        LOCK_FILE="/tmp/deploy-${TARGET}.lock"
+        exec 200>"$LOCK_FILE"
+        if ! flock -n 200; then
+            echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE" 2>/dev/null || echo "unknown"))"
+            exit 1
+        fi
+        echo "$$" > "$LOCK_FILE"
     fi
-    echo "$$" > "$LOCK_FILE"
 
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
     echo "  Target:     $TARGET"

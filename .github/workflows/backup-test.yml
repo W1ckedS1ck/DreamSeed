@@ -344,7 +344,6 @@ jobs:
           echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
           if [ "$RC" -ne 0 ]; then
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
-            # Show backup logs on failure
             ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null; echo '---'; ls -la /home/ubuntu/backups/project/ 2>/dev/null; echo '---'; ls -la /home/ubuntu/backups/db/ 2>/dev/null" 2>&1 || true
           fi
 
