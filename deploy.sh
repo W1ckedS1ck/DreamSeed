@@ -334,7 +334,7 @@ INVEOF
         printf '  "php_version": %s,\n' "$(json_escape "$PHP_VERSION")"
         printf '  "secrets_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/secrets")"
         printf '  "configs_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/configs")"
-        printf '  "scripts_dir": %s,\n  "environment": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
+        printf '  "scripts_dir": %s,\n  "deploy_env": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
         [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && printf ',\n  "cloudflare_api_token": %s' "$(json_escape "$CLOUDFLARE_API_TOKEN")"
         [[ -n "${GRAFANA_PASS:-}" ]] && printf ',\n  "grafana_admin_password": %s' "$(json_escape "$GRAFANA_PASS")"
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && printf ',\n  "ssh_public_key_path": %s' "$(json_escape "$SSH_PUBLIC_KEY_PATH")"

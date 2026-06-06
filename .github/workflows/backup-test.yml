@@ -223,7 +223,7 @@ jobs:
           web_server: nginx
           domain: test.dreamseed.online
           domain_www: false
-          environment: test
+          deploy_env: test
           php_version: "8.3"
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
           cloudflare_enabled: false
@@ -336,7 +336,7 @@ jobs:
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
-          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
+          ssh ubuntu@"$SERVER_IP" "bash -x /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest 2>&1" 2>&1 || true
           RC=$?
           echo "RESTORE_ALL exit code: $RC"
           echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
