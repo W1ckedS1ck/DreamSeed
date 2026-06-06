@@ -45,11 +45,6 @@ __pycache__/
 venv/
 .venv/
 
-# ─── Node.js ──────────────────────────────────────────────────────────
-node_modules/
-package-lock.json
-yarn.lock
-
 # ─── Internal docs & audit ───────────────────────────────────────────
 CLAUDE.md
 docs/private/
