@@ -52,5 +52,5 @@ yarn.lock
 
 # ─── Internal docs & audit ───────────────────────────────────────────
 CLAUDE.md
-Docs/
+docs/private/
 AUDIT_*
