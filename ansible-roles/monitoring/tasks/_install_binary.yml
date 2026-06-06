@@ -52,6 +52,7 @@
         name: "{{ monitor_service_name | default(monitor_bin_name) }}"
         state: restarted
       become: true
+      ignore_errors: true
 
     - name: "Cleanup {{ monitor_bin_name }} temp files"
       ansible.builtin.file:
