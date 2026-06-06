@@ -337,16 +337,18 @@ jobs:
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
           set +e
-          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
+          ssh ubuntu@"$SERVER_IP" "bash -x /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" >/tmp/restore_stdout.txt 2>/tmp/restore_stderr.txt
           RC=$?
           set -e
+          echo "=== stdout ==="
+          cat /tmp/restore_stdout.txt 2>/dev/null || echo "(empty)"
+          echo "=== stderr ==="
+          cat /tmp/restore_stderr.txt 2>/dev/null || echo "(empty)"
           echo "RESTORE_ALL exit code: $RC"
           echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
           if [ "$RC" -ne 0 ]; then
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
-            ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null; echo '===Remote files==='; find /home/ubuntu/backups/ -type f 2>/dev/null | head -10; echo '===Script exists==='; ls -la /home/ubuntu/Scripts/RESTORE_ALL.sh /home/ubuntu/Scripts/common_functions.sh 2>&1; echo '===ENV==='; grep 'ENV=\|BACKUP_DIR\|DB_NAME' /home/ubuntu/Scripts/.env 2>/dev/null" 2>&1 || true
           fi
-
       - name: Verify restored content
         id: verify_content
         run: |
