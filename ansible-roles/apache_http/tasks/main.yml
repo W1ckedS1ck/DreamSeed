@@ -7,12 +7,24 @@
   failed_when: apache_http_enmod_result.rc != 0
   notify: Restart Apache HTTP
 
-- name: Ensure Apache listens on 443 with HTTPS protocol
+- name: Deploy correct ports.conf (Listen 443 with https protocol)
   become: true
-  ansible.builtin.replace:
-    path: /etc/apache2/ports.conf
-    regexp: '^(.*Listen\s+)443(\s*)$'
-    replace: '\1443 https\2'
+  ansible.builtin.copy:
+    dest: /etc/apache2/ports.conf
+    content: |
+      # Managed by Ansible — DreamSeed
+      Listen 80
+
+      <IfModule mod_ssl.c>
+          Listen 443 https
+      </IfModule>
+
+      <IfModule mod_gnutls.c>
+          Listen 443 https
+      </IfModule>
+    owner: root
+    group: root
+    mode: "0644"
   notify: Reload Apache HTTP
 
 - name: Harden Apache — ServerTokens Prod
