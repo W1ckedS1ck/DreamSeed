@@ -80,6 +80,14 @@
   when: cloudflare_enabled | default(true) | bool
 
 # --- Final cert status ---
+- name: Debug certbot result
+  ansible.builtin.debug:
+    msg:
+      - "certbot rc: {{ ssl_certbot_result.rc | default('skipped') }}"
+      - "certbot stdout: {{ ssl_certbot_result.stdout_lines | default([]) }}"
+      - "certbot stderr: {{ ssl_certbot_result.stderr_lines | default([]) }}"
+  when: ssl_certbot_result is defined and ssl_certbot_result.rc is defined and ssl_certbot_result.rc != 0
+
 - name: Re-check certificate after certbot
   become: true
   ansible.builtin.stat:
