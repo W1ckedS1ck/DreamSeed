@@ -78,7 +78,7 @@
         msg: "Unsafe project backup filename from rclone: '{{ restore_latest_project.stdout | trim }}'"
       when:
         - restore_latest_project.stdout | trim != ""
-        - restore_latest_project.stdout | trim | regex_search('[^A-Za-z0-9._-]')
+        - not (restore_latest_project.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
     - name: Download project backup
       ansible.builtin.shell:
@@ -191,7 +191,7 @@
         msg: "Unsafe DB backup filename from rclone: '{{ restore_latest_db.stdout | trim }}'"
       when:
         - restore_latest_db.stdout | trim != ""
-        - restore_latest_db.stdout | trim | regex_search('[^A-Za-z0-9._-]')
+        - not (restore_latest_db.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
     - name: Download DB backup
       ansible.builtin.shell:

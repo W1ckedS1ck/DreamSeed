@@ -77,7 +77,8 @@ for spec in \
     "backup|BETTERUPTIME_BACKUP_KEY|3600|300" \
     "gdrive-upload|BETTERUPTIME_GDRIVE_KEY|86400|1800" \
     "report-daily|BETTERUPTIME_REPORT_DAILY_KEY|86400|1800" \
-    "report-weekly|BETTERUPTIME_REPORT_WEEKLY_KEY|604800|3600"; do
+    "report-weekly|BETTERUPTIME_REPORT_WEEKLY_KEY|604800|3600" \
+    "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600"; do
 
     IFS='|' read -r name var_name period grace <<< "$spec"
 

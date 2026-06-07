@@ -102,6 +102,11 @@ $ALERTS
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alert sent to Telegram" >> "$LOG_FILE"
 else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All verifications passed" >> "$LOG_FILE"
+    if [[ -n "${BETTERUPTIME_VERIFY_KEY:-}" ]]; then
+        if ping_heartbeat "$BETTERUPTIME_VERIFY_KEY"; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >> "$LOG_FILE"
+        fi
+    fi
 fi
 
 rotate_files "$BACKUP_DIR/logs/verify_*.log" 30
