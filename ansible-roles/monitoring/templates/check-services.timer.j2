@@ -1,0 +1,10 @@
+[Unit]
+Description=DreamSeed services health check timer (every 5 minutes)
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=5min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
