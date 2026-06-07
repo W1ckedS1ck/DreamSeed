@@ -23,6 +23,7 @@
     group: ubuntu
     mode: "0600"
   when: rclone_config_stat.stat.exists
+  no_log: true
 
 - name: Create root MySQL config for cron jobs
   ansible.builtin.copy:
@@ -119,7 +120,7 @@
 
 - name: Setup daily GDrive upload cron
   ansible.builtin.cron:
-    name: "DreamSeed hourly gdrive upload"
+    name: "DreamSeed daily gdrive upload"
     minute: "5"
     job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
     user: ubuntu

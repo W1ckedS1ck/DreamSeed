@@ -4,11 +4,11 @@ set -euo pipefail
 # ====== Prevent concurrent executions ======
 LOCK_FILE="/tmp/restore_all.lock"
 exec 9>"$LOCK_FILE"
-if ! timeout 3600 flock -x 9; then
-    echo "ERROR: Restore already in progress or timeout exceeded ($LOCK_FILE)"
+if ! flock -n -x 9; then
+    echo "ERROR: Restore already in progress ($LOCK_FILE)"
     exit 1
 fi
-trap 'exec 9>&-' EXIT
+trap 'rm -f "$LOCK_FILE"; exec 9>&-' EXIT
 
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -409,8 +409,15 @@ if [ -n "$SELECTED_PROJECT" ]; then
             PROJECT_STATUS="❌ Archive structure error"
             echo -e "${RED}✗ Project restore failed!${NC}"
         else
-            sudo rm -rf "$PROJECT_DIR"
-            sudo mv "$extracted_dir" "$PROJECT_DIR"
+            sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
+            sudo mv "$extracted_dir" "$PROJECT_DIR" || {
+                sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" 2>/dev/null || true
+                sudo rm -rf "$TEMP_EXTRACT"
+                PROJECT_STATUS="❌ Move failed"
+                echo "ERROR: Failed to move restored project"
+                exit 1
+            }
+            sudo rm -rf "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
             sudo rm -rf "$TEMP_EXTRACT"
             sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
             sudo chown -R www-data:www-data "$PROJECT_DIR"

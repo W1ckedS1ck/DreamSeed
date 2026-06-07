@@ -88,13 +88,15 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         #    Verifies MySQL can create/delete rows. Checks ms2_tables_ok first.
         if [ "$ms2_tables" -ge 5 ] 2>/dev/null; then
             test_order_id=$(mysql --database={{ db_name }} --socket=/run/mysqld/mysqld.sock -Nse "
+                START TRANSACTION;
                 INSERT INTO {{ db_prefix | replace("'", "''") }}ms2_orders (context, user_id, createdon) VALUES ('test', 0, NOW());
-                SELECT LAST_INSERT_ID();" 2>&1 | grep -vE "ERROR|Warning|mysql" | tail -1 || echo 0)
+                SELECT @id := LAST_INSERT_ID();
+                DELETE FROM {{ db_prefix | replace("'", "''") }}ms2_orders WHERE id = @id;
+                COMMIT;
+                SELECT @id;" 2>/dev/null || echo 0)
 
             clean_id=$(echo "$test_order_id" | tr -dc '0-9' 2>/dev/null)
             if [ -n "$clean_id" ] && [ "$clean_id" -gt 0 ] 2>/dev/null; then
-                mysql --socket=/run/mysqld/mysqld.sock -e "
-                    DELETE FROM {{ db_prefix | replace("'", "''") }}ms2_orders WHERE id = $clean_id;" 2>/dev/null || true
                 echo "db_write_ok{instance=\"{{ domain }}\"} 1"
             else
                 echo "db_write_ok{instance=\"{{ domain }}\"} 0"

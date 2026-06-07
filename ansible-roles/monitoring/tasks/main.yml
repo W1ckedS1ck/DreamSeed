@@ -19,15 +19,20 @@
   failed_when: false
   loop: "{{ ['nginx_exporter'] if web_server == 'apache' else ['apache_exporter'] }}"
 
-- name: Remove stale web exporter binary on web server switch
+- name: Remove stale web exporter binary and service unit on web server switch
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   become: true
   loop: >
-    {{ ['/usr/local/bin/nginx-prometheus-exporter']
+    {{ ['/usr/local/bin/nginx-prometheus-exporter', '/etc/systemd/system/nginx_exporter.service']
        if web_server == 'apache'
-       else ['/usr/local/bin/apache_exporter'] }}
+       else ['/usr/local/bin/apache_exporter', '/etc/systemd/system/apache_exporter.service'] }}
+
+- name: Reload systemd after stale service cleanup
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
 
 - name: MySQL Exporter
   ansible.builtin.include_tasks: mysql_exporter.yml

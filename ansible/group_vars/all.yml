@@ -54,6 +54,7 @@ monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | defa
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.19.0', true) }}"
 monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.144.0', true) }}"
 monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.144.0', true) }}"
+
 vm_retention: 3
 monitoring_cron_enabled: true
 monitoring_vmagent_enabled: true

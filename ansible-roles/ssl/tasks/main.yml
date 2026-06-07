@@ -13,10 +13,22 @@
     src: "{{ secrets_dir }}/ssl/letsencrypt/"
     dest: /etc/letsencrypt/
     owner: root
-    group: root
-    mode: preserve
+    group: ssl-cert
+    mode: "0640"
   when: ssl_local_backup.stat.exists
   register: ssl_restore_result
+
+- name: Secure restored private keys (privkey.pem and keys/ directory)
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: ssl-cert
+    mode: "0640"
+    recurse: true
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
 
 - name: Set ssl_restored fact
   ansible.builtin.set_fact:

@@ -9,9 +9,9 @@ DB_NAME="${DB_NAME:-modx_db}"
 P=0 F=0 W=0
 FAIL_ITEMS=""
 
-pass() { echo "[PASS] $1"; ((P++)); }
-fail() { echo "[FAIL] $1"; ((F++)); [ -n "$FAIL_ITEMS" ] && FAIL_ITEMS="$FAIL_ITEMS, "; FAIL_ITEMS="${FAIL_ITEMS}${1%% *}"; }
-warn() { echo "[WARN] $1"; ((W++)); }
+pass() { echo "[PASS] $1"; ((++P)); }
+fail() { echo "[FAIL] $1"; ((++F)); [ -n "$FAIL_ITEMS" ] && FAIL_ITEMS="$FAIL_ITEMS, "; FAIL_ITEMS="${FAIL_ITEMS}${1%% *}"; }
+warn() { echo "[WARN] $1"; ((++W)); }
 
 # ====== Checks start ======
 

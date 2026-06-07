@@ -33,6 +33,27 @@ jobs:
 
       - uses: ./.github/actions/setup-terraform
 
+      - name: Mask secrets
+        run: |
+          echo "::add-mask::${{ secrets.TG_TOKEN }}"
+          echo "::add-mask::${{ secrets.TG_CHAT_ID }}"
+          echo "::add-mask::${{ secrets.TG_THREAD_ID }}"
+          echo "::add-mask::${{ secrets.DB_PASS }}"
+          echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          echo "::add-mask::${{ secrets.CF_ZONE_ID }}"
+          echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}"
+          echo "::add-mask::${{ secrets.GRAFANA_PASS }}"
+          echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}"
+          echo "::add-mask::${{ secrets.VAULT_PASSWORD }}"
+          echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}"
+          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}"
+          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
+          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}"
+          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}"
+          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
+          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}"
+          echo "::add-mask::${{ secrets.TF_API_TOKEN }}"
+
       - name: Record start time
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
         id: start_time
@@ -335,10 +356,20 @@ jobs:
         id: verify_backup
 
       - name: Upload backup to GDrive
+        id: gdrive_upload
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Uploading backup to GDrive ==="
-          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh" 2>&1 || true
+          set +e
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh" 2>&1
+          GDRIVE_RC=$?
+          set -e
+          if [ "$GDRIVE_RC" -ne 0 ]; then
+            echo "::warning::GDrive upload failed (exit $GDRIVE_RC) — restore will use local backup only"
+            echo "gdrive_status=fail" >> "$GITHUB_OUTPUT"
+          else
+            echo "gdrive_status=ok" >> "$GITHUB_OUTPUT"
+          fi
           echo "=== Checking cloud backups ==="
           ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | head -3 || echo 'No GDrive backups'" 2>&1 || true
 
@@ -471,6 +502,7 @@ jobs:
           fi
 
       - name: Validate restored artifacts
+        id: validate_hash
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Validating restored artifacts ==="
@@ -483,8 +515,10 @@ jobs:
           echo "Project hash after:  $NEW_HASH"
           if [ "$NEW_HASH" = "$OLD_HASH" ] && [ "$NEW_HASH" != "FAILED" ]; then
             echo "[PASS] Project files restored with identical content"
+            echo "project_hash_match=yes" >> "$GITHUB_OUTPUT"
           else
             echo "[FAIL] Project files hash mismatch or missing"
+            echo "project_hash_match=no" >> "$GITHUB_OUTPUT"
           fi
 
           # Compare DB hash
@@ -495,8 +529,10 @@ jobs:
           echo "DB hash after:  $NEW_DB"
           if [ "$NEW_DB" = "$OLD_DB" ] && [ "$NEW_DB" != "FAILED" ]; then
             echo "[PASS] Database restored with identical table structure"
+            echo "db_hash_match=yes" >> "$GITHUB_OUTPUT"
           else
             echo "[FAIL] Database hash mismatch"
+            echo "db_hash_match=no" >> "$GITHUB_OUTPUT"
           fi
 
           # PHP error log check
@@ -547,25 +583,36 @@ jobs:
             echo "SSL: self-signed (cloudflare disabled)"
           fi
 
-      - name: Cleanup
+      - name: Cleanup temp files and DNS
         if: always()
         run: |
           set -a
           source secrets/.env
           set +a
           rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
+          echo "Temp files cleaned"
+
           RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
-          [ -n "$RECORD_ID" ] && curl -s -X DELETE \
-            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /dev/null && echo "DNS record deleted" || echo "No DNS record to delete"
+          if [ -n "$RECORD_ID" ]; then
+            DEL_RESP=$(curl -s -X DELETE \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
+              echo "DNS record deleted"
+            else
+              echo "::warning::DNS record deletion failed"
+            fi
+          else
+            echo "No DNS record found to delete"
+          fi
 
       - name: Server info on failure
         if: failure() && steps.terraform.outputs.server_ipv4 != ''
         run: |
           echo "============================================"
-          echo "❌ Tests failed — server kept for debugging"
+          echo "❌ Tests failed — diagnostics below (server will be destroyed after this step)"
           echo "Server IP: ${{ steps.terraform.outputs.server_ipv4 }}"
           echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
           echo "Domain: https://test.dreamseed.online/"
@@ -579,13 +626,35 @@ jobs:
           echo "   grep FAIL /tmp/restore_test_output.txt 2>/dev/null || true"
           echo "4. VM logs: ssh ubuntu@${{ steps.terraform.outputs.server_ipv4 }} 'sudo journalctl -u victoria-metrics --no-pager -n 30'"
           echo ""
-          echo "To destroy manually:"
-          echo "   cd terraform/hetzner && TF_WORKSPACE=test terraform destroy -auto-approve"
+          echo "To keep server for debugging, re-run workflow after temporarily commenting the destroy step."
           echo "============================================"
+
+      - name: Send Telegram failure alert
+        if: failure()
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          COMMIT_SHA="${{ github.sha }}"
+          COMMIT_SHORT="${COMMIT_SHA:0:7}"
+          BRANCH="$HEAD_REF"
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          MSG="❌ *Backup Restoration Test FAILED*
+          📅 $(date '+%Y-%m-%d %H:%M')
+          🖥 ${SERVER_IP:-N/A}
+          🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`
+          See GitHub Actions for details."
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=MarkdownV2" \
+            --data-urlencode "text=$MSG" > /dev/null || true
 
       - name: Terraform Destroy
         id: destroy
-        if: success() && steps.terraform.outputs.server_ipv4 != ''
+        if: always() && steps.terraform.outputs.server_ipv4 != ''
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
@@ -611,6 +680,7 @@ jobs:
 
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           ok_destroy() { [ "$1" = "success" ] && echo "✅" || { [ "$1" = "skipped" ] && echo "⏭️"; }; }
+          ok_yn() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
 
           RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
           RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
@@ -624,6 +694,15 @@ jobs:
           SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
           FAILS="${{ steps.service_tests.outputs.test_fails }}"
           BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+${{ steps.verify_backup.outputs.db_count }}"
+
+          GDRIVE_STATUS="${{ steps.gdrive_upload.outputs.gdrive_status }}"
+          GDRIVE_ICON="☁️"; [ "$GDRIVE_STATUS" = "ok" ] && GDRIVE_ICON="☁️ " || GDRIVE_ICON="☁️❌"
+          RESTORE_SRC="local"; [ "$GDRIVE_STATUS" = "ok" ] && RESTORE_SRC="GDrive"
+
+          PROJ_HASH_OK="${{ steps.validate_hash.outputs.project_hash_match }}"
+          DB_HASH_OK="${{ steps.validate_hash.outputs.db_hash_match }}"
+          HASH_ICON="✅"; [ "$PROJ_HASH_OK" != "yes" ] || [ "$DB_HASH_OK" != "yes" ] && HASH_ICON="❌"
+          HASH_DETAIL=""; [ "$PROJ_HASH_OK" = "yes" ] && HASH_DETAIL="project " || HASH_DETAIL="project ❌ "; [ "$DB_HASH_OK" = "yes" ] && HASH_DETAIL="${HASH_DETAIL}DB" || HASH_DETAIL="${HASH_DETAIL}DB ❌"
 
           [ "${{ job.status }}" = "success" ] && STATUS="✅" || STATUS="❌"
           ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
@@ -650,8 +729,10 @@ jobs:
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`" \
             "" \
-            "Backup     ✅ ${BACKUP_FILES} files" \
+            "Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
             "Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?})" \
+            "  Source: ${RESTORE_SRC}" \
+            "Hash       ${HASH_ICON} ${HASH_DETAIL}" \
             "Tests      $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
             "SSL        ${SSL_ICON} ${SSL_STATUS:-?}" \
             "Disk       ${DISK_ICON} ${DISK_USAGE:-?}%" \

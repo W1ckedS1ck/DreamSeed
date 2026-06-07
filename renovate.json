@@ -124,7 +124,7 @@
       "fileMatch": [
         "/^\\.tflint\\.hcl$/"
       ],
-      "matchStrings": ["renovate: depName=(?<depName>.*?)\n.*?version = \"(?<currentValue>.*?)\""],
+      "matchStrings": ["version = \"(?<currentValue>[\\d.]+)\"\\s+# renovate: depName=(?<depName>\\S+)"],
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
     },
