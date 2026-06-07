@@ -365,7 +365,7 @@ jobs:
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Recording artifact hashes before destroy ==="
           PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
+            "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
           echo "Project hash: $PROJ_HASH"
           DB_HASH=$(ssh ubuntu@"$SERVER_IP" \
@@ -477,7 +477,7 @@ jobs:
 
           # Compare project hash
           NEW_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
+            "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           OLD_HASH="${{ steps.artifact_hash.outputs.project_hash }}"
           echo "Project hash before: $OLD_HASH"
           echo "Project hash after:  $NEW_HASH"
@@ -502,7 +502,7 @@ jobs:
           # PHP error log check
           echo "=== PHP error log (last 20 lines) ==="
           ssh ubuntu@"$SERVER_IP" "sudo tail -20 /var/log/php*-fpm.log 2>/dev/null || echo 'No PHP-FPM log found'" 2>&1 || true
-          PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo grep -ci 'PHP Fatal error' /var/log/php*-fpm.log 2>/dev/null || echo 0")
+          PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || echo 0")
           if [ "${PHP_ERRORS:-0}" -eq 0 ]; then
             echo "[PASS] No PHP Fatal errors after restore"
           else
@@ -519,7 +519,7 @@ jobs:
         run: |
           set -o pipefail
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
-            | tee /dev/stderr | grep -E '^(content_rows|test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
+            | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
 
       - name: Run disk check
         id: disk
@@ -651,9 +651,7 @@ jobs:
             "Tests      $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
             "SSL        ${SSL_ICON} ${SSL_STATUS:-?}" \
             "Disk       ${DISK_ICON} ${DISK_USAGE:-?}%" \
-            "Destroy    $(ok_destroy $DESTROY)" \
-            "" \
-            "🔗 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            "Destroy    $(ok_destroy $DESTROY)")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \

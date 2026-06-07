@@ -34,7 +34,7 @@ ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && ec
 ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || echo "[FAIL] Assets missing"
 
 # PHP error log check
-PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo grep -ci 'PHP Fatal error' /var/log/php*-fpm.log 2>/dev/null || echo 0")
+PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || echo 0")
 [ "${PHP_ERRORS:-0}" -eq 0 ] 2>/dev/null && echo "[PASS] No PHP Fatal errors" || echo "[WARN] PHP Fatal errors: $PHP_ERRORS"
 
 # Monitoring — VictoriaMetrics health
