@@ -7,6 +7,14 @@
   failed_when: apache_http_enmod_result.rc != 0
   notify: Restart Apache HTTP
 
+- name: Ensure Apache listens on 443 with HTTPS protocol
+  become: true
+  ansible.builtin.replace:
+    path: /etc/apache2/ports.conf
+    regexp: '^(.*Listen\s+)443(\s*)$'
+    replace: '\1443 https\2'
+  notify: Reload Apache HTTP
+
 - name: Harden Apache — ServerTokens Prod
   become: true
   ansible.builtin.lineinfile:
