@@ -114,7 +114,7 @@ run_renovate_validate() {
     group_start "Renovate Config Validator"
     if ! tool_available npx; then print_skip "npx not installed"; group_end; return 0; fi
 
-    if npx --yes @renovatebot/config-validator 2>&1; then
+    if npx --yes --package renovate -- renovate-config-validator 2>&1; then
         print_ok "renovate.json valid"; ci_annotation "Renovate" "pass"
     else
         print_fail "renovate.json invalid"; ci_annotation "Renovate" "fail"
@@ -173,10 +173,24 @@ run_terraform_validate() {
             export TF_VAR_domain="x"
             export TF_VAR_sm_url="x"
         fi
+
+        # Handle ansible-vault encrypted terraform.tfvars (grafana module)
+        local tfvars_file="$dir/terraform.tfvars"
+        local tfvars_vaulted=""
+        if [[ -f "$tfvars_file" ]] && head -c 16 "$tfvars_file" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
+            tfvars_vaulted="$tfvars_file.vaulted"
+            mv "$tfvars_file" "$tfvars_vaulted"
+        fi
+
         if "$tf" -chdir="$dir" init -backend=false 2>/dev/null && "$tf" -chdir="$dir" validate; then
             print_ok "$dir — valid"
         else
             print_fail "$dir — validation failed"
+        fi
+
+        # Restore vaulted tfvars if we moved it
+        if [[ -n "$tfvars_vaulted" && -f "$tfvars_vaulted" ]]; then
+            mv "$tfvars_vaulted" "$tfvars_file"
         fi
     done
     ci_annotation "Terraform Validate" "$([[ $FAILED == false ]] && echo pass || echo fail)"

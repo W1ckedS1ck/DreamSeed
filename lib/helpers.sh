@@ -46,7 +46,7 @@ step_fail() {
 }
 
 cleanup() {
-    [[ -n "${VAULT_TMP:-}" && -f "${VAULT_TMP:-}" ]] && rm -f "$VAULT_TMP"
+    [[ -n "${DEPLOY_VARS_TMP:-}" && -f "${DEPLOY_VARS_TMP:-}" ]] && rm -f "$DEPLOY_VARS_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
     [[ -n "${LOCK_FILE:-}" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
@@ -68,6 +68,7 @@ write_deploy_history() {
 
 rotate_logs() {
     local max="${MAX_LOG_FILES:-10}" f
+    (( max < 1 )) && max=1
     while IFS= read -r f; do rm -f "$f"; done < <(ls -1t "$LOG_DIR"/deploy_2*.log 2>/dev/null | tail -n +$((max + 1))) 2>/dev/null || true
     while IFS= read -r f; do rm -f "$f"; done < <(ls -1t "$LOG_DIR"/terraform_2*.log 2>/dev/null | tail -n +$((max + 1))) 2>/dev/null || true
     # Rotate deploy_history.log with timestamp (keep last 10 archives)

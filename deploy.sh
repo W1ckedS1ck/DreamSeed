@@ -371,7 +371,7 @@ all:
       server_ip: ${SERVER_IP}
 INVEOF
 
-    VAULT_TMP=$(mktemp); chmod 600 "$VAULT_TMP"
+    DEPLOY_VARS_TMP=$(mktemp); chmod 600 "$DEPLOY_VARS_TMP"
     {
         printf '{\n'
         printf '  "db_pass": %s,\n' "$(json_escape "$DB_PASS")"
@@ -403,7 +403,7 @@ INVEOF
             printf '\n  ]'
         fi
         printf '\n}\n'
-    } > "$VAULT_TMP"
+    } > "$DEPLOY_VARS_TMP"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ "$TARGET" != "prod" ]] && unset "${!BETTERUPTIME_@}"
