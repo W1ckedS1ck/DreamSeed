@@ -90,7 +90,7 @@ run_j2lint() {
         find ansible-roles -name "*.j2" -print0
     )
 
-    if j2lint --ignore "single-statement-per-line,jinja-variable-lower-case,jinja-statements-indentation,jinja-statements-delimiter" -- "${j2_files[@]}"; then
+    if j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "${j2_files[@]}"; then
         print_ok "No issues"; ci_annotation "j2lint" "pass"
     else
         print_fail "Issues found"; ci_annotation "j2lint" "fail"
