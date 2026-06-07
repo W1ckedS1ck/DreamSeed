@@ -135,7 +135,9 @@ if systemctl is-active vmagent &>/dev/null; then
 fi
 
 # --- Backup cron ---
-if crontab -l 2>/dev/null | grep -q smart_backup; then echo "  ✓ cron: backup"
+if crontab -l 2>/dev/null | grep -q smart_backup; then
+  echo "  ✓ cron: backup"
+  export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
 else echo "  ✗ cron: backup not set"; fail=1; fi
 
 # --- fail2ban ---

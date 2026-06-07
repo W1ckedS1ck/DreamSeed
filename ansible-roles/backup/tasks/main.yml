@@ -220,23 +220,15 @@
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
-- name: Wait for VictoriaMetrics to accept writes
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8428/health"
-  register: vm_health
-  retries: 30
-  delay: 2
-  until: vm_health.status == 200
-  changed_when: false
-
 - name: Push initial cron heartbeat to VictoriaMetrics
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      for i in 1 2 3; do
+      # VM may still be starting — retry across ~30s instead of blocking 90s
+      for i in $(seq 1 15); do
         echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
-        sleep 1
+        sleep 2
       done
   changed_when: false
   failed_when: false
