@@ -495,7 +495,7 @@ jobs:
           echo "Running lynis audit..."
           SCORE=$(ssh ubuntu@$SERVER_IP \
             "sudo lynis audit system --quick --no-colors 2>&1 | \
-             awk -F': ' '/Hardening index[[:space:]]*:/ {print \$NF}' | head -1" || true)
+             awk -F': ' '/Hardening index[[:space:]]*:/ {match(\$2, /[0-9]+/); print substr(\$2, RSTART, RLENGTH)}' | head -1" || true)
           SCORE="${SCORE:-?}"
           echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
           echo "Hardening index: $SCORE"
