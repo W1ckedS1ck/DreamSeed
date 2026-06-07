@@ -157,23 +157,34 @@ jobs:
           set +a
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
 
-          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          CF_RESP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          RECORD_ID=$(echo "$CF_RESP" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
           if [ -n "$RECORD_ID" ]; then
-            curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+            CF_RESP=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}" > /dev/null
+              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
           else
-            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+            CF_RESP=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}" > /dev/null
+              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
           fi
-          echo "DNS: test.dreamseed.online -> $SERVER_IP"
+          if echo "$CF_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
+            echo "✓ DNS: test.dreamseed.online -> $SERVER_IP"
+          else
+            echo "⚠ DNS update failed: $(echo "$CF_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('errors',[{}])[0].get('message','unknown'))" 2>/dev/null || echo 'unknown')"
+          fi
 
-          sleep 15
+          # Short wait for Cloudflare DNS propagation + server boot
+          for i in $(seq 1 6); do
+            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=3 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>/dev/null; then
+              echo "✓ Server reachable after ~${i}s"
+              break
+            fi
+            sleep 1
+          done
 
           echo "Waiting for SSH on $SERVER_IP..."
           for i in $(seq 1 30); do
@@ -258,6 +269,9 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
 
       - name: Deploy Grafana
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-06-grafana.yml -e @/tmp/test_vault.yml
 
       - name: Deploy Security
@@ -513,8 +527,8 @@ jobs:
         if: always()
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          scp -o StrictHostKeyChecking=accept-new \
-            "ubuntu@$SERVER_IP:/var/log/lynis-report.dat" /tmp/lynis-report.dat 2>/dev/null || \
+          ssh -o StrictHostKeyChecking=accept-new \
+            ubuntu@"$SERVER_IP" "sudo cat /var/log/lynis-report.dat" 2>/dev/null > /tmp/lynis-report.dat || \
             echo "[WARN] lynis report not available on remote server"
 
       - name: Archive Lynis report
