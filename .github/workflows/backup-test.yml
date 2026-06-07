@@ -562,14 +562,13 @@ jobs:
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /dev/null && echo "DNS record deleted" || echo "No DNS record to delete"
 
       - name: Server info on failure
-        if: failure()
+        if: failure() && steps.terraform.outputs.server_ipv4 != ''
         run: |
           echo "============================================"
           echo "❌ Tests failed — server kept for debugging"
           echo "Server IP: ${{ steps.terraform.outputs.server_ipv4 }}"
           echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
           echo "Domain: https://test.dreamseed.online/"
-          echo "Destroy manually when done: gh workflow run deploy.yml -f environment=dev-hetz -f action=destroy -f confirm='destroy dev'"
           echo ""
           echo "=== FAIL diagnostics ==="
           echo "1. Backup not created → check smart_backup.sh logs:"
@@ -579,11 +578,14 @@ jobs:
           echo "3. Service test failed → check which:"
           echo "   grep FAIL /tmp/restore_test_output.txt 2>/dev/null || true"
           echo "4. VM logs: ssh ubuntu@${{ steps.terraform.outputs.server_ipv4 }} 'sudo journalctl -u victoria-metrics --no-pager -n 30'"
+          echo ""
+          echo "To destroy manually:"
+          echo "   cd terraform/hetzner && TF_WORKSPACE=test terraform destroy -auto-approve"
           echo "============================================"
 
       - name: Terraform Destroy
         id: destroy
-        if: always() && steps.terraform.outputs.server_ipv4 != ''
+        if: success() && steps.terraform.outputs.server_ipv4 != ''
         working-directory: terraform/hetzner
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
