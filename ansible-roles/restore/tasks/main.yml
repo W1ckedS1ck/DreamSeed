@@ -73,6 +73,13 @@
         - restore_latest_project.rc == 0
         - restore_latest_project.stdout | trim == ""
 
+    - name: Validate project backup filename
+      ansible.builtin.fail:
+        msg: "Unsafe project backup filename from rclone: '{{ restore_latest_project.stdout | trim }}'"
+      when:
+        - restore_latest_project.stdout | trim != ""
+        - restore_latest_project.stdout | trim | regex_search('[^A-Za-z0-9._-]')
+
     - name: Download project backup
       ansible.builtin.shell:
         cmd: |
@@ -143,7 +150,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      mysql {{ db_name }} -e "SHOW TABLES" 2>/dev/null | wc -l
+      mysql "{{ db_name }}" -e "SHOW TABLES" 2>/dev/null | wc -l
     executable: /bin/bash
   register: restore_db_tables
   changed_when: false
@@ -179,6 +186,13 @@
         - restore_latest_db.rc == 0
         - restore_latest_db.stdout | trim == ""
 
+    - name: Validate DB backup filename
+      ansible.builtin.fail:
+        msg: "Unsafe DB backup filename from rclone: '{{ restore_latest_db.stdout | trim }}'"
+      when:
+        - restore_latest_db.stdout | trim != ""
+        - restore_latest_db.stdout | trim | regex_search('[^A-Za-z0-9._-]')
+
     - name: Download DB backup
       ansible.builtin.shell:
         cmd: |
@@ -192,7 +206,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql {{ db_name }}
+          gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql "{{ db_name }}"
         executable: /bin/bash
       register: restore_db_result
       changed_when: false
@@ -203,7 +217,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          mysql {{ db_name }} -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
+          mysql "{{ db_name }}" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
         executable: /bin/bash
       register: restore_db_table_count
       changed_when: false

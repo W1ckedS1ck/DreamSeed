@@ -188,14 +188,14 @@ run_gitleaks() {
     group_start "Gitleaks (Secrets) — ${mode}"
     if ! tool_available gitleaks; then print_skip "gitleaks not installed"; group_end; return 0; fi
 
-    local args
+    local -a args
     if [[ "$mode" == "full-history" ]]; then
-        args="--source ."
+        args=(--source .)
     else
-        args="--source . --no-git"
+        args=(--source . --no-git)
     fi
 
-    if gitleaks detect $args -v 2>&1; then
+    if gitleaks detect "${args[@]}" -v 2>&1; then
         print_ok "No secrets found"; ci_annotation "Gitleaks" "pass"
     else
         print_fail "Secrets detected"; ci_annotation "Gitleaks" "fail"

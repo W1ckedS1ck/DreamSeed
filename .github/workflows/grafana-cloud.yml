@@ -25,24 +25,27 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Set TF_WORKSPACE
+        env:
+          WORKSPACE_INPUT: ${{ github.event.inputs.workspace }}
         run: |
-          echo "TF_WORKSPACE=${{ github.event.inputs.workspace }}" >> $GITHUB_ENV
+          echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
 
       - name: Set Terraform variables
         env:
           PROD_SM_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
           DEV_SM_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
+          WORKSPACE_INPUT: ${{ github.event.inputs.workspace }}
         run: |
-          if [[ "${{ github.event.inputs.workspace }}" == "prod" ]]; then
+          if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
             echo "TF_VAR_grafana_cloud_url=${{ secrets.PROD_GRAFANA_CLOUD_URL }}" >> $GITHUB_ENV
             echo "TF_VAR_grafana_cloud_token=${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" >> $GITHUB_ENV
             echo "TF_VAR_sm_access_token=${{ secrets.PROD_SM_ACCESS_TOKEN }}" >> $GITHUB_ENV
@@ -50,7 +53,7 @@ jobs:
             echo "TF_VAR_sm_url=https://synthetic-monitoring-api-us-east-0.grafana.net" >> $GITHUB_ENV
             [[ -n "$PROD_SM_TOKEN" ]] && SM_ENABLED=true || SM_ENABLED=false
           else
-            echo "TF_VAR_grafana_cloud_url=${{ secrets.DEV_GRAFANA_CLOUD_URL }}" >> $GITHUB_ENV
+            echo "TF_VAR_grafana_cloud_url=${{ secrets.DEV_GRAFANA_CLOUD_URL }}" >> "$GITHUB_ENV"
             echo "TF_VAR_grafana_cloud_token=${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}" >> $GITHUB_ENV
             echo "TF_VAR_sm_access_token=${{ secrets.DEV_SM_ACCESS_TOKEN }}" >> $GITHUB_ENV
             echo "TF_VAR_domain=hetz.vitalikuts.online" >> $GITHUB_ENV

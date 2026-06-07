@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 50
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - uses: ./.github/actions/setup-terraform
 
@@ -99,7 +99,6 @@ jobs:
           [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
           echo "StrictHostKeyChecking accept-new" > ~/.ssh/config
-          echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
           echo "IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
 
       - name: Load secrets and export TF vars
@@ -109,6 +108,11 @@ jobs:
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
+          echo "::add-mask::$GRAFANA_PASS"
+          [[ -n "$TG_CHAT_ID" ]] && echo "::add-mask::$TG_CHAT_ID"
+          [[ -n "$TG_THREAD_ID" ]] && echo "::add-mask::$TG_THREAD_ID"
+          [[ -n "$DEV_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$DEV_GRAFANA_CLOUD_TOKEN"
+          [[ -n "$PROD_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$PROD_GRAFANA_CLOUD_TOKEN"
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)" >> "$GITHUB_ENV"
           echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
@@ -217,7 +221,7 @@ jobs:
               admin_email: admin@dreamseed.online
           EOF
 
-          cat > /tmp/test_vault.yml <<EOF
+          (umask 177; cat > /tmp/test_vault.yml <<EOF
           db_pass: "${DB_PASS}"
           server_ip: "${{ steps.terraform.outputs.server_ipv4 }}"
           web_server: nginx
@@ -233,7 +237,7 @@ jobs:
           configs_dir: "${PWD}/configs"
           ssh_public_key_path: "${HOME}/.ssh/deploy_key.pub"
           EOF
-          chmod 600 /tmp/test_vault.yml
+          )
 
       - name: Deploy Base packages
         run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml
@@ -515,7 +519,7 @@ jobs:
 
       - name: Archive Lynis report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: lynis-report
           path: /tmp/lynis-report.dat

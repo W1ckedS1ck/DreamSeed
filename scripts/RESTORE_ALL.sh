@@ -51,9 +51,12 @@ ENV_DISPLAY=$(format_env_display "$ENV")
 START_TIME=$(date +%s)
 
 SERVICES_STOPPED=0
+RESTORE_TEMP_DIRS=()
+
 cleanup_trap() {
-    rm -rf /tmp/restore_* 2>/dev/null || true
-    # Keep pre_restore_* snapshots on exit (only clean explicit restore temp dirs)
+    for _d in "${RESTORE_TEMP_DIRS[@]:-}"; do
+        rm -rf "$_d" 2>/dev/null || true
+    done
     if [ "$SERVICES_STOPPED" -eq 1 ]; then
         if [ "$MODE" = "interactive" ]; then
             echo ""
@@ -360,8 +363,8 @@ else
     echo "Backing up current state..."
 fi
 
-PRE_RESTORE_BACKUP_DIR="/tmp/pre_restore_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$PRE_RESTORE_BACKUP_DIR"
+PRE_RESTORE_BACKUP_DIR=$(mktemp -d /tmp/pre_restore_XXXXXX)
+RESTORE_TEMP_DIRS+=("$PRE_RESTORE_BACKUP_DIR")
 
 if [ -n "$SELECTED_DB" ]; then
     BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
@@ -524,6 +527,9 @@ else
     echo "Starting services..."
 fi
 
+SITE_STATUS="⏭️ Not checked"
+RESTORE_RESULT=${RESTORE_RESULT:-0}
+
 if sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>&1; then
     SERVICES_STOPPED=0
     echo -e "${GREEN}✓ Services started${NC}"
@@ -534,7 +540,7 @@ else
 fi
 sleep 3
 
-HTTP_CODE=$(curl -sk "$SITE_URL" -o /dev/null -w "%{http_code}")
+HTTP_CODE=$(curl -s "$SITE_URL" -o /dev/null -w "%{http_code}")
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
     SITE_STATUS="✅ HTTP $HTTP_CODE"
     echo -e "${GREEN}✓ Site is up (HTTP $HTTP_CODE)${NC}"

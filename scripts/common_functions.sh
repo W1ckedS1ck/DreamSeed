@@ -19,7 +19,7 @@ BACKUP_DB_KEEP="${BACKUP_DB_KEEP:-15}"
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
-    local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPPS|BASH_FUNC_.*)$'
+    local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|BASH_FUNC_.*)$'
     while IFS= read -r line; do
         line="${line#export }"
         [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
@@ -79,7 +79,9 @@ send_tg() {
         --data-urlencode "parse_mode=$parse_mode"
     )
     [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
-    curl -s -X POST "$tg_url" "${data[@]}" > /dev/null 2>&1
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$tg_url" "${data[@]}" 2>&1) || true
+    [[ "$http_code" != "200" ]] && echo "WARNING: Telegram send failed (HTTP ${http_code:-000})" >&2 || true
 }
 
 ping_heartbeat() {

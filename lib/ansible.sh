@@ -43,13 +43,23 @@ check_services() {
     echo "  ▸ Post-deploy checks"
 
     local scripts_dir_remote
-    scripts_dir_remote=$(python3 -c "import yaml,sys; d=yaml.safe_load(open('$SCRIPT_DIR/ansible/group_vars/all.yml')); print(d.get('scripts_dir_remote', ''))" 2>/dev/null)
+    scripts_dir_remote=$(python3 - "$SCRIPT_DIR/ansible/group_vars/all.yml" <<'PYEOF' 2>/dev/null
+import yaml, sys
+d = yaml.safe_load(open(sys.argv[1]))
+print(d.get('scripts_dir_remote', ''))
+PYEOF
+)
     scripts_dir_remote="${scripts_dir_remote:-/home/ubuntu/Scripts}"
+    # Validate path is safe before passing to SSH remote command
+    if [[ ! "$scripts_dir_remote" =~ ^/[A-Za-z0-9/_-]+$ ]]; then
+        echo "  ⚠ scripts_dir_remote has unexpected chars, using default" >&2
+        scripts_dir_remote="/home/ubuntu/Scripts"
+    fi
 
     local output
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "bash ${scripts_dir_remote}/check_services.sh" 2>&1)
+        "bash '${scripts_dir_remote}/check_services.sh'" 2>&1)
     local rc=$?
 
     echo "$output"
