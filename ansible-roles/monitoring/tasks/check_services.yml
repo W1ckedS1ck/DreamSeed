@@ -1,0 +1,50 @@
+---
+- name: Deploy check_services systemd timer
+  ansible.builtin.template:
+    src: check-services.timer.j2
+    dest: /etc/systemd/system/check-services.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Deploy check_services systemd service
+  ansible.builtin.template:
+    src: check-services.service.j2
+    dest: /etc/systemd/system/check-services.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Enable and start check_services timer
+  ansible.builtin.systemd:
+    name: check-services.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: monitoring_cron_enabled | bool
+
+- name: Stop and disable check_services timer when disabled
+  ansible.builtin.systemd:
+    name: check-services.timer
+    state: stopped
+    enabled: false
+  become: true
+  when: not monitoring_cron_enabled | bool
+
+- name: Remove check_services unit files when disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/systemd/system/check-services.timer
+    - /etc/systemd/system/check-services.service
+  notify: Reload systemd
+  when: not monitoring_cron_enabled | bool

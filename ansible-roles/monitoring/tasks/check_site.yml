@@ -65,9 +65,8 @@
   notify: Reload systemd
   when: not monitoring_cron_enabled | bool
 
-# --- check_services.sh is uploaded for deploy.sh (post-deploy SSH health check) ---
-# No systemd timer — metrics are one-time (pushed only at deploy).
-# check_site.sh (every 1 min) is the always-on metric source.
+# --- check_services.sh is uploaded for deploy.sh + periodic check-services.timer ---
+# Runs every 5 min via systemd timer; pushed metrics complement check_site.sh (1 min).
 
 - name: Ensure scripts directory exists
   ansible.builtin.file:

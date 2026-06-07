@@ -401,7 +401,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
 
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
     if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
-        [[ "$PROJECT_DIR" =~ ^/var/www/[^/]+$ ]] || { echo "ERROR: PROJECT_DIR must be /var/www/<name>, got: $PROJECT_DIR"; exit 1; }
+        [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
         extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
         if [[ ! -d "$extracted_dir" ]]; then
             echo -e "${RED}✗ Archive structure mismatch: expected '$extracted_dir' not found${NC}"

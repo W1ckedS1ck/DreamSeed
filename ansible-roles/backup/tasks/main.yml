@@ -171,11 +171,11 @@
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
-- name: Check if MODX is installed (modx_system_settings table exists)
+- name: Check if MODX is installed ({{ db_prefix }}system_settings table exists)
   ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
-    query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = 'modx_system_settings'"
+    query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = '{{ db_prefix }}system_settings'"
   register: modx_check
   become: true
   failed_when: false
@@ -185,7 +185,7 @@
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
-      INSERT INTO `{{ db_name }}`.`modx_system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
   become: true
@@ -198,7 +198,7 @@
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
-      INSERT INTO `{{ db_name }}`.`modx_system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('cache_db', '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
       ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
   become: true
@@ -211,7 +211,7 @@
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
-      INSERT INTO `{{ db_name }}`.`modx_system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('cache_db_session', '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
       ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
   become: true

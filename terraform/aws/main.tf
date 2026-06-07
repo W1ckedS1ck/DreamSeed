@@ -87,11 +87,16 @@ resource "aws_instance" "web" {
 
   user_data = <<EOF
 #!/bin/bash
+set -e
 hostnamectl set-hostname dreamseed-${var.environment}
+# Bootstrap marker — only run apt upgrade on first boot
+if [[ ! -f /etc/.dreamseed-bootstrapped ]]; then
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+    touch /etc/.dreamseed-bootstrapped
+fi
 sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 systemctl restart ssh
-apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 EOF
 
   metadata_options {

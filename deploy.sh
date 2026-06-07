@@ -154,8 +154,15 @@ main() {
         LOCK_FILE="/tmp/deploy-${TARGET}.lock"
         exec 200>"$LOCK_FILE"
         if ! flock -n 200; then
-            echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE" 2>/dev/null || echo "unknown"))"
-            exit 1
+            local stale_pid
+            stale_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+            if [[ -n "$stale_pid" ]] && kill -0 "$stale_pid" 2>/dev/null; then
+                echo "Error: deploy already running for $TARGET (PID $stale_pid)"
+                exit 1
+            fi
+            # Stale lock from dead process — kernel released flock, retry
+            flock -n 200 || { echo "Error: cannot acquire deploy lock for $TARGET"; exit 1; }
+            echo "  ⚠ Removed stale deploy lock (PID ${stale_pid:-unknown})"
         fi
         echo "$$" > "$LOCK_FILE"
     fi
