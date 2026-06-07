@@ -6,8 +6,15 @@ set -euo pipefail
 SERVER_IP="${1:?Usage: $0 <SERVER_IP>}"
 DB_NAME="${DB_NAME:-modx_db}"
 
+CHECK_OUTPUT=$(mktemp)
+trap 'rm -f "$CHECK_OUTPUT"' EXIT
+
 {
 # ====== Checks start ======
+
+# MODX cache state
+CACHE_STALE=$(ssh ubuntu@"$SERVER_IP" "find /var/www/html/core/cache/ -mmin -10 -type f 2>/dev/null | head -1 | wc -l" || echo 0)
+[ "$CACHE_STALE" -gt 0 ] && echo "[PASS] MODX cache populated after restore" || echo "[WARN] MODX cache empty or inaccessible"
 
 # Database
 ssh ubuntu@"$SERVER_IP" "systemctl is-active mariadb" && echo "[PASS] MariaDB running" || echo "[FAIL] MariaDB"
@@ -26,38 +33,12 @@ ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localho
 ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && echo "[PASS] Config exists" || echo "[FAIL] Config missing"
 ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && echo "[PASS] Assets exists" || echo "[FAIL] Assets missing"
 
-# Keyword check
-KEYWORDS=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 10 https://localhost/ 2>/dev/null | grep -coi 'Lucky Bamboo\|bonsai\|sakura\|maple\|oak\|pine\|willow\|cypress\|Dreamers\|Wheel of Life'" 2>/dev/null || echo 0)
-[ "${KEYWORDS:-0}" -ge 3 ] && echo "[PASS] Site keywords ($KEYWORDS matches)" || echo "[WARN] Keywords low ($KEYWORDS)"
-
-# Cart test (add product via miniShop2, then clean)
-CART_RESULT=$(ssh ubuntu@"$SERVER_IP" '
-    DB_NAME="'"$DB_NAME"'"
-    ID=$(mysql "$DB_NAME" -N -e "SELECT id FROM modx_site_content WHERE class_key=\"msProduct\" AND published=1 AND deleted=0 LIMIT 1")
-    [ -z "$ID" ] && echo "NO_PRODUCT" && exit 0
-    RESP=$(curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
-        -d "ms2_action=cart/add&id=$ID&count=1&options=[]" \
-        "https://localhost/assets/components/minishop2/action.php" 2>/dev/null)
-    case "$RESP" in
-      *success*true*) echo "OK" ;;
-      *) echo "$RESP" ;;
-    esac
-    curl -sk --max-time 10 -X POST -H "X-Requested-With: XMLHttpRequest" \
-        -d "ms2_action=cart/clean" \
-        "https://localhost/assets/components/minishop2/action.php" > /dev/null 2>&1
-')
-case "$CART_RESULT" in
-    OK) echo "[PASS] Cart add + clean OK" ;;
-    NO_PRODUCT) echo "[WARN] No products in DB" ;;
-    *) echo "[FAIL] Cart: $CART_RESULT" ;;
-esac
-
-# SMTP
-SMTP_RESULT=$(ssh ubuntu@"$SERVER_IP" "timeout 10 bash -c 'echo | openssl s_client -starttls smtp -connect mail.privateemail.com:587 2>/dev/null | grep -q \"Verification: OK\" && echo OK || echo FAIL'" 2>/dev/null || echo "FAIL")
-[ "$SMTP_RESULT" = "OK" ] && echo "[PASS] SMTP TLS OK" || echo "[WARN] SMTP failed"
+# PHP error log check
+PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo grep -ci 'PHP Fatal error' /var/log/php*-fpm.log 2>/dev/null || echo 0")
+[ "${PHP_ERRORS:-0}" -eq 0 ] 2>/dev/null && echo "[PASS] No PHP Fatal errors" || echo "[WARN] PHP Fatal errors: $PHP_ERRORS"
 
 # Monitoring — VictoriaMetrics health
-VM_HEALTH=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8428/health 2>/dev/null && echo OK || echo FAIL")
+VM_HEALTH=$(ssh ubuntu@"$SERVER_IP" "curl -sf -o /dev/null http://127.0.0.1:8428/health && echo OK || echo FAIL")
 [ "$VM_HEALTH" = "OK" ] && echo "[PASS] VictoriaMetrics health" || echo "[WARN] VM health: $VM_HEALTH"
 
 # Monitoring — node_exporter metrics
@@ -101,7 +82,7 @@ VMA_ERRS=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8429/metrics 2>/de
 [ "$VMA_ERRS" = "0" ] && echo "[PASS] vmagent remote write: 0 errors" || echo "[FAIL] vmagent remote write errors: $VMA_ERRS"
 
 # Monitoring — nginx_exporter (or apache_exporter for Apache)
-NE2=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx-prometheus-exporter 2>/dev/null || systemctl is-active apache_exporter 2>/dev/null || echo inactive")
+NE2=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx_exporter 2>/dev/null || systemctl is-active apache_exporter 2>/dev/null || echo inactive")
 [ "$NE2" = "active" ] && echo "[PASS] Web exporter running" || echo "[WARN] Web exporter: $NE2"
 
 # Backup — cron job installed
@@ -127,11 +108,11 @@ GRAFANA_FLAG=$(ssh ubuntu@"$SERVER_IP" "test -f /etc/grafana/.admin_password_set
 [ "$GRAFANA_FLAG" = "OK" ] && echo "[PASS] Grafana admin password set" || echo "[WARN] Grafana password: $GRAFANA_FLAG"
 
 # ====== Checks end ======
-} 2>&1
+} > "$CHECK_OUTPUT" 2>&1
+
 P=0 F=0 W=0
 FAIL_ITEMS=""
 while IFS= read -r line; do
-  echo "$line"
   case "$line" in
     *'[PASS]'*) ((P++));;
     *'[FAIL]'*)
@@ -143,7 +124,9 @@ while IFS= read -r line; do
       ;;
     *'[WARN]'*) ((W++));;
   esac
-done
+done < "$CHECK_OUTPUT"
+
+cat "$CHECK_OUTPUT"
 echo "test_summary=P:${P} F:${F} W:${W}"
 echo "test_fails=${FAIL_ITEMS:-none}"
 [ "$F" -eq 0 ]

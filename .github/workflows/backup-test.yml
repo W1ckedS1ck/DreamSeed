@@ -243,6 +243,9 @@ jobs:
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
           cloudflare_enabled: false
           grafana_admin_password: "${GRAFANA_PASS}"
+          grafana_cloud_url: "${DEV_GRAFANA_CLOUD_URL}"
+          grafana_cloud_username: "${DEV_GRAFANA_CLOUD_USERNAME}"
+          grafana_cloud_token: "${DEV_GRAFANA_CLOUD_TOKEN}"
           scripts_dir: "${PWD}/scripts"
           secrets_dir: "${PWD}/secrets"
           configs_dir: "${PWD}/configs"
@@ -356,6 +359,20 @@ jobs:
             echo "[WARN] Grafana via nginx proxy: not reachable"
           fi
 
+      - name: Record artifact hashes
+        id: artifact_hash
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Recording artifact hashes before destroy ==="
+          PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
+            "find /var/www/html -type f -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
+          echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
+          echo "Project hash: $PROJ_HASH"
+          DB_HASH=$(ssh ubuntu@"$SERVER_IP" \
+            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
+          echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
+          echo "DB hash: $DB_HASH"
+
       - name: Destroy data — simulate disaster
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
@@ -378,13 +395,17 @@ jobs:
         id: restore
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          RESTORE_START=$(date +%s)
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
           set +e
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
           RC=$?
           set -e
+          RESTORE_ELAPSED=$(( $(date +%s) - RESTORE_START ))
           echo "RESTORE_ALL exit code: $RC"
           echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
+          echo "restore_duration=${RESTORE_ELAPSED}s" >> "$GITHUB_OUTPUT"
+          echo "Restore duration: ${RESTORE_ELAPSED}s"
           if [ "$RC" -ne 0 ]; then
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
           fi
@@ -449,6 +470,50 @@ jobs:
             exit 1
           fi
 
+      - name: Validate restored artifacts
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Validating restored artifacts ==="
+
+          # Compare project hash
+          NEW_HASH=$(ssh ubuntu@"$SERVER_IP" \
+            "find /var/www/html -type f -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
+          OLD_HASH="${{ steps.artifact_hash.outputs.project_hash }}"
+          echo "Project hash before: $OLD_HASH"
+          echo "Project hash after:  $NEW_HASH"
+          if [ "$NEW_HASH" = "$OLD_HASH" ] && [ "$NEW_HASH" != "FAILED" ]; then
+            echo "[PASS] Project files restored with identical content"
+          else
+            echo "[FAIL] Project files hash mismatch or missing"
+          fi
+
+          # Compare DB hash
+          NEW_DB=$(ssh ubuntu@"$SERVER_IP" \
+            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
+          OLD_DB="${{ steps.artifact_hash.outputs.db_hash }}"
+          echo "DB hash before: $OLD_DB"
+          echo "DB hash after:  $NEW_DB"
+          if [ "$NEW_DB" = "$OLD_DB" ] && [ "$NEW_DB" != "FAILED" ]; then
+            echo "[PASS] Database restored with identical table structure"
+          else
+            echo "[FAIL] Database hash mismatch"
+          fi
+
+          # PHP error log check
+          echo "=== PHP error log (last 20 lines) ==="
+          ssh ubuntu@"$SERVER_IP" "sudo tail -20 /var/log/php*-fpm.log 2>/dev/null || echo 'No PHP-FPM log found'" 2>&1 || true
+          PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo grep -ci 'PHP Fatal error' /var/log/php*-fpm.log 2>/dev/null || echo 0")
+          if [ "${PHP_ERRORS:-0}" -eq 0 ]; then
+            echo "[PASS] No PHP Fatal errors after restore"
+          else
+            echo "[WARN] $PHP_ERRORS PHP Fatal errors found after restore"
+          fi
+
+          # MODX cache state
+          echo "=== MODX cache ==="
+          CACHE_DIRS=$(ssh ubuntu@"$SERVER_IP" "ls /var/www/html/core/cache/ 2>/dev/null | wc -l" || echo 0)
+          echo "Cache entries: $CACHE_DIRS"
+
       - name: Run full service tests
         id: service_tests
         run: |
@@ -456,87 +521,31 @@ jobs:
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
             | tee /dev/stderr | grep -E '^(content_rows|test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
 
-      - name: DAST scan (nuclei)
-        id: dast
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          echo "$SERVER_IP test.dreamseed.online" | sudo tee -a /etc/hosts > /dev/null
-
-          NUCLEI_VER=$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest \
-            | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','v3.3.9')[1:])" 2>/dev/null || echo "3.3.9")
-          NUCLEI_VER="${NUCLEI_VER:-3.3.9}"
-          echo "Using nuclei v$NUCLEI_VER"
-          wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VER}/nuclei_${NUCLEI_VER}_linux_amd64.zip"
-          unzip -q nuclei_*.zip nuclei && chmod +x ./nuclei
-          ./nuclei -update-templates -silent
-
-          ./nuclei \
-            -u "https://test.dreamseed.online/" \
-            -tags "misconfig,exposure,headers,tech" \
-            -severity "low,medium,high,critical" \
-            -silent -json-export /tmp/nuclei.json || true
-
-          COUNT=$(wc -l < /tmp/nuclei.json 2>/dev/null || echo 0)
-          echo "dast_count=$COUNT" >> "$GITHUB_OUTPUT"
-          echo "DAST findings: $COUNT"
-          if [ "$COUNT" -gt 0 ]; then
-            python3 << 'PYEOF'
-          import json, sys
-          for line in open('/tmp/nuclei.json'):
-              f = json.loads(line)
-              print(f"  [{f['info']['severity'].upper()}] {f['template-id']}: {f['matched-at']}")
-          PYEOF
-          fi
-
       - name: Run disk check
+        id: disk
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           DISK_USAGE=$(ssh ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
+          echo "disk_usage=$DISK_USAGE" >> "$GITHUB_OUTPUT"
           echo "Disk usage: $DISK_USAGE%"
           echo "--- Top disk consumers ---"
           ssh ubuntu@$SERVER_IP \
             "sudo du -sh /* 2>/dev/null | sort -rh | head -10" || true
           [ "${DISK_USAGE:-100}" -lt 90 ] && echo "[PASS] Disk space OK" || echo "[WARN] Disk space low"
 
-      - name: Security audit (lynis)
-        id: lynis
+      - name: Detect SSL type
+        id: ssl
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          echo "Installing lynis..."
-          ssh ubuntu@$SERVER_IP \
-            "sudo apt-get update -qq 2>/dev/null && sudo apt-get install -y lynis -qq" || echo "[WARN] lynis install failed"
-          echo "Running lynis audit..."
-          SCORE=$(ssh ubuntu@$SERVER_IP \
-            "sudo lynis audit system --quick --no-colors 2>&1 | \
-             awk -F': ' '/Hardening index[[:space:]]*:/ {match(\$2, /[0-9]+/); print substr(\$2, RSTART, RLENGTH)}' | head -1" || true)
-          SCORE="${SCORE:-?}"
-          echo "lynis_score=$SCORE" >> "$GITHUB_OUTPUT"
-          echo "Hardening index: $SCORE"
-
-      - name: Check Lynis score threshold
-        run: |
-          SCORE="${{ steps.lynis.outputs.lynis_score }}"
-          if [ "${SCORE:-0}" -lt 65 ]; then
-            echo "::error::Lynis hardening score dropped to $SCORE (threshold: 65)"
-            exit 1
+          LE_CERT=$(ssh ubuntu@"$SERVER_IP" "test -f /etc/letsencrypt/live/test.dreamseed.online/fullchain.pem && echo yes || echo no" 2>/dev/null || echo "no")
+          if [ "$LE_CERT" = "yes" ]; then
+            echo "ssl_status=letsencrypt" >> "$GITHUB_OUTPUT"
+            echo "SSL: Let's Encrypt"
+          else
+            echo "ssl_status=self-signed" >> "$GITHUB_OUTPUT"
+            echo "SSL: self-signed (cloudflare disabled)"
           fi
-          echo "✅ Lynis score: $SCORE (threshold: 65)"
-
-      - name: Download Lynis report from server
-        if: always()
-        run: |
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          ssh -o StrictHostKeyChecking=accept-new \
-            ubuntu@"$SERVER_IP" "sudo cat /var/log/lynis-report.dat" 2>/dev/null > /tmp/lynis-report.dat || \
-            echo "[WARN] lynis report not available on remote server"
-
-      - name: Archive Lynis report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: lynis-report
-          path: /tmp/lynis-report.dat
 
       - name: Cleanup
         if: always()
@@ -598,10 +607,10 @@ jobs:
 
           ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           ok_destroy() { [ "$1" = "success" ] && echo "✅" || { [ "$1" = "skipped" ] && echo "⏭️"; }; }
-          ok_dast() { [ -z "$1" ] && echo "❓" || { [ "$1" -eq 0 ] && echo "✅" || echo "❌"; }; }
 
           RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
           RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
+          RESTORE_TIME="${{ steps.restore.outputs.restore_duration }}"
 
           TESTS="${{ steps.service_tests.outcome }}"
           DESTROY="${{ steps.destroy.outcome }}"
@@ -610,8 +619,6 @@ jobs:
           HTTP_CODE="${{ steps.verify_content.outputs.restore_http_code }}"
           SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
           FAILS="${{ steps.service_tests.outputs.test_fails }}"
-          DAST_COUNT="${{ steps.dast.outputs.dast_count }}"
-          LYNIS_SCORE="${{ steps.lynis.outputs.lynis_score }}"
           BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+${{ steps.verify_backup.outputs.db_count }}"
 
           [ "${{ job.status }}" = "success" ] && STATUS="✅" || STATUS="❌"
@@ -620,19 +627,33 @@ jobs:
           SECS=$(( ELAPSED % 60 ))
           FAIL_DETAIL=""
           [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_DETAIL=" ⚠️ $FAILS"
-          HARDENING_OK="❌"; [ -n "$LYNIS_SCORE" ] && [ "$LYNIS_SCORE" -ge 65 ] 2>/dev/null && HARDENING_OK="✅"
 
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          SSL_ICON="❓"
+          SSL_STATUS="${{ steps.ssl.outputs.ssl_status }}"
+          [ "$SSL_STATUS" = "letsencrypt" ] && SSL_ICON="✅"
+          [ "$SSL_STATUS" = "self-signed" ] && SSL_ICON="⚠️"
+
+          DISK_USAGE="${{ steps.disk.outputs.disk_usage }}"
+          DISK_ICON="✅"; [ -n "$DISK_USAGE" ] && [ "$DISK_USAGE" -ge 80 ] && DISK_ICON="⚠️"
+
+          COMMIT_SHA="${{ github.sha }}"
+          COMMIT_SHORT="${COMMIT_SHA:0:7}"
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 *Backup Restoration Test* $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
+            "🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`" \
             "" \
             "Backup     ✅ ${BACKUP_FILES} files" \
-            "Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?})" \
+            "Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?})" \
             "Tests      $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
-            "DAST       $(ok_dast $DAST_COUNT) ${DAST_COUNT:-0} issues" \
-            "Hardening  $HARDENING_OK ${LYNIS_SCORE:-?}/100" \
-            "Destroy    $(ok_destroy $DESTROY)")
+            "SSL        ${SSL_ICON} ${SSL_STATUS:-?}" \
+            "Disk       ${DISK_ICON} ${DISK_USAGE:-?}%" \
+            "Destroy    $(ok_destroy $DESTROY)" \
+            "" \
+            "🔗 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \

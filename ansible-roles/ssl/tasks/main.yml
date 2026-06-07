@@ -81,13 +81,15 @@
 - name: SSL status
   ansible.builtin.debug:
     msg: >-
-      {{ ssl_restored | default(false) | ternary(
-        '✓ SSL: Restored from local backup',
-        ssl_has_cert | ternary(
-          '✓ SSL: Let''s Encrypt certificate ready',
-          '⊘ SSL: certbot failed — Nginx will use self-signed. Fix DNS and re-run.'
-        )
-      ) }}
+      {%- if ssl_restored | default(false) -%}
+      ✓ SSL: Restored from local backup
+      {%- elif ssl_has_cert -%}
+      ✓ SSL: Let's Encrypt certificate ready
+      {%- elif not cloudflare_enabled | default(true) | bool -%}
+      ⊘ SSL: self-signed (Cloudflare disabled for this environment)
+      {%- else -%}
+      ⊘ SSL: certbot failed — self-signed fallback. Fix DNS and re-run.
+      {%- endif -%}
 
 # --- Certbot timer + deploy-hook ---
 - name: Enable certbot auto-renewal timer
