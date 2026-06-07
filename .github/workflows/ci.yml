@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  TF_VERSION: "1.11.4"
+  TF_VERSION: "1.15.5"
   TFLINT_VERSION: "v0.63.1"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
