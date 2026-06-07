@@ -313,6 +313,31 @@ jobs:
           echo "db_count=$DB_COUNT" >> "$GITHUB_OUTPUT"
         id: verify_backup
 
+      - name: Upload backup to GDrive
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Uploading backup to GDrive ==="
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh" 2>&1 || true
+          echo "=== Checking cloud backups ==="
+          ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | head -3 || echo 'No GDrive backups'" 2>&1 || true
+
+      - name: Verify backup archives integrity
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Running verify_backups.sh ==="
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/verify_backups.sh" 2>&1 || true
+
+      - name: Check Grafana proxy
+        run: |
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "=== Checking Grafana via nginx proxy ==="
+          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || echo 0")
+          if [ "$GRAFANA_OK" -ge 1 ]; then
+            echo "[PASS] Grafana reachable via nginx proxy"
+          else
+            echo "[WARN] Grafana via nginx proxy: not reachable"
+          fi
+
       - name: Destroy data — simulate disaster
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
@@ -337,13 +362,9 @@ jobs:
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
           set +e
-          ssh ubuntu@"$SERVER_IP" "bash -x /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" >/tmp/restore_stdout.txt 2>/tmp/restore_stderr.txt
+          ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
           RC=$?
           set -e
-          echo "=== stdout ==="
-          cat /tmp/restore_stdout.txt 2>/dev/null || echo "(empty)"
-          echo "=== stderr ==="
-          cat /tmp/restore_stderr.txt 2>/dev/null || echo "(empty)"
           echo "RESTORE_ALL exit code: $RC"
           echo "restore_exit_code=$RC" >> "$GITHUB_OUTPUT"
           if [ "$RC" -ne 0 ]; then
