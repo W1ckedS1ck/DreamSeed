@@ -57,8 +57,6 @@ jobs:
       - name: Mask secrets
         run: |
           [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}" || true
-          [[ -n "${{ secrets.TG_CHAT_ID }}" ]] && echo "::add-mask::${{ secrets.TG_CHAT_ID }}" || true
-          [[ -n "${{ secrets.TG_THREAD_ID }}" ]] && echo "::add-mask::${{ secrets.TG_THREAD_ID }}" || true
           [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}" || true
           [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}" || true
           [[ -n "${{ secrets.CF_ZONE_ID }}" ]] && echo "::add-mask::${{ secrets.CF_ZONE_ID }}" || true
@@ -70,17 +68,15 @@ jobs:
           [[ -n "${{ secrets.RCLONE_CONF_BASE64 }}" ]] && echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}" || true
           [[ -n "${{ secrets.USER_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.USER_SSH_PUBLIC_KEY }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" || true
-          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" || true
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
+          # NOTE: TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
+          # because they are pure integers that corrupt log output (IPs, timestamps, counts)
 
       - name: Setup secrets
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
           DB_PASS: ${{ secrets.DB_PASS }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
@@ -92,18 +88,16 @@ jobs:
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}
-          DEV_GRAFANA_CLOUD_USERNAME: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
-          PROD_GRAFANA_CLOUD_USERNAME: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
         run: |
           mkdir -p secrets ~/.ssh
 
           {
             echo "TG_TOKEN=$TG_TOKEN"
-            echo "TG_CHAT_ID=$TG_CHAT_ID"
-            echo "TG_THREAD_ID=$TG_THREAD_ID"
+            echo "TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}"
+            echo "TG_THREAD_ID=${{ secrets.TG_THREAD_ID }}"
             echo "DB_PASS=$DB_PASS"
             echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
             echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
@@ -115,11 +109,11 @@ jobs:
             echo "ADDITIONAL_SSH_KEYS=\"$USER_SSH_PUBLIC_KEY\""
 
             echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_PUSH_URL"
-            echo "DEV_GRAFANA_CLOUD_USERNAME=$DEV_GRAFANA_CLOUD_USERNAME"
+            echo "DEV_GRAFANA_CLOUD_USERNAME=${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
             echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
 
             echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_PUSH_URL"
-            echo "PROD_GRAFANA_CLOUD_USERNAME=$PROD_GRAFANA_CLOUD_USERNAME"
+            echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
 
             # Use existing "Vitali" key and Primary IP in Hetzner Cloud

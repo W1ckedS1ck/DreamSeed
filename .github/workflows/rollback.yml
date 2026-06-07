@@ -138,6 +138,8 @@ jobs:
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          # TG_CHAT_ID/TG_THREAD_ID read via secrets below — pure integers,
+          # substring masking is minimal here (no Ansible output to corrupt)
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
         run: |
