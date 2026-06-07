@@ -274,12 +274,14 @@ jobs:
           EOF
           )
 
-      - name: Deploy Phase 1 — base + db + security (parallel)
+      - name: Deploy Base packages
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml
+
+      - name: Deploy DB + Security (parallel)
         run: |
           set +e
           pids=()
           cd ansible
-          ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml -e @/tmp/test_vault.yml & pids+=($!)
           ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml & pids+=($!)
           ansible-playbook -i inventory/hosts-test.yml playbook-07-security.yml -e @/tmp/test_vault.yml & pids+=($!)
           failed=0
