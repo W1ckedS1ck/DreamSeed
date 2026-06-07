@@ -30,7 +30,7 @@ CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
 # State
 TARGET="" WEB_SERVER="" TF_PROVIDER="" TF_WORKSPACE="" TARGET_PREFIX=""
 DEPLOY_DOMAIN="" ENV_FILE="" TF_DIR="" SERVER_IP=""
-SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false
+SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false
 STEP_NAMES=() STEP_TIMES=() STEP_START=0
 
 DEPLOY_START=$(date +%s)
@@ -72,6 +72,7 @@ OPTIONS:
   -x, --destroy      Destroy resources
   -p, --parallel     Parallel playbook execution (3 phases)
   -d, --dry-run      Preview only
+  -c, --check        Validate config & syntax only (no deploy)
   -h                 Show this help
    --logs [tf]        Tail latest deploy/terraform log
    --lint             Run all linters locally (no deploy)
@@ -107,6 +108,7 @@ parse_args() {
             -x|--destroy) DESTROY_MODE=true; shift ;;
             -p|--parallel) PARALLEL_MODE=true; shift ;;
             -d|--dry-run) DRY_RUN=true; shift ;;
+            -c|--check) CHECK_MODE=true; shift ;;
             -h|--help) usage; exit 0 ;;
             *) echo "Unknown option: $1"; usage; exit 1 ;;
         esac
@@ -189,6 +191,47 @@ main() {
     )
 
     preflight_checks
+
+    # ----- Validate playbooks exist -----
+    for entry in "${playbooks[@]}"; do
+        local pb="${entry%%:*}"
+        if [[ ! -f "$SCRIPT_DIR/ansible/$pb" ]]; then
+            echo "Error: playbook not found: $SCRIPT_DIR/ansible/$pb"
+            exit 1
+        fi
+    done
+
+    # ----- Check mode (validate only) -----
+    if [[ "$CHECK_MODE" == "true" ]]; then
+        echo ""
+        echo "  ══════════════════ CHECK ══════════════════"
+        echo "  ✓ Preflight passed"
+        echo "  ✓ All playbooks present"
+        if [[ "$SKIP_TERRAFORM" == "false" ]]; then
+            export_tf_env
+            terraform_init_if_needed || { echo "Terraform init failed"; step_fail "Terraform init failed"; }
+            if _tf validate -no-color >> "$LOG" 2>&1; then
+                echo "  ✓ Terraform config valid"
+            else
+                echo "  ✗ Terraform config invalid (see $LOG)"; exit 1
+            fi
+        fi
+        for entry in "${playbooks[@]}"; do
+            local pb="${entry%%:*}" label="${entry##*:}"
+            if ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
+                echo "  ✓ $label"
+            else
+                echo "  ✗ $label syntax error"
+                ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" 2>&1
+                exit 1
+            fi
+        done
+        echo ""
+        echo "  ✓ All checks passed"
+        echo "  ════════════════════════════════════════════════"
+        echo ""
+        exit 0
+    fi
 
     # ----- Dry run -----
     if [[ "$DRY_RUN" == "true" ]]; then
