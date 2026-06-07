@@ -63,12 +63,6 @@
     - {path: /etc/at.deny, mode: "0600"}
 
 # --- Authorized Keys ---
-- name: Validate additional SSH public keys
-  ansible.builtin.shell:
-    cmd: "echo '{{ item }}' | ssh-keygen -l -f /dev/stdin > /dev/null 2>&1"
-  changed_when: false
-  loop: "{{ additional_ssh_keys | default([]) }}"
-
 - name: Add additional SSH public keys
   become: true
   ansible.posix.authorized_key:
@@ -235,8 +229,8 @@
     mode: "{{ item.mode }}"
     recurse: true
   loop:
-    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "u=rwX,g=rwX,o=rX"}
-    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "u=rwX,g=rwX,o=rX"}
+    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "u=rwX,g=rwX,o="}
+    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "u=rwX,g=rwX,o="}
     - {path: "{{ web_root }}/core/model", owner: root, mode: "u=rwX,g=rwX,o="}
     - {path: "{{ web_root }}/core/components", owner: root, mode: "u=rwX,g=rwX,o="}
   when: modx_config_file.stat.exists

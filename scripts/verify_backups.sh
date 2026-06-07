@@ -44,7 +44,7 @@ if [[ -n "$DB_BACKUP" && -f "$DB_BACKUP" ]]; then
         sql_head=$(zcat "$DB_BACKUP" 2>/dev/null | head -1000) || true
         if grep -q "CREATE TABLE\|INSERT INTO" <<< "$sql_head" 2>/dev/null; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ DB backup OK: $(basename "$DB_BACKUP")" >> "$LOG_FILE"
-            LOCAL_OK=$((LOCAL_OK == 1 ? 1 : 0))
+            # LOCAL_OK stays 1 only if project backup also passed (set above)
         else
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ DB backup INVALID SQL: $(basename "$DB_BACKUP")" >> "$LOG_FILE"
             ALERTS+="❌ DB backup invalid SQL: $(basename "$DB_BACKUP")
@@ -102,6 +102,11 @@ $ALERTS
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alert sent to Telegram" >> "$LOG_FILE"
 else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All verifications passed" >> "$LOG_FILE"
+    if [[ -n "${BETTERUPTIME_VERIFY_KEY:-}" ]]; then
+        if ping_heartbeat "$BETTERUPTIME_VERIFY_KEY"; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >> "$LOG_FILE"
+        fi
+    fi
 fi
 
 rotate_files "$BACKUP_DIR/logs/verify_*.log" 30

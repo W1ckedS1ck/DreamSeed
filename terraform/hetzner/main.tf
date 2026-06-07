@@ -74,9 +74,9 @@ if ! id ubuntu &>/dev/null; then
   echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
 fi
 mkdir -p /home/ubuntu/.ssh
-echo '${var.ssh_public_key}' >> /home/ubuntu/.ssh/authorized_keys
+echo '${base64encode(var.ssh_public_key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
 %{for key in var.additional_ssh_keys~}
-echo '${key}' >> /home/ubuntu/.ssh/authorized_keys
+echo '${base64encode(key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
 %{endfor~}
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh

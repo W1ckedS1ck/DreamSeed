@@ -188,14 +188,14 @@ run_gitleaks() {
     group_start "Gitleaks (Secrets) — ${mode}"
     if ! tool_available gitleaks; then print_skip "gitleaks not installed"; group_end; return 0; fi
 
-    local args
+    local -a args
     if [[ "$mode" == "full-history" ]]; then
-        args="--source ."
+        args=(--source .)
     else
-        args="--source . --no-git"
+        args=(--source . --no-git)
     fi
 
-    if gitleaks detect $args -v 2>&1; then
+    if gitleaks detect "${args[@]}" -v 2>&1; then
         print_ok "No secrets found"; ci_annotation "Gitleaks" "pass"
     else
         print_fail "Secrets detected"; ci_annotation "Gitleaks" "fail"
@@ -219,7 +219,7 @@ run_markdownlint() {
     group_start "markdownlint (Documentation)"
     if ! tool_available markdownlint-cli2; then print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"; group_end; return 0; fi
 
-    if markdownlint-cli2 --config .markdownlint.yml "Documentation/**/*.md" "README.md"; then
+    if markdownlint-cli2 --config .markdownlint.yml "docs/**/*.md" "README.md"; then
         print_ok "No issues"; ci_annotation "markdownlint" "pass"
     else
         print_fail "Issues found"; ci_annotation "markdownlint" "fail"
@@ -355,7 +355,7 @@ OPTIONS:
   --gitleaks          Run only gitleaks (working tree)
   --gitleaks-full-history Run only gitleaks (full git history, slower)
   --trivy             Run only trivy
-  --markdownlint      Run only markdownlint (Documentation/)
+  --markdownlint      Run only markdownlint (docs/)
   --secrets           Run only secrets audit
 
   --list              Show available tools and their status

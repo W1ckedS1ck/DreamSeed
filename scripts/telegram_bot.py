@@ -211,7 +211,7 @@ def main():
                             response = "Use /status or /backups"
 
                         send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'MarkdownV2'}
-                        if TG_THREAD_ID:
+                        if TG_THREAD_ID is not None:
                             send_kwargs['message_thread_id'] = TG_THREAD_ID
 
                         resp = requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',

@@ -25,8 +25,6 @@ RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; NC=$'\033[0m'
 TTY=$([[ -t 1 ]] && echo true || echo false)
 
 # Timeouts
-SSH_ATTEMPTS=20 SSH_INTERVAL=1
-AWS_SSH_ATTEMPTS=40 AWS_SSH_INTERVAL=10
 CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
 
 # State
@@ -125,9 +123,12 @@ parse_args() {
 resolve_target() {
     ENV_FILE="$SCRIPT_DIR/secrets/.env"
     case "$TARGET" in
-        prod)    TF_PROVIDER="aws";    DEPLOY_DOMAIN="dreamseed.online";       TF_WORKSPACE="prod";    TARGET_PREFIX="PROD" ;;
-        dev-aws) TF_PROVIDER="aws";    DEPLOY_DOMAIN="aws.vitalikuts.online";  TF_WORKSPACE="dev-aws"; TARGET_PREFIX="DEV_AWS" ;;
-        dev-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz" ;;
+        prod)    TF_PROVIDER="aws";    DEPLOY_DOMAIN="dreamseed.online";       TF_WORKSPACE="prod";    TARGET_PREFIX="PROD"
+                 SSH_ATTEMPTS=40; SSH_INTERVAL=10 ;;
+        dev-aws) TF_PROVIDER="aws";    DEPLOY_DOMAIN="aws.vitalikuts.online";  TF_WORKSPACE="dev-aws"; TARGET_PREFIX="DEV_AWS"
+                 SSH_ATTEMPTS=40; SSH_INTERVAL=10 ;;
+        dev-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz"
+                 SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
@@ -149,13 +150,15 @@ main() {
     parse_args "$@"
     resolve_target
 
-    LOCK_FILE="/tmp/deploy-${TARGET}.lock"
-    exec 200>"$LOCK_FILE"
-    if ! flock -n 200; then
-        echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE" 2>/dev/null || echo "unknown"))"
-        exit 1
+    if command -v flock &>/dev/null; then
+        LOCK_FILE="/tmp/deploy-${TARGET}.lock"
+        exec 200>"$LOCK_FILE"
+        if ! flock -n 200; then
+            echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE" 2>/dev/null || echo "unknown"))"
+            exit 1
+        fi
+        echo "$$" > "$LOCK_FILE"
     fi
-    echo "$$" > "$LOCK_FILE"
 
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
     echo "  Target:     $TARGET"
@@ -251,8 +254,9 @@ main() {
         done
         [[ "$ok" != "true" ]] && { tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"; }
 
-        SERVER_IP=$(_tf output -raw server_ipv4 2>&1 | tee -a "$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
+        SERVER_IP=$(_tf output -raw server_ipv4 2>>"$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
+        [[ "$SERVER_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || step_fail "Invalid IP from Terraform: $SERVER_IP"
 
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
@@ -272,11 +276,6 @@ main() {
     fi
 
     # ----- Wait for SSH -----
-    if [[ "$TF_PROVIDER" == "aws" ]]; then
-        SSH_ATTEMPTS=$AWS_SSH_ATTEMPTS; SSH_INTERVAL=$AWS_SSH_INTERVAL
-    elif [[ "$TF_PROVIDER" == "hetzner" ]]; then
-        SSH_ATTEMPTS=90; SSH_INTERVAL=2
-    fi
     step_start "Wait for SSH ($SERVER_IP)"
     local ssh_err="" attempt=0
     for ((attempt=1; attempt<=SSH_ATTEMPTS; attempt++)); do
@@ -334,7 +333,7 @@ INVEOF
         printf '  "php_version": %s,\n' "$(json_escape "$PHP_VERSION")"
         printf '  "secrets_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/secrets")"
         printf '  "configs_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/configs")"
-        printf '  "scripts_dir": %s,\n  "environment": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
+        printf '  "scripts_dir": %s,\n  "deploy_env": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
         [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && printf ',\n  "cloudflare_api_token": %s' "$(json_escape "$CLOUDFLARE_API_TOKEN")"
         [[ -n "${GRAFANA_PASS:-}" ]] && printf ',\n  "grafana_admin_password": %s' "$(json_escape "$GRAFANA_PASS")"
         [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && printf ',\n  "ssh_public_key_path": %s' "$(json_escape "$SSH_PUBLIC_KEY_PATH")"
@@ -356,7 +355,7 @@ INVEOF
         printf '\n}\n'
     } > "$VAULT_TMP"
 
-    # Strip Better Stack keys for non-prod
+    # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ "$TARGET" != "prod" ]] && unset "${!BETTERUPTIME_@}"
 
     # ----- Verify SSH host key -----

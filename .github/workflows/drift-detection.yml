@@ -18,6 +18,7 @@ jobs:
   drift-prod-aws:
     name: Detect drift — AWS prod
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
       TF_WORKSPACE: prod

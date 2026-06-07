@@ -125,7 +125,6 @@
     - mysql-database.json
     - node-exporter-full.json
     - victoria-metrics-single-node.json
-  notify: Restart Grafana
 
 - name: Set web server dashboard lists
   ansible.builtin.set_fact:
@@ -141,7 +140,6 @@
     mode: "0644"
   become: true
   loop: "{{ _ws_copy_dashboards }}"
-  notify: Restart Grafana
 
 - name: Remove dashboard files for disabled web server
   ansible.builtin.file:
@@ -149,7 +147,6 @@
     state: absent
   become: true
   loop: "{{ _ws_remove_dashboards }}"
-  notify: Restart Grafana
 
 - name: Fix Grafana dashboard directory ownership and permissions
   ansible.builtin.file:

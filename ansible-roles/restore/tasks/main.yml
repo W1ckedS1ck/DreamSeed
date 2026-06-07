@@ -63,11 +63,22 @@
         executable: /bin/bash
       register: restore_latest_project
       changed_when: false
+      failed_when: false
 
     - name: Fail if no project backup found
       ansible.builtin.fail:
         msg: "No project backups found on Google Drive"
-      when: restore_latest_project.stdout | trim == ""
+      when:
+        - restore_latest_project.rc is defined
+        - restore_latest_project.rc == 0
+        - restore_latest_project.stdout | trim == ""
+
+    - name: Validate project backup filename
+      ansible.builtin.fail:
+        msg: "Unsafe project backup filename from rclone: '{{ restore_latest_project.stdout | trim }}'"
+      when:
+        - restore_latest_project.stdout | trim != ""
+        - not (restore_latest_project.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
     - name: Download project backup
       ansible.builtin.shell:
@@ -76,6 +87,7 @@
           rclone copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /tmp/
         executable: /bin/bash
       changed_when: false
+      when: restore_latest_project.stdout | trim != ""
 
     - name: Verify project archive integrity
       ansible.builtin.shell:
@@ -86,13 +98,15 @@
       register: restore_archive_check
       changed_when: false
       failed_when: restore_archive_check.rc != 0
+      when: restore_latest_project.stdout | trim != ""
 
     - name: Validate web_root before destructive operation
       ansible.builtin.fail:
         msg: "Refusing to rm -rf '{{ web_root }}': path is empty, root, or /var/www"
       when: >
-        web_root == '' or web_root == '/' or
-        web_root == '/var/www' or web_root == '/var/www/'
+        restore_latest_project.stdout | trim != "" and
+        (web_root == '' or web_root == '/' or
+        web_root == '/var/www' or web_root == '/var/www/')
 
     - name: Extract project
       become: true
@@ -105,17 +119,20 @@
           chown -R www-data:www-data "{{ web_root }}"
         executable: /bin/bash
       changed_when: false
+      when: restore_latest_project.stdout | trim != ""
 
     - name: Verify project extraction
       ansible.builtin.stat:
         path: "{{ web_root }}/index.php"
       register: restore_index_check
       failed_when: not restore_index_check.stat.exists or restore_index_check.stat.size == 0
+      when: restore_latest_project.stdout | trim != ""
 
     - name: Cleanup project archive
       ansible.builtin.file:
         path: "/tmp/{{ restore_latest_project.stdout | trim }}"
         state: absent
+      when: restore_latest_project.stdout | trim != ""
 
     - name: Show restored project
       ansible.builtin.debug:
@@ -133,7 +150,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      mysql {{ db_name }} -e "SHOW TABLES" 2>/dev/null | wc -l
+      mysql "{{ db_name }}" -e "SHOW TABLES" 2>/dev/null | wc -l
     executable: /bin/bash
   register: restore_db_tables
   changed_when: false
@@ -159,11 +176,22 @@
         executable: /bin/bash
       register: restore_latest_db
       changed_when: false
+      failed_when: false
 
     - name: Fail if no DB backup found
       ansible.builtin.fail:
         msg: "No DB backups found on Google Drive"
-      when: restore_latest_db.stdout | trim == ""
+      when:
+        - restore_latest_db.rc is defined
+        - restore_latest_db.rc == 0
+        - restore_latest_db.stdout | trim == ""
+
+    - name: Validate DB backup filename
+      ansible.builtin.fail:
+        msg: "Unsafe DB backup filename from rclone: '{{ restore_latest_db.stdout | trim }}'"
+      when:
+        - restore_latest_db.stdout | trim != ""
+        - not (restore_latest_db.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
     - name: Download DB backup
       ansible.builtin.shell:
@@ -172,31 +200,35 @@
           rclone copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /tmp/
         executable: /bin/bash
       changed_when: false
+      when: restore_latest_db.stdout | trim != ""
 
     - name: Restore database
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql {{ db_name }}
+          gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql "{{ db_name }}"
         executable: /bin/bash
       register: restore_db_result
       changed_when: false
       failed_when: restore_db_result.rc != 0
+      when: restore_latest_db.stdout | trim != ""
 
     - name: Verify database restore (expect 50+ tables)
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          mysql {{ db_name }} -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
+          mysql "{{ db_name }}" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
         executable: /bin/bash
       register: restore_db_table_count
       changed_when: false
       failed_when: (restore_db_table_count.stdout | int) < 50
+      when: restore_latest_db.stdout | trim != ""
 
     - name: Cleanup DB archive
       ansible.builtin.file:
         path: "/tmp/{{ restore_latest_db.stdout | trim }}"
         state: absent
+      when: restore_latest_db.stdout | trim != ""
 
     - name: Show restored DB
       ansible.builtin.debug:

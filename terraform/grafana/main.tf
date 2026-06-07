@@ -71,7 +71,7 @@ resource "terraform_data" "dashboard_download" {
 }
 
 resource "grafana_folder" "dreamseed" {
-  title = "DreamSeed"
+  title = "DreamSeed (${terraform.workspace})"
 }
 
 resource "grafana_dashboard" "this" {
