@@ -201,3 +201,20 @@ jobs:
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Notify success
+        if: success() && inputs.action == 'deploy'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+        run: |
+          MSG="✅ *Deploy complete* — ${{ inputs.environment }}
+          Server: ${{ inputs.server_ip || 'new' }}
+          🖥 ${{ inputs.web_server }}
+          📅 $(date '+%Y-%m-%d %H:%M')"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=MarkdownV2" \
+            --data-urlencode "text=$MSG" > /dev/null || true

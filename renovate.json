@@ -130,11 +130,11 @@
     },
     {
       "customType": "regex",
-      "description": "Track Terraform version in CI",
+      "description": "Track Terraform CLI version in setup-terraform action",
       "managerFilePatterns": [
-        "/^\\.github/workflows/(ci|grafana-cloud)\\.yml$/"
+        "/^\\.github/actions/setup-terraform/action\\.yml$/"
       ],
-      "matchStrings": ["TF_VERSION: \"(?<currentValue>.*?)\""],
+      "matchStrings": ["default: \"(?<currentValue>[\\d.]+)\"\\s+# renovate: depName=hashicorp/terraform"],
       "depNameTemplate": "hashicorp/terraform",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
