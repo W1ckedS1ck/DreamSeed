@@ -600,6 +600,8 @@ jobs:
 
       - name: Send Telegram report
         if: always()
+        env:
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           set -a
           source secrets/.env
@@ -638,7 +640,7 @@ jobs:
 
           COMMIT_SHA="${{ github.sha }}"
           COMMIT_SHORT="${COMMIT_SHA:0:7}"
-          BRANCH="${{ github.head_ref || github.ref_name }}"
+          BRANCH="$HEAD_REF"
 
           MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 *Backup Restoration Test* $STATUS" \
