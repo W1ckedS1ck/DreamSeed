@@ -78,7 +78,7 @@ jobs:
           GRAFANA_PASS: ${{ secrets.GRAFANA_PASS }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
-          RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
           DEV_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}
           DEV_GRAFANA_CLOUD_USERNAME: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
@@ -117,7 +117,7 @@ jobs:
           echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
           chmod 600 ~/.vault_pass_dreamseed
 
-          [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
+          [[ -n "$RCLONE_CONF_BASE64" ]] && echo "$RCLONE_CONF_BASE64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
           echo "StrictHostKeyChecking accept-new" > ~/.ssh/config
           echo "IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config

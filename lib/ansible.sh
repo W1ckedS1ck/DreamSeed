@@ -57,10 +57,12 @@ PYEOF
     fi
 
     local output
+    echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "bash '${scripts_dir_remote}/check_services.sh'" 2>&1)
     local rc=$?
+    echo "    [DEBUG] SSH exit code: $rc"
 
     echo "$output"
 

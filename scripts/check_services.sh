@@ -89,13 +89,21 @@ if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
 elif [[ "$tables" -ge 1 ]]; then echo "  ⚠ DB: only $tables tables"
 else echo "  ✗ DB: no tables"; fail=1; fi
 
-# --- VictoriaMetrics ---
-vm=$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
-if [[ "$vm" == "OK" ]]; then
+# --- VictoriaMetrics (retry 10 times × 2s — may still be starting) ---
+_vm_ok=0
+for i in $(seq 1 10); do
+    vm=$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
+    if [[ "$vm" == "OK" ]]; then
+        _vm_ok=1
+        break
+    fi
+    sleep 2
+done
+if [[ $_vm_ok -eq 1 ]]; then
     echo "  ✓ VictoriaMetrics"
     export_metric "victoria_metrics_up 1"
 else
-    echo "  ✗ VictoriaMetrics"
+    echo "  ✗ VictoriaMetrics (not ready after ~20s)"
     export_metric "victoria_metrics_up 0"
     fail=1
 fi
