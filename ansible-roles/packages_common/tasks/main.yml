@@ -72,12 +72,13 @@
   ansible.builtin.command: file -s /swapfile
   register: swapfile_type
   changed_when: false
+  failed_when: false
   when: swapfile_stat.stat.exists
 
 - name: Format swap file
   become: true
   ansible.builtin.command: mkswap /swapfile
-  when: swapfile_stat.stat.exists and 'swap file' not in swapfile_type.stdout
+  when: swapfile_stat.stat.exists and (swapfile_type.rc != 0 or 'swap file' not in swapfile_type.stdout)
   changed_when: true
 
 - name: Enable swap
