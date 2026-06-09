@@ -45,11 +45,12 @@
 
 - name: Set global ServerName to suppress warning
   become: true
-  ansible.builtin.lineinfile:
-    path: /etc/apache2/apache2.conf
-    regexp: '^ServerName'
-    line: "ServerName localhost"
-    insertafter: '^</Directory>'
+  ansible.builtin.copy:
+    content: "ServerName localhost\n"
+    dest: /etc/apache2/conf-enabled/servername.conf
+    owner: root
+    group: root
+    mode: "0644"
   notify: Reload Apache HTTP
 
 - name: Deploy HTTP vhost
@@ -61,6 +62,15 @@
     group: root
     mode: "0644"
   notify: Reload Apache HTTP
+
+- name: Create empty DocumentRoot for catch-all vhost
+  become: true
+  ansible.builtin.file:
+    path: /var/www/empty
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Deploy catch-all vhost (reject IP/unknown hosts)
   become: true
@@ -99,6 +109,7 @@
   ansible.builtin.command: "a2ensite {{ domain }}.conf"
   register: apache_http_ensite_result
   changed_when: "'Enabling' in apache_http_ensite_result.stdout"
+  notify: Reload Apache HTTP
 
 - name: Validate Apache config
   become: true

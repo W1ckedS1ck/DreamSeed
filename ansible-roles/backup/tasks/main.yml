@@ -201,6 +201,7 @@
     query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
   become: true
   when:
+    - clear_sessions | default(true)
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 

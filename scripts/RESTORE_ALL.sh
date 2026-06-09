@@ -17,6 +17,11 @@ source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
 
+if ! [[ "$MODX_TABLE_PREFIX" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'"
+    exit 1
+fi
+
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
 

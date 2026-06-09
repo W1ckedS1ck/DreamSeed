@@ -15,17 +15,37 @@
     owner: root
     group: ssl-cert
     mode: "0640"
+    directory_mode: "0750"
   when: ssl_local_backup.stat.exists
   register: ssl_restore_result
 
-- name: Secure restored private keys (privkey.pem and keys/ directory)
+- name: Secure archive and live directories (traversable)
   become: true
   ansible.builtin.file:
     path: "{{ item }}"
     owner: root
     group: ssl-cert
-    mode: "0640"
-    recurse: true
+    mode: "0750"
+    state: directory
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
+
+- name: Secure private keys in archive and live (files only)
+  become: true
+  ansible.builtin.command: >
+    find {{ item }} -type f -exec chmod 0640 {} \;
+  changed_when: true
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
+
+- name: Ensure private key symlinks in live point correctly
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: ssl-cert
   loop:
     - /etc/letsencrypt/archive
     - /etc/letsencrypt/live
@@ -192,4 +212,12 @@
     name: nginx
     state: restarted
   when: web_server == 'nginx'
+  failed_when: false
+
+- name: Restart apache to apply ssl-cert group membership
+  become: true
+  ansible.builtin.systemd:
+    name: apache2
+    state: restarted
+  when: web_server == 'apache'
   failed_when: false

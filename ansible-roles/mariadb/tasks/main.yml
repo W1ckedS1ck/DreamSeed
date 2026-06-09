@@ -53,7 +53,7 @@
   ansible.mysql.mysql_db:
     name: "{{ db_name }}"
     encoding: utf8mb4
-    collation: utf8mb4_general_ci
+    collation: utf8mb4_unicode_ci
     state: present
     login_unix_socket: /run/mysqld/mysqld.sock
 

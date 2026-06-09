@@ -50,6 +50,10 @@
     path: /swapfile
   register: swapfile_stat
 
+- name: Check if swap is already active
+  ansible.builtin.set_fact:
+    swap_is_active: "{{ ansible_facts['swaptotal_mb'] | int > 0 }}"
+
 - name: Create swap file (2 GB)
   become: true
   ansible.builtin.shell: fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
@@ -62,18 +66,23 @@
   ansible.builtin.file:
     path: /swapfile
     mode: "0600"
-  when: not swapfile_stat.stat.exists
+
+- name: Check if swap file is formatted
+  become: true
+  ansible.builtin.command: file -s /swapfile
+  register: swapfile_type
+  changed_when: false
 
 - name: Format swap file
   become: true
   ansible.builtin.command: mkswap /swapfile
-  when: not swapfile_stat.stat.exists
+  when: "'swap file' not in swapfile_type.stdout"
   changed_when: true
 
 - name: Enable swap
   become: true
   ansible.builtin.command: swapon /swapfile
-  when: not swapfile_stat.stat.exists
+  when: not swap_is_active
   changed_when: true
   register: swap_enable_result
   failed_when: false
@@ -82,7 +91,7 @@
   ansible.builtin.debug:
     msg: "WARNING: swapon /swapfile failed — system has no swap. Under memory pressure OOM killer may kill PHP/DB. Fix: check filesystem or kernel params."
   when:
-    - not swapfile_stat.stat.exists
+    - not swap_is_active
     - swap_enable_result.rc is defined
     - swap_enable_result.rc != 0
 

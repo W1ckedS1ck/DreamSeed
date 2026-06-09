@@ -135,7 +135,7 @@ groups:
         annotations:
           summary: Site health check hasn't run for >3 min
 
-{{ alert_body('ssl-expiry', 'SSL Cert Expiring Soon', 'ssl_days_remaining', 86400, 7, 'lt', '1h', 'Alerting', 'Alerting', 'info') }}
+{{ alert_body('ssl-expiry', 'SSL Cert Expiring Soon', 'ssl_days_remaining', 86400, 7, 'lt', '1h', 'OK', 'Alerting', 'info') }}
         annotations:
           summary: >-
             {% raw %}SSL cert expires in {{ $values.A.Value }} days on {{ $labels.instance }}{% endraw %}
