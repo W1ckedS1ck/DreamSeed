@@ -157,6 +157,12 @@
     creates: /etc/ssl/certs/selfsigned.crt
   when: not ssl_has_cert
 
+- name: Check if self-signed key exists
+  become: true
+  ansible.builtin.stat:
+    path: /etc/ssl/private/selfsigned.key
+  register: selfsigned_key
+
 - name: Ensure group ssl-cert exists
   become: true
   ansible.builtin.group:
@@ -171,6 +177,7 @@
     owner: root
     group: ssl-cert
     mode: "0640"
+  when: selfsigned_key.stat.exists
 
 - name: Add web server user to ssl-cert group
   become: true
