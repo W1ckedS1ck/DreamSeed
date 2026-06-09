@@ -96,6 +96,7 @@ jobs:
             echo "GRAFANA_PASS=$GRAFANA_PASS"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
+            echo "SSH_KEY=${HOME}/.ssh/deploy_key"
             echo "HETZNER_SSH_KEY_NAME=Vitali"
             echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
             echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_PUSH_URL"
@@ -116,8 +117,10 @@ jobs:
 
           [[ -n "$RCLONE_CONF_BASE64" ]] && echo "$RCLONE_CONF_BASE64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
-          echo "StrictHostKeyChecking accept-new" > ~/.ssh/config
-          echo "IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
+          echo "Host *" > ~/.ssh/config
+          echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
+          echo "  IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Load secrets and export TF vars
         run: |
@@ -131,8 +134,9 @@ jobs:
           [[ -n "$PROD_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$PROD_GRAFANA_CLOUD_TOKEN"
           echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)" >> "$GITHUB_ENV"
-          echo "TF_VAR_primary_ip_name=" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=Vitali" >> "$GITHUB_ENV"
+          [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali}" >> "$GITHUB_ENV"
+          echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
@@ -153,9 +157,20 @@ jobs:
           TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
-          terraform apply -auto-approve -no-color \
-            -var="environment=test" \
-            -replace="hcloud_server.main"
+          for try in 1 2; do
+            if terraform apply -auto-approve -no-color \
+                -var="environment=test" \
+                -replace="hcloud_server.main"; then
+              break
+            fi
+            if [ "$try" -lt 2 ]; then
+              echo "Attempt $try/2 failed, retrying in 10s..."
+              sleep 10
+            else
+              echo "Terraform apply failed after 2 attempts"
+              exit 1
+            fi
+          done
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
 
       - name: Capture server SSH host key
@@ -172,7 +187,9 @@ jobs:
           source secrets/.env
           set +a
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
 
+          # --- DNS ---
           CF_RESP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
           RECORD_ID=$(echo "$CF_RESP" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
@@ -188,40 +205,50 @@ jobs:
               -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
           fi
           if echo "$CF_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
-            echo "✓ DNS: test.dreamseed.online -> $SERVER_IP"
+            echo "[OK] DNS: test.dreamseed.online -> $SERVER_IP"
           else
-            echo "⚠ DNS update failed: $(echo "$CF_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('errors',[{}])[0].get('message','unknown'))" 2>/dev/null || echo 'unknown')"
+            echo "[WARN] DNS update failed"
           fi
 
-          # Short wait for Cloudflare DNS propagation + server boot
-          for i in $(seq 1 6); do
-            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=3 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>/dev/null; then
-              echo "✓ Server reachable after ~${i}s"
-              break
-            fi
-            sleep 1
-          done
-
+          # --- Wait for SSH (90 x 2s = 180s, matches deploy.sh for Hetzner) ---
           echo "Waiting for SSH on $SERVER_IP..."
-          for i in $(seq 1 30); do
-            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>/dev/null; then
-              echo "SSH is ready (attempt $i)"
+          for i in $(seq 1 90); do
+            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+                -o BatchMode=yes -o PasswordAuthentication=no \
+                -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
+              echo "SSH ready (attempt $i)"
               break
             fi
-            echo "Attempt $i/30 - waiting..."
-            [ "$i" -eq 30 ] && {
-              echo "SSH never became available. Verbose output:"
-              ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes ubuntu@"$SERVER_IP" "exit 0" 2>&1 || true
+            if [ $((i % 10)) -eq 1 ] && [ $i -gt 1 ]; then
+              echo "  Attempt $i/90..."
+            fi
+            [ "$i" -eq 90 ] && {
+              echo "SSH never became available after 180s"
+              ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+                -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" "exit 0" 2>&1 || true
               exit 1
             }
-            sleep 3
+            sleep 2
           done
 
-          echo "Waiting for cloud-init to finish..."
-          ssh ubuntu@$SERVER_IP \
-            "timeout 300 cloud-init status --wait" 2>/dev/null || echo "cloud-init wait timed out, continuing..."
+          # --- Wait for cloud-init (matching deploy.sh) ---
+          echo "Waiting for cloud-init..."
+          ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+            "timeout 300 cloud-init status --wait" 2>/dev/null || {
+              for j in $(seq 1 15); do
+                st=$(ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+                  'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
+                [[ "$st" == *"status: done"* || "$st" == *"No pending"* ]] && break
+                [[ "$st" == *"status: error"* ]] && { echo "Cloud-init status: error"; exit 1; }
+                [[ $j -eq 15 ]] && { echo "Cloud-init timeout after 30s"; exit 1; }
+                sleep 2
+              done
+            }
+          echo "Cloud-init done"
+
+          # --- Wait for apt lock ---
           echo "Waiting for apt lock to release..."
-          ssh ubuntu@$SERVER_IP \
+          ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
             "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
           sleep 5
 
@@ -304,6 +331,8 @@ jobs:
 
       - name: Wait for stack to settle
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           for i in $(seq 1 10); do
             vm_ok=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8428/health 2>/dev/null || echo 'not_ready'" 2>/dev/null || echo "not_ready")
@@ -316,6 +345,8 @@ jobs:
       - name: Record initial content count
         id: initial_content
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ROWS=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo 0")
@@ -324,6 +355,8 @@ jobs:
 
       - name: Create backup via smart_backup.sh
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running smart_backup.sh ==="
           set +e
@@ -338,6 +371,8 @@ jobs:
 
       - name: Verify backup files exist
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Local backups ==="
           ssh ubuntu@"$SERVER_IP" "ls -lh /home/ubuntu/backups/project/ 2>/dev/null || echo 'No project backups'"
@@ -357,6 +392,8 @@ jobs:
       - name: Upload backup to GDrive
         id: gdrive_upload
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Uploading backup to GDrive ==="
           set +e
@@ -374,12 +411,16 @@ jobs:
 
       - name: Verify backup archives integrity
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running verify_backups.sh ==="
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/verify_backups.sh" 2>&1 || true
 
       - name: Check Grafana proxy
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Checking Grafana via nginx proxy ==="
           GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || echo 0")
@@ -392,6 +433,8 @@ jobs:
       - name: Record artifact hashes
         id: artifact_hash
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Recording artifact hashes before destroy ==="
           PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
@@ -405,6 +448,8 @@ jobs:
 
       - name: Destroy data — simulate disaster
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Destroying data to simulate disaster ==="
           # Drop all tables (SET FOREIGN_KEY_CHECKS=0 needed for InnoDB FK constraints)
@@ -424,6 +469,8 @@ jobs:
       - name: Restore from backup via RESTORE_ALL.sh
         id: restore
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           RESTORE_START=$(date +%s)
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
@@ -442,6 +489,8 @@ jobs:
       - name: Verify restored content
         id: verify_content
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Verifying restored content ==="
 
@@ -503,6 +552,8 @@ jobs:
       - name: Validate restored artifacts
         id: validate_hash
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Validating restored artifacts ==="
 
@@ -553,12 +604,15 @@ jobs:
         id: service_tests
         run: |
           set -o pipefail
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
             | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
 
       - name: Run disk check
         id: disk
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           DISK_USAGE=$(ssh ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
@@ -572,6 +626,8 @@ jobs:
       - name: Detect SSL type
         id: ssl
         run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           LE_CERT=$(ssh ubuntu@"$SERVER_IP" "test -f /etc/letsencrypt/live/test.dreamseed.online/fullchain.pem && echo yes || echo no" 2>/dev/null || echo "no")
           if [ "$LE_CERT" = "yes" ]; then
