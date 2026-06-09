@@ -71,6 +71,7 @@ export_tf_env() {
             if [[ -r "$pk" ]]; then
                 local pk_content; pk_content="$(<"$pk")"
                 export TF_VAR_ssh_public_key="$pk_content"
+                export TF_VAR_additional_ssh_keys=$(python3 -c "import sys,json; print(json.dumps([sys.stdin.read().strip()]))" < "$pk")
             fi
         fi
     }
