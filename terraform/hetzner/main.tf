@@ -73,13 +73,14 @@ if ! id ubuntu &>/dev/null; then
   useradd -m -s /bin/bash -G sudo ubuntu
   echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
 fi
+%{   if length(var.additional_ssh_keys) > 0~}
 mkdir -p /home/ubuntu/.ssh
-echo '${base64encode(var.ssh_public_key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
-%{for key in var.additional_ssh_keys~}
+%{      for key in var.additional_ssh_keys~}
 echo '${base64encode(key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
-%{endfor~}
+%{      endfor~}
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+%{   endif~}
 apt-get update -qq
 EOF
 }
