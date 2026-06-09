@@ -37,3 +37,11 @@ scrape_configs:
         labels:
           job: vm
           instance: "{{ domain }}"
+
+{% if grafana_cloud_url is defined and grafana_cloud_url | length > 0 %}
+  - job_name: vmagent
+    static_configs:
+      - targets: ["localhost:8429"]
+        labels:
+          instance: "{{ domain }}"
+{% endif %}

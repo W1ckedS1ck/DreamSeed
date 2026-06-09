@@ -5,7 +5,9 @@ import os
 import sys
 import time
 import subprocess
+import threading
 import requests
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from env_loader import load_env
 
@@ -15,6 +17,8 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger('dreamseed-bot')
+
+HEALTH_PORT = 8553
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(SCRIPT_DIR, '.env')
@@ -31,6 +35,31 @@ RCLONE_REMOTE = 'gdrive'
 REMOTE_BASE = os.environ.get('REMOTE_BASE', 'DreamSeed/backups')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')
 DB_PREFIX = os.environ.get('DB_PREFIX', 'db_modx_db_')
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        log.debug("health: %s", format % args)
+
+
+def start_health_server():
+    try:
+        server = HTTPServer(('127.0.0.1', HEALTH_PORT), HealthHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        log.info("Health endpoint listening on http://127.0.0.1:%d/health", HEALTH_PORT)
+    except Exception as e:
+        log.warning("Health endpoint failed to start: %s", e)
 
 
 def escape_md2(text):
@@ -155,6 +184,8 @@ def main():
     if not TG_TOKEN:
         log.error("TG_TOKEN not set")
         return
+
+    start_health_server()
 
     last_update = None
     commands = {

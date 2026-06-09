@@ -145,6 +145,9 @@ jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*: 
 if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
 else echo "  ⚠ fail2ban: no jails ($jails)"; fi
 
+# --- Heartbeat: export last-run timestamp so we can alert if this script stops running ---
+export_metric "check_services_last_run{instance=\"$DOMAIN\"} $(date +%s)"
+
 # --- Export overall health status ---
 if [[ $fail -eq 0 ]]; then
     export_metric "dreamseed_health_overall 1"

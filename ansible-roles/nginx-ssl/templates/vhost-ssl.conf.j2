@@ -94,4 +94,11 @@ server {
         add_header Pragma "no-cache";
         add_header Cloudflare-CDN-Cache-Control "no-cache";
     }
+
+    location = /bot-health {
+        proxy_pass http://127.0.0.1:8553/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        access_log off;
+    }
 }
