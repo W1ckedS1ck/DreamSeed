@@ -171,7 +171,6 @@
     owner: root
     group: ssl-cert
     mode: "0640"
-  when: not ssl_has_cert
 
 - name: Add web server user to ssl-cert group
   become: true
@@ -179,4 +178,11 @@
     name: www-data
     groups: ssl-cert
     append: true
-  when: not ssl_has_cert
+
+- name: Restart nginx to apply ssl-cert group membership
+  become: true
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
+  when: web_server == 'nginx'
+  failed_when: false
