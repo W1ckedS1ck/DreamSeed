@@ -27,6 +27,7 @@ resolve_env_file() {
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         local pw="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
         [[ ! -f "$pw" ]] && { echo "Error: vault password file not found: $pw" >&2; exit 1; }
+        [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
         local tmp; tmp=$(mktemp); chmod 600 "$tmp"
         ansible-vault view "$f" --vault-password-file "$pw" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
         [[ -s "$tmp" ]] || { echo "Error: vault decrypted file is empty" >&2; exit 1; }

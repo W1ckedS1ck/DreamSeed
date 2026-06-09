@@ -8,7 +8,6 @@ if ! flock -n -x 9; then
     echo "ERROR: Restore already in progress ($LOCK_FILE)"
     exit 1
 fi
-trap 'rm -f "$LOCK_FILE"; exec 9>&-' EXIT
 
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,6 +58,8 @@ SERVICES_STOPPED=0
 RESTORE_TEMP_DIRS=()
 
 cleanup_trap() {
+    rm -f "$LOCK_FILE"
+    exec 9>&-
     for _d in "${RESTORE_TEMP_DIRS[@]:-}"; do
         rm -rf "$_d" 2>/dev/null || true
     done

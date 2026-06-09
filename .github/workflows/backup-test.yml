@@ -248,7 +248,7 @@ jobs:
               admin_email: admin@dreamseed.online
           EOF
 
-          (umask 177; cat > /tmp/test_vault.yml <<EOF
+          (umask 177; envsubst > /tmp/test_vault.yml <<'EOF'
           db_pass: "${DB_PASS}"
           server_ip: "${{ steps.terraform.outputs.server_ipv4 }}"
           web_server: nginx

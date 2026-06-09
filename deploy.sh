@@ -406,7 +406,7 @@ INVEOF
     } > "$DEPLOY_VARS_TMP"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ "$TARGET" != "prod" ]] && unset "${!BETTERUPTIME_@}"
+    [[ "$TARGET" != "prod" ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
 
     # ----- Verify SSH host key -----
     ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
