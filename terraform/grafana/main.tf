@@ -1,9 +1,6 @@
 locals {
   cloud_prom = "grafanacloud-prom"
 
-  probes_http = ["London", "Frankfurt", "NorthVirginia", "Singapore"]
-  probes_ssl  = ["London", "Frankfurt", "NorthVirginia"]
-
   dashboards = {
     node_exporter    = { gid = 1860 }
     mysql            = { gid = 7362 }

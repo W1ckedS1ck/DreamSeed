@@ -19,13 +19,12 @@ variable "sm_access_token" {
 variable "sm_enabled" {
   description = "Enable Synthetic Monitoring checks"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "domain" {
   description = "Domain to monitor (e.g. dreamseed.online)"
   type        = string
-  default     = "dreamseed.online"
 }
 
 variable "sm_url" {
