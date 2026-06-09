@@ -8,4 +8,5 @@ location ~ \.php$ {
     fastcgi_connect_timeout 60s;
     fastcgi_send_timeout 300s;
     fastcgi_read_timeout 300s;
+    fastcgi_hide_header X-Powered-By;
 }
