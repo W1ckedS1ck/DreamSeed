@@ -209,8 +209,8 @@
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 14
-  delay: 2
+  retries: 30
+  delay: 3
   changed_when: false
 
 - name: Check if Grafana admin password already set
