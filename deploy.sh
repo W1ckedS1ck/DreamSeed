@@ -357,6 +357,13 @@ main() {
     }
     echo ""; step_ok
 
+    # ----- Wait for apt lock -----
+    step_start "Wait for apt lock"
+    ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
+    sleep 5
+    step_ok
+
     # ----- Generate inventory + vault -----
     mkdir -p "$SCRIPT_DIR/ansible/inventory"
     INVENTORY_FILE="$SCRIPT_DIR/ansible/inventory/hosts-${TF_WORKSPACE}.yml"
