@@ -576,6 +576,12 @@ if [ "$MODE" = "interactive" ]; then
     echo ""
 fi
 
+echo ""
+echo "Project: $PROJECT_STATUS"
+echo "DB: $DB_STATUS"
+echo "Site: $SITE_STATUS"
+echo "Time: ${ELAPSED}s"
+
 if [ "${RESTORE_RESULT:-0}" -eq 1 ]; then
     MSG="❌ <b>[$ENV_DISPLAY] DreamSeed Restore FAILED</b>"
 else
