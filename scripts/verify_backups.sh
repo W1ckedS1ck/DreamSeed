@@ -93,7 +93,7 @@ fi
 # ====== Send alerts if verification failed ======
 if [[ -n "$ALERTS" ]]; then
     MSG="====== ALERT ======
-🔴 *BACKUP VERIFICATION FAILED* — $DOMAIN
+🔴 <b>BACKUP VERIFICATION FAILED</b> — $DOMAIN
 
 $ALERTS
 ⏰ $(date '+%d.%m.%Y %H:%M')

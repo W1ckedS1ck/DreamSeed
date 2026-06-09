@@ -59,9 +59,9 @@ format_env_display() {
 format_env_escaped() {
     local env="$1"
     if [ -z "$env" ]; then
-        echo "*PROD*"
+        echo "<b>PROD</b>"
     else
-        echo "***$(escape_md2 "$env")***"
+        echo "<b><i>$env</i></b>"
     fi
 }
 
@@ -71,7 +71,7 @@ format_name() {
 
 send_tg() {
     local text="$1"
-    local parse_mode="${2:-MarkdownV2}"
+    local parse_mode="${2:-HTML}"
     local tg_url="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
     local data=(
         --data-urlencode "chat_id=$TG_CHAT_ID"
@@ -104,7 +104,7 @@ prune_cloud_backups() {
 }
 
 escape_md2() {
-    echo "$1" | sed 's/[_*\[\]()~`>#+=|{}.!@:-]/\\&/g'
+    echo "$1" | sed 's/[][_*()~`>#+=|{}.!@:-]/\\&/g'
 }
 
 rotate_files() {

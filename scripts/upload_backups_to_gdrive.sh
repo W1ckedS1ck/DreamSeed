@@ -89,7 +89,7 @@ if [ "$HAS_ERROR" -eq 1 ]; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
     MSG="====== ALERT ======
-🔴 *UPLOAD FAILED* — $ENV_DISPLAY_ESCAPED
+🔴 <b>UPLOAD FAILED</b> — $ENV_DISPLAY_ESCAPED
 
 ${UPLOAD_MSG}⏰ $(date '+%d.%m.%Y %H:%M')  ⏱ ${DURATION}s
 =========================="

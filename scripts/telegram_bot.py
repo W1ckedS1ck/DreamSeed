@@ -67,8 +67,8 @@ def format_backup_name(filename, prefix='DreamSeed_'):
     name = filename.replace(prefix, '').replace('.tar.gz', '').replace('.sql.gz', '')
     parts = name.rsplit('_', 1)
     if len(parts) == 2:
-        return escape_md2(f"{parts[0]} {parts[1].replace('-', ':')}")
-    return escape_md2(name)
+        return f"{parts[0]} {parts[1].replace('-', ':')}"
+    return name
 
 def _local_backups(subdir, prefix):
     path = f'{BACKUP_DIR}/{subdir}'
@@ -116,7 +116,7 @@ def cmd_status():
                 log.warning("Failed to parse cloud size %s: %s", size_bytes, e)
                 return "-"
 
-        msg = f"📊 *Backup Status* — {escape_md2(env)}\n\n"
+        msg = f"📊 <b>Backup Status</b> — {env}\n\n"
 
         msg += "📁 Local:\n"
         for f in proj_files[:2]:
@@ -141,10 +141,10 @@ def cmd_backups():
         proj_files = _local_backups('project', 'DreamSeed_')[:5]
         db_files = _local_backups('db', 'db_')[:5]
 
-        msg = f"🖥 *Last 5 Projects* — {escape_md2(env)}\n\n"
+        msg = f"🖥 <b>Last 5 Projects</b> — {env}\n\n"
         msg += '\n'.join([f"{format_backup_name(f)} ({get_size(f'{BACKUP_DIR}/project/{f}')})" for f in proj_files])
 
-        msg += f"\n\n🗄 *Last 5 DB* — {escape_md2(env)}\n\n"
+        msg += f"\n\n🗄 <b>Last 5 DB</b> — {env}\n\n"
         msg += '\n'.join([f"{format_backup_name(f, DB_PREFIX)} ({get_size(f'{BACKUP_DIR}/db/{f}')})" for f in db_files])
 
         return msg
@@ -210,7 +210,7 @@ def main():
                         else:
                             response = "Use /status or /backups"
 
-                        send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'MarkdownV2'}
+                        send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'HTML'}
                         if TG_THREAD_ID is not None:
                             send_kwargs['message_thread_id'] = TG_THREAD_ID
 

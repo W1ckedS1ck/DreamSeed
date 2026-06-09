@@ -103,12 +103,12 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
 # ====== Telegram notification only on failure ======
 if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* ]]; then
     MSG="====== ALERT ======
-🔴 *BACKUP FAILED* — $ENV_DISPLAY_ESCAPED
+🔴 <b>BACKUP FAILED</b> — $ENV_DISPLAY_ESCAPED
 "
-    [[ "$PROJECT_STATUS" == "❌"* ]] && MSG+="$(escape_md2 "$PROJECT_STATUS")
+    [[ "$PROJECT_STATUS" == "❌"* ]] && MSG+="$PROJECT_STATUS
 "
     [[ "$DB_STATUS" == "❌"* ]] && MSG+="
-$(escape_md2 "$DB_STATUS")"
+$DB_STATUS"
     MSG+="
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="

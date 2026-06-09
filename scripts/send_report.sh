@@ -52,8 +52,8 @@ if [ "$REPORT_TYPE" = "daily" ]; then
     DB_1=$(format_name "$(echo "$DB_FILES" | head -1)")
     DB_2=$(format_name "$(echo "$DB_FILES" | sed -n '2p')")
 
-    MSG="*DAILY REPORT*
-$(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
+    MSG="<b>DAILY REPORT</b>
+$(date +%d.%m) - $ENV_DISPLAY"
 
     if [ "$PROJ_COUNT" -ge 1 ]; then
         MSG+="
@@ -91,14 +91,14 @@ $(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
 
     MSG+="
 
-$(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
+$(date '+%d.%m.%Y %H:%M')"
 
     send_tg "$MSG"
 
 # ====== WEEKLY REPORT ======
 elif [ "$REPORT_TYPE" = "weekly" ]; then
-    MSG="*WEEKLY REPORT*
-$(escape_md2 "$(date -d '-7 days' +%d.%m)")-$(escape_md2 "$(date +%d.%m)") - $ENV_DISPLAY"
+    MSG="<b>WEEKLY REPORT</b>
+$(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
 
     if [ "$PROJ_COUNT" -ge 1 ]; then
         MSG+="

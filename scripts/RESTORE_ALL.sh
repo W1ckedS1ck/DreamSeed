@@ -572,22 +572,22 @@ if [ "$MODE" = "interactive" ]; then
 fi
 
 if [ "${RESTORE_RESULT:-0}" -eq 1 ]; then
-    MSG="❌ *[$ENV_DISPLAY] DreamSeed Restore FAILED*"
+    MSG="❌ <b>[$ENV_DISPLAY] DreamSeed Restore FAILED</b>"
 else
-    MSG="✅ *[$ENV_DISPLAY] DreamSeed Restore*"
+    MSG="✅ <b>[$ENV_DISPLAY] DreamSeed Restore</b>"
 fi
 
 MSG="$MSG
 
-📝 *Project:* $(escape_md2 "$PROJECT_STATUS")
-🗄️ *DB:* $(escape_md2 "$DB_STATUS")
-🌐 *Site:* $(escape_md2 "$SITE_STATUS")
-⏱️ *Time:* \`${ELAPSED}\`s"
+📝 <b>Project:</b> $PROJECT_STATUS
+🗄️ <b>DB:</b> $DB_STATUS
+🌐 <b>Site:</b> $SITE_STATUS
+⏱️ <b>Time:</b> <code>${ELAPSED}</code>s"
 
 if [[ "$DB_STATUS" == *"Rollback"* ]]; then
     MSG="$MSG
 
-⚠️ *Data rollback — verify carefully!*"
+⚠️ <b>Data rollback — verify carefully!</b>"
 fi
 
 send_tg "$MSG"
