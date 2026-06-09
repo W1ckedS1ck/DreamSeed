@@ -137,6 +137,7 @@ jobs:
           [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali}" >> "$GITHUB_ENV"
           echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}" >> "$GITHUB_ENV"
+          python3 -c "import json, os; k=open(os.path.expanduser('~/.ssh/deploy_key.pub')).read().strip(); print(f'TF_VAR_additional_ssh_keys={json.dumps([k])}')" >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
