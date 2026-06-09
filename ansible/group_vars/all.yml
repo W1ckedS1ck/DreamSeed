@@ -61,6 +61,7 @@ monitoring_vmagent_enabled: true
 monitoring_scrape_interval: "15s"
 grafana_telegram_token: "{{ lookup('env', 'TG_TOKEN') }}"
 grafana_telegram_chat_id: "{{ lookup('env', 'TG_CHAT_ID') }}"
+grafana_telegram_thread_id: "{{ lookup('env', 'TG_THREAD_ID') | default('', true) }}"
 grafana_cloud_url: "{{ lookup('env', 'GRAFANA_CLOUD_URL') | default('', true) }}"
 grafana_cloud_username: "{{ lookup('env', 'GRAFANA_CLOUD_USERNAME') | default('', true) }}"
 grafana_cloud_token: "{{ lookup('env', 'GRAFANA_CLOUD_TOKEN') | default('', true) }}"

@@ -56,6 +56,9 @@ contactPoints:
         settings:
           bottoken: "{{ grafana_telegram_token }}"
           chatid: "{{ grafana_telegram_chat_id }}"
+{% if grafana_telegram_thread_id | length > 0 %}
+          message_thread_id: "{{ grafana_telegram_thread_id }}"
+{% endif %}
           message: "{% raw %}{{ if .Alerts.Firing }}🔴 {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
         disableResolveMessage: false
 
@@ -159,10 +162,10 @@ groups:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
 
-{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 180, 'gt', '1m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 600, 'gt', '1m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
-            {% raw %}Service health check hasn't run for >3 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
+            {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
 
 {% if grafana_cloud_url is defined and grafana_cloud_url | length > 0 %}
 {{ alert_body('vmagent-down', 'VMAgent Down', 'up{job="vmagent"}', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'warning') }}
