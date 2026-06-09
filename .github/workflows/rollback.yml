@@ -120,12 +120,25 @@ jobs:
               ubuntu@${{ steps.server-ip.outputs.ip }} \
               "bash ${SCRIPTS_DIR}/RESTORE_ALL.sh --auto-latest"
 
+      - name: Set domain
+        id: domain
+        run: |
+          ENV="${{ inputs.environment }}"
+          case "$ENV" in
+            prod)    DOMAIN="dreamseed.online" ;;
+            dev-aws) DOMAIN="aws.vitalikuts.online" ;;
+            dev-hetz) DOMAIN="hetz.vitalikuts.online" ;;
+          esac
+          echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+          echo "Health check domain: $DOMAIN"
+
       - name: Health check
         id: health
         run: |
+          DOMAIN="${{ steps.domain.outputs.domain }}"
           for i in 1 2 3 4 5; do
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
-              "http://${{ steps.server-ip.outputs.ip }}" || echo "000")
+              "http://$DOMAIN" || echo "000")
             if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
               echo "HTTP $http_code — OK"
               break
@@ -136,7 +149,7 @@ jobs:
           done
           for i in 1 2 3; do
             https_code=$(curl -sk -o /dev/null -w "%{http_code}" --connect-timeout 5 \
-              "https://${{ steps.server-ip.outputs.ip }}" || echo "000")
+              "https://$DOMAIN" || echo "000")
             if [[ "$https_code" =~ ^(200|301|302)$ ]]; then
               echo "HTTPS $https_code — OK"
               exit 0
@@ -145,9 +158,6 @@ jobs:
             sleep 3
           done
           echo "HTTPS health check failed (HTTP was OK, SSL may be broken)"
-          exit 1
-          done
-          echo "::error::Site not healthy after rollback"
           exit 1
 
       - name: Send completion notification
