@@ -37,28 +37,30 @@ jobs:
         run: |
           echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
 
-      - name: Set Terraform variables
+      - name: Write terraform.tfvars.json
+        working-directory: terraform/grafana
         env:
-          PROD_SM_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
-          DEV_SM_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
           WORKSPACE_INPUT: ${{ github.event.inputs.workspace }}
         run: |
           if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
-            echo "TF_VAR_grafana_cloud_url=${{ secrets.PROD_GRAFANA_CLOUD_URL }}" >> $GITHUB_ENV
-            echo "TF_VAR_grafana_cloud_token=${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" >> $GITHUB_ENV
-            echo "TF_VAR_sm_access_token=${{ secrets.PROD_SM_ACCESS_TOKEN }}" >> $GITHUB_ENV
-            echo "TF_VAR_domain=dreamseed.online" >> $GITHUB_ENV
-            echo "TF_VAR_sm_url=https://synthetic-monitoring-api-us-east-0.grafana.net" >> $GITHUB_ENV
-            [[ -n "$PROD_SM_TOKEN" ]] && SM_ENABLED=true || SM_ENABLED=false
+            jq -n \
+              --arg url "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" \
+              --arg token "${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" \
+              --arg sm_token "${{ secrets.PROD_SM_ACCESS_TOKEN }}" \
+              --arg domain "dreamseed.online" \
+              --arg sm_url "https://synthetic-monitoring-api-us-east-0.grafana.net" \
+              '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_token | length > 0)}' \
+              > terraform.tfvars.json
           else
-            echo "TF_VAR_grafana_cloud_url=${{ secrets.DEV_GRAFANA_CLOUD_URL }}" >> "$GITHUB_ENV"
-            echo "TF_VAR_grafana_cloud_token=${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}" >> $GITHUB_ENV
-            echo "TF_VAR_sm_access_token=${{ secrets.DEV_SM_ACCESS_TOKEN }}" >> $GITHUB_ENV
-            echo "TF_VAR_domain=hetz.vitalikuts.online" >> $GITHUB_ENV
-            echo "TF_VAR_sm_url=https://synthetic-monitoring-api-eu-north-0.grafana.net" >> $GITHUB_ENV
-            [[ -n "$DEV_SM_TOKEN" ]] && SM_ENABLED=true || SM_ENABLED=false
+            jq -n \
+              --arg url "${{ secrets.DEV_GRAFANA_CLOUD_URL }}" \
+              --arg token "${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}" \
+              --arg sm_token "${{ secrets.DEV_SM_ACCESS_TOKEN }}" \
+              --arg domain "hetz.vitalikuts.online" \
+              --arg sm_url "https://synthetic-monitoring-api-eu-north-0.grafana.net" \
+              '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_token | length > 0)}' \
+              > terraform.tfvars.json
           fi
-          echo "TF_VAR_sm_enabled=$SM_ENABLED" >> $GITHUB_ENV
 
       - name: Init dashboards cache
         working-directory: terraform/grafana
