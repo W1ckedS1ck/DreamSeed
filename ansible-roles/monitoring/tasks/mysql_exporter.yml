@@ -43,6 +43,7 @@
       User=mysqld_exporter
       ExecStart=/usr/local/bin/mysqld_exporter --config.my-cnf=/etc/mysqld_exporter.cnf --web.listen-address=127.0.0.1:9104 --no-collect.slave_status
       Restart=always
+      RestartSec=5s
 
       [Install]
       WantedBy=multi-user.target

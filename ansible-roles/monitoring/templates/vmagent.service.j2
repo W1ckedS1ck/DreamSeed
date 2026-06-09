@@ -16,6 +16,7 @@ ExecStart=/usr/local/bin/vmagent \
   -promscrape.config=/etc/vmagent/scrape.yml \
   -remoteWrite.queues=4
 Restart=always
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target
