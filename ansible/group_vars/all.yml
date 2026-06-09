@@ -83,6 +83,11 @@ secrets_dir: "{{ playbook_dir }}/../secrets"
 configs_dir: "{{ playbook_dir }}/../configs"
 
 # ========================
+#  Environment
+# ========================
+deploy_env: "{{ lookup('env', 'DEPLOY_ENV') | default('unknown', true) }}"
+
+# ========================
 #  Security
 # ========================
 dev_write_perms: false

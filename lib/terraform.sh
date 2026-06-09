@@ -74,8 +74,10 @@ terraform_destroy() {
 
     TF_TMP_OUT=$(mktemp)
     # shellcheck disable=SC2086
+    set +e
     _tf destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
+    set -e
     if [[ $tf_exit -ne 0 ]]; then
         echo "  ⚠ terraform destroy exited with code $tf_exit (ignored — TFC remote backend exit 1 bug)"
     fi

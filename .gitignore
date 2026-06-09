@@ -13,7 +13,7 @@ secrets/
 crash.log
 override.tf
 override.tf.json
-terraform/*/terraform.tfvars
+terraform/*/terraform.tfvars*
 terraform/grafana/.dashboards/
 
 # ─── Ansible ──────────────────────────────────────────────────────────
