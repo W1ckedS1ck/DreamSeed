@@ -19,9 +19,6 @@ on:
           - destroy
         default: deploy
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   bench:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} testhetz-${{ inputs.server_type }}
@@ -33,7 +30,7 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.15.6"
+          terraform_version: "1.16.0"
 
       - name: Setup SSH key
         env:
