@@ -65,7 +65,6 @@ jobs:
           echo "✅ testhetz-${{ inputs.server_type }} created!"
           echo "   IP: $IP"
           echo "   SSH: ssh -i ~/.ssh/testhetz ubuntu@$IP"
-          echo "   GeekBench: ssh ubuntu@$IP ./Geekbench-6.4.1-Linux/geekbench6"
           echo "=========================================="
 
       - name: Destroy
