@@ -7,7 +7,7 @@ on:
         description: 'Hetzner server type'
         required: true
         type: choice
-        options: [cx23, cx33, cax21]
+        options: [cx23, cx33, cx43, cax21]
       action:
         description: 'Action'
         required: true
