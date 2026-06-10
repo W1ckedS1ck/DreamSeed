@@ -31,12 +31,12 @@ cd /home/ubuntu
 GB_VER=""
 for v in 6.7.1 6.7.0 6.6.1 6.6.0 6.5.0 6.4.0 6.3.0 6.2.2 6.2.1 6.2.0 6.1.0 6.0.3; do
   if curl -sfIL --connect-timeout 5 "https://cdn.geekbench.com/Geekbench-$${v}-Linux.tar.gz" > /dev/null 2>&1; then
-    GB_VER="$$v"
+    GB_VER="$${v}"
     break
   fi
 done
 # shellcheck disable=SC2157
-if [ -n "$$GB_VER" ]; then
+if [ -n "$${GB_VER}" ]; then
   wget -q "https://cdn.geekbench.com/Geekbench-$${GB_VER}-Linux.tar.gz"
   tar xzf "Geekbench-$${GB_VER}-Linux.tar.gz"
   rm -f "Geekbench-$${GB_VER}-Linux.tar.gz"
@@ -59,7 +59,7 @@ lscpu >> /home/ubuntu/benchmark-info.txt
 echo "=== SETUP COMPLETE ==="
 echo "Server: testhetz-${server_type}"
 # shellcheck disable=SC2157
-if [ -n "$$GB_DIR" ]; then
+if [ -n "$${GB_DIR}" ]; then
   echo "GeekBench: /home/ubuntu/$${GB_DIR}/geekbench6 (v$${GB_VER})"
   echo "Run: cd $${GB_DIR} && ./geekbench6"
 else
