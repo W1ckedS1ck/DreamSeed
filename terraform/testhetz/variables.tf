@@ -15,7 +15,14 @@ variable "location" {
   default     = "fsn1"
 }
 
+variable "ssh_key_name" {
+  type        = string
+  description = "Name of existing SSH key in Hetzner Cloud"
+  default     = "Vitali"
+}
+
 variable "ssh_public_key" {
   type        = string
-  description = "SSH public key content to inject"
+  description = "SSH public key content (used when ssh_key_name is empty)"
+  default     = ""
 }

@@ -52,8 +52,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/testhetz
           chmod 600 ~/.ssh/testhetz
-          ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
-          export TF_VAR_ssh_public_key="$(cat ~/.ssh/testhetz.pub)"
 
           cd terraform/testhetz
           terraform init -upgrade=false
@@ -117,8 +115,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/testhetz
           chmod 600 ~/.ssh/testhetz
-          ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
-          export TF_VAR_ssh_public_key="$(cat ~/.ssh/testhetz.pub)"
 
           cd terraform/testhetz
           terraform init -upgrade=false
