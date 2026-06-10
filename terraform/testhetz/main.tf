@@ -1,8 +1,13 @@
+data "hcloud_ssh_key" "vitali" {
+  name = "Vitali"
+}
+
 resource "hcloud_server" "main" {
   name        = "testhetz-${var.server_type}"
   server_type = var.server_type
   image       = "ubuntu-24.04"
   location    = var.location
+  ssh_keys    = [data.hcloud_ssh_key.vitali.id]
 
   public_net {
     ipv4_enabled = true
