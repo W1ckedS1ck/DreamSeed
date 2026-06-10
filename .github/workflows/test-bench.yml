@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: hashicorp/setup-terraform@v4
         with:
@@ -42,11 +42,10 @@ jobs:
           echo "SSH_PUB=$(cat ~/.ssh/testhetz.pub)" >> "$GITHUB_ENV"
 
       - name: Restore TF state
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v5
         with:
           path: terraform/testhetz/testhetz.tfstate
           key: testhetz-state-${{ inputs.server_type }}
-          save-always: true
 
       - name: Deploy
         if: inputs.action == 'deploy'
@@ -105,6 +104,13 @@ jobs:
           echo "   SSH: ssh -i ~/.ssh/testhetz root@$IP"
           echo "   Run: ssh root@$IP 'cd Geekbench-* && ./geekbench6'"
           echo "=========================================="
+
+      - name: Save TF state
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: terraform/testhetz/testhetz.tfstate
+          key: testhetz-state-${{ inputs.server_type }}
 
       - name: Destroy
         if: inputs.action == 'destroy'
