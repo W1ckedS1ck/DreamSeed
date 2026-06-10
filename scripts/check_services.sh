@@ -82,20 +82,28 @@ if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     fail=1
     tables=0
 else
-    tables=$(mysql --defaults-group=monitoring -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" 2>/dev/null || echo "0")
+    tables=$(mysql --defaults-group-suffix=monitoring -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" 2>/dev/null || echo "0")
     export_metric "database_tables{database=\"$DB_NAME\"} $tables"
 fi
 if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
 elif [[ "$tables" -ge 1 ]]; then echo "  ⚠ DB: only $tables tables"
 else echo "  ✗ DB: no tables"; fail=1; fi
 
-# --- VictoriaMetrics ---
-vm=$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
-if [[ "$vm" == "OK" ]]; then
+# --- VictoriaMetrics (retry 10 times × 2s — may still be starting) ---
+_vm_ok=0
+for i in $(seq 1 10); do
+    vm=$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
+    if [[ "$vm" == "OK" ]]; then
+        _vm_ok=1
+        break
+    fi
+    sleep 2
+done
+if [[ $_vm_ok -eq 1 ]]; then
     echo "  ✓ VictoriaMetrics"
     export_metric "victoria_metrics_up 1"
 else
-    echo "  ✗ VictoriaMetrics"
+    echo "  ✗ VictoriaMetrics (not ready after ~20s)"
     export_metric "victoria_metrics_up 0"
     fail=1
 fi
@@ -127,13 +135,18 @@ if systemctl is-active vmagent &>/dev/null; then
 fi
 
 # --- Backup cron ---
-if crontab -l 2>/dev/null | grep -q smart_backup; then echo "  ✓ cron: backup"
+if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
+  echo "  ✓ cron: backup"
+  export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
 else echo "  ✗ cron: backup not set"; fail=1; fi
 
 # --- fail2ban ---
 jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
 if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
 else echo "  ⚠ fail2ban: no jails ($jails)"; fi
+
+# --- Heartbeat: export last-run timestamp so we can alert if this script stops running ---
+export_metric "check_services_last_run{instance=\"$DOMAIN\"} $(date +%s)"
 
 # --- Export overall health status ---
 if [[ $fail -eq 0 ]]; then

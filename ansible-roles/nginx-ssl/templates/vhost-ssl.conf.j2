@@ -42,6 +42,7 @@ server {
     }
 
     location ^~ /manager {
+        limit_req zone=modx_login burst=3 nodelay;
         add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
@@ -58,6 +59,10 @@ server {
     location ~* \.(jpg|jpeg|gif|png|ico|css|js|svg|woff|woff2|ttf|eot|otf|webp)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 
     location ^~ /core {
@@ -90,8 +95,17 @@ server {
         # can fetch from grafana.com and plugins can load their own assets.
         # (Nginx does not inherit parent add_header when a child block has any,
         #  so the server-level CSP is already absent here — this is explicit.)
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Cloudflare-CDN-Cache-Control "no-cache";
+    }
+
+    location = /bot-health {
+        proxy_pass http://127.0.0.1:8553/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        access_log off;
     }
 }

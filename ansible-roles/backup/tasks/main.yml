@@ -23,6 +23,7 @@
     group: ubuntu
     mode: "0600"
   when: rclone_config_stat.stat.exists
+  no_log: true
 
 - name: Create root MySQL config for cron jobs
   ansible.builtin.copy:
@@ -119,7 +120,7 @@
 
 - name: Setup daily GDrive upload cron
   ansible.builtin.cron:
-    name: "DreamSeed hourly gdrive upload"
+    name: "DreamSeed daily gdrive upload"
     minute: "5"
     job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
     user: ubuntu
@@ -171,11 +172,11 @@
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
-- name: Check if MODX is installed (modx_system_settings table exists)
+- name: Check if MODX is installed ({{ db_prefix }}system_settings table exists)
   ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
-    query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = 'modx_system_settings'"
+    query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = '{{ db_prefix }}system_settings'"
   register: modx_check
   become: true
   failed_when: false
@@ -185,11 +186,22 @@
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
-      INSERT INTO `{{ db_name }}`.`modx_system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
       ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
   become: true
   when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Truncate MODX session table on deploy (clear stale sessions)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
+  become: true
+  when:
+    - clear_sessions | default(true)
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
@@ -198,7 +210,7 @@
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
-      INSERT INTO `{{ db_name }}`.`modx_system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('cache_db', '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
       ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
   become: true
@@ -211,7 +223,7 @@
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
-      INSERT INTO `{{ db_name }}`.`modx_system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('cache_db_session', '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
       ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
   become: true
@@ -219,23 +231,15 @@
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
-- name: Wait for VictoriaMetrics to accept writes
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8428/health"
-  register: vm_health
-  retries: 30
-  delay: 2
-  until: vm_health.status == 200
-  changed_when: false
-
 - name: Push initial cron heartbeat to VictoriaMetrics
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      for i in 1 2 3; do
+      # VM may still be starting — retry across ~30s instead of blocking 90s
+      for i in $(seq 1 15); do
         echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
-        sleep 1
+        sleep 2
       done
   changed_when: false
   failed_when: false

@@ -57,10 +57,26 @@ resource "aws_security_group" "web" {
   }
 
   egress {
-    description = "All outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTP/HTTPS (apt, certbot, rclone)"
+    from_port   = 80
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
+  }
+
+  egress {
+    description = "DNS"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
+  }
+
+  egress {
+    description = "NTP"
+    from_port   = 123
+    to_port     = 123
+    protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
   }
 
@@ -87,11 +103,16 @@ resource "aws_instance" "web" {
 
   user_data = <<EOF
 #!/bin/bash
+set -e
 hostnamectl set-hostname dreamseed-${var.environment}
+# Bootstrap marker — only run apt upgrade on first boot
+if [[ ! -f /etc/.dreamseed-bootstrapped ]]; then
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+    touch /etc/.dreamseed-bootstrapped
+fi
 sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 systemctl restart ssh
-apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 EOF
 
   metadata_options {

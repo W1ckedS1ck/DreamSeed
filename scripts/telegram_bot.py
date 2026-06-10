@@ -5,7 +5,9 @@ import os
 import sys
 import time
 import subprocess
+import threading
 import requests
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from env_loader import load_env
 
@@ -15,6 +17,8 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger('dreamseed-bot')
+
+HEALTH_PORT = 8553
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(SCRIPT_DIR, '.env')
@@ -31,6 +35,31 @@ RCLONE_REMOTE = 'gdrive'
 REMOTE_BASE = os.environ.get('REMOTE_BASE', 'DreamSeed/backups')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')
 DB_PREFIX = os.environ.get('DB_PREFIX', 'db_modx_db_')
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        log.debug("health: %s", format % args)
+
+
+def start_health_server():
+    try:
+        server = HTTPServer(('127.0.0.1', HEALTH_PORT), HealthHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        log.info("Health endpoint listening on http://127.0.0.1:%d/health", HEALTH_PORT)
+    except Exception as e:
+        log.warning("Health endpoint failed to start: %s", e)
 
 
 def escape_md2(text):
@@ -67,8 +96,8 @@ def format_backup_name(filename, prefix='DreamSeed_'):
     name = filename.replace(prefix, '').replace('.tar.gz', '').replace('.sql.gz', '')
     parts = name.rsplit('_', 1)
     if len(parts) == 2:
-        return escape_md2(f"{parts[0]} {parts[1].replace('-', ':')}")
-    return escape_md2(name)
+        return f"{parts[0]} {parts[1].replace('-', ':')}"
+    return name
 
 def _local_backups(subdir, prefix):
     path = f'{BACKUP_DIR}/{subdir}'
@@ -116,7 +145,7 @@ def cmd_status():
                 log.warning("Failed to parse cloud size %s: %s", size_bytes, e)
                 return "-"
 
-        msg = f"📊 *Backup Status* — {escape_md2(env)}\n\n"
+        msg = f"📊 <b>Backup Status</b> — {env}\n\n"
 
         msg += "📁 Local:\n"
         for f in proj_files[:2]:
@@ -141,10 +170,10 @@ def cmd_backups():
         proj_files = _local_backups('project', 'DreamSeed_')[:5]
         db_files = _local_backups('db', 'db_')[:5]
 
-        msg = f"🖥 *Last 5 Projects* — {escape_md2(env)}\n\n"
+        msg = f"🖥 <b>Last 5 Projects</b> — {env}\n\n"
         msg += '\n'.join([f"{format_backup_name(f)} ({get_size(f'{BACKUP_DIR}/project/{f}')})" for f in proj_files])
 
-        msg += f"\n\n🗄 *Last 5 DB* — {escape_md2(env)}\n\n"
+        msg += f"\n\n🗄 <b>Last 5 DB</b> — {env}\n\n"
         msg += '\n'.join([f"{format_backup_name(f, DB_PREFIX)} ({get_size(f'{BACKUP_DIR}/db/{f}')})" for f in db_files])
 
         return msg
@@ -155,6 +184,8 @@ def main():
     if not TG_TOKEN:
         log.error("TG_TOKEN not set")
         return
+
+    start_health_server()
 
     last_update = None
     commands = {
@@ -210,7 +241,7 @@ def main():
                         else:
                             response = "Use /status or /backups"
 
-                        send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'MarkdownV2'}
+                        send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'HTML'}
                         if TG_THREAD_ID is not None:
                             send_kwargs['message_thread_id'] = TG_THREAD_ID
 

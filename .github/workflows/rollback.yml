@@ -30,6 +30,8 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - uses: ./.github/actions/setup-terraform
+        with:
+          cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Setup secrets
         env:
@@ -112,26 +114,60 @@ jobs:
         run: |
           SCRIPTS_DIR=$(grep -E '^scripts_dir_remote:' ansible/group_vars/all.yml | sed "s/.*: *\"//;s/\"$//")
           SCRIPTS_DIR="${SCRIPTS_DIR:-/home/ubuntu/Scripts}"
-          ssh -o StrictHostKeyChecking=accept-new \
+          OUTPUT=$(ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=10 \
               -i ~/.ssh/deploy_key \
               ubuntu@${{ steps.server-ip.outputs.ip }} \
-              "bash ${SCRIPTS_DIR}/RESTORE_ALL.sh --auto-latest"
+              "bash ${SCRIPTS_DIR}/RESTORE_ALL.sh --auto-latest" 2>&1)
+          echo "$OUTPUT"
+          # Parse summary lines (last occurrence of each)
+          PROJECT=$(echo "$OUTPUT" | grep "^Project:" | tail -1 | sed 's/.*: //')
+          DB=$(echo "$OUTPUT" | grep "^DB:" | tail -1 | sed 's/.*: //')
+          SITE=$(echo "$OUTPUT" | grep "^Site:" | tail -1 | sed 's/.*: //')
+          TIME=$(echo "$OUTPUT" | grep "^Time:" | tail -1 | sed 's/.*: //')
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          echo "db=$DB" >> "$GITHUB_OUTPUT"
+          echo "site=$SITE" >> "$GITHUB_OUTPUT"
+          echo "time=$TIME" >> "$GITHUB_OUTPUT"
+
+      - name: Set domain
+        id: domain
+        run: |
+          ENV="${{ inputs.environment }}"
+          case "$ENV" in
+            prod)    DOMAIN="dreamseed.online" ;;
+            dev-aws) DOMAIN="aws.vitalikuts.online" ;;
+            dev-hetz) DOMAIN="hetz.vitalikuts.online" ;;
+          esac
+          echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+          echo "Health check domain: $DOMAIN"
 
       - name: Health check
         id: health
         run: |
+          DOMAIN="${{ steps.domain.outputs.domain }}"
           for i in 1 2 3 4 5; do
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
-              "http://${{ steps.server-ip.outputs.ip }}" || echo "000")
+              "http://$DOMAIN" || echo "000")
             if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
               echo "HTTP $http_code — OK"
-              exit 0
+              break
             fi
             echo "Attempt $i/5: HTTP $http_code, waiting 5s..."
             sleep 5
+            if [[ $i -eq 5 ]]; then echo "HTTP health check failed"; exit 1; fi
           done
-          echo "::error::Site not healthy after rollback"
+          for i in 1 2 3; do
+            https_code=$(curl -sk -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+              "https://$DOMAIN" || echo "000")
+            if [[ "$https_code" =~ ^(200|301|302)$ ]]; then
+              echo "HTTPS $https_code — OK"
+              exit 0
+            fi
+            echo "HTTPS attempt $i/3: $https_code, waiting 3s..."
+            sleep 3
+          done
+          echo "HTTPS health check failed (HTTP was OK, SSL may be broken)"
           exit 1
 
       - name: Send completion notification
@@ -141,7 +177,6 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
         run: |
-          ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"
           if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
@@ -151,13 +186,15 @@ jobs:
           else
             STATUS="⚠️  SITE UNHEALTHY"
           fi
-          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\nEnvironment: %s\nRestore: %s\nHealth: %s\n🖥 %s' \
+          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\n📝 Project: %s\n🗄️ DB: %s\n🌐 Site: %s\n⏱️ Time: %s\n🖥 %s %s' \
             "$STATUS" \
             "$(date '+%Y-%m-%d %H:%M')" \
-            "${{ inputs.environment }}" \
-            "$(ok $RESTORE)" \
-            "$(ok $HEALTH)" \
-            "${{ steps.server-ip.outputs.ip }}")
+            "${{ steps.restore.outputs.project }}" \
+            "${{ steps.restore.outputs.db }}" \
+            "${{ steps.restore.outputs.site }}" \
+            "${{ steps.restore.outputs.time }}" \
+            "${{ steps.server-ip.outputs.ip }}" \
+            "${{ inputs.environment }}")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \

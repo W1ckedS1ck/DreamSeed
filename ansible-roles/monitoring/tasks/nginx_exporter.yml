@@ -31,6 +31,7 @@
       User=nginx_exporter
       ExecStart=/usr/local/bin/nginx-prometheus-exporter --web.listen-address=127.0.0.1:9113 --nginx.scrape-uri=http://127.0.0.1:80/nginx_status
       Restart=always
+      RestartSec=5s
 
       [Install]
       WantedBy=multi-user.target

@@ -87,6 +87,10 @@ frame-ancestors 'self';"
         Header always unset X-Frame-Options
     </Location>
 
+    # --- Telegram Bot Health ---
+    ProxyPass /bot-health http://127.0.0.1:8553/health
+    ProxyPassReverse /bot-health http://127.0.0.1:8553/health
+
     # --- Document Root ---
     <Directory {{ web_root }}>
         AllowOverride All

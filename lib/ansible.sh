@@ -3,13 +3,15 @@
 # Sourced by deploy.sh — do not execute directly.
 
 _ansible_cmd() {
-    local rc
+    set +e
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
     ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${VAULT_TMP}" \
+    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_TMP}" \
         "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
-    return "${PIPESTATUS[0]}"
+    local rc=${PIPESTATUS[0]}
+    set -e
+    return "$rc"
 }
 
 run_ansible() {
@@ -56,11 +58,15 @@ PYEOF
         scripts_dir_remote="/home/ubuntu/Scripts"
     fi
 
-    local output
+    local output rc
+    echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
+    set +e
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "bash '${scripts_dir_remote}/check_services.sh'" 2>&1)
-    local rc=$?
+    rc=$?
+    set -e
+    echo "    [DEBUG] SSH exit code: $rc"
 
     echo "$output"
 

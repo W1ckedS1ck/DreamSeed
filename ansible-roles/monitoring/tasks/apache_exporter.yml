@@ -29,6 +29,7 @@
       User=apache_exporter
       ExecStart=/usr/local/bin/apache_exporter --web.listen-address=127.0.0.1:9117 --scrape_uri=http://127.0.0.1:80/server-status?auto
       Restart=always
+      RestartSec=5s
 
       [Install]
       WantedBy=multi-user.target

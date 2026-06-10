@@ -18,7 +18,7 @@ terraform_select_workspace() {
 
 terraform_init_if_needed() {
     local ws
-    ws=$(cat "$TF_DIR/.terraform/environment" 2>/dev/null || echo "")
+    ws=$(_tf workspace show 2>/dev/null || echo "")
     if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$ws" != "$TF_WORKSPACE" ]]; then
         TF_WORKSPACE="$TF_WORKSPACE" _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
     fi
@@ -74,13 +74,15 @@ terraform_destroy() {
 
     TF_TMP_OUT=$(mktemp)
     # shellcheck disable=SC2086
+    set +e
     _tf destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
+    set -e
     if [[ $tf_exit -ne 0 ]]; then
         echo "  ⚠ terraform destroy exited with code $tf_exit (ignored — TFC remote backend exit 1 bug)"
     fi
     grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (check $DEPLOY_TF_LOG)"
-    cat "$TF_TMP_OUT" >> "$DEPLOY_TF_LOG"; rm -f "$TF_TMP_OUT"
+    cat "$TF_TMP_OUT" >> "$DEPLOY_TF_LOG" && rm -f "$TF_TMP_OUT"
 
     rm -f "$SCRIPT_DIR/secrets/tfstate-backup/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
 

@@ -14,6 +14,7 @@
   ansible.builtin.command: "a2ensite {{ domain }}-ssl.conf"
   register: apache_ssl_ensite_result
   changed_when: "'Enabling' in apache_ssl_ensite_result.stdout"
+  notify: Reload Apache HTTP
 
 - name: Validate Apache config
   become: true

@@ -56,31 +56,27 @@ jobs:
 
       - name: Mask secrets
         run: |
-          echo "::add-mask::${{ secrets.TG_TOKEN }}"
-          echo "::add-mask::${{ secrets.TG_CHAT_ID }}"
-          echo "::add-mask::${{ secrets.TG_THREAD_ID }}"
-          echo "::add-mask::${{ secrets.DB_PASS }}"
-          echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}"
-          echo "::add-mask::${{ secrets.CF_ZONE_ID }}"
-          echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}"
-          echo "::add-mask::${{ secrets.GRAFANA_PASS }}"
-          echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}"
-          echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}"
-          echo "::add-mask::${{ secrets.VAULT_PASSWORD }}"
-          echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}"
-          echo "::add-mask::${{ secrets.USER_SSH_PUBLIC_KEY }}"
-          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}"
-          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
-          echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}"
-          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}"
-          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
-          echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}"
+          [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}" || true
+          [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}" || true
+          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}" || true
+          [[ -n "${{ secrets.CF_ZONE_ID }}" ]] && echo "::add-mask::${{ secrets.CF_ZONE_ID }}" || true
+          [[ -n "${{ secrets.HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}" || true
+          [[ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]] && echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}" || true
+          [[ -n "${{ secrets.VAULT_PASSWORD }}" ]] && echo "::add-mask::${{ secrets.VAULT_PASSWORD }}" || true
+          [[ -n "${{ secrets.RCLONE_CONF_BASE64 }}" ]] && echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}" || true
+          [[ -n "${{ secrets.USER_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.USER_SSH_PUBLIC_KEY }}" || true
+          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" || true
+          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
+          # NOTE: TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
+          # because they are pure integers that corrupt log output (IPs, timestamps, counts)
 
       - name: Setup secrets
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
           DB_PASS: ${{ secrets.DB_PASS }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
@@ -89,21 +85,19 @@ jobs:
           BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
-          RCLONE_CONF_B64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}
-          DEV_GRAFANA_CLOUD_USERNAME: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
-          PROD_GRAFANA_CLOUD_USERNAME: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
         run: |
           mkdir -p secrets ~/.ssh
 
           {
             echo "TG_TOKEN=$TG_TOKEN"
-            echo "TG_CHAT_ID=$TG_CHAT_ID"
-            echo "TG_THREAD_ID=$TG_THREAD_ID"
+            echo "TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}"
+            echo "TG_THREAD_ID=${{ secrets.TG_THREAD_ID }}"
             echo "DB_PASS=$DB_PASS"
             echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
             echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
@@ -115,11 +109,11 @@ jobs:
             echo "ADDITIONAL_SSH_KEYS=\"$USER_SSH_PUBLIC_KEY\""
 
             echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_PUSH_URL"
-            echo "DEV_GRAFANA_CLOUD_USERNAME=$DEV_GRAFANA_CLOUD_USERNAME"
+            echo "DEV_GRAFANA_CLOUD_USERNAME=${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
             echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
 
             echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_PUSH_URL"
-            echo "PROD_GRAFANA_CLOUD_USERNAME=$PROD_GRAFANA_CLOUD_USERNAME"
+            echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
 
             # Use existing "Vitali" key and Primary IP in Hetzner Cloud
@@ -135,7 +129,7 @@ jobs:
           echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
           chmod 600 ~/.vault_pass_dreamseed
 
-          [[ -n "$RCLONE_CONF_B64" ]] && echo "$RCLONE_CONF_B64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
+          [[ -n "$RCLONE_CONF_BASE64" ]] && echo "$RCLONE_CONF_BASE64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
       - name: Deploy
         if: inputs.action == 'deploy'
@@ -195,6 +189,23 @@ jobs:
         run: |
           MSG="❌ *Deploy failed* — ${{ inputs.environment }}
           Action: ${{ inputs.action }}
+          📅 $(date '+%Y-%m-%d %H:%M')"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=MarkdownV2" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Notify success
+        if: success() && inputs.action == 'deploy'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+        run: |
+          MSG="✅ *Deploy complete* — ${{ inputs.environment }}
+          Server: ${{ inputs.server_ip || 'new' }}
+          🖥 ${{ inputs.web_server }}
           📅 $(date '+%Y-%m-%d %H:%M')"
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \

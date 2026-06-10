@@ -13,10 +13,43 @@
     src: "{{ secrets_dir }}/ssl/letsencrypt/"
     dest: /etc/letsencrypt/
     owner: root
-    group: root
-    mode: preserve
+    group: ssl-cert
+    mode: "0640"
+    directory_mode: "0750"
   when: ssl_local_backup.stat.exists
   register: ssl_restore_result
+
+- name: Secure archive and live directories (traversable)
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: ssl-cert
+    mode: "0750"
+    state: directory
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
+
+- name: Secure private keys in archive and live (files only)
+  become: true
+  ansible.builtin.command: >
+    find {{ item }} -type f -exec chmod 0640 {} \;
+  changed_when: true
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
+
+- name: Ensure private key symlinks in live point correctly
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: ssl-cert
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
 
 - name: Set ssl_restored fact
   ansible.builtin.set_fact:
@@ -68,6 +101,14 @@
   when: cloudflare_enabled | default(true) | bool
 
 # --- Final cert status ---
+- name: Debug certbot result
+  ansible.builtin.debug:
+    msg:
+      - "certbot rc: {{ ssl_certbot_result.rc | default('skipped') }}"
+      - "certbot stdout: {{ ssl_certbot_result.stdout_lines | default([]) }}"
+      - "certbot stderr: {{ ssl_certbot_result.stderr_lines | default([]) }}"
+  when: ssl_certbot_result is defined and ssl_certbot_result.rc is defined and ssl_certbot_result.rc != 0
+
 - name: Re-check certificate after certbot
   become: true
   ansible.builtin.stat:
@@ -81,13 +122,15 @@
 - name: SSL status
   ansible.builtin.debug:
     msg: >-
-      {{ ssl_restored | default(false) | ternary(
-        '✓ SSL: Restored from local backup',
-        ssl_has_cert | ternary(
-          '✓ SSL: Let''s Encrypt certificate ready',
-          '⊘ SSL: certbot failed — Nginx will use self-signed. Fix DNS and re-run.'
-        )
-      ) }}
+      {%- if ssl_restored | default(false) -%}
+      ✓ SSL: Restored from local backup
+      {%- elif ssl_has_cert -%}
+      ✓ SSL: Let's Encrypt certificate ready
+      {%- elif not cloudflare_enabled | default(true) | bool -%}
+      ⊘ SSL: self-signed (Cloudflare disabled for this environment)
+      {%- else -%}
+      ⊘ SSL: certbot failed — self-signed fallback. Fix DNS and re-run.
+      {%- endif -%}
 
 # --- Certbot timer + deploy-hook ---
 - name: Enable certbot auto-renewal timer
@@ -135,6 +178,12 @@
     creates: /etc/ssl/certs/selfsigned.crt
   when: not ssl_has_cert
 
+- name: Check if self-signed key exists
+  become: true
+  ansible.builtin.stat:
+    path: /etc/ssl/private/selfsigned.key
+  register: selfsigned_key
+
 - name: Ensure group ssl-cert exists
   become: true
   ansible.builtin.group:
@@ -149,7 +198,7 @@
     owner: root
     group: ssl-cert
     mode: "0640"
-  when: not ssl_has_cert
+  when: selfsigned_key.stat.exists
 
 - name: Add web server user to ssl-cert group
   become: true
@@ -157,4 +206,19 @@
     name: www-data
     groups: ssl-cert
     append: true
-  when: not ssl_has_cert
+
+- name: Restart nginx to apply ssl-cert group membership
+  become: true
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
+  when: web_server == 'nginx'
+  failed_when: false
+
+- name: Restart apache to apply ssl-cert group membership
+  become: true
+  ansible.builtin.systemd:
+    name: apache2
+    state: restarted
+  when: web_server == 'apache'
+  failed_when: false

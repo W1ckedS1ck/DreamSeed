@@ -33,6 +33,7 @@
         dest: "/tmp/{{ monitor_bin_name }}.tar.gz"
         mode: "0644"
         timeout: 90
+        checksum: "{{ monitor_checksum | default(omit) }}"
 
     - name: "Extract {{ monitor_bin_name }}"
       ansible.builtin.unarchive:

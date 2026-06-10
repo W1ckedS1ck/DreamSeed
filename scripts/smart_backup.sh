@@ -35,6 +35,7 @@ ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
 
 # ====== Lock against parallel runs ======
+trap 'exec 9>&-' EXIT
 LOCK_FILE="/tmp/smart_backup.lock"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
@@ -48,7 +49,6 @@ echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
 
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
-trap 'exec 9>&-' EXIT
 
 if [[ -f "$MARKER_FILE" ]]; then
     CHANGED=$(sudo find "$PROJECT_DIR" -type f \
@@ -103,12 +103,12 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
 # ====== Telegram notification only on failure ======
 if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* ]]; then
     MSG="====== ALERT ======
-🔴 *BACKUP FAILED* — $ENV_DISPLAY_ESCAPED
+🔴 <b>BACKUP FAILED</b> — $ENV_DISPLAY_ESCAPED
 "
-    [[ "$PROJECT_STATUS" == "❌"* ]] && MSG+="$(escape_md2 "$PROJECT_STATUS")
+    [[ "$PROJECT_STATUS" == "❌"* ]] && MSG+="$PROJECT_STATUS
 "
     [[ "$DB_STATUS" == "❌"* ]] && MSG+="
-$(escape_md2 "$DB_STATUS")"
+$DB_STATUS"
     MSG+="
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="

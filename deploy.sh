@@ -30,7 +30,7 @@ CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
 # State
 TARGET="" WEB_SERVER="" TF_PROVIDER="" TF_WORKSPACE="" TARGET_PREFIX=""
 DEPLOY_DOMAIN="" ENV_FILE="" TF_DIR="" SERVER_IP=""
-SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false
+SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false
 STEP_NAMES=() STEP_TIMES=() STEP_START=0
 
 DEPLOY_START=$(date +%s)
@@ -72,6 +72,7 @@ OPTIONS:
   -x, --destroy      Destroy resources
   -p, --parallel     Parallel playbook execution (3 phases)
   -d, --dry-run      Preview only
+  -c, --check        Validate config & syntax only (no deploy)
   -h                 Show this help
    --logs [tf]        Tail latest deploy/terraform log
    --lint             Run all linters locally (no deploy)
@@ -107,6 +108,7 @@ parse_args() {
             -x|--destroy) DESTROY_MODE=true; shift ;;
             -p|--parallel) PARALLEL_MODE=true; shift ;;
             -d|--dry-run) DRY_RUN=true; shift ;;
+            -c|--check) CHECK_MODE=true; shift ;;
             -h|--help) usage; exit 0 ;;
             *) echo "Unknown option: $1"; usage; exit 1 ;;
         esac
@@ -154,8 +156,15 @@ main() {
         LOCK_FILE="/tmp/deploy-${TARGET}.lock"
         exec 200>"$LOCK_FILE"
         if ! flock -n 200; then
-            echo "Error: deploy already running for $TARGET (PID $(cat "$LOCK_FILE" 2>/dev/null || echo "unknown"))"
-            exit 1
+            local stale_pid
+            stale_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+            if [[ -n "$stale_pid" ]] && kill -0 "$stale_pid" 2>/dev/null; then
+                echo "Error: deploy already running for $TARGET (PID $stale_pid)"
+                exit 1
+            fi
+            # Stale lock from dead process — kernel released flock, retry
+            flock -n 200 || { echo "Error: cannot acquire deploy lock for $TARGET"; exit 1; }
+            echo "  ⚠ Removed stale deploy lock (PID ${stale_pid:-unknown})"
         fi
         echo "$$" > "$LOCK_FILE"
     fi
@@ -182,6 +191,47 @@ main() {
     )
 
     preflight_checks
+
+    # ----- Validate playbooks exist -----
+    for entry in "${playbooks[@]}"; do
+        local pb="${entry%%:*}"
+        if [[ ! -f "$SCRIPT_DIR/ansible/$pb" ]]; then
+            echo "Error: playbook not found: $SCRIPT_DIR/ansible/$pb"
+            exit 1
+        fi
+    done
+
+    # ----- Check mode (validate only) -----
+    if [[ "$CHECK_MODE" == "true" ]]; then
+        echo ""
+        echo "  ══════════════════ CHECK ══════════════════"
+        echo "  ✓ Preflight passed"
+        echo "  ✓ All playbooks present"
+        if [[ "$SKIP_TERRAFORM" == "false" ]]; then
+            export_tf_env
+            terraform_init_if_needed || { echo "Terraform init failed"; step_fail "Terraform init failed"; }
+            if _tf validate -no-color >> "$LOG" 2>&1; then
+                echo "  ✓ Terraform config valid"
+            else
+                echo "  ✗ Terraform config invalid (see $LOG)"; exit 1
+            fi
+        fi
+        for entry in "${playbooks[@]}"; do
+            local pb="${entry%%:*}" label="${entry##*:}"
+            if ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
+                echo "  ✓ $label"
+            else
+                echo "  ✗ $label syntax error"
+                ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" 2>&1
+                exit 1
+            fi
+        done
+        echo ""
+        echo "  ✓ All checks passed"
+        echo "  ════════════════════════════════════════════════"
+        echo ""
+        exit 0
+    fi
 
     # ----- Dry run -----
     if [[ "$DRY_RUN" == "true" ]]; then
@@ -307,6 +357,13 @@ main() {
     }
     echo ""; step_ok
 
+    # ----- Wait for apt lock -----
+    step_start "Wait for apt lock"
+    ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
+    sleep 5
+    step_ok
+
     # ----- Generate inventory + vault -----
     mkdir -p "$SCRIPT_DIR/ansible/inventory"
     INVENTORY_FILE="$SCRIPT_DIR/ansible/inventory/hosts-${TF_WORKSPACE}.yml"
@@ -321,7 +378,7 @@ all:
       server_ip: ${SERVER_IP}
 INVEOF
 
-    VAULT_TMP=$(mktemp); chmod 600 "$VAULT_TMP"
+    DEPLOY_VARS_TMP=$(mktemp); chmod 600 "$DEPLOY_VARS_TMP"
     {
         printf '{\n'
         printf '  "db_pass": %s,\n' "$(json_escape "$DB_PASS")"
@@ -353,10 +410,10 @@ INVEOF
             printf '\n  ]'
         fi
         printf '\n}\n'
-    } > "$VAULT_TMP"
+    } > "$DEPLOY_VARS_TMP"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ "$TARGET" != "prod" ]] && unset "${!BETTERUPTIME_@}"
+    [[ "$TARGET" != "prod" ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
 
     # ----- Verify SSH host key -----
     ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
@@ -388,14 +445,9 @@ INVEOF
             "playbook-05-backup.yml:Backup & Telegram bot" || step_fail "Phase 3 failed"
         step_ok
 
-        # Phase 4: Grafana (sequential — needs VictoriaMetrics up)
+        # Phase 4: Grafana (no hard dependency on VM — datasource provisioning is
+        # file-based; Grafana connects to VM asynchronously when it's ready.)
         step_start "Grafana"
-        echo "    Waiting for VictoriaMetrics health..."
-        for ((vm_retry=1; vm_retry<=15; vm_retry++)); do
-            if curl -sf --max-time 3 "http://${SERVER_IP}:8428/health" | grep -q "OK" 2>/dev/null; then break; fi
-            [[ $vm_retry -eq 15 ]] && echo "  ⚠ VictoriaMetrics not responding, continuing anyway"
-            sleep 2
-        done
         run_ansible "playbook-06-grafana.yml" "Grafana" || step_fail "Grafana failed"
         step_ok
     else

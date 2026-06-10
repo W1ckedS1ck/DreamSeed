@@ -4,11 +4,10 @@ set -euo pipefail
 # ====== Prevent concurrent executions ======
 LOCK_FILE="/tmp/restore_all.lock"
 exec 9>"$LOCK_FILE"
-if ! timeout 3600 flock -x 9; then
-    echo "ERROR: Restore already in progress or timeout exceeded ($LOCK_FILE)"
+if ! flock -n -x 9; then
+    echo "ERROR: Restore already in progress ($LOCK_FILE)"
     exit 1
 fi
-trap 'exec 9>&-' EXIT
 
 # ====== Load shared functions ======
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,6 +15,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
+
+if ! [[ "$MODX_TABLE_PREFIX" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'"
+    exit 1
+fi
 
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
@@ -54,6 +58,8 @@ SERVICES_STOPPED=0
 RESTORE_TEMP_DIRS=()
 
 cleanup_trap() {
+    rm -f "$LOCK_FILE"
+    exec 9>&-
     for _d in "${RESTORE_TEMP_DIRS[@]:-}"; do
         rm -rf "$_d" 2>/dev/null || true
     done
@@ -401,7 +407,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
 
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
     if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
-        [[ "$PROJECT_DIR" =~ ^/var/www/[^/]+$ ]] || { echo "ERROR: PROJECT_DIR must be /var/www/<name>, got: $PROJECT_DIR"; exit 1; }
+        [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
         extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
         if [[ ! -d "$extracted_dir" ]]; then
             echo -e "${RED}✗ Archive structure mismatch: expected '$extracted_dir' not found${NC}"
@@ -409,8 +415,15 @@ if [ -n "$SELECTED_PROJECT" ]; then
             PROJECT_STATUS="❌ Archive structure error"
             echo -e "${RED}✗ Project restore failed!${NC}"
         else
-            sudo rm -rf "$PROJECT_DIR"
-            sudo mv "$extracted_dir" "$PROJECT_DIR"
+            sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
+            sudo mv "$extracted_dir" "$PROJECT_DIR" || {
+                sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" 2>/dev/null || true
+                sudo rm -rf "$TEMP_EXTRACT"
+                PROJECT_STATUS="❌ Move failed"
+                echo "ERROR: Failed to move restored project"
+                exit 1
+            }
+            sudo rm -rf "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
             sudo rm -rf "$TEMP_EXTRACT"
             sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
             sudo chown -R www-data:www-data "$PROJECT_DIR"
@@ -564,23 +577,29 @@ if [ "$MODE" = "interactive" ]; then
     echo ""
 fi
 
+echo ""
+echo "Project: $PROJECT_STATUS"
+echo "DB: $DB_STATUS"
+echo "Site: $SITE_STATUS"
+echo "Time: ${ELAPSED}s"
+
 if [ "${RESTORE_RESULT:-0}" -eq 1 ]; then
-    MSG="❌ *[$ENV_DISPLAY] DreamSeed Restore FAILED*"
+    MSG="❌ <b>[$ENV_DISPLAY] DreamSeed Restore FAILED</b>"
 else
-    MSG="✅ *[$ENV_DISPLAY] DreamSeed Restore*"
+    MSG="✅ <b>[$ENV_DISPLAY] DreamSeed Restore</b>"
 fi
 
 MSG="$MSG
 
-📝 *Project:* $(escape_md2 "$PROJECT_STATUS")
-🗄️ *DB:* $(escape_md2 "$DB_STATUS")
-🌐 *Site:* $(escape_md2 "$SITE_STATUS")
-⏱️ *Time:* \`${ELAPSED}\`s"
+📝 <b>Project:</b> $PROJECT_STATUS
+🗄️ <b>DB:</b> $DB_STATUS
+🌐 <b>Site:</b> $SITE_STATUS
+⏱️ <b>Time:</b> <code>${ELAPSED}</code>s"
 
 if [[ "$DB_STATUS" == *"Rollback"* ]]; then
     MSG="$MSG
 
-⚠️ *Data rollback — verify carefully!*"
+⚠️ <b>Data rollback — verify carefully!</b>"
 fi
 
 send_tg "$MSG"

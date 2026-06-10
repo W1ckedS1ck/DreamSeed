@@ -113,10 +113,18 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rm -rf "{{ web_root }}"
-          mkdir -p "{{ web_root }}"
-          tar -xzf "/tmp/{{ restore_latest_project.stdout | trim }}" -C /var/www/
-          chown -R www-data:www-data "{{ web_root }}"
+          _archive="/tmp/{{ restore_latest_project.stdout | trim }}"
+          _web="{{ web_root }}"
+          tar -tzf "$_archive" > /dev/null 2>&1 || { echo "Corrupt archive: $_archive"; exit 1; }
+          mv "$_web" "${_web}.bak.$$" 2>/dev/null || true
+          mkdir -p "$_web"
+          if ! tar -xzf "$_archive" -C /var/www/; then
+            mv "${_web}.bak.$$"/* "$_web" 2>/dev/null || true
+            rm -rf "${_web}.bak.$$" 2>/dev/null || true
+            exit 1
+          fi
+          rm -rf "${_web}.bak.$$" 2>/dev/null || true
+          chown -R www-data:www-data "$_web"
         executable: /bin/bash
       changed_when: false
       when: restore_latest_project.stdout | trim != ""

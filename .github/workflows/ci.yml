@@ -60,8 +60,7 @@ jobs:
       - name: Lint Jinja2 templates
         run: |
           pip install j2lint==1.2.0 --quiet
-          mapfile -t j2_files < <(find ansible-roles -name "*.j2")
-          j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "${j2_files[@]}"
+          bash scripts/lint.sh --ci --j2lint
 
   terraform-checks:
     name: Terraform Lint + Validate
@@ -69,9 +68,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
+      - uses: ./.github/actions/setup-terraform
       - uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
@@ -134,6 +131,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.x'
@@ -155,9 +154,18 @@ jobs:
           sudo apt-get install -y gitleaks -qq 2>/dev/null || \
             (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
              sudo tar -xz -C /usr/local/bin gitleaks)
-      - name: Run pre-commit hooks
+      - name: Run pre-commit hooks (changed files only)
         run: |
           pip install pre-commit
-          pre-commit run --all-files --show-diff-on-failure
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            REF="origin/${{ github.base_ref }}"
+          else
+            REF="HEAD~1"
+          fi
+          if git rev-parse "$REF" &>/dev/null; then
+            pre-commit run --from-ref "$REF" --to-ref HEAD --show-diff-on-failure
+          else
+            pre-commit run --all-files --show-diff-on-failure
+          fi
       - name: Validate Renovate config
         run: npx --yes --package renovate -- renovate-config-validator

@@ -136,7 +136,8 @@ for item in data.get('data', []):
 
 for spec in \
     "https://dreamseed.online/|Main site|The Dreamers|180" \
-    "https://dreamseed.online/grafana|Grafana|Grafana|180"; do
+    "https://dreamseed.online/grafana|Grafana|Grafana|180" \
+    "https://dreamseed.online/bot-health|Telegram Bot|OK|180"; do
 
     IFS='|' read -r url name keyword freq <<< "$spec"
 
@@ -284,7 +285,7 @@ payload["custom_webhook_template_attributes"] = {
     "body_template": {
         "chat_id": chat_id,
         "message_thread_id": int(thread),
-        "parse_mode": "MarkdownV2",
+        "parse_mode": "HTML",
         "text": text
     }
 }

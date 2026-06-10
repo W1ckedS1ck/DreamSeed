@@ -14,8 +14,10 @@ ExecStart=/usr/local/bin/vmagent \
   -remoteWrite.basicAuth.password=${VM_CLOUD_PASS} \
   -remoteWrite.label=env={{ domain }} \
   -promscrape.config=/etc/vmagent/scrape.yml \
-  -remoteWrite.queues=4
+  -remoteWrite.queues=4 \
+  -httpListenAddr=127.0.0.1:8429
 Restart=always
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target
