@@ -1,0 +1,85 @@
+name: TestBench
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_type:
+        description: 'Hetzner server type'
+        required: true
+        type: choice
+        options:
+          - cx33
+          - cax21
+      action:
+        description: 'Action'
+        required: true
+        type: choice
+        options:
+          - deploy
+          - destroy
+        default: deploy
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  bench:
+    name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} testhetz-${{ inputs.server_type }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: hashicorp/setup-terraform@d5b4347ecab7a708759a33566ff92294dcba11c9 # v4
+        with:
+          terraform_version: "1.15.5"
+
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.TESTHETZ_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/testhetz
+          chmod 600 ~/.ssh/testhetz
+          ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
+
+      - name: Deploy
+        if: inputs.action == 'deploy'
+        id: deploy
+        working-directory: terraform/testhetz
+        env:
+          HCLOUD_TOKEN: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+        run: |
+          terraform init -upgrade=false
+          terraform apply -auto-approve \
+            -var="hcloud_token=$HCLOUD_TOKEN" \
+            -var="server_type=${{ inputs.server_type }}" \
+            -var="ssh_public_key=$(cat ~/.ssh/testhetz.pub)"
+
+          IP=$(terraform output -raw server_ipv4)
+          echo "server_ip=$IP" >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "=========================================="
+          echo "✅ testhetz-${{ inputs.server_type }} created!"
+          echo "   IP: $IP"
+          echo "   SSH: ssh -i ~/.ssh/testhetz ubuntu@$IP"
+          echo "   GeekBench: ssh ubuntu@$IP ./Geekbench-6.4.1-Linux/geekbench6"
+          echo "=========================================="
+
+      - name: Destroy
+        if: inputs.action == 'destroy'
+        working-directory: terraform/testhetz
+        env:
+          HCLOUD_TOKEN: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+        run: |
+          terraform init -upgrade=false
+          terraform destroy -auto-approve \
+            -var="hcloud_token=$HCLOUD_TOKEN" \
+            -var="server_type=${{ inputs.server_type }}" \
+            -var="ssh_public_key=dummy"
+
+          echo "=========================================="
+          echo "✅ testhetz-${{ inputs.server_type }} destroyed!"
+          echo "=========================================="

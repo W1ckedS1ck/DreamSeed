@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+
+hostnamectl set-hostname testhetz-${server_type}
+
+apt-get update -qq
+apt-get install -y -qq \
+  build-essential \
+  htop \
+  neofetch \
+  wget \
+  curl \
+  unzip \
+  cpuid > /dev/null
+
+cd /home/ubuntu
+wget -q https://cdn.geekbench.com/Geekbench-6.4.1-Linux.tar.gz
+tar xzf Geekbench-6.4.1-Linux.tar.gz
+chown -R ubuntu:ubuntu /home/ubuntu/Geekbench-6.4.1-Linux
+rm -f Geekbench-6.4.1-Linux.tar.gz
+
+echo "CPU info:" > /home/ubuntu/benchmark-info.txt
+cat /proc/cpuinfo | grep -E "model name|siblings|cpu cores" | sort -u >> /home/ubuntu/benchmark-info.txt
+echo "" >> /home/ubuntu/benchmark-info.txt
+echo "Memory:" >> /home/ubuntu/benchmark-info.txt
+free -h >> /home/ubuntu/benchmark-info.txt
+echo "" >> /home/ubuntu/benchmark-info.txt
+echo "lscpu:" >> /home/ubuntu/benchmark-info.txt
+lscpu >> /home/ubuntu/benchmark-info.txt
+
+echo "=== SETUP COMPLETE ==="
+echo "Server: testhetz-${server_type}"
+echo "GeekBench: /home/ubuntu/Geekbench-6.4.1-Linux/geekbench6"
+echo "Run: ./Geekbench-6.4.1-Linux/geekbench6"
