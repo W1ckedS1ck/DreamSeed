@@ -1,5 +1,10 @@
-data "hcloud_ssh_key" "deploy" {
-  name = var.ssh_key_name
+resource "random_id" "key_suffix" {
+  byte_length = 4
+}
+
+resource "hcloud_ssh_key" "deploy" {
+  name       = "testhetz-deploy-${random_id.key_suffix.hex}"
+  public_key = var.ssh_public_key
 }
 
 resource "hcloud_server" "main" {
@@ -7,7 +12,7 @@ resource "hcloud_server" "main" {
   server_type = var.server_type
   image       = "ubuntu-24.04"
   location    = var.location
-  ssh_keys    = [data.hcloud_ssh_key.deploy.id]
+  ssh_keys    = [hcloud_ssh_key.deploy.id]
 
   public_net {
     ipv4_enabled = true
