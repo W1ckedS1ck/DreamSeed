@@ -86,7 +86,7 @@
           DOSBlockingPeriod   60
           DOSWhitelist        127.0.0.1 ::1
           DOSEmailNotify      {{ admin_email }}
-          DOSSystemCommand    "su - someone -c \"/sbin/iptables -A INPUT -s %s -j DROP && sleep 60 && /sbin/iptables -D INPUT -s %s -j DROP\" &"
+          DOSSystemCommand    "sudo /sbin/iptables -A INPUT -s %s -j DROP && sleep 60 && sudo /sbin/iptables -D INPUT -s %s -j DROP &"
       </IfModule>
     owner: root
     group: root
