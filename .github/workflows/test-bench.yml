@@ -35,25 +35,29 @@ jobs:
         with:
           terraform_version: "1.15.6"
 
-      - name: Deploy
-        if: inputs.action == 'deploy'
+      - name: Setup SSH key
         env:
           SSH_KEY: ${{ secrets.TESTHETZ_SSH_KEY }}
-          TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
-          TF_VAR_server_type: ${{ inputs.server_type }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/testhetz
           chmod 600 ~/.ssh/testhetz
           ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
-          export TF_VAR_ssh_public_key="$(cat ~/.ssh/testhetz.pub)"
+          echo "SSH_PUBLIC_KEY=$(cat ~/.ssh/testhetz.pub)" >> "$GITHUB_ENV"
 
-          cd terraform/testhetz
+      - name: Deploy
+        if: inputs.action == 'deploy'
+        id: deploy
+        working-directory: terraform/testhetz
+        env:
+          TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+          TF_VAR_server_type: ${{ inputs.server_type }}
+          TF_VAR_ssh_public_key: ${{ env.SSH_PUBLIC_KEY }}
+        run: |
           terraform init -upgrade=false
           terraform apply -auto-approve
 
           IP=$(terraform output -raw server_ipv4)
-          echo "$IP" > /tmp/server_ip
           echo "server_ip=$IP" >> "$GITHUB_OUTPUT"
 
           echo ""
@@ -62,11 +66,11 @@ jobs:
           echo "   IP: $IP"
           echo "=========================================="
 
-      - name: Wait for server
+      - name: Wait for SSH
         if: inputs.action == 'deploy'
+        env:
+          IP: ${{ steps.deploy.outputs.server_ip }}
         run: |
-          IP=$(cat /tmp/server_ip)
-
           for i in $(seq 1 30); do
             if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
               -i ~/.ssh/testhetz "ubuntu@$IP" 'true' 2>/dev/null; then
@@ -77,6 +81,11 @@ jobs:
             sleep 5
           done
 
+      - name: Wait for cloud-init
+        if: inputs.action == 'deploy'
+        env:
+          IP: ${{ steps.deploy.outputs.server_ip }}
+        run: |
           echo "Waiting for cloud-init..."
           if ssh -i ~/.ssh/testhetz "ubuntu@$IP" \
             "timeout 300 cloud-init status --wait" 2>/dev/null; then
@@ -92,28 +101,25 @@ jobs:
             done
           fi
 
+      - name: Done — ready to benchmark
+        if: inputs.action == 'deploy'
+        run: |
           echo ""
           echo "=========================================="
           echo "✅ testhetz-${{ inputs.server_type }} ready!"
-          echo "   IP: $IP"
-          echo "   SSH: ssh -i ~/.ssh/testhetz ubuntu@$IP"
-          echo "   Run: ssh ubuntu@$IP 'cd Geekbench-* && ./geekbench6'"
+          echo "   IP: ${{ steps.deploy.outputs.server_ip }}"
+          echo "   SSH: ssh -i ~/.ssh/testhetz ubuntu@${{ steps.deploy.outputs.server_ip }}"
+          echo "   Run: ssh ubuntu@${{ steps.deploy.outputs.server_ip }} 'cd Geekbench-* && ./geekbench6'"
           echo "=========================================="
 
       - name: Destroy
         if: inputs.action == 'destroy'
+        working-directory: terraform/testhetz
         env:
-          SSH_KEY: ${{ secrets.TESTHETZ_SSH_KEY }}
           TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
           TF_VAR_server_type: ${{ inputs.server_type }}
+          TF_VAR_ssh_public_key: ${{ env.SSH_PUBLIC_KEY }}
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/testhetz
-          chmod 600 ~/.ssh/testhetz
-          ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
-          export TF_VAR_ssh_public_key="$(cat ~/.ssh/testhetz.pub)"
-
-          cd terraform/testhetz
           terraform init -upgrade=false
           terraform destroy -auto-approve
 
