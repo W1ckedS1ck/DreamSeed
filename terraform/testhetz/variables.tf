@@ -12,7 +12,7 @@ variable "server_type" {
 variable "location" {
   type        = string
   description = "Hetzner datacenter location"
-  default     = "nbg1"
+  default     = "fsn1"
 }
 
 variable "ssh_key_name" {
