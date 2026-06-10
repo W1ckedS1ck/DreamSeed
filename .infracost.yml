@@ -1,0 +1,9 @@
+version: 0.1
+
+projects:
+  - path: terraform/aws
+    name: AWS EC2 (prod/dev-aws)
+  - path: terraform/hetzner
+    name: Hetzner Cloud (dev-hetz)
+  - path: terraform/testhetz
+    name: Hetzner Benchmark (testhetz)
