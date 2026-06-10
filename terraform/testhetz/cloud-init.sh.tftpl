@@ -3,7 +3,13 @@ set -e
 
 hostnamectl set-hostname testhetz-${server_type}
 
-# Inject SSH key
+# Create ubuntu user
+if ! id ubuntu &>/dev/null; then
+  useradd -m -s /bin/bash -G sudo ubuntu
+  echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
+fi
+
+# Inject SSH key for both root and ubuntu
 mkdir -p /home/ubuntu/.ssh
 echo ${base64ssh} | base64 -d >> /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
