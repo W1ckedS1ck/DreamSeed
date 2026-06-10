@@ -3,6 +3,12 @@ set -e
 
 hostnamectl set-hostname testhetz-${server_type}
 
+# Inject SSH key
+mkdir -p /home/ubuntu/.ssh
+echo ${base64ssh} | base64 -d >> /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+
 apt-get update -qq
 apt-get install -y -qq \
   build-essential \
