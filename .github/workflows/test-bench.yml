@@ -7,16 +7,12 @@ on:
         description: 'Hetzner server type'
         required: true
         type: choice
-        options:
-          - cx33
-          - cax21
+        options: [cx23, cx33, cax21]
       action:
         description: 'Action'
         required: true
         type: choice
-        options:
-          - deploy
-          - destroy
+        options: [deploy, destroy]
         default: deploy
 
 env:
