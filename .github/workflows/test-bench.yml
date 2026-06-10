@@ -50,15 +50,16 @@ jobs:
           ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
           PUBKEY=$(cat ~/.ssh/testhetz.pub)
 
-          if ! curl -sfH "Authorization: Bearer $HCLOUD_TOKEN" \
-            "https://api.hetzner.cloud/v1/ssh_keys?name=Vitali" | grep -q '"name":"Vitali"'; then
+          if curl -sfH "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys?name=Vitali" | grep -q '"name": "Vitali"'; then
+            echo "SSH key 'Vitali' already exists in Hetzner"
+          else
             echo "Creating SSH key 'Vitali' in Hetzner..."
             curl -sfX POST "https://api.hetzner.cloud/v1/ssh_keys" \
               -H "Authorization: Bearer $HCLOUD_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"name\":\"Vitali\",\"public_key\":\"$PUBKEY\"}" > /dev/null
-          else
-            echo "SSH key 'Vitali' already exists in Hetzner"
+              -d "{\"name\":\"Vitali\",\"public_key\":\"$PUBKEY\"}" > /dev/null || \
+            echo "Key may already exist (uniqueness error) — ignoring"
           fi
 
       - name: Deploy
