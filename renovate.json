@@ -11,7 +11,7 @@
   "major": {
     "dependencyDashboardApproval": true
   },
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit","custom.regex"],
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit", "custom.regex"],
   "terraform": {
     "fileMatch": [
       "terraform/.*\\.tf$"
