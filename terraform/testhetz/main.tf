@@ -1,5 +1,9 @@
+resource "random_id" "key_suffix" {
+  byte_length = 4
+}
+
 resource "hcloud_ssh_key" "deploy" {
-  name       = "testhetz-deploy"
+  name       = "testhetz-deploy-${random_id.key_suffix.hex}"
   public_key = var.ssh_public_key
 }
 
