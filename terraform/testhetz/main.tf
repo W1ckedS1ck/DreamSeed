@@ -1,5 +1,5 @@
 data "hcloud_ssh_key" "vitali" {
-  name = "Vitali"
+  name = "Vitali.pub"
 }
 
 resource "hcloud_server" "main" {
