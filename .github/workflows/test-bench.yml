@@ -42,35 +42,17 @@ jobs:
           key: testhetz-state-${{ inputs.server_type }}
           save-always: true
 
-      - name: Ensure SSH key in Hetzner
+      - name: Deploy
         if: inputs.action == 'deploy'
         env:
-          HCLOUD_TOKEN: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
           SSH_KEY: ${{ secrets.TESTHETZ_SSH_KEY }}
+          TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+          TF_VAR_server_type: ${{ inputs.server_type }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/testhetz
           chmod 600 ~/.ssh/testhetz
-          ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
-          PUBKEY=$(cat ~/.ssh/testhetz.pub)
 
-          if ! curl -sfH "Authorization: Bearer $HCLOUD_TOKEN" \
-            "https://api.hetzner.cloud/v1/ssh_keys?name=Vitali" | grep -q '"name":"Vitali"'; then
-            echo "Creating SSH key 'Vitali' in Hetzner..."
-            curl -sfX POST "https://api.hetzner.cloud/v1/ssh_keys" \
-              -H "Authorization: Bearer $HCLOUD_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"name\":\"Vitali\",\"public_key\":\"$PUBKEY\"}" > /dev/null
-          else
-            echo "SSH key 'Vitali' already exists in Hetzner"
-          fi
-
-      - name: Deploy
-        if: inputs.action == 'deploy'
-        env:
-          TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
-          TF_VAR_server_type: ${{ inputs.server_type }}
-        run: |
           cd terraform/testhetz
           terraform init -upgrade=false
           terraform apply -auto-approve
@@ -125,9 +107,14 @@ jobs:
       - name: Destroy
         if: inputs.action == 'destroy'
         env:
+          SSH_KEY: ${{ secrets.TESTHETZ_SSH_KEY }}
           TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
           TF_VAR_server_type: ${{ inputs.server_type }}
         run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/testhetz
+          chmod 600 ~/.ssh/testhetz
+
           cd terraform/testhetz
           terraform init -upgrade=false
           terraform destroy -auto-approve
