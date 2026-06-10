@@ -35,13 +35,6 @@ jobs:
         with:
           terraform_version: "1.15.6"
 
-      - name: Restore TF state
-        uses: actions/cache@v4
-        with:
-          path: terraform/testhetz/testhetz.tfstate
-          key: testhetz-state-${{ inputs.server_type }}
-          save-always: true
-
       - name: Deploy
         if: inputs.action == 'deploy'
         env:
@@ -61,6 +54,7 @@ jobs:
 
           IP=$(terraform output -raw server_ipv4)
           echo "$IP" > /tmp/server_ip
+          echo "server_ip=$IP" >> "$GITHUB_OUTPUT"
 
           echo ""
           echo "=========================================="
