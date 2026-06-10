@@ -43,19 +43,19 @@ jobs:
           echo "$SSH_KEY" > ~/.ssh/testhetz
           chmod 600 ~/.ssh/testhetz
           ssh-keygen -y -f ~/.ssh/testhetz > ~/.ssh/testhetz.pub
+          echo "SSH_PUBLIC_KEY=$(cat ~/.ssh/testhetz.pub)" >> "$GITHUB_ENV"
 
       - name: Deploy
         if: inputs.action == 'deploy'
         id: deploy
         working-directory: terraform/testhetz
         env:
-          HCLOUD_TOKEN: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+          TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+          TF_VAR_server_type: ${{ inputs.server_type }}
+          TF_VAR_ssh_public_key: ${{ env.SSH_PUBLIC_KEY }}
         run: |
           terraform init -upgrade=false
-          terraform apply -auto-approve \
-            -var="hcloud_token=$HCLOUD_TOKEN" \
-            -var="server_type=${{ inputs.server_type }}" \
-            -var="ssh_public_key=$(cat ~/.ssh/testhetz.pub)"
+          terraform apply -auto-approve
 
           IP=$(terraform output -raw server_ipv4)
           echo "server_ip=$IP" >> "$GITHUB_OUTPUT"
@@ -72,13 +72,12 @@ jobs:
         if: inputs.action == 'destroy'
         working-directory: terraform/testhetz
         env:
-          HCLOUD_TOKEN: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+          TF_VAR_hcloud_token: ${{ secrets.TESTHETZ_HCLOUD_TOKEN }}
+          TF_VAR_server_type: ${{ inputs.server_type }}
+          TF_VAR_ssh_public_key: ${{ env.SSH_PUBLIC_KEY }}
         run: |
           terraform init -upgrade=false
-          terraform destroy -auto-approve \
-            -var="hcloud_token=$HCLOUD_TOKEN" \
-            -var="server_type=${{ inputs.server_type }}" \
-            -var="ssh_public_key=dummy"
+          terraform destroy -auto-approve
 
           echo "=========================================="
           echo "✅ testhetz-${{ inputs.server_type }} destroyed!"
