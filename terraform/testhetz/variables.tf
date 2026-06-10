@@ -6,7 +6,7 @@ variable "hcloud_token" {
 
 variable "server_type" {
   type        = string
-  description = "Hetzner server type (cx33, cax21, etc.)"
+  description = "Hetzner server type (cx23, cx33, cax21)"
 }
 
 variable "location" {
@@ -15,14 +15,7 @@ variable "location" {
   default     = "nbg1"
 }
 
-variable "ssh_key_name" {
-  type        = string
-  description = "Name of existing SSH key in Hetzner Cloud"
-  default     = "Vitali"
-}
-
 variable "ssh_public_key" {
   type        = string
-  description = "SSH public key content (used when ssh_key_name is empty)"
-  default     = ""
+  description = "SSH public key content"
 }
