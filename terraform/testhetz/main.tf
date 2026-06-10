@@ -19,9 +19,7 @@ resource "hcloud_server" "main" {
   image       = "ubuntu-24.04"
   location    = var.location
 
-  ssh_keys = local.use_existing_key
-    ? [data.hcloud_ssh_key.deploy[0].id]
-    : [hcloud_ssh_key.auto[0].id]
+  ssh_keys = local.use_existing_key ? [data.hcloud_ssh_key.deploy[0].id] : [hcloud_ssh_key.auto[0].id]
 
   public_net {
     ipv4_enabled = true
