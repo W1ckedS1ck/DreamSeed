@@ -75,7 +75,7 @@ jobs:
 
           for i in $(seq 1 30); do
             if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-              -i ~/.ssh/testhetz "ubuntu@$IP" 'true' 2>/dev/null; then
+              -i ~/.ssh/testhetz ${{"root@$IP" 'true' 2>/dev/null; then
               echo "SSH ready (attempt $i)"
               break
             fi
@@ -84,12 +84,12 @@ jobs:
           done
 
           echo "Waiting for cloud-init..."
-          if ssh -i ~/.ssh/testhetz "ubuntu@$IP" \
+          if ssh -i ~/.ssh/testhetz ${{"root@$IP" \
             "timeout 300 cloud-init status --wait" 2>/dev/null; then
             echo "cloud-init done"
           else
             for j in $(seq 1 15); do
-              st=$(ssh -i ~/.ssh/testhetz "ubuntu@$IP" \
+              st=$(ssh -i ~/.ssh/testhetz ${{"root@$IP" \
                 'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
               [[ "$st" == *"status: done"* ]] && { echo "cloud-init done"; break; }
               [[ "$st" == *"status: error"* ]] && { echo "cloud-init error"; exit 1; }
@@ -102,8 +102,8 @@ jobs:
           echo "=========================================="
           echo "✅ testhetz-${{ inputs.server_type }} ready!"
           echo "   IP: $IP"
-          echo "   SSH: ssh -i ~/.ssh/testhetz ubuntu@$IP"
-          echo "   Run: ssh ubuntu@$IP 'cd Geekbench-* && ./geekbench6'"
+          echo "   SSH: ssh -i ~/.ssh/testhetz root@$IP"
+          echo "   Run: ssh root@$IP 'cd Geekbench-* && ./geekbench6'"
           echo "=========================================="
 
       - name: Destroy
