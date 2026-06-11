@@ -69,7 +69,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 16 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (6 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · Trivy · gitleaks · pre-commit · Renovate |
+| **CI/CD** | GitHub Actions (7 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · Trivy · gitleaks · pre-commit · Renovate |
 
 ---
 
