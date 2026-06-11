@@ -168,7 +168,7 @@ groups:
             {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
 
 {% if grafana_cloud_url is defined and grafana_cloud_url | length > 0 %}
-{{ alert_body('vmagent-down', 'VMAgent Down', 'up{job="vmagent"}', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('vmagent-remote-write', 'VMAgent Remote Write Failing', 'vmagent_remote_write_ok', 300, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
-          summary: VMAgent (Grafana Cloud remote write) is not running
+          summary: VMAgent is not pushing metrics to Grafana Cloud (process down or remote write failing)
 {% endif %}

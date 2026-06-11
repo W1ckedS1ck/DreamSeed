@@ -385,38 +385,47 @@ all:
 INVEOF
 
     DEPLOY_VARS_TMP=$(mktemp); chmod 600 "$DEPLOY_VARS_TMP"
-    {
-        printf '{\n'
-        printf '  "db_pass": %s,\n' "$(json_escape "$DB_PASS")"
-        printf '  "server_ip": %s,\n' "$(json_escape "$SERVER_IP")"
-        printf '  "web_server": %s,\n' "$(json_escape "$WEB_SERVER")"
-        printf '  "domain": %s,\n' "$(json_escape "$DEPLOY_DOMAIN")"
-        printf '  "domain_www": %s,\n' "$([[ "$TARGET" == "prod" ]] && echo "true" || echo "false")"
-        printf '  "dev_write_perms": %s,\n' "$([[ "$TARGET" == "prod" ]] && echo "false" || echo "true")"
-        printf '  "php_version": %s,\n' "$(json_escape "$PHP_VERSION")"
-        printf '  "secrets_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/secrets")"
-        printf '  "configs_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/configs")"
-        printf '  "scripts_dir": %s,\n  "deploy_env": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
-        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && printf ',\n  "cloudflare_api_token": %s' "$(json_escape "$CLOUDFLARE_API_TOKEN")"
-        [[ -n "${GRAFANA_PASS:-}" ]] && printf ',\n  "grafana_admin_password": %s' "$(json_escape "$GRAFANA_PASS")"
-        [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && printf ',\n  "ssh_public_key_path": %s' "$(json_escape "$SSH_PUBLIC_KEY_PATH")"
-        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && printf ',\n  "grafana_cloud_url": %s' "$(json_escape "$GRAFANA_CLOUD_URL")"
-        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && printf ',\n  "grafana_cloud_username": %s' "$(json_escape "$GRAFANA_CLOUD_USERNAME")"
-        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && printf ',\n  "grafana_cloud_token": %s' "$(json_escape "$GRAFANA_CLOUD_TOKEN")"
-        if [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]]; then
-            printf ',\n  "additional_ssh_keys": ['
-            local first=true
-            while IFS= read -r key; do
-                [[ -n "$key" ]] && {
-                    $first || printf ','
-                    printf '\n    %s' "$(json_escape "$key")"
-                    first=false
-                }
-            done <<< "$ADDITIONAL_SSH_KEYS"
-            printf '\n  ]'
-        fi
-        printf '\n}\n'
-    } > "$DEPLOY_VARS_TMP"
+    python3 -c "
+import json, os, sys
+
+target = sys.argv[1]
+script_dir = sys.argv[2]
+dst = sys.argv[3]
+
+data = {
+    'db_pass': os.environ.get('DB_PASS', ''),
+    'server_ip': os.environ.get('SERVER_IP', ''),
+    'web_server': os.environ.get('WEB_SERVER', ''),
+    'domain': os.environ.get('DEPLOY_DOMAIN', ''),
+    'domain_www': target == 'prod',
+    'dev_write_perms': target != 'prod',
+    'php_version': os.environ.get('PHP_VERSION', ''),
+    'secrets_dir': f'{script_dir}/secrets',
+    'configs_dir': f'{script_dir}/configs',
+    'scripts_dir': f'{script_dir}/scripts',
+    'deploy_env': target,
+}
+
+optional_map = {
+    'CLOUDFLARE_API_TOKEN': 'cloudflare_api_token',
+    'GRAFANA_PASS': 'grafana_admin_password',
+    'SSH_PUBLIC_KEY_PATH': 'ssh_public_key_path',
+    'GRAFANA_CLOUD_URL': 'grafana_cloud_url',
+    'GRAFANA_CLOUD_USERNAME': 'grafana_cloud_username',
+    'GRAFANA_CLOUD_TOKEN': 'grafana_cloud_token',
+}
+for env_var, key in optional_map.items():
+    val = os.environ.get(env_var)
+    if val:
+        data[key] = val
+
+additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
+if additional_keys.strip():
+    data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
+
+with open(dst, 'w') as f:
+    json.dump(data, f, indent=2)
+" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_TMP"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ "$TARGET" != "prod" ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)

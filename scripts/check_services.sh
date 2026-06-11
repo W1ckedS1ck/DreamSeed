@@ -131,7 +131,25 @@ if [[ "$WEB_SVC" == "apache2" ]]; then
     _check_ep 9117 apache_ apache_exporter || fail=1
 fi
 if systemctl is-active vmagent &>/dev/null; then
-    _check_ep 8429 vmagent_ vmagent || echo "  ⚠ vmagent running but no metrics"
+    _raw=$(curl -sf --max-time 5 "http://127.0.0.1:8429/metrics" 2>/dev/null || echo "")
+    _blocks=$(echo "$_raw" | grep -oP '^vmagent_remotewrite_blocks_sent_total\s+\K\d+' || echo "0")
+    _errors=$(echo "$_raw" | grep -oP '^vmagent_remotewrite_errors_total\s+\K\d+' || echo "0")
+    if [[ "$_blocks" -gt 0 && "$_errors" -eq 0 ]]; then
+        export_metric 'vmagent_remote_write_ok 1'
+        echo "  ✓ vmagent: remote write OK"
+    elif [[ "$_blocks" -gt 0 && "$_errors" -gt 0 ]]; then
+        export_metric 'vmagent_remote_write_ok 0'
+        echo "  ⚠ vmagent: remote write errors (errors=$_errors)"
+        fail=1
+    else
+        export_metric 'vmagent_remote_write_ok 0'
+        echo "  ⚠ vmagent: running but no remote write data"
+        fail=1
+    fi
+else
+    export_metric 'vmagent_remote_write_ok 0'
+    echo "  ✗ vmagent: not running"
+    fail=1
 fi
 
 # --- Backup cron ---

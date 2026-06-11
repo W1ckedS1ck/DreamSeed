@@ -52,10 +52,6 @@ cleanup() {
     [[ -n "${LOCK_FILE:-}" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
 }
 
-json_escape() {
-    python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$1"
-}
-
 write_deploy_history() {
     local status="$1" msg="${2:-}" ts dur
     ts=$(date '+%Y-%m-%d %H:%M:%S')
