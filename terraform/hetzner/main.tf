@@ -1,6 +1,6 @@
 locals {
-  use_existing_key = var.ssh_key_name != ""
-  use_existing_ip  = var.primary_ip_name != ""
+  use_existing_key  = var.ssh_key_name != ""
+  use_existing_ip   = var.primary_ip_name != ""
   create_primary_ip = var.primary_ip_name == "" && var.enable_primary_ip
   use_dynamic_ip    = var.primary_ip_name == "" && !var.enable_primary_ip
   labels = {
@@ -47,23 +47,23 @@ resource "hcloud_firewall" "web" {
   }
 
   rule {
-    direction  = "out"
-    protocol   = "tcp"
-    port       = "80-443"
+    direction       = "out"
+    protocol        = "tcp"
+    port            = "80-443"
     destination_ips = ["0.0.0.0/0", "::/0"]
   }
 
   rule {
-    direction  = "out"
-    protocol   = "udp"
-    port       = "53"
+    direction       = "out"
+    protocol        = "udp"
+    port            = "53"
     destination_ips = ["0.0.0.0/0", "::/0"]
   }
 
   rule {
-    direction  = "out"
-    protocol   = "udp"
-    port       = "123"
+    direction       = "out"
+    protocol        = "udp"
+    port            = "123"
     destination_ips = ["0.0.0.0/0", "::/0"]
   }
 }
@@ -74,25 +74,25 @@ data "hcloud_primary_ip" "main" {
 }
 
 resource "hcloud_primary_ip" "main" {
-  count         = local.create_primary_ip ? 1 : 0
-  name          = "dreamseed-main-${var.environment}"
-  datacenter    = "${var.location}-dc1"
-  type          = "ipv4"
-  assignee_type = "server"
-  auto_delete   = false
-  labels        = local.labels
+  count             = local.create_primary_ip ? 1 : 0
+  name              = "dreamseed-main-${var.environment}"
+  datacenter        = "${var.location}-dc1"
+  type              = "ipv4"
+  assignee_type     = "server"
+  auto_delete       = false
+  labels            = local.labels
   delete_protection = var.environment == "prod-hetz"
 }
 
 resource "hcloud_server" "main" {
-  name               = "dreamseed-${var.environment}"
-  server_type        = var.server_type
-  image              = "ubuntu-24.04"
-  location           = var.location
-  labels             = local.labels
-  ssh_keys           = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
-  firewall_ids       = [hcloud_firewall.web.id]
-  delete_protection  = var.environment == "prod-hetz"
+  name              = "dreamseed-${var.environment}"
+  server_type       = var.server_type
+  image             = "ubuntu-24.04"
+  location          = var.location
+  labels            = local.labels
+  ssh_keys          = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
+  firewall_ids      = [hcloud_firewall.web.id]
+  delete_protection = var.environment == "prod-hetz"
 
   public_net {
     ipv4_enabled = true

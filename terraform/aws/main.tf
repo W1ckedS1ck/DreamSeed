@@ -33,30 +33,30 @@ resource "aws_security_group" "web" {
   description = "Security group for DreamSeed web server (${var.environment})"
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks  = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
-    ipv6_cidr_blocks = ["::/0"]  #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    description      = "SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
   }
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks  = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
-    ipv6_cidr_blocks = ["::/0"]  #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    description      = "HTTP"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
   }
 
   ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks  = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
-    ipv6_cidr_blocks = ["::/0"]  #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    description      = "HTTPS"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
   }
 
   egress {
