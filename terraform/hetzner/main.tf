@@ -46,6 +46,26 @@ resource "hcloud_firewall" "web" {
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 
+  rule {
+    direction       = "out"
+    protocol        = "tcp"
+    port            = "80-443"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction       = "out"
+    protocol        = "udp"
+    port            = "53"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction       = "out"
+    protocol        = "udp"
+    port            = "123"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
 }
 
 data "hcloud_primary_ip" "main" {
