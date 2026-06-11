@@ -33,8 +33,11 @@ terraform_ensure_workspace() {
 }
 
 terraform_init_if_needed() {
-    if [[ ! -d "$TF_DIR/.terraform" ]]; then
-        terraform_ensure_workspace
+    # Ensure TFC workspace exists before init (first deploy creates workspace via API)
+    terraform_ensure_workspace
+    local ws
+    ws=$(_tf workspace show 2>/dev/null || echo "")
+    if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$ws" != "$TF_WORKSPACE" ]]; then
         TF_WORKSPACE="$TF_WORKSPACE" _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
     fi
 }
