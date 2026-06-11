@@ -298,15 +298,13 @@ main() {
 
         local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
-        local ok=false
-        for try in 1 2; do
-            # shellcheck disable=SC2086
-            if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
-                ok=true; break
-            fi
-            [[ $try -lt 2 ]] && { echo "    Attempt $try/2 failed, retrying in 10s..."; sleep 10; }
-        done
-        [[ "$ok" != "true" ]] && { tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"; }
+        echo "  [debug] SSH key: ${TF_VAR_ssh_public_key:0:20}..." >&2
+        # shellcheck disable=SC2086
+        if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
+            :  # ok
+        else
+            tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"
+        fi
 
         SERVER_IP=$(_tf output -raw server_ipv4 2>>"$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
