@@ -296,23 +296,8 @@ main() {
         terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform init failed"; }
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
 
-        local tf_args="" tfvars_file=""
+        local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
-        [[ "$TF_PROVIDER" == "hetzner" ]] && {
-            tfvars_file=$(mktemp)
-            cat > "$tfvars_file" <<-TFEOF
-hcloud_token          = "${HCLOUD_TOKEN:-}"
-environment           = "${TARGET}"
-ssh_public_key        = "${TF_VAR_ssh_public_key:-}"
-additional_ssh_keys   = ${TF_VAR_additional_ssh_keys:-[]}
-ssh_key_name          = "${HETZNER_SSH_KEY_NAME:-}"
-primary_ip_name       = "${HETZNER_PRIMARY_IP_NAME:-}"
-enable_primary_ip     = ${HETZNER_ENABLE_PRIMARY_IP:-false}
-server_type           = "${HETZNER_SERVER_TYPE:-cx23}"
-location              = "${HETZNER_LOCATION:-nbg1}"
-TFEOF
-            tf_args="-var-file=$tfvars_file"
-        }
         local ok=false
         for try in 1 2; do
             # shellcheck disable=SC2086

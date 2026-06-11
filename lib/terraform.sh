@@ -18,18 +18,50 @@ terraform_select_workspace() {
 
 terraform_ensure_workspace() {
     [[ -z "${TF_API_TOKEN:-}" || -z "${TF_WORKSPACE:-}" ]] && return 0
-    local org="DreamSeed" prefix="dreamseed-"
-    local url="https://app.terraform.io/api/v2/organizations/$org/workspaces/$prefix$TF_WORKSPACE"
-    local exists
-    exists=$(curl -sf -H "Authorization: Bearer $TF_API_TOKEN" "$url" | \
-        python3 -c "import json,sys; print('yes' if json.load(sys.stdin).get('data') else 'no')" 2>/dev/null || echo "no")
-    if [[ "$exists" != "yes" ]]; then
-        echo "  Creating TFC workspace: $prefix$TF_WORKSPACE"
-        curl -sf -X POST "https://app.terraform.io/api/v2/organizations/$org/workspaces" \
-            -H "Authorization: Bearer $TF_API_TOKEN" \
-            -H "Content-Type: application/vnd.api+json" \
-            -d "{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$prefix$TF_WORKSPACE\"}}}" >/dev/null 2>&1 || true
+    local org="DreamSeed" prefix="dreamseed-" ws_name="$prefix$TF_WORKSPACE"
+    local auth="Authorization: Bearer $TF_API_TOKEN" api="https://app.terraform.io/api/v2"
+
+    # Fetch or create workspace, extract ID
+    local ws_id
+    ws_id=$(curl -sf -H "$auth" "$api/organizations/$org/workspaces/$ws_name" | \
+        python3 -c "import json,sys; print(json.load(sys.stdin).get('data',{}).get('id',''))" 2>/dev/null || echo "")
+    if [[ -z "$ws_id" ]]; then
+        echo "  Creating TFC workspace: $ws_name"
+        ws_id=$(curl -sf -X POST "$api/organizations/$org/workspaces" \
+            -H "$auth" -H "Content-Type: application/vnd.api+json" \
+            -d "{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$ws_name\"}}}" | \
+            python3 -c "import json,sys; print(json.load(sys.stdin).get('data',{}).get('id',''))" 2>/dev/null || echo "")
     fi
+    [[ -z "$ws_id" ]] && return 0
+
+    # Ensure required terraform variables exist in the workspace
+    local vars_json
+    vars_json=$(curl -sf -H "$auth" "$api/workspaces/$ws_id/vars" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for v in d.get('data',[]):
+    print(f\"{v['attributes']['key']}={v['attributes']['value']}\")
+" 2>/dev/null || echo "")
+
+    local set_var
+    set_var() {
+        local key="$1" value="$2" cat="${3:-terraform}" hcl="${4:-false}" sens="${5:-false}"
+        if ! echo "$vars_json" | grep -q "^$key="; then
+            curl -sf -X POST "$api/workspaces/$ws_id/vars" \
+                -H "$auth" -H "Content-Type: application/vnd.api+json" \
+                -d "{\"data\":{\"type\":\"vars\",\"attributes\":{\"key\":\"$key\",\"value\":\"$value\",\"category\":\"$cat\",\"hcl\":$hcl,\"sensitive\":$sens}}}" >/dev/null 2>&1
+        fi
+    }
+
+    set_var "hcloud_token" "${HCLOUD_TOKEN:-}" "terraform" "false" "true"
+    set_var "environment" "${TARGET:-prod-hetz}"
+    set_var "ssh_public_key" "${TF_VAR_ssh_public_key:-}" "terraform" "false" "true"
+    set_var "additional_ssh_keys" "${TF_VAR_additional_ssh_keys:-[]}" "terraform" "true" "false"
+    [[ -n "${HETZNER_SERVER_TYPE:-}" ]] && set_var "server_type" "$HETZNER_SERVER_TYPE"
+    [[ -n "${HETZNER_LOCATION:-}" ]] && set_var "location" "$HETZNER_LOCATION"
+    [[ -n "${HETZNER_SSH_KEY_NAME:-}" ]] && set_var "ssh_key_name" "$HETZNER_SSH_KEY_NAME"
+    [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && set_var "primary_ip_name" "$HETZNER_PRIMARY_IP_NAME"
+    [[ -n "${HETZNER_ENABLE_PRIMARY_IP:-}" ]] && set_var "enable_primary_ip" "$HETZNER_ENABLE_PRIMARY_IP"
 }
 
 terraform_init_if_needed() {
