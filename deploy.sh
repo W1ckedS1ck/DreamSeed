@@ -196,6 +196,7 @@ main() {
     )
 
     preflight_checks
+    apply_target_vars
 
     # ----- Validate playbooks exist -----
     for entry in "${playbooks[@]}"; do
