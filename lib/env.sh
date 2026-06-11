@@ -86,6 +86,8 @@ export_tf_env() {
     }
     [[ "$TF_PROVIDER" == "hetzner" ]] && {
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
+        echo "  [debug] HCLOUD_TOKEN=${HCLOUD_TOKEN:+set (${#HCLOUD_TOKEN} chars)}" >&2
+        echo "  [debug] TF_VAR_hcloud_token=${TF_VAR_hcloud_token:+set (${#TF_VAR_hcloud_token} chars)}" >&2
         [[ -n "${HETZNER_SERVER_TYPE:-}" ]] && export TF_VAR_server_type="$HETZNER_SERVER_TYPE"
         [[ -n "${HETZNER_LOCATION:-}" ]] && export TF_VAR_location="$HETZNER_LOCATION"
         [[ -n "${HETZNER_SSH_KEY_NAME:-}" ]] && export TF_VAR_ssh_key_name="$HETZNER_SSH_KEY_NAME"

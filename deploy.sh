@@ -196,7 +196,6 @@ main() {
     )
 
     preflight_checks
-    apply_target_vars
 
     # ----- Validate playbooks exist -----
     for entry in "${playbooks[@]}"; do
@@ -300,6 +299,8 @@ main() {
         local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
 
+        echo "  [debug] TF_VAR_hcloud_token=${TF_VAR_hcloud_token:+set}" >&2
+        echo "  [debug] TF_VAR_environment=${TF_VAR_environment:-unset}" >&2
         local ok=false
         for try in 1 2; do
             # shellcheck disable=SC2086
