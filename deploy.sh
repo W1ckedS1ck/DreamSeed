@@ -397,8 +397,8 @@ data = {
     'server_ip': os.environ.get('SERVER_IP', ''),
     'web_server': os.environ.get('WEB_SERVER', ''),
     'domain': os.environ.get('DEPLOY_DOMAIN', ''),
-    'domain_www': target == 'prod',
-    'dev_write_perms': target != 'prod',
+    'domain_www': target.startswith('prod'),
+    'dev_write_perms': not target.startswith('prod'),
     'php_version': os.environ.get('PHP_VERSION', ''),
     'secrets_dir': f'{script_dir}/secrets',
     'configs_dir': f'{script_dir}/configs',
@@ -428,7 +428,7 @@ with open(dst, 'w') as f:
 " "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_TMP"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ "$TARGET" != "prod" ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
+    [[ ! "$TARGET" =~ ^prod ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
 
     # ----- Verify SSH host key -----
     ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true

@@ -13,6 +13,9 @@ on:
           - aws
         default: hetzner
 
+permissions:
+  contents: read
+
 concurrency:
   group: backup-test
   cancel-in-progress: false

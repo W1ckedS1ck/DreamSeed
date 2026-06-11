@@ -80,7 +80,7 @@ send_tg() {
     )
     [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$tg_url" "${data[@]}" 2>&1) || true
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$tg_url" "${data[@]}" 2>/dev/null) || true
     [[ "$http_code" != "200" ]] && echo "WARNING: Telegram send failed (HTTP ${http_code:-000})" >&2 || true
 }
 
