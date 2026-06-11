@@ -298,8 +298,7 @@ main() {
 
         local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
-        echo "  [debug] SSH key: ${TF_VAR_ssh_public_key:0:20}..." >&2
-        # shellcheck disable=SC2086
+        [[ "$TF_PROVIDER" == "hetzner" ]] && tf_args="-var=hcloud_token=${HCLOUD_TOKEN:-} -var=environment=${TARGET}"
         if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
             :  # ok
         else
