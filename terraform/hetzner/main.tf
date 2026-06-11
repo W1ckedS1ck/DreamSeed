@@ -45,6 +45,27 @@ resource "hcloud_firewall" "web" {
     port       = "443"
     source_ips = ["0.0.0.0/0", "::/0"]
   }
+
+  rule {
+    direction  = "out"
+    protocol   = "tcp"
+    port       = "80-443"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction  = "out"
+    protocol   = "udp"
+    port       = "53"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction  = "out"
+    protocol   = "udp"
+    port       = "123"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
 }
 
 data "hcloud_primary_ip" "main" {
@@ -64,13 +85,14 @@ resource "hcloud_primary_ip" "main" {
 }
 
 resource "hcloud_server" "main" {
-  name         = "dreamseed-${var.environment}"
-  server_type  = var.server_type
-  image        = "ubuntu-24.04"
-  location     = var.location
-  labels       = local.labels
-  ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
-  firewall_ids = [hcloud_firewall.web.id]
+  name               = "dreamseed-${var.environment}"
+  server_type        = var.server_type
+  image              = "ubuntu-24.04"
+  location           = var.location
+  labels             = local.labels
+  ssh_keys           = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
+  firewall_ids       = [hcloud_firewall.web.id]
+  delete_protection  = var.environment == "prod-hetz"
 
   public_net {
     ipv4_enabled = true

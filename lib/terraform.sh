@@ -5,8 +5,6 @@
 # Terraform shortcut — runs tf in the correct provider dir
 _tf() { ( cd "$TF_DIR" && "$TERRAFORM" "$@" ); }
 
-# Clean up stale CI SSH key from Hetzner Cloud before terraform apply
-# to avoid "SSH key not unique (uniqueness_error)"
 terraform_select_workspace() {
     local ws="$TF_WORKSPACE"
     (
