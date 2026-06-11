@@ -26,7 +26,7 @@ terraform_ensure_workspace() {
         echo "  Creating TFC workspace: $ws_name"
         curl -sf -X POST "https://app.terraform.io/api/v2/organizations/$org/workspaces" \
             -H "$auth" -H "Content-Type: application/vnd.api+json" \
-            -d "{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$ws_name\",\"operations\":false,\"execution-mode\":\"local\"}}}" >/dev/null 2>&1 || true
+            -d "{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$ws_name\",\"execution-mode\":\"local\"}}}" >/dev/null 2>&1 && echo "  ✓ Workspace created" || echo "  ⚠ Failed to create workspace (will try 'terraform workspace new')"
     fi
 }
 
