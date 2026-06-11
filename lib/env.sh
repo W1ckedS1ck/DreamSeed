@@ -3,7 +3,7 @@
 # Sourced by deploy.sh — do not execute directly.
 
 validate_env_file() {
-    local f="$1" n=0 required=("DB_PASS" "GRAFANA_PASS" "TG_TOKEN" "TG_CHAT_ID")
+    local f="$1" n=0 required=("DB_PASS" "GRAFANA_PASS" "TG_TOKEN" "TG_CHAT_ID") in_quote=0
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
         exit 1
@@ -11,7 +11,15 @@ validate_env_file() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((n++)) || true
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || { echo "Invalid env format at $f:$n: $line" >&2; exit 1; }
+        if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+            local val="${line#*=}"
+            [[ "$val" =~ ^\" && ! "$val" =~ \"$ ]] && in_quote=1 || in_quote=0
+        elif [[ "$in_quote" -eq 1 ]]; then
+            [[ "$line" =~ \"$ ]] && in_quote=0
+            continue
+        else
+            echo "Invalid env format at $f:$n: $line" >&2; exit 1
+        fi
     done < "$f"
     source "$f" 2>/dev/null || true
     for req in "${required[@]}"; do
