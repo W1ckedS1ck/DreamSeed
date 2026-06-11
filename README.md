@@ -61,7 +61,7 @@ I own **everything below the application layer** — provisioning, configuration
 ## 🧰 Tech Stack
 
 | Layer | Tools |
-|---|---|---|
+|---|---|
 | **Infrastructure** | Terraform / OpenTofu · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
