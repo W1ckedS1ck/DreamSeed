@@ -142,14 +142,14 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                        │                            │
                                        │ Grafana datasource         │ Grafana Cloud
                                        ▼                            ▼
-                                ┌──────────────┐           ┌──────────────────┐
-                                │   Grafana    │           │  Grafana Cloud   │
-                                │  :3000       │           │  (hosted metrics)│
-                                │              │           │                  │
-                                 │ 5 dashboards │           │ 4 community       │
-                                                                  │ 16 alert rules│          │ dashboards (gnet   │
-                                 └──────┬───────┘           │ IDs 1860/7362/   │
-                                       │                    └──────────────────┘
+                                 ┌──────────────┐           ┌──────────────────┐
+                                 │   Grafana    │           │  Grafana Cloud   │
+                                 │  :3000       │           │  (hosted metrics)│
+                                 │  5 dashboards│           │  4 community     │
+                                 │  16 alerts   │           │  dashboards      │
+                                 │              │           │  (gnet 1860/7362/│
+                                 │              │           │   17452/10229)   │
+                                 └──────┬───────┘           └──────────────────┘
                                        │ Telegram contact point
                                        ▼
                                  Telegram (chat_id)

@@ -30,6 +30,7 @@ ansible-galaxy collection install ansible.mysql ansible.posix
 | Target | Current backend | Required env vars |
 |--------|-----------------|-------------------|
 | `prod` | AWS EC2 | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
+| `prod-hetz` | Hetzner Cloud | `PROD_HETZ_HCLOUD_TOKEN` (falls back to `HCLOUD_TOKEN`) |
 | `dev-aws` | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION`, `DEV_AWS_EIP` |
 | `dev-hetz` | Hetzner Cloud | `HCLOUD_TOKEN` |
 
@@ -115,7 +116,7 @@ brew install gitleaks
 ## Secrets setup
 
 ```bash
-cp secrets/.env.example secrets/.env
+cp .env.example secrets/.env
 # edit secrets/.env with your values
 ```
 

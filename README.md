@@ -16,7 +16,7 @@
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
-> Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, under 10 minutes.
+> Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~15 minutes.
 
 ---
 
@@ -107,6 +107,9 @@ Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). 
 ```bash
 # Production on AWS with Nginx (requires confirmation)
 ./deploy.sh prod -n
+
+# Production on Hetzner with Nginx (requires confirmation)
+./deploy.sh prod-hetz -n
 
 # Dev environment 1 (Nginx)
 ./deploy.sh dev-hetz -n
@@ -259,6 +262,7 @@ CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validat
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|
 | `prod` | AWS EC2 (`us-west-1`) | [dreamseed.online](https://dreamseed.online) | Nginx + PHP 8.3 + MariaDB |
+| `prod-hetz` | Hetzner (`nbg1`) | [dreamseed.online](https://dreamseed.online) | Nginx + PHP 8.3 + MariaDB |
 | `dev-aws` | AWS EC2 | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Full stack (inactive) |
 | `dev-hetz` | Hetzner (`nbg1`) | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Full stack |
 
