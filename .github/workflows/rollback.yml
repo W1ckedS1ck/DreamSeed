@@ -7,7 +7,7 @@ on:
         description: 'Target environment'
         required: true
         type: choice
-        options: [prod, dev-aws, dev-hetz]
+        options: [prod, dev-aws, dev-hetz, prod-hetz]
       confirm:
         description: 'Prod confirmation — type "rollback prod"'
         required: false
@@ -82,9 +82,9 @@ jobs:
                      --query 'Addresses[0].PublicIp' --output text)
               fi
               ;;
-            dev-hetz)
+            dev-hetz|prod-hetz)
               export TF_TOKEN_app_terraform_io="$TF_TOKEN"
-              export TF_WORKSPACE="dev-hetz"
+              export TF_WORKSPACE="$ENV"
               cd terraform/hetzner
               terraform init -upgrade=false > /dev/null
               IP=$(terraform output -raw server_ipv4)
@@ -101,7 +101,7 @@ jobs:
           echo "Found server IP: $IP"
 
       - name: Validate prod confirmation
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' || inputs.environment == 'prod-hetz'
         run: |
           if [[ "${{ inputs.confirm }}" != "rollback prod" ]]; then
             echo "::error::To rollback prod you must set confirm = 'rollback prod'"
@@ -135,9 +135,10 @@ jobs:
         run: |
           ENV="${{ inputs.environment }}"
           case "$ENV" in
-            prod)    DOMAIN="dreamseed.online" ;;
-            dev-aws) DOMAIN="aws.vitalikuts.online" ;;
-            dev-hetz) DOMAIN="hetz.vitalikuts.online" ;;
+            prod)       DOMAIN="dreamseed.online" ;;
+            prod-hetz)  DOMAIN="dreamseed.online" ;;
+            dev-aws)    DOMAIN="aws.vitalikuts.online" ;;
+            dev-hetz)   DOMAIN="hetz.vitalikuts.online" ;;
           esac
           echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
           echo "Health check domain: $DOMAIN"

@@ -30,7 +30,7 @@ CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
 # State
 TARGET="" WEB_SERVER="" TF_PROVIDER="" TF_WORKSPACE="" TARGET_PREFIX=""
 DEPLOY_DOMAIN="" ENV_FILE="" TF_DIR="" SERVER_IP=""
-SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false
+SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false SKIP_DNS=false
 STEP_NAMES=() STEP_TIMES=() STEP_START=0
 
 DEPLOY_START=$(date +%s)
@@ -62,6 +62,7 @@ TARGETS:
   prod               AWS        dreamseed.online
   dev-aws            AWS        aws.vitalikuts.online
   dev-hetz           Hetzner    hetz.vitalikuts.online
+  prod-hetz          Hetzner    dreamseed.online
 
 WEB SERVER (required):
   -n                 Nginx
@@ -73,6 +74,7 @@ OPTIONS:
   -p, --parallel     Parallel playbook execution (3 phases)
   -d, --dry-run      Preview only
   -c, --check        Validate config & syntax only (no deploy)
+  --no-dns           Skip Cloudflare DNS update
   -h                 Show this help
    --logs [tf]        Tail latest deploy/terraform log
    --lint             Run all linters locally (no deploy)
@@ -97,7 +99,7 @@ parse_args() {
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            prod|dev-aws|dev-hetz) TARGET="$1"; shift ;;
+            prod|dev-aws|dev-hetz|prod-hetz) TARGET="$1"; shift ;;
             -n) WEB_SERVER="nginx"; shift ;;
             -a) WEB_SERVER="apache"; shift ;;
             -i|--ip)
@@ -109,6 +111,7 @@ parse_args() {
             -p|--parallel) PARALLEL_MODE=true; shift ;;
             -d|--dry-run) DRY_RUN=true; shift ;;
             -c|--check) CHECK_MODE=true; shift ;;
+            --no-dns) SKIP_DNS=true; shift ;;
             -h|--help) usage; exit 0 ;;
             *) echo "Unknown option: $1"; usage; exit 1 ;;
         esac
@@ -129,8 +132,10 @@ resolve_target() {
                  SSH_ATTEMPTS=40; SSH_INTERVAL=10 ;;
         dev-aws) TF_PROVIDER="aws";    DEPLOY_DOMAIN="aws.vitalikuts.online";  TF_WORKSPACE="dev-aws"; TARGET_PREFIX="DEV_AWS"
                  SSH_ATTEMPTS=40; SSH_INTERVAL=10 ;;
-        dev-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz"
-                 SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
+        dev-hetz)  TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz";  TARGET_PREFIX="DEV_HETZ"
+                   SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
+        prod-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="dreamseed.online";      TF_WORKSPACE="prod-hetz"; TARGET_PREFIX="PROD_HETZ"
+                   SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
@@ -261,7 +266,7 @@ main() {
     fi
 
     # ----- Production confirmation -----
-    if [[ "$TARGET" == "prod" && "$DESTROY_MODE" == "false" ]]; then
+    if [[ "$TARGET" =~ ^prod && "$DESTROY_MODE" == "false" ]]; then
         echo ""
         echo "  ⚠ Deploying to PRODUCTION ($DEPLOY_DOMAIN)"
         if [[ "${CI:-}" == "true" ]]; then
@@ -317,6 +322,11 @@ main() {
         else
             rm -f "$tmp_bk"
             echo "  ⚠ tfstate backup failed (empty or error)" | tee -a "$LOG"
+        fi
+        if [[ "$SKIP_DNS" == "false" ]]; then
+            update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
+        else
+            echo "  — Cloudflare DNS update skipped (--no-dns)"
         fi
         step_ok
     else

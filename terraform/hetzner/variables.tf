@@ -44,3 +44,9 @@ variable "additional_ssh_keys" {
   description = "Additional SSH public keys to inject via cloud-init (in addition to ssh_public_key)"
   default     = []
 }
+
+variable "enable_primary_ip" {
+  type        = bool
+  description = "Create a new Primary IP in Hetzner Cloud (only when primary_ip_name is empty)"
+  default     = false
+}

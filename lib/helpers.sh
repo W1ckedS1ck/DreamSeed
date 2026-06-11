@@ -78,6 +78,56 @@ rotate_logs() {
     fi
 }
 
+update_cloudflare_dns() {
+    local domain="$1" ip="$2"
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && {
+        log "Cloudflare DNS: skip (CLOUDFLARE_API_TOKEN not set)"
+        return 0
+    }
+
+    # Resolve zone ID from domain (API token must have Zone:Read access)
+    local zone_id zone_name api_base
+    api_base="https://api.cloudflare.com/client/v4"
+    zone_id=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "$api_base/zones?name=${domain#*.}" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+zones=d.get('result',[])
+if zones:
+    print(zones[0]['id'])
+" 2>/dev/null || echo "")
+
+    [[ -z "$zone_id" ]] && { log "Cloudflare DNS: skip (no zone found for $domain)"; return 0; }
+
+    local base="$api_base/zones/$zone_id/dns_records"
+    local type="A"
+
+    local existing
+    existing=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "$base?type=$type&name=$domain" 2>/dev/null)
+    local count
+    count=$(echo "$existing" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('result',[])))" 2>/dev/null || echo 0)
+
+    if [[ "$count" -gt 0 ]]; then
+        local record_id old_ip
+        record_id=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['id'])")
+        old_ip=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['content'])")
+        [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
+        curl -s -X PUT "$base/$record_id" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"$type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":true}" >/dev/null 2>&1
+        log "Cloudflare DNS: $domain $old_ip → $ip"
+    else
+        curl -s -X POST "$base" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"$type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":true}" >/dev/null 2>&1
+        log "Cloudflare DNS: $domain → $ip (created)"
+    fi
+    echo "  ✓ Cloudflare DNS: $domain → $ip"
+}
+
 print_summary() {
     echo ""
     echo "  ──────────────────────────────────────────────────────"
