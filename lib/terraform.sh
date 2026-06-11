@@ -35,7 +35,7 @@ terraform_ensure_workspace() {
 terraform_init_if_needed() {
     if [[ ! -d "$TF_DIR/.terraform" ]]; then
         terraform_ensure_workspace
-        _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
+        TF_WORKSPACE="$TF_WORKSPACE" _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
     fi
 }
 
