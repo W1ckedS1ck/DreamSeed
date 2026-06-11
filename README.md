@@ -9,7 +9,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
 ![Terraform / OpenTofu](https://img.shields.io/badge/Terraform-1.9%2B-7B42BC?logo=terraform)
-![Ansible](https://img.shields.io/badge/Ansible-13%2B-EE0000?logo=ansible)
+![Ansible](https://img.shields.io/badge/Ansible-14%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
 ![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
@@ -142,7 +142,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (~400 lines + 5 modular lib files)
+├── deploy.sh                 # Main orchestrator (500 lines + 5 modular lib files)
 ├── audit-secrets.sh          # Pre-push secret leakage scanner
 ├── .github/actions/          # Composite actions: setup-terraform, setup-ansible
 ├── terraform/
@@ -160,6 +160,7 @@ DreamSeed/
 ├── ansible-roles/            # 15 reusable roles (nginx, mariadb, ssl, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
+├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
 ├── .tflint.hcl               # Terraform linter config (root) + terraform/aws/.tflint.hcl (AWS ruleset)
 ├── renovate.json              # Automated dependency update config
@@ -169,7 +170,8 @@ DreamSeed/
     ├── drift-detection.yml   # Daily terraform plan against prod
     ├── backup-test.yml       # Full backup/restore verification with app health checks
     ├── rollback.yml          # Emergency rollback with prod confirmation
-    └── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
+    ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
+    └── test-bench.yml        # Hetzner server benchmark
 ```
 
 ---
@@ -223,16 +225,17 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 6 Workflows + Renovate + Infracost App
+### 🧪 CI/CD Pipeline — 7 Workflows + Renovate + Infracost App
 
 | Workflow | Trigger |
 |----------|---------|
 | **CI** — 7 parallel checks | Every PR + push to main |
-| **Deploy** — single-click deploy | Manual dispatch (prod, dev-aws, dev-hetz) |
+| **Deploy** — single-click deploy | Manual dispatch (all targets) |
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
+| **Test Bench** — Hetzner server benchmark | Manual dispatch |
 
 CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt) · **Trivy** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
 
