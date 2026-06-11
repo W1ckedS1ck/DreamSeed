@@ -128,8 +128,8 @@ jobs:
             echo "DEV_HETZ_SSH_KEY_NAME=Vitali"
             echo "DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1"
             echo "PROD_HETZ_SSH_KEY_NAME=Vitali.pub"
-            echo "PROD_HETZ_PRIMARY_IP_NAME=dreamseed-main-prod-hetz"
-            echo "PROD_HETZ_ENABLE_PRIMARY_IP="
+            echo "PROD_HETZ_PRIMARY_IP_NAME="
+            echo "PROD_HETZ_ENABLE_PRIMARY_IP=true"
           } > secrets/.env
           chmod 600 secrets/.env
 
