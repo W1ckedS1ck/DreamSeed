@@ -45,8 +45,7 @@ All targets require:
 - `TG_THREAD_ID` — Telegram topic/thread ID for alerts
 - `OWNER` — display name for Telegram reports
 - `TF_API_TOKEN` — Terraform Cloud API token
-- `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 challenge)
-- `CLOUDFLARE_ZONE_ID` — Cloudflare zone ID
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 + DNS update; zone ID auto-detected)
 - `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
 
 Hetzner dev additionally:

@@ -35,7 +35,7 @@ deploy.sh TARGET -n|-a [OPTIONS]
                curl https://$DOMAIN/ → 200|301
                SSL (Cloudflare/LE/self-signed), MODX index.php, DB tables
                VictoriaMetrics health, node + mysql + nginx/apache exporters, vmagent
-               fail2ban (7 jails), cron backup, MySQL write probe
+               fail2ban (7-8 jails, depends on web server), cron backup, MySQL write probe
                → Push to VM: database_tables, dreamseed_health_overall
 ```
 
@@ -270,7 +270,7 @@ DreamSeed/
 ├── audit-secrets.sh       # Pre-push secret leakage check
 ├── .github/
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 6 workflows + Renovate + Infracost App
+│   └── workflows/         # 7 workflows + Renovate + Infracost App
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP
