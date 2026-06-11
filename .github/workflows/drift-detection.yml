@@ -51,7 +51,12 @@ jobs:
             -var="elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" \
             -var="environment=prod" \
             -out=/tmp/prod.tfplan 2>&1 | tee /tmp/plan.log
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -eq 1 ]; then
+            echo "::error::Terraform plan failed for AWS prod — check credentials, state, or provider."
+            exit 1
+          fi
 
       - name: Report and notify drift
         if: steps.plan.outputs.exit_code == '2'
@@ -107,7 +112,12 @@ jobs:
             -var="ssh_public_key=$SSH_PUB_KEY" \
             -var="ssh_key_name=" \
             -out=/tmp/prod-hetz.tfplan 2>&1 | tee /tmp/plan.log
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -eq 1 ]; then
+            echo "::error::Terraform plan failed for Hetzner prod — check credentials, state, or provider."
+            exit 1
+          fi
 
       - name: Report and notify drift
         if: steps.plan.outputs.exit_code == '2'

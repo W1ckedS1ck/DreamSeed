@@ -67,11 +67,8 @@
 
     - name: Fail if no project backup found
       ansible.builtin.fail:
-        msg: "No project backups found on Google Drive"
-      when:
-        - restore_latest_project.rc is defined
-        - restore_latest_project.rc == 0
-        - restore_latest_project.stdout | trim == ""
+        msg: "No project backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_project.stdout | trim == ""
 
     - name: Validate project backup filename
       ansible.builtin.fail:
@@ -188,11 +185,8 @@
 
     - name: Fail if no DB backup found
       ansible.builtin.fail:
-        msg: "No DB backups found on Google Drive"
-      when:
-        - restore_latest_db.rc is defined
-        - restore_latest_db.rc == 0
-        - restore_latest_db.stdout | trim == ""
+        msg: "No DB backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_db.stdout | trim == ""
 
     - name: Validate DB backup filename
       ansible.builtin.fail:
