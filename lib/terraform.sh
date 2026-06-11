@@ -16,10 +16,26 @@ terraform_select_workspace() {
     )
 }
 
+terraform_ensure_workspace() {
+    [[ -z "${TF_API_TOKEN:-}" || -z "${TF_WORKSPACE:-}" ]] && return 0
+    local org="DreamSeed" prefix="dreamseed-"
+    local url="https://app.terraform.io/api/v2/organizations/$org/workspaces/$prefix$TF_WORKSPACE"
+    local exists
+    exists=$(curl -sf -H "Authorization: Bearer $TF_API_TOKEN" "$url" | \
+        python3 -c "import json,sys; print('yes' if json.load(sys.stdin).get('data') else 'no')" 2>/dev/null || echo "no")
+    if [[ "$exists" != "yes" ]]; then
+        echo "  Creating TFC workspace: $prefix$TF_WORKSPACE"
+        curl -sf -X POST "https://app.terraform.io/api/v2/organizations/$org/workspaces" \
+            -H "Authorization: Bearer $TF_API_TOKEN" \
+            -H "Content-Type: application/vnd.api+json" \
+            -d "{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$prefix$TF_WORKSPACE\"}}}" >/dev/null 2>&1 || true
+    fi
+}
+
 terraform_init_if_needed() {
-    # Init without workspace so new workspaces can be created in TFC
     if [[ ! -d "$TF_DIR/.terraform" ]]; then
-        ( unset TF_WORKSPACE; _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1 )
+        terraform_ensure_workspace
+        _tf init -reconfigure -input=false -no-color >> "$DEPLOY_TF_LOG" 2>&1
     fi
 }
 
