@@ -58,9 +58,8 @@ contactPoints:
 {% if grafana_telegram_thread_id | length > 0 %}
           message_thread_id: "{{ grafana_telegram_thread_id }}"
 {% endif %}
-          message: "{% raw %}{{ if .Alerts.Firing }}🔴 {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
-        secureSettings:
           bottoken: "{{ grafana_telegram_token }}"
+          message: "{% raw %}{{ if .Alerts.Firing }}🔴 {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
         disableResolveMessage: false
 
 policies:
