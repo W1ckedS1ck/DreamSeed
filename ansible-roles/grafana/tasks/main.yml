@@ -234,6 +234,7 @@
   ansible.builtin.file:
     path: /etc/grafana/.admin_password_set
     state: touch
+    mode: "0644"
   become: true
   when:
     - grafana_cli_result is defined

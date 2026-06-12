@@ -10,19 +10,19 @@
 #       monitor_download_url: "https://github.com/org/foo_exporter/releases/download/v{{ monitor_version }}/..."
 #       monitor_extracted_binary: "/tmp/foo_exporter-{{ monitor_version }}.linux-amd64/foo_exporter"
 
-- name: "Check if {{ monitor_bin_name }} is installed"
+- name: "Check installation: {{ monitor_bin_name }}"
   ansible.builtin.stat:
     path: "{{ monitor_bin_path }}"
   register: _monitor_bin
 
-- name: "Get current {{ monitor_bin_name }} version"
+- name: "Get version: {{ monitor_bin_name }}"
   ansible.builtin.command: "{{ monitor_bin_path }} --version"
   changed_when: false
   failed_when: false
   register: _monitor_current_version
   when: _monitor_bin.stat.exists
 
-- name: "Install/Upgrade {{ monitor_bin_name }}"
+- name: "Install or upgrade {{ monitor_bin_name }}"
   when: >
     not _monitor_bin.stat.exists or
     monitor_version not in (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')).split()
@@ -41,7 +41,7 @@
         dest: /tmp/
         remote_src: true
 
-    - name: "Install {{ monitor_bin_name }} binary"
+    - name: "Install binary: {{ monitor_bin_name }}"
       ansible.builtin.copy:
         src: "{{ monitor_extracted_binary }}"
         dest: "{{ monitor_bin_path }}"
@@ -49,14 +49,14 @@
         remote_src: true
       become: true
 
-    - name: "Restart {{ monitor_bin_name }} service"
+    - name: "Restart service: {{ monitor_bin_name }}"
       ansible.builtin.systemd:
         name: "{{ monitor_service_name | default(monitor_bin_name) }}"
         state: restarted
       become: true
       when: _monitor_bin.stat.exists
 
-    - name: "Cleanup {{ monitor_bin_name }} temp files"
+    - name: "Cleanup temp files: {{ monitor_bin_name }}"
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent

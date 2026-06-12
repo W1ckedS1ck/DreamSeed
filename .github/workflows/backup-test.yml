@@ -133,12 +133,14 @@ jobs:
           echo "::add-mask::$GRAFANA_PASS"
           [[ -n "$DEV_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$DEV_GRAFANA_CLOUD_TOKEN"
           [[ -n "$PROD_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$PROD_GRAFANA_CLOUD_TOKEN"
-          echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)" >> "$GITHUB_ENV"
-          [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali}" >> "$GITHUB_ENV"
-          echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}" >> "$GITHUB_ENV"
-          python3 -c "import json, os; k=open(os.path.expanduser('~/.ssh/deploy_key.pub')).read().strip(); print(f'TF_VAR_additional_ssh_keys={json.dumps([k])}')" >> "$GITHUB_ENV"
+          {
+            echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN"
+            echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)"
+            [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME"
+            echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali}"
+            echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+            python3 -c "import json, os; k=open(os.path.expanduser('~/.ssh/deploy_key.pub')).read().strip(); print(f'TF_VAR_additional_ssh_keys={json.dumps([k])}')"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
@@ -173,12 +175,12 @@ jobs:
               exit 1
             fi
           done
-          echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
+          echo "server_ipv4=$(terraform output -raw server_ipv4)" >> "$GITHUB_OUTPUT"
 
       - name: Capture server SSH host key
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          for i in $(seq 1 15); do
+          for _ in $(seq 1 15); do
             ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
             sleep 2
           done
@@ -221,7 +223,7 @@ jobs:
               echo "SSH ready (attempt $i)"
               break
             fi
-            if [ $((i % 10)) -eq 1 ] && [ $i -gt 1 ]; then
+            if [ $((i % 10)) -eq 1 ] && [ "$i" -gt 1 ]; then
               echo "  Attempt $i/90..."
             fi
             [ "$i" -eq 90 ] && {
@@ -542,9 +544,11 @@ jobs:
             echo "[FAIL] DB tables: ${TBL_COUNT:-0} (expected 50+)"
           fi
 
-          echo "restore_content_rows=$ROWS" >> "$GITHUB_OUTPUT"
-          echo "restore_table_count=$TBL_COUNT" >> "$GITHUB_OUTPUT"
-          echo "restore_http_code=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+          {
+            echo "restore_content_rows=$ROWS"
+            echo "restore_table_count=$TBL_COUNT"
+            echo "restore_http_code=$HTTP_CODE"
+          } >> "$GITHUB_OUTPUT"
 
           if [ "${ROWS:-0}" -eq 0 ] || [ "${TBL_COUNT:-0}" -lt 50 ]; then
             echo "::error::Restore verification failed — no content restored"
@@ -737,9 +741,9 @@ jobs:
           source secrets/.env
           set +a
 
-          ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
-          ok_destroy() { [ "$1" = "success" ] && echo "✅" || { [ "$1" = "skipped" ] && echo "⏭️"; }; }
-          ok_yn() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
+          ok() { if [ "$1" = "success" ]; then echo "✅"; else echo "❌"; fi; }
+          ok_destroy() { if [ "$1" = "success" ]; then echo "✅"; elif [ "$1" = "skipped" ]; then echo "⏭️"; fi; }
+          ok_yn() { if [ "$1" = "yes" ]; then echo "✅"; else echo "❌"; fi; }
 
           RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
           RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"

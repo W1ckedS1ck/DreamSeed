@@ -172,7 +172,7 @@
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
-- name: Check if MODX is installed ({{ db_prefix }}system_settings table exists)
+- name: Check MODX system_settings table
   ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root

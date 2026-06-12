@@ -78,7 +78,6 @@ resource "hcloud_primary_ip" "main" {
   name              = "dreamseed-main-${var.environment}"
   datacenter        = "${var.location}-dc1"
   type              = "ipv4"
-  assignee_type     = "server"
   auto_delete       = false
   labels            = local.labels
   delete_protection = var.environment == "prod-hetz"

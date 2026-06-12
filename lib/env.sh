@@ -110,12 +110,12 @@ if additional:
 print(json.dumps(keys))
 ")
         # Also export ssh_public_key for TF to create CI key if needed
+        # NOTE: TF_VAR_additional_ssh_keys is already set above (includes deploy key + ADDITIONAL_SSH_KEYS)
         if [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
             local pk; pk="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
             if [[ -r "$pk" ]]; then
                 local pk_content; pk_content="$(<"$pk")"
                 export TF_VAR_ssh_public_key="$pk_content"
-                export TF_VAR_additional_ssh_keys=$(python3 -c "import sys,json; print(json.dumps([sys.stdin.read().strip()]))" < "$pk")
             fi
         fi
     }

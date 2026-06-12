@@ -40,13 +40,14 @@
     - /etc/letsencrypt/archive
     - /etc/letsencrypt/live
 
-- name: Ensure private key symlinks in live point correctly
+- name: Ensure private key directories in archive and live
   become: true
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
     group: ssl-cert
+    mode: "0750"
   loop:
     - /etc/letsencrypt/archive
     - /etc/letsencrypt/live
@@ -64,7 +65,9 @@
   register: ssl_cert_file
 
 # --- Certbot DNS Challenge (CloudFlare) ---
-- block:
+- name: Obtain or skip Let's Encrypt certificate via DNS-01
+  when: cloudflare_enabled | default(true) | bool
+  block:
     - name: Install CloudFlare DNS certbot plugin
       become: true
       ansible.builtin.apt:
@@ -98,7 +101,7 @@
       when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
       register: ssl_certbot_result
       failed_when: false
-  when: cloudflare_enabled | default(true) | bool
+      changed_when: ssl_certbot_result is not skipped and ssl_certbot_result.rc is defined and ssl_certbot_result.rc == 0
 
 # --- Final cert status ---
 - name: Debug certbot result
