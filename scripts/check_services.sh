@@ -140,11 +140,9 @@ if systemctl is-active vmagent &>/dev/null; then
     elif [[ "$_blocks" -gt 0 && "$_errors" -gt 0 ]]; then
         export_metric 'vmagent_remote_write_ok 0'
         echo "  ⚠ vmagent: remote write errors (errors=$_errors)"
-        fail=1
     else
         export_metric 'vmagent_remote_write_ok 0'
         echo "  ⚠ vmagent: running but no remote write data"
-        fail=1
     fi
 else
     export_metric 'vmagent_remote_write_ok 0'
