@@ -128,10 +128,11 @@
       when: restore_latest_project.stdout | trim != ""
 
     - name: Verify project extraction
+      become: true
       ansible.builtin.stat:
         path: "{{ web_root }}/index.php"
       register: restore_index_check
-      failed_when: not restore_index_check.stat.exists or restore_index_check.stat.size == 0
+      failed_when: restore_index_check.stat is not defined or not restore_index_check.stat.exists or restore_index_check.stat.size == 0
       when: restore_latest_project.stdout | trim != ""
 
     - name: Cleanup project archive
