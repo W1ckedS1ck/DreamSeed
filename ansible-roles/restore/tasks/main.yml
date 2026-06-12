@@ -30,6 +30,7 @@
 #  Restore Project
 # ========================
 - name: Check if site already restored
+  become: true
   ansible.builtin.stat:
     path: "{{ web_root }}/index.php"
   register: restore_site_exists

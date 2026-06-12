@@ -310,6 +310,7 @@ main() {
         SERVER_IP=$(_tf output -raw server_ipv4 2>>"$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
         [[ "$SERVER_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || step_fail "Invalid IP from Terraform: $SERVER_IP"
+        export SERVER_IP
 
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
@@ -330,6 +331,7 @@ main() {
     else
         step_start "Using existing server"
         SERVER_IP="$EXISTING_IP"
+        export SERVER_IP
         step_ok
     fi
 
