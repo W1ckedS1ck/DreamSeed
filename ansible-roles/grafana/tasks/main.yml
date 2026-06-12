@@ -199,7 +199,7 @@
 
 - name: Reset Grafana admin password via CLI
   ansible.builtin.command:
-    cmd: grafana-cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
+    cmd: grafana cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
   become: true
   no_log: true

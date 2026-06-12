@@ -97,6 +97,11 @@ groups:
           summary: >-
             {% raw %}Disk < 10% free (mountpoint: {{ $labels.mountpoint }}){% endraw %}
 
+{{ alert_body('swap-thrashing', 'Swap Thrashing Detected', 'rate(node_vmstat_pswpin[5m])', 300, 100, 'gt', '5m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: >-
+            {% raw %}Swap page-in rate > 100 pages/s — memory pressure detected on {{ $labels.instance }}{% endraw %}
+
 {{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: MariaDB service is not running
@@ -120,6 +125,11 @@ groups:
 {{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: Website is not responding (HTTP != 200)
+
+{{ alert_body('site-slow', 'Site Response Time > 5s', 'site_response_time_seconds', 120, 5, 'gt', '5m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: >-
+            {% raw %}Site response time {{ $values.A.Value }}s (threshold: 5s) on {{ $labels.instance }}{% endraw %}
 
 {{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '5m', 'OK', 'Error', 'critical') }}
         annotations:

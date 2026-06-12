@@ -24,7 +24,9 @@ No modules.
 | ---- | ---- |
 | [grafana_dashboard.this](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/dashboard) | resource |
 | [grafana_folder.dreamseed](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/folder) | resource |
+| [grafana_synthetic_monitoring_check.http_grafana](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/synthetic_monitoring_check) | resource |
 | [grafana_synthetic_monitoring_check.http_main](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/synthetic_monitoring_check) | resource |
+| [grafana_synthetic_monitoring_check.multi_main](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/synthetic_monitoring_check) | resource |
 | [terraform_data.dashboard_download](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [grafana_synthetic_monitoring_probes.main](https://registry.terraform.io/providers/grafana/grafana/latest/docs/data-sources/synthetic_monitoring_probes) | data source |
 
