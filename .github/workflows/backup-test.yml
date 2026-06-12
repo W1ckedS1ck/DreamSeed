@@ -40,7 +40,7 @@ jobs:
           [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}"
           [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}"
           [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}"
-
+          [[ -n "${{ secrets.CF_ZONE_ID }}" ]] && echo "::add-mask::${{ secrets.CF_ZONE_ID }}"
           [[ -n "${{ secrets.HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}"
           [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}"
           [[ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]] && echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}"
@@ -192,20 +192,16 @@ jobs:
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
 
           # --- DNS ---
-          CF_ZONE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=dreamseed.online" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-            python3 -c "import sys,json; r=json.load(sys.stdin).get('result',[]); print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
-          if [ -z "$CF_ZONE" ]; then echo "[WARN] Could not resolve Cloudflare zone"; else
-          CF_RESP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records?type=A&name=test.dreamseed.online" \
+          CF_RESP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
           RECORD_ID=$(echo "$CF_RESP" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
           if [ -n "$RECORD_ID" ]; then
-            CF_RESP=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records/$RECORD_ID" \
+            CF_RESP=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
               -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
           else
-            CF_RESP=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records" \
+            CF_RESP=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
               -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
@@ -214,7 +210,6 @@ jobs:
             echo "[OK] DNS: test.dreamseed.online -> $SERVER_IP"
           else
             echo "[WARN] DNS update failed"
-          fi
           fi
 
           # --- Wait for SSH (90 x 2s = 180s, matches deploy.sh for Hetzner) ---
@@ -654,16 +649,12 @@ jobs:
           rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
           echo "Temp files cleaned"
 
-          CF_ZONE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=dreamseed.online" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-            python3 -c "import sys,json; r=json.load(sys.stdin).get('result',[]); print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
-          if [ -n "$CF_ZONE" ]; then
-          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records?type=A&name=test.dreamseed.online" \
+          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
           if [ -n "$RECORD_ID" ]; then
             DEL_RESP=$(curl -s -X DELETE \
-              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records/$RECORD_ID" \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
             if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
               echo "DNS record deleted"
@@ -672,7 +663,6 @@ jobs:
             fi
           else
             echo "No DNS record found to delete"
-          fi
           fi
 
       - name: Server info on failure

@@ -24,7 +24,6 @@ fi
 # ====== Validate required env vars ======
 : "${DB_NAME:?ERROR: DB_NAME not set in .env or environment}"
 : "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
-
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
 

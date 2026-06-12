@@ -32,11 +32,11 @@
 
 | Metric | Value |
 |--------|-------|
-| Deploy time | ~15-25 min (zero to live, either cloud) |
+| Deploy time | ~8-15 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | 1 hour → Google Drive, 5/15 versions retained |
 | Uptime coverage | 16 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
-| CI checks per push | 7 parallel jobs (lint → security → validate) |
+| CI checks per push | 8 parallel jobs (lint → security → validate) |
 | Cloud cost | Tracked via Infracost GitHub App on every PR |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
@@ -52,7 +52,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
 - **Observability** — VictoriaMetrics + Grafana stack with 16 alert rules (CPU, RAM, Disk, MySQL, PHP-FPM, Nginx/Apache, site down, MODX Core, VictoriaMetrics, backup cron, site check cron, SSL expiry, admin login, MiniShop2 write, DB tables, backup verify). Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 7 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Trivy, gitleaks, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
+- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Trivy, gitleaks, pre-commit, actionlint. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -229,7 +229,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 7 parallel checks | Every PR + push to main |
+| **CI** — 8 parallel checks | Every PR + push to main |
 | **Deploy** — single-click deploy | Manual dispatch (all targets) |
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |

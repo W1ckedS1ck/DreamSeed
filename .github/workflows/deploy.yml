@@ -66,6 +66,7 @@ jobs:
           [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}" || true
           [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}" || true
 
+          [[ -n "${{ secrets.CF_ZONE_ID }}" ]] && echo "::add-mask::${{ secrets.CF_ZONE_ID }}" || true
           [[ -n "${{ secrets.HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}" || true

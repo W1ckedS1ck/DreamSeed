@@ -114,6 +114,8 @@ if [[ ! -f /etc/.dreamseed-bootstrapped ]]; then
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
     touch /etc/.dreamseed-bootstrapped
 fi
+sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+systemctl restart ssh
 EOF
 
   metadata_options {
