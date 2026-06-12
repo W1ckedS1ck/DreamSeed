@@ -12,6 +12,7 @@
 ![Ansible](https://img.shields.io/badge/Ansible-14%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
+![Checkov](https://img.shields.io/badge/Checkov-passed-2A6F97?logo=checkov)
 ![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
@@ -237,7 +238,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
 | **Test Bench** — Hetzner server benchmark | Manual dispatch |
 
-CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt) · **Trivy** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
+CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
 
 ### 🛑 Production Safeguards
 
