@@ -174,22 +174,36 @@ jobs:
         shell: bash
         env:
           INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_API_KEY }}
-          PYTHONIOENCODING: utf-8
         run: |
-          set -o pipefail
-          infracost inspect --failing --json --no-color 2>/dev/null | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          pols = data.get('failing_policies', [])
-          if not pols:
-              print('✅ No FinOps policy violations')
-              sys.exit(0)
-          print(f'⚠️  {len(pols)} FinOps policy violation(s)')
-          for p in pols:
-              print(f'  - [{p[\"policy\"]}] {p[\"resource\"]} ({p[\"file\"]}:{p[\"line\"]})')
-              print(f'    {p[\"message\"]}')
-          sys.exit(1)
-          " 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          # v2: --failing filters output; --addresses-only gives one line per violation.
+          failing_addrs=$(infracost inspect --failing --addresses-only --no-color 2>&1)
+          inspect_exit=$?
+
+          if [ "${inspect_exit}" -ne 0 ]; then
+            echo "❌ Infracost inspect failed (exit ${inspect_exit}):"
+            echo "${failing_addrs}"
+            exit ${inspect_exit}
+          fi
+
+          # Empty output = no violations.
+          if [ -z "$(echo "${failing_addrs}" | tr -d '[:space:]')" ]; then
+            echo "✅ No FinOps policy violations"
+            exit 0
+          fi
+
+          # Violations found: show addresses + full JSON with details.
+          {
+            echo '## ⚠️  FinOps Policy Violations'
+            echo '```'
+            echo "${failing_addrs}"
+            echo '```'
+            echo ''
+            echo '### Details'
+            echo '```json'
+            infracost inspect --failing --json --no-color
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
 
   pre-commit:
     name: Pre-commit
