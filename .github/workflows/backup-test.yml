@@ -215,19 +215,19 @@ jobs:
           fi
 
           # --- Wait for SSH (90 x 2s = 180s, matches deploy.sh for Hetzner) ---
-          echo "Waiting for SSH on $SERVER_IP..."
+          echo "[$(date +%H:%M:%S)] Waiting for SSH on $SERVER_IP..."
           for i in $(seq 1 90); do
             if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
                 -o BatchMode=yes -o PasswordAuthentication=no \
                 -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
-              echo "SSH ready (attempt $i)"
+              echo "[$(date +%H:%M:%S)] SSH ready (attempt $i)"
               break
             fi
-            if [ $((i % 10)) -eq 1 ] && [ "$i" -gt 1 ]; then
-              echo "  Attempt $i/90..."
+            if [ $((i % 5)) -eq 0 ]; then
+              echo "[$(date +%H:%M:%S)] SSH attempt $i/90..."
             fi
             [ "$i" -eq 90 ] && {
-              echo "SSH never became available after 180s"
+              echo "[$(date +%H:%M:%S)] SSH never became available after 180s"
               ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
                 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" "exit 0" 2>&1 || true
               exit 1
@@ -236,24 +236,41 @@ jobs:
           done
 
           # --- Wait for cloud-init (matching deploy.sh) ---
-          echo "Waiting for cloud-init..."
-          ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-            "timeout 300 cloud-init status --wait" 2>/dev/null || {
-              for j in $(seq 1 15); do
-                st=$(ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-                  'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
-                [[ "$st" == *"status: done"* || "$st" == *"No pending"* ]] && break
-                [[ "$st" == *"status: error"* ]] && { echo "Cloud-init status: error"; exit 1; }
-                [[ $j -eq 15 ]] && { echo "Cloud-init timeout after 30s"; exit 1; }
-                sleep 2
-              done
+          echo "[$(date +%H:%M:%S)] Waiting for cloud-init (max 5 min)..."
+          CI_START=$(date +%s)
+          for j in $(seq 1 150); do
+            ci_out=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 "ubuntu@$SERVER_IP" \
+              'cloud-init status 2>/dev/null' 2>/dev/null || echo "unknown")
+            ci_elapsed=$(( $(date +%s) - CI_START ))
+            case "$ci_out" in
+              *"status: done"*|*"No pending"*)
+                echo "[$(date +%H:%M:%S)] Cloud-init done (${ci_elapsed}s)"
+                break
+                ;;
+              *"status: error"*)
+                echo "[$(date +%H:%M:%S)] Cloud-init status: error"
+                exit 1
+                ;;
+              *)
+                if [ $((j % 5)) -eq 0 ] || [ "$j" -eq 1 ]; then
+                  echo "[$(date +%H:%M:%S)] Cloud-init: running (${ci_elapsed}s)..."
+                fi
+                ;;
+            esac
+            [ "$j" -eq 150 ] && {
+              echo "[$(date +%H:%M:%S)] Cloud-init timeout after ${ci_elapsed}s"
+              exit 1
             }
-          echo "Cloud-init done"
+            sleep 2
+          done
 
           # --- Wait for apt lock ---
-          echo "Waiting for apt lock to release..."
+          echo "[$(date +%H:%M:%S)] Waiting for apt lock to release..."
+          APT_START=$(date +%s)
           ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
             "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
+          APT_ELAPSED=$(( $(date +%s) - APT_START ))
+          [ "$APT_ELAPSED" -gt 0 ] && echo "[$(date +%H:%M:%S)] Apt lock released (${APT_ELAPSED}s)" || true
           sleep 5
 
       - name: Generate config
@@ -427,7 +444,7 @@ jobs:
           ssh() { command ssh -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Checking Grafana via nginx proxy ==="
-          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || echo 0")
+          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
           if [ "$GRAFANA_OK" -ge 1 ]; then
             echo "[PASS] Grafana reachable via nginx proxy"
           else
@@ -594,7 +611,7 @@ jobs:
           # PHP error log check
           echo "=== PHP error log (last 20 lines) ==="
           ssh ubuntu@"$SERVER_IP" "sudo tail -20 /var/log/php*-fpm.log 2>/dev/null || echo 'No PHP-FPM log found'" 2>&1 || true
-          PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || echo 0")
+          PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || true")
           if [ "${PHP_ERRORS:-0}" -eq 0 ]; then
             echo "[PASS] No PHP Fatal errors after restore"
           else

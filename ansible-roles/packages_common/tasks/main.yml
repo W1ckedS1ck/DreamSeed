@@ -68,6 +68,12 @@
     mode: "0600"
   when: not swap_is_active
 
+- name: Re-stat swap file after creation
+  become: true
+  ansible.builtin.stat:
+    path: /swapfile
+  register: swapfile_stat
+
 - name: Check if swap file is formatted
   become: true
   ansible.builtin.command: file -s /swapfile

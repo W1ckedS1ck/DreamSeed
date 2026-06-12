@@ -209,7 +209,7 @@
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 30
+  retries: 45
   delay: 3
   changed_when: false
 
