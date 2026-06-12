@@ -40,18 +40,6 @@
     - /etc/letsencrypt/archive
     - /etc/letsencrypt/live
 
-- name: Ensure private key directories in archive and live
-  become: true
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: ssl-cert
-    mode: "0750"
-  loop:
-    - /etc/letsencrypt/archive
-    - /etc/letsencrypt/live
-
 - name: Set ssl_restored fact
   ansible.builtin.set_fact:
     ssl_restored: "{{ ssl_local_backup.stat.exists }}"

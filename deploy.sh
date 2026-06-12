@@ -93,8 +93,9 @@ parse_args() {
     fi
 
     if [[ "$1" == "--lint" ]]; then
-        run_lint
-        exit $?
+        run_lint && exit 0
+        echo "  ✗ Some linters reported issues (see above)"
+        exit 1
     fi
 
     while [[ $# -gt 0 ]]; do
@@ -434,9 +435,11 @@ with open(dst, 'w') as f:
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ ! "$TARGET" =~ ^prod ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
 
-    # ----- Verify SSH host key -----
-    ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
-    ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+    # ----- Verify SSH host key (new server only) -----
+    if [[ "$SKIP_TERRAFORM" == "false" ]]; then
+        ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
+        ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+    fi
 
     # ----- Ansible playbooks -----
     if [[ "$PARALLEL_MODE" == "true" ]]; then
