@@ -228,6 +228,30 @@
   ansible.builtin.debug:
     var: grafana_journal
 
+- name: Check listening port
+  ansible.builtin.command:
+    cmd: ss -tlnp | grep '{{ grafana_port }}'
+  become: true
+  changed_when: false
+  ignore_errors: true
+  register: grafana_listen
+
+- name: Debug listening port
+  ansible.builtin.debug:
+    var: grafana_listen
+
+- name: Check Grafana process tree
+  ansible.builtin.command:
+    cmd: ps aux | grep -i grafana
+  become: true
+  changed_when: false
+  ignore_errors: true
+  register: grafana_ps
+
+- name: Debug process tree
+  ansible.builtin.debug:
+    var: grafana_ps
+
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"

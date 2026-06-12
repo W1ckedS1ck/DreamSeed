@@ -51,7 +51,8 @@ jobs:
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}"
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}"
           [[ -n "${{ secrets.TF_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TF_API_TOKEN }}"
-          # NOTE: TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
+          # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
+          # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
           # because they are pure integers that corrupt log output (IPs, timestamps, counts)
 
       - name: Record start time
@@ -80,16 +81,16 @@ jobs:
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
-        # TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME excluded from env:
+        # TG_CHAT_ID, TG_THREAD_ID — из vars, не маскируются
+        # DEV/PROD_GRAFANA_CLOUD_USERNAME excluded from env:
         # because they are pure integers that trigger substring masking in GitHub Actions.
-        # Written directly to secrets/.env via ${{ }} in the shell script instead.
         run: |
           mkdir -p secrets ~/.ssh
 
           {
             echo "TG_TOKEN=$TG_TOKEN"
-            echo "TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}"
-            echo "TG_THREAD_ID=${{ secrets.TG_THREAD_ID }}"
+            echo "TG_CHAT_ID=${{ vars.TG_CHAT_ID }}"
+            echo "TG_THREAD_ID=${{ vars.TG_THREAD_ID }}"
             echo "DB_PASS=$DB_PASS"
             echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
 
@@ -176,6 +177,14 @@ jobs:
             fi
           done
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> "$GITHUB_OUTPUT"
+          # Write IP to Step Summary (visible in Summary tab, bypasses log masking)
+          {
+            echo "### Server connection"
+            echo '```'
+            echo "IP:  $(terraform output -raw server_ipv4)"
+            echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@$(terraform output -raw server_ipv4)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Capture server SSH host key
         run: |
@@ -217,7 +226,7 @@ jobs:
           # --- Wait for SSH (90 x 2s = 180s, matches deploy.sh for Hetzner) ---
           echo "[$(date +%H:%M:%S)] Waiting for SSH on $SERVER_IP..."
           for i in $(seq 1 90); do
-            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+            if ssh -q -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
                 -o BatchMode=yes -o PasswordAuthentication=no \
                 -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
               echo "[$(date +%H:%M:%S)] SSH ready (attempt $i)"
@@ -341,7 +350,7 @@ jobs:
           pids=()
           cd ansible
           ansible-playbook -i inventory/hosts-test.yml playbook-04-monitor.yml -e @/tmp/test_vault.yml & pids+=($!)
-          TG_CHAT_ID="${{ secrets.TG_CHAT_ID }}" TG_THREAD_ID="${{ secrets.TG_THREAD_ID }}" TG_TOKEN="${{ secrets.TG_TOKEN }}" ansible-playbook -i inventory/hosts-test.yml playbook-05-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
+          TG_CHAT_ID="${{ vars.TG_CHAT_ID }}" TG_THREAD_ID="${{ vars.TG_THREAD_ID }}" TG_TOKEN="${{ secrets.TG_TOKEN }}" ansible-playbook -i inventory/hosts-test.yml playbook-05-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
           failed=0
           for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
           set -e
@@ -353,7 +362,7 @@ jobs:
       - name: Wait for stack to settle
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           for i in $(seq 1 10); do
             vm_ok=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8428/health 2>/dev/null || echo 'not_ready'" 2>/dev/null || echo "not_ready")
@@ -367,7 +376,7 @@ jobs:
         id: initial_content
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ROWS=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo 0")
@@ -377,7 +386,7 @@ jobs:
       - name: Create backup via smart_backup.sh
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running smart_backup.sh ==="
           set +e
@@ -393,7 +402,7 @@ jobs:
       - name: Verify backup files exist
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Local backups ==="
           ssh ubuntu@"$SERVER_IP" "ls -lh /home/ubuntu/backups/project/ 2>/dev/null || echo 'No project backups'"
@@ -414,7 +423,7 @@ jobs:
         id: gdrive_upload
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Uploading backup to GDrive ==="
           set +e
@@ -433,7 +442,7 @@ jobs:
       - name: Verify backup archives integrity
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running verify_backups.sh ==="
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/verify_backups.sh" 2>&1 || true
@@ -441,7 +450,7 @@ jobs:
       - name: Check Grafana proxy
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Checking Grafana via nginx proxy ==="
           GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
@@ -455,7 +464,7 @@ jobs:
         id: artifact_hash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Recording artifact hashes before destroy ==="
           PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
@@ -470,7 +479,7 @@ jobs:
       - name: Destroy data — simulate disaster
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Destroying data to simulate disaster ==="
           # Drop all tables (SET FOREIGN_KEY_CHECKS=0 needed for InnoDB FK constraints)
@@ -491,7 +500,7 @@ jobs:
         id: restore
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           RESTORE_START=$(date +%s)
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
@@ -511,7 +520,7 @@ jobs:
         id: verify_content
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Verifying restored content ==="
 
@@ -576,7 +585,7 @@ jobs:
         id: validate_hash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Validating restored artifacts ==="
 
@@ -635,7 +644,7 @@ jobs:
         id: disk
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           DISK_USAGE=$(ssh ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
@@ -650,7 +659,7 @@ jobs:
         id: ssl
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           LE_CERT=$(ssh ubuntu@"$SERVER_IP" "test -f /etc/letsencrypt/live/test.dreamseed.online/fullchain.pem && echo yes || echo no" 2>/dev/null || echo "no")
           if [ "$LE_CERT" = "yes" ]; then
@@ -712,9 +721,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
-        # TG_CHAT_ID/TG_THREAD_ID intentionally NOT in env: — they are pure integers
-        # that corrupt log output via GitHub Actions substring masking.
-        # They are sourced from secrets/.env below.
+        # TG_CHAT_ID/TG_THREAD_ID sourced from secrets/.env (vars, not secrets — no masking)
         run: |
           source secrets/.env
           COMMIT_SHA="${{ github.sha }}"

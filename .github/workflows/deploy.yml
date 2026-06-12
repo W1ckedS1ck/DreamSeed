@@ -80,7 +80,8 @@ jobs:
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
-          # NOTE: TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
+          # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
+          # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
           # because they are pure integers that corrupt log output (IPs, timestamps, counts)
 
       - name: Setup secrets
@@ -106,8 +107,8 @@ jobs:
 
           {
             echo "TG_TOKEN=$TG_TOKEN"
-            echo "TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}"
-            echo "TG_THREAD_ID=${{ secrets.TG_THREAD_ID }}"
+            echo "TG_CHAT_ID=${{ vars.TG_CHAT_ID }}"
+            echo "TG_THREAD_ID=${{ vars.TG_THREAD_ID }}"
             echo "DB_PASS=$DB_PASS"
             echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
             echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
@@ -198,8 +199,8 @@ jobs:
         if: failure()
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           MSG="❌ *Deploy failed* — ${{ inputs.environment }}
           Action: ${{ inputs.action }}
@@ -214,8 +215,8 @@ jobs:
         if: success() && inputs.action == 'deploy'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           MSG="✅ *Deploy complete* — ${{ inputs.environment }}
           Server: ${{ inputs.server_ip || 'new' }}

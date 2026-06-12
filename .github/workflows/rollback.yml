@@ -180,8 +180,8 @@ jobs:
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"

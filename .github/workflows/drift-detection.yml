@@ -65,9 +65,8 @@ jobs:
         if: steps.plan.outputs.exit_code == '2'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          # TG_CHAT_ID/TG_THREAD_ID — pure integers, substring masking is minimal here
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           echo "::error::Infrastructure drift detected on prod! Review the plan output above."
@@ -126,8 +125,8 @@ jobs:
         if: steps.plan.outputs.exit_code == '2'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           echo "::error::Infrastructure drift detected on Hetzner prod! Review the plan output above."
