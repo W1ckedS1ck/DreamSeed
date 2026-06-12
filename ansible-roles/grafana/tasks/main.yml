@@ -148,30 +148,7 @@
   become: true
   loop: "{{ _ws_remove_dashboards }}"
 
-- name: Fix Grafana dashboard directory ownership and permissions
-  ansible.builtin.file:
-    path: /var/lib/grafana/dashboards
-    owner: grafana
-    group: grafana
-    mode: "0755"
-  become: true
 
-- name: Find Grafana dashboard files
-  ansible.builtin.find:
-    paths: /var/lib/grafana/dashboards
-    file_type: file
-    recurse: true
-  register: _grafana_dash_files
-  become: true
-
-- name: Fix Grafana dashboard file permissions
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    owner: grafana
-    group: grafana
-    mode: "0644"
-  loop: "{{ _grafana_dash_files.files }}"
-  become: true
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
@@ -204,51 +181,7 @@
     enabled: true
   become: true
 
-- name: Check Grafana service status
-  ansible.builtin.command:
-    cmd: systemctl status grafana-server --no-pager -l
-  become: true
-  changed_when: false
-  ignore_errors: true
-  register: grafana_status
 
-- name: Debug Grafana status
-  ansible.builtin.debug:
-    var: grafana_status
-
-- name: Check Grafana journal
-  ansible.builtin.command:
-    cmd: journalctl -u grafana-server --no-pager -n 30
-  become: true
-  changed_when: false
-  ignore_errors: true
-  register: grafana_journal
-
-- name: Debug Grafana journal
-  ansible.builtin.debug:
-    var: grafana_journal
-
-- name: Check listening port
-  ansible.builtin.shell:
-    cmd: ss -tlnp | grep '{{ grafana_port }}' || true
-  become: true
-  changed_when: false
-  register: grafana_listen
-
-- name: Debug listening port
-  ansible.builtin.debug:
-    var: grafana_listen.stdout
-
-- name: Check Grafana process tree
-  ansible.builtin.shell:
-    cmd: ps aux | grep -i grafana || true
-  become: true
-  changed_when: false
-  register: grafana_ps
-
-- name: Debug process tree
-  ansible.builtin.debug:
-    var: grafana_ps.stdout
 
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
