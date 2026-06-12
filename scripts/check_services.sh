@@ -144,8 +144,8 @@ else echo "  ⚠ fail2ban: no jails ($jails)"; fi
 # --- vmagent (Grafana Cloud metrics agent) ---
 if systemctl is-active vmagent &>/dev/null; then
     _raw=$(curl -sf --max-time 5 "http://127.0.0.1:8429/metrics" 2>/dev/null || echo "")
-    _blocks=$(echo "$_raw" | grep -oP '^vmagent_remotewrite_blocks_sent_total\s+\K\d+' || echo "0")
-    _errors=$(echo "$_raw" | grep -oP '^vmagent_remotewrite_errors_total\s+\K\d+' || echo "0")
+    _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {print $2}'); _blocks=${_blocks:-0}
+    _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {print $2}'); _errors=${_errors:-0}
     if [[ "$_blocks" -gt 0 && "$_errors" -eq 0 ]]; then
         export_metric 'vmagent_remote_write_ok 1'
         echo "  ✓ vmagent: remote write OK"
