@@ -35,6 +35,27 @@ repos:
 
   - repo: local
     hooks:
+      - id: terraform-docs-aws
+        name: terraform-docs (aws)
+        entry: bash -c "cd terraform/aws && terraform-docs markdown table --output-file README.md ."
+        language: system
+        files: ^terraform/aws/.*\.tf$
+        pass_filenames: false
+      - id: terraform-docs-hetzner
+        name: terraform-docs (hetzner)
+        entry: bash -c "cd terraform/hetzner && terraform-docs markdown table --output-file README.md ."
+        language: system
+        files: ^terraform/hetzner/.*\.tf$
+        pass_filenames: false
+      - id: terraform-docs-grafana
+        name: terraform-docs (grafana)
+        entry: bash -c "cd terraform/grafana && terraform-docs markdown table --output-file README.md ."
+        language: system
+        files: ^terraform/grafana/.*\.tf$
+        pass_filenames: false
+
+  - repo: local
+    hooks:
       - id: gitleaks
         name: Check for hardcoded secrets
         entry: gitleaks detect --source . --no-git -v

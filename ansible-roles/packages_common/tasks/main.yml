@@ -40,6 +40,10 @@
       - unzip
       - bind9-dnsutils
       - python3-pymysql
+      - debsums
+      - apt-show-versions
+      - libpam-tmpdir
+      - libpam-pwquality
     state: present
   environment:
     DEBIAN_FRONTEND: noninteractive

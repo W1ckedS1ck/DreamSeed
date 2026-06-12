@@ -82,6 +82,20 @@ jobs:
       - name: Validate all providers
         run: bash scripts/lint.sh --ci --validate-terraform
 
+  checkov:
+    name: IaC Compliance (Checkov)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf # v12.1347.0
+        with:
+          directory: terraform
+          framework: terraform
+          quiet: true
+          soft_fail: false
+
   trivy:
     name: Terraform Security
     runs-on: ubuntu-latest
