@@ -144,6 +144,52 @@ jobs:
         with:
           args: -shellcheck=
 
+  infracost:
+    name: Infracost (FinOps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Install Infracost
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
+          echo "$HOME/.infracost/bin" >> "$GITHUB_PATH"
+      - name: Authenticate
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: infracost auth login
+      - name: Scan Terraform
+        run: infracost scan --no-color
+      - name: Post cost summary
+        run: |
+          {
+            echo '## 💰 Monthly Cost Estimate'
+            echo '```'
+            infracost inspect --summary --no-color
+            echo '```'
+            echo ''
+            infracost inspect --group-by project --no-color
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail on FinOps violations
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -o pipefail
+          infracost inspect --failing --json --no-color 2>/dev/null | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          pols = data.get('failing_policies', [])
+          if not pols:
+              print('✅ No FinOps policy violations')
+              sys.exit(0)
+          print(f'⚠️  {len(pols)} FinOps policy violation(s)')
+          for p in pols:
+              print(f'  - [{p[\"policy\"]}] {p[\"resource\"]} ({p[\"file\"]}:{p[\"line\"]})')
+              print(f'    {p[\"message\"]}')
+          sys.exit(1)
+          " 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
