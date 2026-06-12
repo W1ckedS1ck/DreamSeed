@@ -129,17 +129,6 @@ else
     exit 1
 fi
 
-# Ping external watchdog on success
-# Legacy healthchecks.io (kept for portfolio reference):
-# _hc_uuid=""
-# if [[ "$REPORT_TYPE" == "daily" ]]; then
-#     _hc_uuid="${HEALTHCHECK_REPORT_DAILY_UUID:-}"
-# elif [[ "$REPORT_TYPE" == "weekly" ]]; then
-#     _hc_uuid="${HEALTHCHECK_REPORT_WEEKLY_UUID:-}"
-# fi
-# if [[ -n "$_hc_uuid" ]]; then
-#     curl -fsS -m 10 --retry 3 "https://hc-ping.com/$_hc_uuid" > /dev/null 2>&1
-# fi
 _bs_key=""
 if [[ "$REPORT_TYPE" == "daily" ]]; then
     _bs_key="${BETTERUPTIME_REPORT_DAILY_KEY:-}"

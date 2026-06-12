@@ -96,10 +96,5 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret | Created | Notes |
 |--------|---------|-------|
-| `ENV_FILE_BASE` | 2026-05-18 | Not referenced anywhere |
-| `ENV_FILE_BASE64` | 2026-05-30 | Not referenced anywhere |
-| `TEST_PASS` | 2026-06-03 | Not referenced anywhere |
-| `TEST_USER` | 2026-06-03 | Not referenced anywhere |
-| `INFRACOST_API_KEY` | 2026-05-20 | Not referenced anywhere |
+| `INFRACOST_API_KEY` | 2026-05-20 | Used in ci.yml for FinOps scan |
 | `INFRACOST_CLI_AUTHENTICATION_TOKEN` | 2026-05-15 | Not referenced anywhere |
-| `PROD_SSH_PUBLIC_KEY` | 2026-05-08 | Not referenced anywhere |
