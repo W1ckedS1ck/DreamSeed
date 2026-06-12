@@ -156,9 +156,11 @@ jobs:
           echo "$HOME/.infracost/bin" >> "$GITHUB_PATH"
       - name: Scan Terraform
         env:
-          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_API_KEY }}
         run: infracost scan --no-color
       - name: Post cost summary
+        env:
+          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_API_KEY }}
         run: |
           {
             echo '## 💰 Monthly Cost Estimate'
@@ -171,6 +173,7 @@ jobs:
       - name: Fail on FinOps violations
         shell: bash
         env:
+          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_API_KEY }}
           PYTHONIOENCODING: utf-8
         run: |
           set -o pipefail
