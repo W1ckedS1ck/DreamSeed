@@ -49,7 +49,7 @@ cleanup() {
     [[ -n "${DEPLOY_VARS_TMP:-}" && -f "${DEPLOY_VARS_TMP:-}" ]] && rm -f "$DEPLOY_VARS_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
-    [[ -n "${LOCK_FILE:-}" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
+    [[ -n "${LOCK_FILE:-}" && "$LOCK_ACQUIRED" == "true" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
 }
 
 write_deploy_history() {
@@ -82,10 +82,18 @@ update_cloudflare_dns() {
     }
 
     # Resolve zone ID from domain (API token must have Zone:Read access)
-    local zone_id zone_name api_base
+    # For apex domains (e.g. dreamseed.online, 1 dot), use domain as-is.
+    # For subdomains (e.g. aws.vitalikuts.online, 2+ dots), strip first component.
+    local zone_id api_base zone_lookup
     api_base="https://api.cloudflare.com/client/v4"
+    local dot_count="${domain//[^.]}"
+    if [[ ${#dot_count} -ge 2 ]]; then
+        zone_lookup="${domain#*.}"
+    else
+        zone_lookup="$domain"
+    fi
     zone_id=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "$api_base/zones?name=${domain#*.}" | python3 -c "
+        "$api_base/zones?name=$zone_lookup" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 zones=d.get('result',[])

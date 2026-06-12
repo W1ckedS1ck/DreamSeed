@@ -11,24 +11,14 @@
   "major": {
     "dependencyDashboardApproval": true
   },
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit", "custom.regex"],
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit", "regex"],
   "terraform": {
     "fileMatch": [
       "terraform/.*\\.tf$"
     ],
     "versioning": "semver"
   },
-  "pip_requirements": {
-    "fileMatch": [
-      "/ansible/requirements\\.txt$",
-      "/ansible/requirements-deploy\\.txt$"
-    ]
-  },
-  "ansible-galaxy": {
-    "fileMatch": [
-      "/ansible/requirements\\.yml$"
-    ]
-  },
+
   "customManagers": [
     {
       "customType": "regex",

@@ -157,6 +157,7 @@ main() {
     parse_args "$@"
     resolve_target
 
+    LOCK_ACQUIRED=false
     if command -v flock &>/dev/null; then
         LOCK_FILE="/tmp/deploy-${TARGET}.lock"
         exec 200>"$LOCK_FILE"
@@ -171,6 +172,7 @@ main() {
             flock -n 200 || { echo "Error: cannot acquire deploy lock for $TARGET"; exit 1; }
             echo "  ⚠ Removed stale deploy lock (PID ${stale_pid:-unknown})"
         fi
+        LOCK_ACQUIRED=true
         echo "$$" > "$LOCK_FILE"
     fi
 
