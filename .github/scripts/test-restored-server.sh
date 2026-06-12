@@ -81,8 +81,14 @@ VMAE=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8429/metrics 2>/dev/nu
 WEB_EXP=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx_exporter 2>/dev/null || systemctl is-active apache_exporter 2>/dev/null || echo inactive")
 [ "$WEB_EXP" = "active" ] && pass "Web exporter running" || warn "Web exporter: $WEB_EXP"
 
-# Backup — cron job installed
-ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null | grep -q smart_backup" && pass "Backup cron installed" || warn "Backup cron: MISSING"
+# Backup — cron jobs installed
+CRON=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null" || true)
+echo "$CRON" | grep -q "smart_backup" && pass "Cron: hourly backup" || fail "Cron: hourly backup missing"
+echo "$CRON" | grep -q "upload_backups_to_gdrive" && pass "Cron: daily gdrive upload" || warn "Cron: daily gdrive upload missing"
+echo "$CRON" | grep -q "send_report.sh daily" && pass "Cron: daily report" || warn "Cron: daily report missing"
+echo "$CRON" | grep -q "send_report.sh weekly" && pass "Cron: weekly report" || warn "Cron: weekly report missing"
+echo "$CRON" | grep -q "verify_backups" && pass "Cron: backup verification" || warn "Cron: backup verification missing"
+echo "$CRON" | grep -q "session-cleanup" && pass "Cron: session cleanup" || warn "Cron: session cleanup missing"
 
 # Backup — cloud sync reachable
 GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
