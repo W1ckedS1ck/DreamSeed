@@ -229,28 +229,26 @@
     var: grafana_journal
 
 - name: Check listening port
-  ansible.builtin.command:
-    cmd: ss -tlnp | grep '{{ grafana_port }}'
+  ansible.builtin.shell:
+    cmd: ss -tlnp | grep '{{ grafana_port }}' || true
   become: true
   changed_when: false
-  ignore_errors: true
   register: grafana_listen
 
 - name: Debug listening port
   ansible.builtin.debug:
-    var: grafana_listen
+    var: grafana_listen.stdout
 
 - name: Check Grafana process tree
-  ansible.builtin.command:
-    cmd: ps aux | grep -i grafana
+  ansible.builtin.shell:
+    cmd: ps aux | grep -i grafana || true
   become: true
   changed_when: false
-  ignore_errors: true
   register: grafana_ps
 
 - name: Debug process tree
   ansible.builtin.debug:
-    var: grafana_ps
+    var: grafana_ps.stdout
 
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
