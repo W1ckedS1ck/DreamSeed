@@ -154,11 +154,9 @@ jobs:
         run: |
           curl -fsSL https://raw.githubusercontent.com/infracost/cli/master/scripts/install.sh | sh
           echo "$HOME/.infracost/bin" >> "$GITHUB_PATH"
-      - name: Authenticate
+      - name: Scan Terraform
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
-        run: infracost configure set api_key "$INFRACOST_API_KEY"
-      - name: Scan Terraform
         run: infracost scan --no-color
       - name: Post cost summary
         run: |
