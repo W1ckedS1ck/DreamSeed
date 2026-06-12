@@ -157,7 +157,7 @@ jobs:
       - name: Authenticate
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
-        run: infracost auth login
+        run: infracost configure set api_key "$INFRACOST_API_KEY"
       - name: Scan Terraform
         run: infracost scan --no-color
       - name: Post cost summary
