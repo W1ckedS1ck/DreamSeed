@@ -138,11 +138,11 @@ Use cloud console to restart:
 
 ## Alert Channels Overview
 
-| Layer | Source | What it monitors | Survives server death? |
-|-------|--------|-----------------|----------------------|
-| 1 | Grafana (on-server) | CPU, RAM, Disk, Nginx, MySQL, PHP-FPM, Site, MODX, VictoriaMetrics, Backup cron | ❌ No |
-| 2 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (4 heartbeats) | ✅ Yes |
-| 3 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
+| Layer | Prefix | Source | What it monitors | Survives server death? |
+|-------|--------|--------|-----------------|----------------------|
+| 1 | G1–G18 | Grafana (on-server) | CPU, RAM, Disk, Nginx, MySQL, PHP-FPM, Site, MODX, VictoriaMetrics, Backup cron | ❌ No |
+| 2 | B1–B7 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (4 heartbeats) | ✅ Yes |
+| 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
 All alerts → same Telegram topic.
 
@@ -152,7 +152,7 @@ All alerts → same Telegram topic.
 
 ---
 
-### 1. 🔴 High CPU
+### G1. 🔴 High CPU
 
 **Metric:** CPU usage > 85% for 5+ minutes
 **Severity:** Warning
@@ -189,7 +189,7 @@ ps aux | grep php-fpm | wc -l
 
 ---
 
-### 2. 🔴 High RAM
+### G2. 🔴 High RAM
 
 **Metric:** RAM usage > 90% for 5+ minutes
 **Severity:** Warning
@@ -227,7 +227,7 @@ sudo mysql -e "SHOW VARIABLES LIKE '%innodb_buffer_pool_size%';"
 
 ---
 
-### 3. 🔴 Low Disk Space
+### G3. 🔴 Low Disk Space
 
 **Metric:** Available space on `/` < 10% for 5+ minutes
 **Severity:** Critical (can lead to MySQL crash, failed backups, site down)
@@ -289,7 +289,7 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
 
 ---
 
-### 4. 🔴 MySQL Down
+### G4. 🔴 MySQL Down
 
 **Metric:** `mysql_up` = 0 (mysqld_exporter cannot reach MariaDB)
 **Severity:** CRITICAL — site will show database errors
@@ -334,7 +334,7 @@ curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online
 
 ---
 
-### 5. 🔴 PHP-FPM Down
+### G5. 🔴 PHP-FPM Down
 
 **Metric:** `php_fpm_up` = 0 (socket not found or process not running)
 **Severity:** CRITICAL — site returns blank page or 502
@@ -371,7 +371,7 @@ sudo dmesg | grep -i "oom\|php" | tail -10
 
 ---
 
-### 6. 🔴 Web Server Down (Nginx or Apache)
+### G6. 🔴 Web Server Down (Nginx or Apache)
 
 **Metric:** `nginx_up` = 0 _or_ `apache_up` = 0 (which one fired depends on what's deployed)
 **Severity:** CRITICAL — site is down
@@ -487,7 +487,7 @@ sudo certbot certificates 2>/dev/null || echo "No local certs (using LetsEncrypt
 
 ---
 
-### 8. 🔴 Site Down
+### G7. 🔴 Site Down
 
 **Metric:** `site_up` = 0 (HTTP check from inside the server returned non-200)
 **Severity:** CRITICAL — users cannot access the site
@@ -535,7 +535,7 @@ sudo tail -50 /var/log/php*-fpm.log 2>/dev/null
 
 ---
 
-### 9. 🔴 MODX Core Missing
+### G8. 🔴 MODX Core Missing
 
 **Metric:** `modx_core_ok` = 0 (`manager/config.core.php` or `core/model/modx/modx.class.php` not found)
 **Severity:** CRITICAL — MODX application broken
@@ -579,7 +579,7 @@ ls /var/www/html/ | head -20
 
 ---
 
-### 10. 🔴 VictoriaMetrics Down
+### G9. 🔴 VictoriaMetrics Down
 
 **Metric:** `victoria_up` = 0 (VictoriaMetrics health check failed)
 **Severity:** High — no metrics collected, all Grafana alerts may stop working
@@ -615,7 +615,7 @@ sudo dmesg | grep -i "oom\|victoria" | tail -5
 
 ---
 
-### 11. 🔴 Backup Cron Not Running
+### G10. 🔴 Backup Cron Not Running
 
 **Metric:** `cron_last_run_backup` timestamp > 120 minutes old
 **Severity:** Warning — backups may have stopped
@@ -655,7 +655,7 @@ tail -5 /home/ubuntu/backups/logs/backup_$(date +%Y-%m-%d).log
 
 ---
 
-### 12. 🔴 Site Health Check Not Running
+### G11. 🔴 Site Health Check Not Running
 
 **Metric:** `check_site_last_run` > 180 seconds old
 **Severity:** Warning — `check_site.sh` timer may have stopped
@@ -696,7 +696,7 @@ curl -s http://127.0.0.1:8428/health
 
 ---
 
-### 13. 🔴 SSL Cert Expiring Soon
+### G12. 🔴 SSL Cert Expiring Soon
 
 **Metric:** `ssl_days_remaining` < 7 days
 **Severity:** Warning — certificate about to expire
@@ -727,7 +727,7 @@ sudo certbot renew --preferred-challenges dns-01
 
 ---
 
-### 14. 🔴 Admin Login Failed
+### G13. 🔴 Admin Login Failed
 
 **Metric:** `admin_login_ok` = 0 (hourly probe to `/manager/` returned no MODX login page)
 **Severity:** High — admin panel may be down
@@ -761,7 +761,7 @@ sudo systemctl restart php*-fpm
 
 ---
 
-### 15. 🔴 MiniShop2 Write Failed
+### G14. 🔴 MiniShop2 Write Failed
 
 **Metric:** `db_write_ok` = 0 (hourly INSERT+DELETE probe into `modx_ms2_orders` failed)
 **Severity:** High — database write path may be broken
@@ -789,7 +789,7 @@ df -h
 
 ---
 
-### 16. 🔴 Overall Health Check Failed
+### G15. 🔴 Overall Health Check Failed
 
 **Metric:** `dreamseed_health_overall` = 0 (composite check from `check_services.sh`)
 **Severity:** High — one or more services or checks are failing
@@ -809,7 +809,7 @@ curl -sf http://127.0.0.1:8428/api/v1/query?query=dreamseed_health_overall
 
 ---
 
-### 17. 🔴 Site HTTP Status Critical
+### G16. 🔴 Site HTTP Status Critical
 
 **Metric:** `site_http_status` != 1 (site returned non-200/301 HTTP code)
 **Severity:** High — site not serving correctly
@@ -829,7 +829,7 @@ sudo tail -30 /var/log/nginx/error.log
 
 ---
 
-### 18. 🔴 Database Tables Below Threshold
+### G17. 🔴 Database Tables Below Threshold
 
 **Metric:** `database_tables` < 50 tables in `modx_db`
 **Severity:** CRITICAL — DB may be empty or not restored
@@ -857,7 +857,7 @@ sudo bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest
 
 ---
 
-### 19. 🔴 Backup Verification Failed
+### G18. 🔴 Backup Verification Failed
 
 **Metric:** `backup_verification_ok` = 0 (local or cloud backup verification failed)
 **Severity:** Warning — disaster recovery may be compromised
@@ -889,7 +889,7 @@ rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1
 
 ---
 
-### 13. 🔴 BetterStack Alert — dreamseed.online (HTTP)
+### B1. 🔴 BetterStack Alert — dreamseed.online (HTTP)
 
 **What triggered:** Better Stack (from 4 global regions) cannot reach `https://dreamseed.online`
 **Severity:** CRITICAL — server may be down
@@ -933,7 +933,7 @@ rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1
 
 ---
 
-### 14. 🔴 BetterStack Alert — dreamseed.online (Keyword "The Dreamers")
+### B2. 🔴 BetterStack Alert — dreamseed.online (Keyword "The Dreamers")
 
 **What triggered:** Better Stack checked `https://dreamseed.online/` but text "The Dreamers" was not found in the response
 **Severity:** High — site may be returning a different page (error, maintenance, redirect)
@@ -960,7 +960,7 @@ curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online/
 
 ---
 
-### 15. 🔴 BetterStack Alert — dreamseed.online/grafana
+### B3. 🔴 BetterStack Alert — dreamseed.online/grafana
 
 **What triggered:** Better Stack cannot reach `https://dreamseed.online/grafana`
 **Severity:** Medium — Grafana is down, but site may still work
@@ -985,7 +985,7 @@ ssh aws "sudo systemctl restart grafana-server"
 
 ---
 
-### 16. 🔴 BetterStack Alert — backup heartbeat missed
+### B4. 🔴 BetterStack Alert — backup heartbeat missed
 
 **What triggered:** `smart_backup.sh` did not ping within 1h + 5m grace
 **Severity:** Warning — backup may have failed
@@ -1035,7 +1035,7 @@ Look for one of these last lines:
 
 ---
 
-### 17. 🔴 BetterStack Alert — gdrive-upload heartbeat missed
+### B5. 🔴 BetterStack Alert — gdrive-upload heartbeat missed
 
 **What triggered:** `upload_backups_to_gdrive.sh` did not ping within 24h + 30m grace
 **Severity:** Warning — cloud backups may have stopped
@@ -1064,7 +1064,7 @@ ssh prod "grep gdrive /home/ubuntu/backups/logs/*.log 2>/dev/null" | tail -5
 
 ---
 
-### 18. 🔴 BetterStack Alert — report-daily heartbeat missed
+### B6. 🔴 BetterStack Alert — report-daily heartbeat missed
 
 **What triggered:** `send_report.sh daily` did not ping within 24h + 30m grace
 **Severity:** Info — only the Telegram report failed
@@ -1087,7 +1087,7 @@ ssh prod "bash /home/ubuntu/Scripts/send_report.sh daily 2>&1"
 
 ---
 
-### 19. 🔴 BetterStack Alert — report-weekly heartbeat missed
+### B7. 🔴 BetterStack Alert — report-weekly heartbeat missed
 
 **What triggered:** `send_report.sh weekly` did not ping within 7d + 1h grace
 **Severity:** Info
@@ -1099,7 +1099,7 @@ ssh prod "bash /home/ubuntu/Scripts/send_report.sh daily 2>&1"
 
 ---
 
-### 20. 🔴 BACKUP FAILED — direct from script
+### S1. 🔴 BACKUP FAILED
 
 **What triggered:** `smart_backup.sh` ran but project backup (tar) or DB dump (mysqldump) failed
 **Severity:** Warning — this hour's backup was not created
@@ -1147,7 +1147,7 @@ Look for errors:
 
 ---
 
-### 21. 🔴 UPLOAD FAILED — direct from script
+### S2. 🔴 UPLOAD FAILED
 
 **What triggered:** `upload_backups_to_gdrive.sh` ran but `rclone copy` failed
 **Severity:** Warning — cloud backup not uploaded
