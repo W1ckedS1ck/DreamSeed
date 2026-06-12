@@ -130,6 +130,18 @@ fi
 if [[ "$WEB_SVC" == "apache2" ]]; then
     _check_ep 9117 apache_ apache_exporter || fail=1
 fi
+# --- Backup cron ---
+if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
+  echo "  ✓ cron: backup"
+  export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
+else echo "  ✗ cron: backup not set"; fail=1; fi
+
+# --- fail2ban ---
+jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
+if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
+else echo "  ⚠ fail2ban: no jails ($jails)"; fi
+
+# --- vmagent (Grafana Cloud metrics agent) ---
 if systemctl is-active vmagent &>/dev/null; then
     _raw=$(curl -sf --max-time 5 "http://127.0.0.1:8429/metrics" 2>/dev/null || echo "")
     _blocks=$(echo "$_raw" | grep -oP '^vmagent_remotewrite_blocks_sent_total\s+\K\d+' || echo "0")
@@ -150,18 +162,7 @@ else
     fail=1
 fi
 
-# --- Backup cron ---
-if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
-  echo "  ✓ cron: backup"
-  export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
-else echo "  ✗ cron: backup not set"; fail=1; fi
-
-# --- fail2ban ---
-jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
-if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
-else echo "  ⚠ fail2ban: no jails ($jails)"; fi
-
-# --- Heartbeat: export last-run timestamp so we can alert if this script stops running ---
+# --- Heartbeat ---
 export_metric "check_services_last_run{instance=\"$DOMAIN\"} $(date +%s)"
 
 # --- Export overall health status ---
