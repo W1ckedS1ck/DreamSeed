@@ -2,7 +2,6 @@ locals {
   use_existing_key  = var.ssh_key_name != ""
   use_existing_ip   = var.primary_ip_name != ""
   create_primary_ip = var.primary_ip_name == "" && var.enable_primary_ip
-  use_dynamic_ip    = var.primary_ip_name == "" && !var.enable_primary_ip
   labels = {
     environment = var.environment
     service     = "DreamSeed"
