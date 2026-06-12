@@ -38,7 +38,7 @@
 | Backup frequency (RPO) | 1 hour → Google Drive, 5/15 versions retained |
 | Uptime coverage | 16 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
 | CI checks per push | 8 parallel jobs (lint → security → validate) |
-| Cloud cost | Tracked via Infracost GitHub App on every PR |
+
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
 ---
@@ -226,7 +226,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 7 Workflows + Renovate + Infracost App
+### 🧪 CI/CD Pipeline — 6 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
@@ -238,7 +238,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
 | **Test Bench** — Hetzner server benchmark | Manual dispatch |
 
-CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
+CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 
 ### 🛑 Production Safeguards
 

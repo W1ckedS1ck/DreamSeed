@@ -144,64 +144,6 @@ jobs:
         with:
           args: -shellcheck=
 
-  infracost:
-    name: Infracost (FinOps)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - name: Install Infracost
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/infracost/cli/master/scripts/install.sh | sh
-          echo "$HOME/.infracost/bin" >> "$GITHUB_PATH"
-      - name: Scan Terraform
-        env:
-          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_API_KEY }}
-        run: infracost scan --no-color
-      - name: Post cost summary
-        env:
-          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_API_KEY }}
-        run: |
-          {
-            echo '## 💰 Monthly Cost Estimate'
-            echo '```'
-            infracost inspect --summary --no-color
-            echo '```'
-            echo ''
-            infracost inspect --group-by project --no-color
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: FinOps violations (info only)
-        shell: bash
-        env:
-          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_API_KEY }}
-        run: |
-          failing_addrs=$(infracost inspect --failing --addresses-only --no-color 2>&1)
-          inspect_exit=$?
-
-          if [ "${inspect_exit}" -ne 0 ]; then
-            echo "⚠️ Infracost inspect failed (exit ${inspect_exit})"
-            echo "${failing_addrs}"
-            exit 0
-          fi
-
-          if [ -z "$(echo "${failing_addrs}" | tr -d '[:space:]')" ]; then
-            echo "✅ No FinOps policy violations"
-            exit 0
-          fi
-
-          echo "⚠️  Info: FinOps violations detected (not blocking CI)"
-          {
-            echo '## ⚠️  FinOps Policy Violations'
-            echo '```'
-            echo "${failing_addrs}"
-            echo '```'
-            echo ''
-            echo '### Details'
-            echo '```json'
-            infracost inspect --failing --json --no-color
-            echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
-
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest

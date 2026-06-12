@@ -96,5 +96,5 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret | Created | Notes |
 |--------|---------|-------|
-| `INFRACOST_API_KEY` | 2026-05-20 | Used in ci.yml for FinOps scan |
+| `INFRACOST_API_KEY` | 2026-05-20 | Kept in GitHub Secrets (not used in code) |
 | `INFRACOST_CLI_AUTHENTICATION_TOKEN` | 2026-05-15 | Not referenced anywhere |

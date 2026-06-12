@@ -257,7 +257,7 @@ Schedule Mon 10:00 Backup Test           Provision Hetzner → Ansible deploy
                                           → Destroy → Telegram report (P/F/W summary)
 
 Bot events         Renovate              Dependency updates (auto PRs)
-                   Infracost App         Cost estimate comments on PRs
+
 ```
 
 ---
@@ -270,7 +270,7 @@ DreamSeed/
 ├── audit-secrets.sh       # Pre-push secret leakage check
 ├── .github/
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 7 workflows + Renovate + Infracost App
+│   └── workflows/         # 6 workflows + Renovate
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP
