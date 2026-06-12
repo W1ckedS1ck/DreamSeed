@@ -204,6 +204,30 @@
     enabled: true
   become: true
 
+- name: Check Grafana service status
+  ansible.builtin.command:
+    cmd: systemctl status grafana-server --no-pager -l
+  become: true
+  changed_when: false
+  ignore_errors: true
+  register: grafana_status
+
+- name: Debug Grafana status
+  ansible.builtin.debug:
+    var: grafana_status
+
+- name: Check Grafana journal
+  ansible.builtin.command:
+    cmd: journalctl -u grafana-server --no-pager -n 30
+  become: true
+  changed_when: false
+  ignore_errors: true
+  register: grafana_journal
+
+- name: Debug Grafana journal
+  ansible.builtin.debug:
+    var: grafana_journal
+
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
