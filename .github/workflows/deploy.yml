@@ -60,6 +60,10 @@ jobs:
         if: inputs.action == 'deploy'
         uses: ./.github/actions/setup-ansible
 
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Mask secrets
         run: |
           [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}" || true
@@ -227,3 +231,26 @@ jobs:
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          ACTION="${{ inputs.action }}"
+          ENV="${{ inputs.environment }}"
+          WEB="${{ inputs.web_server }}"
+          SERVER_IP="${{ inputs.server_ip }}"
+          SKIP_DNS="${{ inputs.skip_dns }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## ${ACTION^} ${RESULT}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Environment** | ${ENV} |" >> "$M"
+          echo "| **Web server** | ${WEB} |" >> "$M"
+          echo "| **Action** | ${ACTION} |" >> "$M"
+          echo "| **Server IP** | ${SERVER_IP:-new} |" >> "$M"
+          echo "| **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"

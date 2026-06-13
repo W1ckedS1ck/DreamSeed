@@ -206,3 +206,33 @@ jobs:
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          RESTORE="${{ steps.restore.outcome }}"
+          HEALTH="${{ steps.health.outcome }}"
+          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
+            STATUS="✅ ROLLBACK OK"
+          elif [[ "$RESTORE" != "success" ]]; then
+            STATUS="❌ RESTORE FAILED"
+          else
+            STATUS="⚠️ SITE UNHEALTHY"
+          fi
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Rollback Deploy — ${STATUS}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Environment** | ${{ inputs.environment }} |" >> "$M"
+          echo "| **Server** | ${{ steps.server-ip.outputs.ip }} |" >> "$M"
+          echo "| **Domain** | ${{ steps.domain.outputs.domain }} |" >> "$M"
+          echo "" >> "$M"
+          echo "### Restore" >> "$M"
+          echo "| Metric | Value |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Project | ${{ steps.restore.outputs.project }} |" >> "$M"
+          echo "| DB | ${{ steps.restore.outputs.db }} |" >> "$M"
+          echo "| Site | ${{ steps.restore.outputs.site }} |" >> "$M"
+          echo "| Duration | ${{ steps.restore.outputs.time }} |" >> "$M"
