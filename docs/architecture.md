@@ -3,7 +3,7 @@
 ## Deployment Flow
 
 ```
-deploy.sh TARGET -n|-a [OPTIONS]
+   deploy.sh TARGET -n|-a [OPTIONS]
        │
        ├─ 1. Preflight checks
        │      SSH key, .env, provider vars, TF dir
@@ -13,7 +13,7 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      backup tfstate → ssh-keygen -R
        │
        ├─ 3. Wait for SSH
-        │      AWS: 40×10s | Hetzner: 90×2s polling
+       │      AWS: 40×10s | Hetzner: 90×2s polling
        │
        ├─ 4. Wait for cloud-init
        │      timeout 300s + 15×2s fallback
@@ -25,17 +25,17 @@ deploy.sh TARGET -n|-a [OPTIONS]
        │      01 Base ─── Packages, swap, PHP, MariaDB
        │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
        │      03 DB ────── MariaDB tuning, users, restore
-│ 04 Monitor ─ Exporters + VictoriaMetrics + vmagent + check_site cron
-│ 05 Backup ── Scripts, crons, Better Stack heartbeats, Telegram bot
+       │      04 Monitor ─ Exporters + VictoriaMetrics + vmagent + check_site cron
+       │      05 Backup ── Scripts, crons, Better Stack heartbeats, Telegram bot
        │      06 Grafana ─ Dashboards, datasources, alerts
        │      07 Security ── SSH, fail2ban, sysctl, MODX perms
        │
-        └─ 7. Post-deploy checks
+       └─ 7. Post-deploy checks
                systemctl is-active (7 services + mysqld_exporter)
                curl https://$DOMAIN/ → 200|301
                SSL (Cloudflare/LE/self-signed), MODX index.php, DB tables
                VictoriaMetrics health, node + mysql + nginx/apache exporters, vmagent
-               fail2ban (7 jails), cron backup, MySQL write probe
+               fail2ban (7-8 jails, depends on web server), cron backup, MySQL write probe
                → Push to VM: database_tables, dreamseed_health_overall
 ```
 
@@ -56,12 +56,12 @@ Cloudflare Proxy (Full SSL)
    │
    ├─ dreamseed.online/manager/ → MODX admin panel
    │
-    └─ Monitoring backplane (127.0.0.1 only)
-         Node Exporter :9100
-         Nginx Exporter :9113 / Apache Exporter :9117
+   └─ Monitoring backplane (127.0.0.1 only)
+         Node Exporter   :9100
+         Nginx Exporter  :9113 / Apache Exporter :9117
          MySQLd Exporter :9104
          VictoriaMetrics :8428
-         vmagent :8429 ──remote write──→ Grafana Cloud
+         vmagent         :8429 ──remote write──→ Grafana Cloud
 ```
 
 ---
@@ -130,28 +130,28 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 
 ```
 ┌──────────────┐    :8428    ┌─────────────────┐    :8429    ┌───────────────┐
-│  Exporters   │─────────────│ VictoriaMetrics │────────────│   vmagent     │
-│  node_exporter              │ retention: 3mo  │            │ remote write  │
-│  nginx/apache_exporter      │ scrape: 15s     │            └───────┬───────┘
-│  mysqld_exporter            └────────┬────────┘                    │
-│  check_site.sh (every 1m)           │                             │
-│  check_services.sh (every 5m)       │                             │
-│  smart_backup.sh (heartbeat)        │                             │
+│  Exporters   │─────────────│ VictoriaMetrics │──────────-──│   vmagent     │
+│  node_exporter             │ retention: 3mo  │             │ remote write  │
+│  nginx/apache_exporter     │ scrape: 15s     │             └───────┬───────┘
+│  mysqld_exporter           └────────┬────────┘                     │
+│  check_site.sh (every 1m)           │                              │
+│  check_services.sh (every 5m)       │                              │
+│  smart_backup.sh (heartbeat)        │                              │
 
-└─────────────────────────────────────┘                             │
-                                       │                            │
-                                       │ Grafana datasource         │ Grafana Cloud
-                                       ▼                            ▼
-                                ┌──────────────┐           ┌──────────────────┐
-                                │   Grafana    │           │  Grafana Cloud   │
-                                │  :3000       │           │  (hosted metrics)│
-                                │              │           │                  │
-                                 │ 5 dashboards │           │ 4 community       │
-                                                                  │ 16 alert rules│          │ dashboards (gnet   │
-                                 └──────┬───────┘           │ IDs 1860/7362/   │
-                                       │                    └──────────────────┘
-                                       │ Telegram contact point
-                                       ▼
+└─────────────────────────────────────┘                              │
+                                      │                              │
+                                      │ Grafana datasource           │ Grafana Cloud
+                                      ▼                              ▼
+                                 ┌──────────────┐           ┌──────────────────┐
+                                 │   Grafana    │           │  Grafana Cloud   │
+                                 │  :3000       │           │  (hosted metrics)│
+                                 │  5 dashboards│           │  4 community     │
+                                 │  16 alerts   │           │  dashboards      │
+                                 │              │           │  (gnet 1860/7362/│
+                                 │              │           │   17452/10229)   │
+                                 └──────┬───────┘           └──────────────────┘
+                                        │ Telegram  point
+                                        ▼
                                  Telegram (chat_id)
 ```
 
@@ -257,7 +257,7 @@ Schedule Mon 10:00 Backup Test           Provision Hetzner → Ansible deploy
                                           → Destroy → Telegram report (P/F/W summary)
 
 Bot events         Renovate              Dependency updates (auto PRs)
-                   Infracost App         Cost estimate comments on PRs
+
 ```
 
 ---
@@ -270,7 +270,7 @@ DreamSeed/
 ├── audit-secrets.sh       # Pre-push secret leakage check
 ├── .github/
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 6 workflows + Renovate + Infracost App
+│   └── workflows/         # 6 workflows + Renovate
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP

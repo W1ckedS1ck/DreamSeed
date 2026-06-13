@@ -9,14 +9,15 @@
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
 ![Terraform / OpenTofu](https://img.shields.io/badge/Terraform-1.9%2B-7B42BC?logo=terraform)
-![Ansible](https://img.shields.io/badge/Ansible-13%2B-EE0000?logo=ansible)
+![Ansible](https://img.shields.io/badge/Ansible-14%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
+![Checkov](https://img.shields.io/badge/Checkov-passed-2A6F97?logo=checkov)
 ![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
-> Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, under 10 minutes.
+> Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~15 minutes.
 
 ---
 
@@ -32,12 +33,12 @@
 
 | Metric | Value |
 |--------|-------|
-| Deploy time | ~15-25 min (zero to live, either cloud) |
+| Deploy time | ~8-15 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | 1 hour → Google Drive, 5/15 versions retained |
 | Uptime coverage | 16 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
-| CI checks per push | 7 parallel jobs (lint → security → validate) |
-| Cloud cost | Tracked via Infracost GitHub App on every PR |
+| CI checks per push | 8 parallel jobs (lint → security → validate) |
+
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
 ---
@@ -52,7 +53,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
 - **Observability** — VictoriaMetrics + Grafana stack with 16 alert rules (CPU, RAM, Disk, MySQL, PHP-FPM, Nginx/Apache, site down, MODX Core, VictoriaMetrics, backup cron, site check cron, SSL expiry, admin login, MiniShop2 write, DB tables, backup verify). Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 7 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Trivy, gitleaks, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
+- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Trivy, gitleaks, pre-commit, actionlint. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -61,7 +62,7 @@ I own **everything below the application layer** — provisioning, configuration
 ## 🧰 Tech Stack
 
 | Layer | Tools |
-|---|---|---|
+|---|---|
 | **Infrastructure** | Terraform / OpenTofu · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
@@ -69,7 +70,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 16 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (6 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · Trivy · gitleaks · pre-commit · Renovate |
+| **CI/CD** | GitHub Actions (7 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · Trivy · gitleaks · pre-commit · Renovate |
 
 ---
 
@@ -108,6 +109,9 @@ Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). 
 # Production on AWS with Nginx (requires confirmation)
 ./deploy.sh prod -n
 
+# Production on Hetzner with Nginx (requires confirmation)
+./deploy.sh prod-hetz -n
+
 # Dev environment 1 (Nginx)
 ./deploy.sh dev-hetz -n
 
@@ -139,7 +143,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (~400 lines + 5 modular lib files)
+├── deploy.sh                 # Main orchestrator (500 lines + 5 modular lib files)
 ├── audit-secrets.sh          # Pre-push secret leakage scanner
 ├── .github/actions/          # Composite actions: setup-terraform, setup-ansible
 ├── terraform/
@@ -157,6 +161,7 @@ DreamSeed/
 ├── ansible-roles/            # 15 reusable roles (nginx, mariadb, ssl, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
+├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
 ├── .tflint.hcl               # Terraform linter config (root) + terraform/aws/.tflint.hcl (AWS ruleset)
 ├── renovate.json              # Automated dependency update config
@@ -166,7 +171,8 @@ DreamSeed/
     ├── drift-detection.yml   # Daily terraform plan against prod
     ├── backup-test.yml       # Full backup/restore verification with app health checks
     ├── rollback.yml          # Emergency rollback with prod confirmation
-    └── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
+    ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
+    └── test-bench.yml        # Hetzner server benchmark
 ```
 
 ---
@@ -220,18 +226,19 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 6 Workflows + Renovate + Infracost App
+### 🧪 CI/CD Pipeline — 6 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 7 parallel checks | Every PR + push to main |
-| **Deploy** — single-click deploy | Manual dispatch (prod, dev-aws, dev-hetz) |
+| **CI** — 8 parallel checks | Every PR + push to main |
+| **Deploy** — single-click deploy | Manual dispatch (all targets) |
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
+| **Test Bench** — Hetzner server benchmark | Manual dispatch |
 
-CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt) · **Trivy** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs). Costs: **Infracost App** (PR comments).
+CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 
 ### 🛑 Production Safeguards
 
@@ -259,6 +266,7 @@ CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validat
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|
 | `prod` | AWS EC2 (`us-west-1`) | [dreamseed.online](https://dreamseed.online) | Nginx + PHP 8.3 + MariaDB |
+| `prod-hetz` | Hetzner (`nbg1`) | [dreamseed.online](https://dreamseed.online) | Nginx + PHP 8.3 + MariaDB |
 | `dev-aws` | AWS EC2 | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Full stack (inactive) |
 | `dev-hetz` | Hetzner (`nbg1`) | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Full stack |
 

@@ -2,15 +2,15 @@
 # Shared functions for DreamSeed scripts. Source this file, do not execute directly.
 
 # shellcheck disable=SC2034  # color vars are consumed by sourcing scripts
-GREEN=$'\033[0;32m'
-# shellcheck disable=SC2034
-YELLOW=$'\033[1;33m'
-# shellcheck disable=SC2034
-RED=$'\033[0;31m'
-# shellcheck disable=SC2034
-CYAN=$'\033[0;36m'
-# shellcheck disable=SC2034
-NC=$'\033[0m'
+if [ -t 1 ]; then
+  GREEN=$'\033[0;32m'
+  YELLOW=$'\033[1;33m'
+  RED=$'\033[0;31m'
+  CYAN=$'\033[0;36m'
+  NC=$'\033[0m'
+else
+  GREEN=''; YELLOW=''; RED=''; CYAN=''; NC=''
+fi
 
 # Backup rotation defaults (can be overridden via environment)
 BACKUP_PROJECT_KEEP="${BACKUP_PROJECT_KEEP:-5}"
@@ -80,7 +80,7 @@ send_tg() {
     )
     [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$tg_url" "${data[@]}" 2>&1) || true
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$tg_url" "${data[@]}" 2>/dev/null) || true
     [[ "$http_code" != "200" ]] && echo "WARNING: Telegram send failed (HTTP ${http_code:-000})" >&2 || true
 }
 

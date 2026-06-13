@@ -5,8 +5,10 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
 
 {
     # Site check
-    if curl -sfk --max-time 10 "https://{{ domain }}" > /dev/null 2>&1; then
+    _resp_time=$(curl -sfk --max-time 10 -o /dev/null -w "%{time_total}" "https://{{ domain }}" 2>/dev/null || echo "-1")
+    if [ "$_resp_time" != "-1" ]; then
         echo "site_up{instance=\"{{ domain }}\"} 1"
+        echo "site_response_time_seconds{instance=\"{{ domain }}\"} ${_resp_time}"
     else
         echo "site_up{instance=\"{{ domain }}\"} 0"
     fi

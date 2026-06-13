@@ -5,8 +5,6 @@
 # Terraform shortcut — runs tf in the correct provider dir
 _tf() { ( cd "$TF_DIR" && "$TERRAFORM" "$@" ); }
 
-# Clean up stale CI SSH key from Hetzner Cloud before terraform apply
-# to avoid "SSH key not unique (uniqueness_error)"
 terraform_select_workspace() {
     local ws="$TF_WORKSPACE"
     (
@@ -16,7 +14,23 @@ terraform_select_workspace() {
     )
 }
 
+terraform_ensure_workspace() {
+    [[ -z "${TF_API_TOKEN:-}" || -z "${TF_WORKSPACE:-}" ]] && return 0
+    local org="DreamSeed" prefix="dreamseed-"
+    local ws_name="${prefix}${TF_WORKSPACE}"
+    local auth="Authorization: Bearer $TF_API_TOKEN"
+    local url="https://app.terraform.io/api/v2/organizations/$org/workspaces/$ws_name"
+    if ! curl -sf -H "$auth" "$url" >/dev/null 2>&1; then
+        echo "  Creating TFC workspace: $ws_name"
+        curl -sf -X POST "https://app.terraform.io/api/v2/organizations/$org/workspaces" \
+            -H "$auth" -H "Content-Type: application/vnd.api+json" \
+            -d "{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$ws_name\",\"execution-mode\":\"local\"}}}" >/dev/null 2>&1 && echo "  ✓ Workspace created" || echo "  ⚠ Failed to create workspace (will try 'terraform workspace new')"
+    fi
+}
+
 terraform_init_if_needed() {
+    # Ensure TFC workspace exists before init (first deploy creates workspace via API)
+    terraform_ensure_workspace
     local ws
     ws=$(_tf workspace show 2>/dev/null || echo "")
     if [[ ! -d "$TF_DIR/.terraform" ]] || [[ "$ws" != "$TF_WORKSPACE" ]]; then
@@ -27,18 +41,18 @@ terraform_init_if_needed() {
 terraform_destroy() {
     if [[ "$TTY" == "false" ]]; then
         [[ "${CI_DESTROY_CONFIRM:-}" == "yes" ]] || { echo "Error: CI destroy requires CI_DESTROY_CONFIRM=yes"; exit 1; }
-    elif [[ "$TARGET" == "prod" ]]; then
+    elif [[ "$TARGET" =~ ^prod ]]; then
         echo ""
         echo "  ⚠  PRODUCTION DESTROY REQUESTED  ⚠"
-        echo "  This will PERMANENTLY DELETE: dreamseed.online"
+        echo "  This will PERMANENTLY DELETE: $DEPLOY_DOMAIN"
         echo ""
-        read -rp "  Step 1/3 — Do you REALLY want to destroy PROD? [y/N] " a1
+        read -rp "  Step 1/3 — Do you REALLY want to destroy $TARGET? [y/N] " a1
         [[ ! "${a1:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
         read -rp "  Step 2/3 — Are you absolutely sure? [y/N] " a2
         [[ ! "${a2:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
-        echo "  Step 3/3 — Type 'destroy prod' to confirm: "
+        echo "  Step 3/3 — Type 'destroy $TARGET' to confirm: "
         read -rp "  > " a3
-        [[ "$a3" != "destroy prod" ]] && { echo "Aborted."; exit 0; }
+        [[ "$a3" != "destroy ${TARGET}" ]] && { echo "Aborted."; exit 0; }
     else
         read -rp "  Destroy $TARGET? [y/N] " a
         [[ ! "${a:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
@@ -86,7 +100,7 @@ terraform_destroy() {
 
     rm -f "$SCRIPT_DIR/secrets/tfstate-backup/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
 
-    if [[ "$TARGET" != "prod" ]]; then
+    if [[ ! "$TARGET" =~ ^prod ]]; then
         local ws_del="$TF_WORKSPACE"
         ( cd "$TF_DIR" && unset TF_WORKSPACE && \
           "$TERRAFORM" workspace delete "$ws_del" 2>&1 ) >> "$DEPLOY_TF_LOG" 2>&1 || true

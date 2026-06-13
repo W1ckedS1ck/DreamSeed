@@ -19,11 +19,16 @@ preflight_checks() {
     validate_env_file "$env_src"
 
     set +e
-    set -a; source "$env_src"; set +a
+    source "$env_src"
     set -e
+    export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
+    export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
+    export BETTERUPTIME_API_TOKEN
+    export TG_TOKEN TG_CHAT_ID TG_THREAD_ID
+    export EMAIL_USER EMAIL_PASS SMTP_SERVER SMTP_PORT OWNER
 
     # Auto-setup Better Stack heartbeats for prod if needed
-    if [[ "$TARGET" == "prod" && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
+    if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
             env_src=$(resolve_env_file "$ENV_FILE")
             source "$env_src"
@@ -37,7 +42,7 @@ preflight_checks() {
 
     # Load Grafana Cloud credentials (PROD_ for prod, DEV_ for all dev)
     local gc_pfx="DEV"
-    [[ "$TARGET" == "prod" ]] && gc_pfx="PROD"
+    [[ "$TARGET" =~ ^prod ]] && gc_pfx="PROD"
     local gc_url="${gc_pfx}_GRAFANA_CLOUD_URL"
     local gc_user="${gc_pfx}_GRAFANA_CLOUD_USERNAME"
     local gc_token="${gc_pfx}_GRAFANA_CLOUD_TOKEN"

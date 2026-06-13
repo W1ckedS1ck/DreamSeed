@@ -30,7 +30,7 @@ CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
 # State
 TARGET="" WEB_SERVER="" TF_PROVIDER="" TF_WORKSPACE="" TARGET_PREFIX=""
 DEPLOY_DOMAIN="" ENV_FILE="" TF_DIR="" SERVER_IP=""
-SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false
+SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false SKIP_DNS=false
 STEP_NAMES=() STEP_TIMES=() STEP_START=0
 
 DEPLOY_START=$(date +%s)
@@ -62,6 +62,7 @@ TARGETS:
   prod               AWS        dreamseed.online
   dev-aws            AWS        aws.vitalikuts.online
   dev-hetz           Hetzner    hetz.vitalikuts.online
+  prod-hetz          Hetzner    dreamseed.online
 
 WEB SERVER (required):
   -n                 Nginx
@@ -73,6 +74,7 @@ OPTIONS:
   -p, --parallel     Parallel playbook execution (3 phases)
   -d, --dry-run      Preview only
   -c, --check        Validate config & syntax only (no deploy)
+  --no-dns           Skip Cloudflare DNS update
   -h                 Show this help
    --logs [tf]        Tail latest deploy/terraform log
    --lint             Run all linters locally (no deploy)
@@ -91,13 +93,14 @@ parse_args() {
     fi
 
     if [[ "$1" == "--lint" ]]; then
-        run_lint
-        exit $?
+        run_lint && exit 0
+        echo "  ✗ Some linters reported issues (see above)"
+        exit 1
     fi
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            prod|dev-aws|dev-hetz) TARGET="$1"; shift ;;
+            prod|dev-aws|dev-hetz|prod-hetz) TARGET="$1"; shift ;;
             -n) WEB_SERVER="nginx"; shift ;;
             -a) WEB_SERVER="apache"; shift ;;
             -i|--ip)
@@ -109,6 +112,7 @@ parse_args() {
             -p|--parallel) PARALLEL_MODE=true; shift ;;
             -d|--dry-run) DRY_RUN=true; shift ;;
             -c|--check) CHECK_MODE=true; shift ;;
+            --no-dns) SKIP_DNS=true; shift ;;
             -h|--help) usage; exit 0 ;;
             *) echo "Unknown option: $1"; usage; exit 1 ;;
         esac
@@ -129,8 +133,10 @@ resolve_target() {
                  SSH_ATTEMPTS=40; SSH_INTERVAL=10 ;;
         dev-aws) TF_PROVIDER="aws";    DEPLOY_DOMAIN="aws.vitalikuts.online";  TF_WORKSPACE="dev-aws"; TARGET_PREFIX="DEV_AWS"
                  SSH_ATTEMPTS=40; SSH_INTERVAL=10 ;;
-        dev-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz"
-                 SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
+        dev-hetz)  TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="hetz.vitalikuts.online"; TF_WORKSPACE="dev-hetz";  TARGET_PREFIX="DEV_HETZ"
+                   SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
+        prod-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="dreamseed.online";      TF_WORKSPACE="prod-hetz"; TARGET_PREFIX="PROD_HETZ"
+                   SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
@@ -152,6 +158,7 @@ main() {
     parse_args "$@"
     resolve_target
 
+    LOCK_ACQUIRED=false
     if command -v flock &>/dev/null; then
         LOCK_FILE="/tmp/deploy-${TARGET}.lock"
         exec 200>"$LOCK_FILE"
@@ -166,6 +173,7 @@ main() {
             flock -n 200 || { echo "Error: cannot acquire deploy lock for $TARGET"; exit 1; }
             echo "  ⚠ Removed stale deploy lock (PID ${stale_pid:-unknown})"
         fi
+        LOCK_ACQUIRED=true
         echo "$$" > "$LOCK_FILE"
     fi
 
@@ -261,7 +269,7 @@ main() {
     fi
 
     # ----- Production confirmation -----
-    if [[ "$TARGET" == "prod" && "$DESTROY_MODE" == "false" ]]; then
+    if [[ "$TARGET" =~ ^prod && "$DESTROY_MODE" == "false" ]]; then
         echo ""
         echo "  ⚠ Deploying to PRODUCTION ($DEPLOY_DOMAIN)"
         if [[ "${CI:-}" == "true" ]]; then
@@ -293,20 +301,17 @@ main() {
 
         local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
-
-        local ok=false
-        for try in 1 2; do
-            # shellcheck disable=SC2086
-            if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
-                ok=true; break
-            fi
-            [[ $try -lt 2 ]] && { echo "    Attempt $try/2 failed, retrying in 10s..."; sleep 10; }
-        done
-        [[ "$ok" != "true" ]] && { tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"; }
+        [[ "$TF_PROVIDER" == "hetzner" ]] && tf_args="-var=environment=${TARGET}"
+        if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
+            :  # ok
+        else
+            tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"
+        fi
 
         SERVER_IP=$(_tf output -raw server_ipv4 2>>"$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
         [[ -z "$SERVER_IP" ]] && step_fail "Empty IP from Terraform"
         [[ "$SERVER_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || step_fail "Invalid IP from Terraform: $SERVER_IP"
+        export SERVER_IP
 
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
@@ -318,10 +323,16 @@ main() {
             rm -f "$tmp_bk"
             echo "  ⚠ tfstate backup failed (empty or error)" | tee -a "$LOG"
         fi
+        if [[ "$SKIP_DNS" == "false" ]]; then
+            update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
+        else
+            echo "  — Cloudflare DNS update skipped (--no-dns)"
+        fi
         step_ok
     else
         step_start "Using existing server"
         SERVER_IP="$EXISTING_IP"
+        export SERVER_IP
         step_ok
     fi
 
@@ -379,45 +390,56 @@ all:
 INVEOF
 
     DEPLOY_VARS_TMP=$(mktemp); chmod 600 "$DEPLOY_VARS_TMP"
-    {
-        printf '{\n'
-        printf '  "db_pass": %s,\n' "$(json_escape "$DB_PASS")"
-        printf '  "server_ip": %s,\n' "$(json_escape "$SERVER_IP")"
-        printf '  "web_server": %s,\n' "$(json_escape "$WEB_SERVER")"
-        printf '  "domain": %s,\n' "$(json_escape "$DEPLOY_DOMAIN")"
-        printf '  "domain_www": %s,\n' "$([[ "$TARGET" == "prod" ]] && echo "true" || echo "false")"
-        printf '  "dev_write_perms": %s,\n' "$([[ "$TARGET" == "prod" ]] && echo "false" || echo "true")"
-        printf '  "php_version": %s,\n' "$(json_escape "$PHP_VERSION")"
-        printf '  "secrets_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/secrets")"
-        printf '  "configs_dir": %s,\n' "$(json_escape "$SCRIPT_DIR/configs")"
-        printf '  "scripts_dir": %s,\n  "deploy_env": %s' "$(json_escape "$SCRIPT_DIR/scripts")" "$(json_escape "$TARGET")"
-        [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && printf ',\n  "cloudflare_api_token": %s' "$(json_escape "$CLOUDFLARE_API_TOKEN")"
-        [[ -n "${GRAFANA_PASS:-}" ]] && printf ',\n  "grafana_admin_password": %s' "$(json_escape "$GRAFANA_PASS")"
-        [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]] && printf ',\n  "ssh_public_key_path": %s' "$(json_escape "$SSH_PUBLIC_KEY_PATH")"
-        [[ -n "${GRAFANA_CLOUD_URL:-}" ]] && printf ',\n  "grafana_cloud_url": %s' "$(json_escape "$GRAFANA_CLOUD_URL")"
-        [[ -n "${GRAFANA_CLOUD_USERNAME:-}" ]] && printf ',\n  "grafana_cloud_username": %s' "$(json_escape "$GRAFANA_CLOUD_USERNAME")"
-        [[ -n "${GRAFANA_CLOUD_TOKEN:-}" ]] && printf ',\n  "grafana_cloud_token": %s' "$(json_escape "$GRAFANA_CLOUD_TOKEN")"
-        if [[ -n "${ADDITIONAL_SSH_KEYS:-}" ]]; then
-            printf ',\n  "additional_ssh_keys": ['
-            local first=true
-            while IFS= read -r key; do
-                [[ -n "$key" ]] && {
-                    $first || printf ','
-                    printf '\n    %s' "$(json_escape "$key")"
-                    first=false
-                }
-            done <<< "$ADDITIONAL_SSH_KEYS"
-            printf '\n  ]'
-        fi
-        printf '\n}\n'
-    } > "$DEPLOY_VARS_TMP"
+    python3 -c "
+import json, os, sys
+
+target = sys.argv[1]
+script_dir = sys.argv[2]
+dst = sys.argv[3]
+
+data = {
+    'db_pass': os.environ.get('DB_PASS', ''),
+    'server_ip': os.environ.get('SERVER_IP', ''),
+    'web_server': os.environ.get('WEB_SERVER', ''),
+    'domain': os.environ.get('DEPLOY_DOMAIN', ''),
+    'domain_www': target.startswith('prod'),
+    'dev_write_perms': not target.startswith('prod'),
+    'php_version': os.environ.get('PHP_VERSION', ''),
+    'secrets_dir': f'{script_dir}/secrets',
+    'configs_dir': f'{script_dir}/configs',
+    'scripts_dir': f'{script_dir}/scripts',
+    'deploy_env': target,
+}
+
+optional_map = {
+    'CLOUDFLARE_API_TOKEN': 'cloudflare_api_token',
+    'GRAFANA_PASS': 'grafana_admin_password',
+    'SSH_PUBLIC_KEY_PATH': 'ssh_public_key_path',
+    'GRAFANA_CLOUD_URL': 'grafana_cloud_url',
+    'GRAFANA_CLOUD_USERNAME': 'grafana_cloud_username',
+    'GRAFANA_CLOUD_TOKEN': 'grafana_cloud_token',
+}
+for env_var, key in optional_map.items():
+    val = os.environ.get(env_var)
+    if val:
+        data[key] = val
+
+additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
+if additional_keys.strip():
+    data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
+
+with open(dst, 'w') as f:
+    json.dump(data, f, indent=2)
+" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_TMP"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ "$TARGET" != "prod" ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
+    [[ ! "$TARGET" =~ ^prod ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
 
-    # ----- Verify SSH host key -----
-    ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
-    ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+    # ----- Verify SSH host key (new server only) -----
+    if [[ "$SKIP_TERRAFORM" == "false" ]]; then
+        ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
+        ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+    fi
 
     # ----- Ansible playbooks -----
     if [[ "$PARALLEL_MODE" == "true" ]]; then

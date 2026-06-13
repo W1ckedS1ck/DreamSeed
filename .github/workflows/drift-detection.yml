@@ -11,6 +11,9 @@ concurrency:
   group: drift-detection
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -51,19 +54,83 @@ jobs:
             -var="elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" \
             -var="environment=prod" \
             -out=/tmp/prod.tfplan 2>&1 | tee /tmp/plan.log
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -eq 1 ]; then
+            echo "::error::Terraform plan failed for AWS prod — check credentials, state, or provider."
+            exit 1
+          fi
 
       - name: Report and notify drift
         if: steps.plan.outputs.exit_code == '2'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          # TG_CHAT_ID/TG_THREAD_ID — pure integers, substring masking is minimal here
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           echo "::error::Infrastructure drift detected on prod! Review the plan output above."
           MSG="🔴 *Drift detected* — AWS prod
+          🔗 $RUN_URL
+          📅 $(date '+%Y-%m-%d %H:%M')"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=MarkdownV2" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+          exit 1
+
+  drift-prod-hetz:
+    name: Detect drift — Hetzner prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      TF_WORKSPACE: prod-hetz
+      TF_VAR_hcloud_token: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+      TF_VAR_environment: prod-hetz
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Derive SSH public key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          ssh-keygen -y -f /tmp/deploy_key > /tmp/deploy_key.pub
+          echo "SSH_PUB_KEY=$(cat /tmp/deploy_key.pub)" >> "$GITHUB_ENV"
+
+      - name: Terraform Init
+        working-directory: terraform/hetzner
+        run: terraform init
+
+      - name: Detect Drift
+        id: plan
+        working-directory: terraform/hetzner
+        run: |
+          terraform plan -detailed-exitcode -no-color \
+            -var="ssh_public_key=$SSH_PUB_KEY" \
+            -var="ssh_key_name=" \
+            -out=/tmp/prod-hetz.tfplan 2>&1 | tee /tmp/plan.log
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -eq 1 ]; then
+            echo "::error::Terraform plan failed for Hetzner prod — check credentials, state, or provider."
+            exit 1
+          fi
+
+      - name: Report and notify drift
+        if: steps.plan.outputs.exit_code == '2'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "::error::Infrastructure drift detected on Hetzner prod! Review the plan output above."
+          MSG="🔴 *Drift detected* — Hetzner prod
           🔗 $RUN_URL
           📅 $(date '+%Y-%m-%d %H:%M')"
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \

@@ -1,0 +1,36 @@
+# Each line is a file pattern followed by one or more owners.
+# Order matters: the last matching pattern takes precedence.
+
+*                              @W1ckedS1ck
+
+# Terraform — infrastructure provisioning
+terraform/aws/*                @W1ckedS1ck
+terraform/hetzner/*            @W1ckedS1ck
+terraform/grafana/*            @W1ckedS1ck
+
+# Ansible — configuration management
+ansible/playbook-*.yml         @W1ckedS1ck
+ansible/group_vars/*           @W1ckedS1ck
+ansible-roles/**/*             @W1ckedS1ck
+
+# CI/CD — pipelines and actions
+.github/workflows/*            @W1ckedS1ck
+.github/actions/*              @W1ckedS1ck
+
+# Deploy orchestration
+deploy.sh                      @W1ckedS1ck
+lib/*                          @W1ckedS1ck
+
+# Server scripts
+scripts/*                      @W1ckedS1ck
+
+# Root configs
+.env.example                   @W1ckedS1ck
+renovate.json                  @W1ckedS1ck
+.pre-commit-config.yaml        @W1ckedS1ck
+.tflint.hcl                    @W1ckedS1ck
+.gitleaks.toml                 @W1ckedS1ck
+
+# Documentation
+docs/*                         @W1ckedS1ck
+README.md                      @W1ckedS1ck

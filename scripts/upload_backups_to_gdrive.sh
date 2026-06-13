@@ -75,11 +75,6 @@ prune_cloud_backups "db" "$MAX_DB_BACKUPS" || {
 # Trash
 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null
 
-# Ping external watchdog on success
-# Legacy healthchecks.io (kept for portfolio reference):
-# if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${HEALTHCHECK_GDRIVE_UUID:-}" ]]; then
-#     curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HEALTHCHECK_GDRIVE_UUID}" > /dev/null 2>&1
-# fi
 if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then
     ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"
 fi

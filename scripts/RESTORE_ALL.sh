@@ -21,6 +21,9 @@ if ! [[ "$MODX_TABLE_PREFIX" =~ ^[A-Za-z0-9_]+$ ]]; then
     exit 1
 fi
 
+# ====== Validate required env vars ======
+: "${DB_NAME:?ERROR: DB_NAME not set in .env or environment}"
+: "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
 

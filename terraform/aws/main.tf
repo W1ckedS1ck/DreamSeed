@@ -10,7 +10,7 @@ data "aws_ami" "ubuntu" {
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"] # 24.04 LTS
-    #   values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-resolute-26.04-amd64-server-*"]   # 26.04 LTS
+
   }
 
   filter {
@@ -29,31 +29,35 @@ resource "aws_key_pair" "deploy" {
 }
 
 resource "aws_security_group" "web" {
+  # checkov:skip=CKV_AWS_24:SSH/HTTP/HTTPS from anywhere required for Ansible provisioning, Cloudflare edge, and Let's Encrypt
   name        = "dreamseed-sg-${var.environment}"
   description = "Security group for DreamSeed web server (${var.environment})"
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    description      = "SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
   }
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    description      = "HTTP"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
   }
 
   ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    description      = "HTTPS"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
   }
 
   egress {
@@ -86,6 +90,7 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_instance" "web" {
+  # checkov:skip=CKV_AWS_126:Detailed monitoring costs extra — not needed for t3.small with VictoriaMetrics scraping from inside
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.deploy.key_name

@@ -30,6 +30,7 @@ ansible-galaxy collection install ansible.mysql ansible.posix
 | Target | Current backend | Required env vars |
 |--------|-----------------|-------------------|
 | `prod` | AWS EC2 | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
+| `prod-hetz` | Hetzner Cloud | `PROD_HETZ_HCLOUD_TOKEN` (falls back to `HCLOUD_TOKEN`) |
 | `dev-aws` | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION`, `DEV_AWS_EIP` |
 | `dev-hetz` | Hetzner Cloud | `HCLOUD_TOKEN` |
 
@@ -44,8 +45,7 @@ All targets require:
 - `TG_THREAD_ID` — Telegram topic/thread ID for alerts
 - `OWNER` — display name for Telegram reports
 - `TF_API_TOKEN` — Terraform Cloud API token
-- `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 challenge)
-- `CLOUDFLARE_ZONE_ID` — Cloudflare zone ID
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 + DNS update; zone ID auto-detected)
 - `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
 
 Hetzner dev additionally:
@@ -115,7 +115,7 @@ brew install gitleaks
 ## Secrets setup
 
 ```bash
-cp secrets/.env.example secrets/.env
+cp .env.example secrets/.env
 # edit secrets/.env with your values
 ```
 

@@ -54,11 +54,11 @@ contactPoints:
       - uid: dreamseed-telegram
         type: telegram
         settings:
-          bottoken: "{{ grafana_telegram_token }}"
           chatid: "{{ grafana_telegram_chat_id }}"
 {% if grafana_telegram_thread_id | length > 0 %}
           message_thread_id: "{{ grafana_telegram_thread_id }}"
 {% endif %}
+          bottoken: "{{ grafana_telegram_token }}"
           message: "{% raw %}{{ if .Alerts.Firing }}🔴 {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
         disableResolveMessage: false
 
@@ -97,6 +97,11 @@ groups:
           summary: >-
             {% raw %}Disk < 10% free (mountpoint: {{ $labels.mountpoint }}){% endraw %}
 
+{{ alert_body('swap-thrashing', 'Swap Thrashing Detected', 'rate(node_vmstat_pswpin[5m])', 300, 100, 'gt', '5m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: >-
+            {% raw %}Swap page-in rate > 100 pages/s — memory pressure detected on {{ $labels.instance }}{% endraw %}
+
 {{ alert_body('mysql-down', 'MySQL Down', 'mysql_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: MariaDB service is not running
@@ -120,6 +125,11 @@ groups:
 {{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
         annotations:
           summary: Website is not responding (HTTP != 200)
+
+{{ alert_body('site-slow', 'Site Response Time > 5s', 'site_response_time_seconds', 120, 5, 'gt', '5m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: >-
+            {% raw %}Site response time {{ $values.A.Value }}s (threshold: 5s) on {{ $labels.instance }}{% endraw %}
 
 {{ alert_body('modx-core', 'MODX Core Missing', 'modx_core_ok', 300, 1, 'lt', '5m', 'OK', 'Error', 'critical') }}
         annotations:
@@ -168,7 +178,7 @@ groups:
             {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
 
 {% if grafana_cloud_url is defined and grafana_cloud_url | length > 0 %}
-{{ alert_body('vmagent-down', 'VMAgent Down', 'up{job="vmagent"}', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('vmagent-remote-write', 'VMAgent Remote Write Failing', 'vmagent_remote_write_ok', 300, 1, 'lt', '2m', 'OK', 'Error', 'critical') }}
         annotations:
-          summary: VMAgent (Grafana Cloud remote write) is not running
+          summary: VMAgent is not pushing metrics to Grafana Cloud (process down or remote write failing)
 {% endif %}

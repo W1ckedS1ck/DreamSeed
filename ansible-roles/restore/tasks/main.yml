@@ -30,6 +30,7 @@
 #  Restore Project
 # ========================
 - name: Check if site already restored
+  become: true
   ansible.builtin.stat:
     path: "{{ web_root }}/index.php"
   register: restore_site_exists
@@ -67,11 +68,8 @@
 
     - name: Fail if no project backup found
       ansible.builtin.fail:
-        msg: "No project backups found on Google Drive"
-      when:
-        - restore_latest_project.rc is defined
-        - restore_latest_project.rc == 0
-        - restore_latest_project.stdout | trim == ""
+        msg: "No project backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_project.stdout | trim == ""
 
     - name: Validate project backup filename
       ansible.builtin.fail:
@@ -130,10 +128,11 @@
       when: restore_latest_project.stdout | trim != ""
 
     - name: Verify project extraction
+      become: true
       ansible.builtin.stat:
         path: "{{ web_root }}/index.php"
       register: restore_index_check
-      failed_when: not restore_index_check.stat.exists or restore_index_check.stat.size == 0
+      failed_when: restore_index_check.stat is not defined or not restore_index_check.stat.exists or restore_index_check.stat.size == 0
       when: restore_latest_project.stdout | trim != ""
 
     - name: Cleanup project archive
@@ -188,11 +187,8 @@
 
     - name: Fail if no DB backup found
       ansible.builtin.fail:
-        msg: "No DB backups found on Google Drive"
-      when:
-        - restore_latest_db.rc is defined
-        - restore_latest_db.rc == 0
-        - restore_latest_db.stdout | trim == ""
+        msg: "No DB backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_db.stdout | trim == ""
 
     - name: Validate DB backup filename
       ansible.builtin.fail:

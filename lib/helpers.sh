@@ -49,11 +49,7 @@ cleanup() {
     [[ -n "${DEPLOY_VARS_TMP:-}" && -f "${DEPLOY_VARS_TMP:-}" ]] && rm -f "$DEPLOY_VARS_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
-    [[ -n "${LOCK_FILE:-}" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
-}
-
-json_escape() {
-    python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$1"
+    [[ -n "${LOCK_FILE:-}" && "$LOCK_ACQUIRED" == "true" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
 }
 
 write_deploy_history() {
@@ -76,6 +72,64 @@ rotate_logs() {
         mv "$LOG_DIR/deploy_history.log" "$LOG_DIR/deploy_history_$(date +%s).log" 2>/dev/null || true
         while IFS= read -r f; do rm -f "$f"; done < <(ls -1t "$LOG_DIR"/deploy_history_*.log 2>/dev/null | tail -n +$((max + 1))) 2>/dev/null || true
     fi
+}
+
+update_cloudflare_dns() {
+    local domain="$1" ip="$2"
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && {
+        log "Cloudflare DNS: skip (CLOUDFLARE_API_TOKEN not set)"
+        return 0
+    }
+
+    # Resolve zone ID from domain (API token must have Zone:Read access)
+    # For apex domains (e.g. dreamseed.online, 1 dot), use domain as-is.
+    # For subdomains (e.g. aws.vitalikuts.online, 2+ dots), strip first component.
+    local zone_id api_base zone_lookup
+    api_base="https://api.cloudflare.com/client/v4"
+    local dot_count="${domain//[^.]}"
+    if [[ ${#dot_count} -ge 2 ]]; then
+        zone_lookup="${domain#*.}"
+    else
+        zone_lookup="$domain"
+    fi
+    zone_id=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "$api_base/zones?name=$zone_lookup" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+zones=d.get('result',[])
+if zones:
+    print(zones[0]['id'])
+" 2>/dev/null || echo "")
+
+    [[ -z "$zone_id" ]] && { log "Cloudflare DNS: skip (no zone found for $domain)"; return 0; }
+
+    local base="$api_base/zones/$zone_id/dns_records"
+    local type="A"
+
+    local existing
+    existing=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "$base?type=$type&name=$domain" 2>/dev/null)
+    local count
+    count=$(echo "$existing" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('result',[])))" 2>/dev/null || echo 0)
+
+    if [[ "$count" -gt 0 ]]; then
+        local record_id old_ip
+        record_id=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['id'])")
+        old_ip=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['content'])")
+        [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
+        curl -s -X PUT "$base/$record_id" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"$type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":true}" >/dev/null 2>&1
+        log "Cloudflare DNS: $domain $old_ip → $ip"
+    else
+        curl -s -X POST "$base" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"$type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":true}" >/dev/null 2>&1
+        log "Cloudflare DNS: $domain → $ip (created)"
+    fi
+    echo "  ✓ Cloudflare DNS: $domain → $ip"
 }
 
 print_summary() {

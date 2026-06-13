@@ -20,6 +20,6 @@ output "dashboard_urls" {
 output "sm_check_ids" {
   description = "Map of synthetic monitoring check names to IDs"
   value = var.sm_enabled ? {
-    http_main = grafana_synthetic_monitoring_check.http_main[0].id
+    http_main = try(grafana_synthetic_monitoring_check.http_main[0].id, null)
   } : {}
 }

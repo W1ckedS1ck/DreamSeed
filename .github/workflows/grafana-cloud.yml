@@ -17,12 +17,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TF_VERSION: "1.15.5"
+
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   plan-and-apply:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:

@@ -62,6 +62,7 @@ def start_health_server():
         log.warning("Health endpoint failed to start: %s", e)
 
 
+
 def escape_md2(text):
     text = str(text).replace('\\', '\\\\')
     special_chars = r'_*[]()~`>#+-=|{}.!'
