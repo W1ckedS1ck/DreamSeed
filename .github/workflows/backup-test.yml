@@ -459,7 +459,7 @@ jobs:
           echo "=== Checking Grafana via nginx proxy ==="
           GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
           if [ "$GRAFANA_OK" -lt 1 ]; then
-            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 http://127.0.0.1/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://127.0.0.1/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
           fi
           if [ "$GRAFANA_OK" -ge 1 ]; then
             echo "[PASS] Grafana reachable via nginx proxy"
