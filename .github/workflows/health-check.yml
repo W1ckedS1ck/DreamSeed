@@ -160,9 +160,13 @@ jobs:
           done
 
           echo "updated_count=$UPDATED_COUNT" >> "$GITHUB_OUTPUT"
-          echo "updated_list=$UPDATED" >> "$GITHUB_OUTPUT"
+          echo "updated_list<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$UPDATED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
           echo "pending_count=$PENDING_COUNT" >> "$GITHUB_OUTPUT"
-          echo "pending_list=$PENDING" >> "$GITHUB_OUTPUT"
+          echo "pending_list<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PENDING" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
           echo "total_count=$TOTAL" >> "$GITHUB_OUTPUT"
           echo "reboot=$REBOOT" >> "$GITHUB_OUTPUT"
           echo "test_summary=$TOTAL available → $UPDATED_COUNT updated ($PENDING_COUNT pending)" >> "$GITHUB_OUTPUT"
