@@ -73,6 +73,7 @@ jobs:
               ;;
             prod-hetz)
               export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_WORKSPACE="prod-hetz"
               cd terraform/hetzner
               terraform init -upgrade=false > /dev/null
               IP=$(terraform output -raw server_ipv4)
@@ -81,6 +82,7 @@ jobs:
               ;;
             dev-hetz)
               export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_WORKSPACE="dev-hetz"
               cd terraform/hetzner
               terraform init -upgrade=false > /dev/null
               IP=$(terraform output -raw server_ipv4)
