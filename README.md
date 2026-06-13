@@ -53,7 +53,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 15 idempotent Ansible roles covering the full server lifecycle (base → web → database → monitoring → backup → grafana → security)
 - **Observability** — VictoriaMetrics + Grafana stack with 16 alert rules (CPU, RAM, Disk, MySQL, PHP-FPM, Nginx/Apache, site down, MODX Core, VictoriaMetrics, backup cron, site check cron, SSL expiry, admin login, MiniShop2 write, DB tables, backup verify). Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Trivy, gitleaks, pre-commit, actionlint. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud workflows
+- **CI/CD** — 9 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud, health-check workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -70,7 +70,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 16 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (7 workflows) · ShellCheck · ruff · ansible-lint · Terraform checks · Trivy · gitleaks · pre-commit · Renovate |
+| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -172,7 +172,7 @@ DreamSeed/
     ├── backup-test.yml       # Full backup/restore verification with app health checks
     ├── rollback.yml          # Emergency rollback with prod confirmation
     ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
-    └── test-bench.yml        # Hetzner server benchmark
+    └── health-check.yml      # Weekly server update (apt upgrade + reboot check)
 ```
 
 ---

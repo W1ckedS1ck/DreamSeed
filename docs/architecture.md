@@ -238,7 +238,7 @@ Trigger            Workflow              Jobs
 Push / PR          CI                    ShellCheck, ansible-lint, j2lint,
                                            Terraform checks (tflint+validate+fmt),
                                           Trivy, gitleaks, pre-commit
-                    ────────── 7 parallel ──────────
+                    ────────── 9 parallel ──────────
 
 Manual dispatch    Deploy                Setup → secrets → deploy.sh / destroy
                    Rollback              Get IP → confirm → RESTORE_ALL.sh
@@ -270,7 +270,7 @@ DreamSeed/
 ├── audit-secrets.sh       # Pre-push secret leakage check
 ├── .github/
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 6 workflows + Renovate
+│   └── workflows/         # 7 workflows + Renovate
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP

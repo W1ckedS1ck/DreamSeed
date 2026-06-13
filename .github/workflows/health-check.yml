@@ -151,9 +151,13 @@ jobs:
           fi
 
           echo "=== Services check ==="
-          for svc in nginx php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
-            $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active && echo "[OK] $svc" || echo "[FAIL] $svc"
+          for svc in nginx apache2 php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
+            if $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active; then
+              echo "[OK] $svc"
+              [ "$svc" = "nginx" ] || [ "$svc" = "apache2" ] && WEB_OK=1
+            fi
           done
+          [ -n "$WEB_OK" ] || echo "[FAIL] web server (neither nginx nor apache2 active)"
 
           UPDATED_NUM=$(echo "$UPGRADED" | grep -oP '^\d+' || echo "0")
           UPDATED_LIST=$(echo "$RESULT" | grep "^Setting up " | sed 's/Setting up //;s/ (.*\.\.\.)//')
