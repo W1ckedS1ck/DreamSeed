@@ -205,12 +205,9 @@ jobs:
           IP="${{ steps.server-ip.outputs.ip }}"
           DOMAIN="${{ steps.server-ip.outputs.domain }}"
           STATUS="${{ env.UPDATE_STATUS }}"
-          SUMMARY="${{ steps.update.outputs.test_summary }}"
-          UPDATED_COUNT="${{ steps.update.outputs.updated_count }}"
-          UPDATED_LIST="${{ steps.update.outputs.updated_list }}"
-          PENDING_COUNT="${{ steps.update.outputs.pending_count }}"
-          PENDING_LIST="${{ steps.update.outputs.pending_list }}"
           TOTAL="${{ steps.update.outputs.total_count }}"
+          UPDATED_COUNT="${{ steps.update.outputs.updated_count }}"
+          PENDING_COUNT="${{ steps.update.outputs.pending_count }}"
           REBOOT="${{ steps.update.outputs.reboot }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
