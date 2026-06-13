@@ -204,7 +204,6 @@
     name: nginx
     state: restarted
   when: web_server == 'nginx'
-  failed_when: false
 
 - name: Restart apache to apply ssl-cert group membership
   become: true
@@ -212,4 +211,3 @@
     name: apache2
     state: restarted
   when: web_server == 'apache'
-  failed_when: false

@@ -192,38 +192,12 @@
   delay: 7
   changed_when: false
 
-- name: Check if Grafana admin password already set
-  ansible.builtin.stat:
-    path: /etc/grafana/.admin_password_set
-  register: grafana_password_flag
-
 - name: Reset Grafana admin password via CLI
   ansible.builtin.command:
     cmd: grafana cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
   become: true
   no_log: true
-  changed_when: true
-  register: grafana_cli_result
-  when:
-    - grafana_admin_password | default('') | length > 0
-    - not grafana_password_flag.stat.exists
-
-- name: Mark Grafana password as set
-  ansible.builtin.file:
-    path: /etc/grafana/.admin_password_set
-    state: touch
-    mode: "0644"
-  become: true
-  when:
-    - grafana_cli_result is defined
-    - grafana_cli_result is not skipped
-    - grafana_cli_result.rc == 0
-
-- name: Warn if Grafana password reset failed
-  ansible.builtin.debug:
-    msg: "WARNING: Grafana CLI password reset failed"
-  when:
-    - grafana_cli_result is defined
-    - grafana_cli_result is not skipped
-    - grafana_cli_result.rc != 0
+  changed_when: false
+  failed_when: false
+  when: grafana_admin_password | default('') | length > 0

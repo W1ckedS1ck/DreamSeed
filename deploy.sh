@@ -371,8 +371,7 @@ main() {
     # ----- Wait for apt lock -----
     step_start "Wait for apt lock"
     ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
-    sleep 5
+        "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done" 2>/dev/null || true
     step_ok
 
     # ----- Generate inventory + vault -----

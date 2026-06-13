@@ -91,6 +91,7 @@
     name: telegram-bot
     enabled: yes
     state: started
+    daemon_reload: true
   become: true
 
 
