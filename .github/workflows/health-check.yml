@@ -115,15 +115,19 @@ jobs:
           echo "=== SSH connectivity ==="
           $SSH "true" 2>/dev/null
           if [ $? -ne 0 ]; then
+            echo "UPDATE_STATUS=unreachable" >> "$GITHUB_ENV"
             echo "test_summary=SSH UNREACHABLE" >> "$GITHUB_OUTPUT"
-            echo "test_fails=1" >> "$GITHUB_OUTPUT"
             echo "test_updated=0" >> "$GITHUB_OUTPUT"
+            echo "test_pending=0" >> "$GITHUB_OUTPUT"
+            echo "test_reboot=unknown" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "=== Before: upgradable packages ==="
-          BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -vc 'Listing...'")
-          echo "Upgradable: $BEFORE"
+          UPGRADABLE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...' | sed 's/\/.*//'")
+          TOTAL=$(echo "$UPGRADABLE" | grep -c .)
+          echo "Total upgradable: $TOTAL"
+          echo "$UPGRADABLE" | sed 's/^/- /'
 
           echo "=== Running apt update ==="
           $SSH "sudo apt update -qq" 2>&1 | tail -1
@@ -131,11 +135,21 @@ jobs:
           echo "=== Upgrading safe packages ==="
           SAFE_PKGS="nginx certbot fail2ban openssl rclone jq rsync unzip bind9-dnsutils python3-pymysql debsums apt-show-versions"
           UPGRADE_OUTPUT=$($SSH "sudo apt-get install --only-upgrade -y $SAFE_PKGS 2>&1")
-          echo "$UPGRADE_OUTPUT"
+          UPDATED=$(echo "$UPGRADE_OUTPUT" | grep "^Setting up " | sed 's/Setting up //;s/ (.*\.\.\.)//' || true)
+          UPDATED_COUNT=$(echo "$UPDATED" | grep -c .)
+          echo "Updated: $UPDATED_COUNT packages"
+          [ -n "$UPDATED" ] && echo "$UPDATED" | sed 's/^/- /' || echo "(none)"
 
-          UPDATED=$(echo "$UPGRADE_OUTPUT" | grep -c "^Setting up " 2>/dev/null || echo "0")
-          echo "Packages updated: $UPDATED"
-          echo "updated=$UPDATED" >> "$GITHUB_OUTPUT"
+          echo "=== Still pending (skipped: php, mariadb, kernel...) ==="
+          BEFORE_LIST=$(echo "$UPGRADABLE" | sort)
+          AFTER_LIST=$(echo "$UPDATED" | sed 's/ .*//' | sort)
+          PENDING=$(comm -23 <(echo "$BEFORE_LIST") <(echo "$AFTER_LIST") 2>/dev/null || echo "$UPGRADABLE")
+          PENDING_COUNT=$(echo "$PENDING" | grep -c .)
+          [ "$PENDING_COUNT" -gt 0 ] && echo "$PENDING" | sed 's/^/- /' || echo "(none)"
+
+          echo "=== Reboot check ==="
+          $SSH "test -f /var/run/reboot-required" 2>/dev/null && REBOOT="yes" || REBOOT="no"
+          [ "$REBOOT" = "yes" ] && echo "⚠️ Reboot required" || echo "No reboot needed"
 
           echo "=== Restarting updated services ==="
           $SSH "sudo systemctl restart nginx fail2ban 2>/dev/null; echo done"
@@ -145,8 +159,14 @@ jobs:
             $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active && echo "[OK] $svc" || echo "[FAIL] $svc"
           done
 
-          echo "test_summary=$BEFORE upgradable → $UPDATED updated" >> "$GITHUB_OUTPUT"
-          echo "test_fails=0" >> "$GITHUB_OUTPUT"
+          echo "updated_count=$UPDATED_COUNT" >> "$GITHUB_OUTPUT"
+          echo "updated_list=$UPDATED" >> "$GITHUB_OUTPUT"
+          echo "pending_count=$PENDING_COUNT" >> "$GITHUB_OUTPUT"
+          echo "pending_list=$PENDING" >> "$GITHUB_OUTPUT"
+          echo "total_count=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "reboot=$REBOOT" >> "$GITHUB_OUTPUT"
+          echo "test_summary=$TOTAL available → $UPDATED_COUNT updated ($PENDING_COUNT pending)" >> "$GITHUB_OUTPUT"
+          echo "UPDATE_STATUS=ok" >> "$GITHUB_ENV"
 
       - name: Notify
         if: always()
@@ -154,28 +174,20 @@ jobs:
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
+          STATUS_ICON="✅"; [ "${{ env.UPDATE_STATUS }}" = "unreachable" ] && STATUS_ICON="❌"
           SUMMARY="${{ steps.update.outputs.test_summary }}"
-          UPDATED="${{ steps.update.outputs.test_updated }}"
+          UPDATED_COUNT="${{ steps.update.outputs.updated_count }}"
+          PENDING_COUNT="${{ steps.update.outputs.pending_count }}"
+          REBOOT="${{ steps.update.outputs.reboot }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
-          if [ "$UPDATED" = "" ]; then
-            STATUS="❌"
-            MSG="${STATUS} *Weekly Update FAILED* — ${{ matrix.target }}
-            📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${ELAPSED}s
-            SSH unreachable"
-          elif [ "$UPDATED" = "0" ]; then
-            STATUS="✅"
-            MSG="${STATUS} *Weekly Update* — ${{ matrix.target }}
-            📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${ELAPSED}s
-            🖥 ${{ steps.server-ip.outputs.domain }}
-            No updates available"
-          else
-            STATUS="✅"
-            MSG="${STATUS} *Weekly Update* — ${{ matrix.target }}
-            📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${ELAPSED}s
-            🖥 ${{ steps.server-ip.outputs.domain }}
-            Updated ${UPDATED} packages"
-          fi
+          REBOOT_LINE=""; [ "$REBOOT" = "yes" ] && REBOOT_LINE=" ⚠️ Reboot required"
+          MSG="${STATUS_ICON} *Weekly Update* — ${{ matrix.target }}
+          📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${ELAPSED}s
+          🖥 ${{ steps.server-ip.outputs.domain }}
+
+          Updated: ${UPDATED_COUNT:-0}
+          Pending: ${PENDING_COUNT:-0}${REBOOT_LINE}"
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
@@ -188,7 +200,14 @@ jobs:
         run: |
           IP="${{ steps.server-ip.outputs.ip }}"
           DOMAIN="${{ steps.server-ip.outputs.domain }}"
-          UPDATED="${{ steps.update.outputs.test_updated }}"
+          STATUS="${{ env.UPDATE_STATUS }}"
+          SUMMARY="${{ steps.update.outputs.test_summary }}"
+          UPDATED_COUNT="${{ steps.update.outputs.updated_count }}"
+          UPDATED_LIST="${{ steps.update.outputs.updated_list }}"
+          PENDING_COUNT="${{ steps.update.outputs.pending_count }}"
+          PENDING_LIST="${{ steps.update.outputs.pending_list }}"
+          TOTAL="${{ steps.update.outputs.total_count }}"
+          REBOOT="${{ steps.update.outputs.reboot }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
           M="$GITHUB_STEP_SUMMARY"
@@ -200,4 +219,8 @@ jobs:
           echo "| **Domain** | ${DOMAIN} |" >> "$M"
           echo "| **Server** | ${IP} |" >> "$M"
           echo "| **Duration** | ${ELAPSED}s |" >> "$M"
-          echo "| **Updated** | ${UPDATED:-unreachable} packages |" >> "$M"
+          echo "| **Status** | ${STATUS} |" >> "$M"
+          echo "| **Available** | ${TOTAL} |" >> "$M"
+          echo "| **Updated** | ${UPDATED_COUNT:-0} |" >> "$M"
+          echo "| **Pending** | ${PENDING_COUNT:-0} |" >> "$M"
+          echo "| **Reboot** | ${REBOOT} |" >> "$M"
