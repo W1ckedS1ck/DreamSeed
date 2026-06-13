@@ -74,14 +74,6 @@
     group: ubuntu
     mode: "0755"
 
-- name: Upload bot runner script
-  ansible.builtin.copy:
-    src: "{{ scripts_dir }}/run_bot.sh"
-    dest: "{{ scripts_dir_remote }}/run_bot.sh"
-    owner: ubuntu
-    group: ubuntu
-    mode: "0755"
-
 - name: Deploy Telegram bot systemd service
   ansible.builtin.template:
     src: telegram_bot.service.j2
