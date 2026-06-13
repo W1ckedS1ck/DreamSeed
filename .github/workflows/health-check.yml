@@ -126,7 +126,10 @@ jobs:
           echo "Total: $TOTAL ($SECURITY security)"
 
           echo "=== Running apt upgrade ==="
-          $SSH "sudo apt-get update -qq && sudo apt-get upgrade -y 2>&1" | tail -5
+          RESULT=$($SSH "sudo apt-get update -qq && sudo apt-get upgrade -y 2>&1")
+          echo "$RESULT" | grep -E "^(Setting up|Preparing to unpack|Unpacking|^[0-9]+ upgraded)"
+          UPGRADED=$(echo "$RESULT" | grep -oP '^(\d+) upgraded' || echo "0 upgraded")
+          echo "$UPGRADED"
 
           echo "=== After: remaining updates ==="
           AFTER=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
@@ -141,10 +144,19 @@ jobs:
             $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active && echo "[OK] $svc" || echo "[FAIL] $svc"
           done
 
+          UPDATED_NUM=$(echo "$UPGRADED" | grep -oP '^\d+' || echo "0")
+          UPDATED_LIST=$(echo "$RESULT" | grep "^Setting up " | sed 's/Setting up //;s/ (.*\.\.\.)//')
+
           echo "status=ok" >> "$GITHUB_OUTPUT"
           echo "before=$TOTAL" >> "$GITHUB_OUTPUT"
           echo "security=$SECURITY" >> "$GITHUB_OUTPUT"
+          echo "updated=$UPDATED_NUM" >> "$GITHUB_OUTPUT"
           echo "after=$AFTER_COUNT" >> "$GITHUB_OUTPUT"
+          if [ -n "$UPDATED_LIST" ]; then
+            echo "UPDATED_LIST<<EOF" >> "$GITHUB_ENV"
+            echo "$UPDATED_LIST" >> "$GITHUB_ENV"
+            echo "EOF" >> "$GITHUB_ENV"
+          fi
 
       - name: Notify
         if: always()
@@ -153,19 +165,18 @@ jobs:
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           STATUS="${{ steps.update.outputs.status }}"
-          BEFORE="${{ steps.update.outputs.before }}"
-          AFTER="${{ steps.update.outputs.after }}"
-          SECURITY="${{ steps.update.outputs.security }}"
           DOMAIN="${{ steps.server-ip.outputs.domain }}"
+          U="${{ steps.update.outputs.updated }}"
+          AFTER="${{ steps.update.outputs.after }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
           N=$'\n'
           if [ "$STATUS" = "unreachable" ]; then
             MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
-          elif [ "${BEFORE:-0}" = "0" ]; then
-            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}No updates available"
+          elif [ "$U" = "0" ]; then
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date"
           else
-            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Before: ${BEFORE} (${SECURITY} security)${N}After:  ${AFTER} remaining"
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}"
           fi
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
@@ -194,5 +205,12 @@ jobs:
           echo "| **Server** | ${IP} |" >> "$M"
           echo "| **Duration** | ${ELAPSED}s |" >> "$M"
           echo "| **Status** | ${STATUS} |" >> "$M"
-          echo "| **Before** | ${BEFORE:-?} (${SECURITY:-?} security) |" >> "$M"
-          echo "| **After** | ${AFTER:-?} remaining |" >> "$M"
+          echo "| **Updated** | ${{ steps.update.outputs.updated }} packages |" >> "$M"
+          echo "| **Remaining** | ${AFTER:-?} |" >> "$M"
+          echo "" >> "$M"
+          if [ -n "$UPDATED_LIST" ]; then
+            echo "### Updated packages" >> "$M"
+            echo '```' >> "$M"
+            echo "$UPDATED_LIST" >> "$M"
+            echo '```' >> "$M"
+          fi
