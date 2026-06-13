@@ -15,9 +15,8 @@ terraform {
 }
 
 provider "grafana" {
-  url    = var.grafana_cloud_url
-  auth   = var.grafana_cloud_token
-  org_id = 1
+  url  = var.grafana_cloud_url
+  auth = "api_key:${var.grafana_cloud_token}"
 }
 
 provider "grafana" {
