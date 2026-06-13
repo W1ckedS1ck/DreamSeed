@@ -860,6 +860,9 @@ jobs:
 
       - name: Write job summary
         if: always()
+        env:
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           ok_yn() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
 
@@ -884,7 +887,7 @@ jobs:
           echo "" >> "$M"
           echo "| | |" >> "$M"
           echo "|---|---|" >> "$M"
-          echo "| **Commit** | \`${{ github.sha }}\` on \`${{ github.head_ref || github.ref_name }}\` |" >> "$M"
+          echo "| **Commit** | \`${COMMIT_SHA}\` on \`${HEAD_REF}\` |" >> "$M"
           echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
           echo "| **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |" >> "$M"
           echo "| **SSL** | ${SSL_STATUS} |" >> "$M"
