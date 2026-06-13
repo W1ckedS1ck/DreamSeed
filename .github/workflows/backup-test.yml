@@ -861,16 +861,11 @@ jobs:
       - name: Write job summary
         if: always()
         run: |
-          set -a
-          source secrets/.env
-          set +a
-
           ok_yn() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
 
           RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
           RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
           RESTORE_TIME="${{ steps.restore.outputs.restore_duration }}"
-          TESTS="${{ steps.service_tests.outcome }}"
           ROWS="${{ steps.verify_content.outputs.restore_content_rows }}"
           TABLES="${{ steps.verify_content.outputs.restore_table_count }}"
           HTTP_CODE="${{ steps.verify_content.outputs.restore_http_code }}"
@@ -881,36 +876,34 @@ jobs:
           DB_HASH_OK="${{ steps.validate_hash.outputs.db_hash_match }}"
           SSL_STATUS="${{ steps.ssl.outputs.ssl_status }}"
           DISK_USAGE="${{ steps.disk.outputs.disk_usage }}"
-          DESTROY_OK="${{ steps.destroy.outcome }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
           [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_LINE="⚠️ **${FAILS}**" || FAIL_LINE=""
 
-          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ## Backup Restoration Test ${{ job.status == 'success' && '✅' || '❌' }}
-
-          | | |
-          |---|---|
-          | **Commit** | \`${{ github.sha }}\` on \`${{ github.head_ref || github.ref_name }}\` |
-          | **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |
-          | **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |
-          | **SSL** | ${SSL_STATUS} |
-          | **Disk** | ${DISK_USAGE}% |
-
-          ### Backup
-          | Metric | Status |
-          |---|---|
-          | Local files | $BACKUP_FILES |
-          | GDrive | ${{ steps.gdrive_upload.outputs.gdrive_status }} |
-          | Hash match | $(ok_yn "$PROJ_HASH_OK") $(ok_yn "$DB_HASH_OK") project/DB |
-
-          ### Restore
-          | Metric | Value |
-          |---|---|
-          | Result | $RESTORE_OK |
-          | Content rows | $ROWS |
-          | DB tables | $TABLES |
-          | HTTP code | $HTTP_CODE |
-          | Duration | ${RESTORE_TIME} |
-
-          ### Service Tests: ${SUMMARY} ${FAIL_LINE}
-          EOF
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Backup Restoration Test ${{ job.status == 'success' && '✅' || '❌' }}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Commit** | \`${{ github.sha }}\` on \`${{ github.head_ref || github.ref_name }}\` |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |" >> "$M"
+          echo "| **SSL** | ${SSL_STATUS} |" >> "$M"
+          echo "| **Disk** | ${DISK_USAGE}% |" >> "$M"
+          echo "" >> "$M"
+          echo "### Backup" >> "$M"
+          echo "| Metric | Status |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Local files | ${BACKUP_FILES} |" >> "$M"
+          echo "| GDrive | ${{ steps.gdrive_upload.outputs.gdrive_status }} |" >> "$M"
+          echo "| Hash match | $(ok_yn "$PROJ_HASH_OK") $(ok_yn "$DB_HASH_OK") project/DB |" >> "$M"
+          echo "" >> "$M"
+          echo "### Restore" >> "$M"
+          echo "| Metric | Value |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Result | ${RESTORE_OK} |" >> "$M"
+          echo "| Content rows | ${ROWS} |" >> "$M"
+          echo "| DB tables | ${TABLES} |" >> "$M"
+          echo "| HTTP code | ${HTTP_CODE} |" >> "$M"
+          echo "| Duration | ${RESTORE_TIME} |" >> "$M"
+          echo "" >> "$M"
+          echo "### Service Tests: ${SUMMARY} ${FAIL_LINE}" >> "$M"
