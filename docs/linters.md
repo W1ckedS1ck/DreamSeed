@@ -5,7 +5,7 @@
 There are 2 layers of linting:
 
 - **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` (fast, covers all tools)
-- **CI on GitHub**: `ci.yml` (full, 7 parallel jobs)
+- **CI on GitHub**: `ci.yml` (full, 9 parallel jobs)
 
 ---
 
