@@ -68,18 +68,6 @@ jobs:
         working-directory: terraform/grafana
         run: bash init-dashboards.sh
 
-      - name: Test Grafana Token
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$URL/api/folders")
-          echo "Grafana API Status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "Token test failed. Expected 200, got $STATUS"
-            exit 1
-          fi
-        env:
-          TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
-          URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
-
       - name: Terraform Init
         working-directory: terraform/grafana
         run: terraform init -upgrade=false
