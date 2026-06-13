@@ -44,9 +44,21 @@
       - apt-show-versions
       - libpam-tmpdir
       - libpam-pwquality
+      - unattended-upgrades
     state: present
   environment:
     DEBIAN_FRONTEND: noninteractive
+
+- name: Enable unattended-upgrades (security-only auto updates)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+    mode: "0644"
 
 - name: Check if swap file exists
   become: true
