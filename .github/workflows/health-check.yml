@@ -137,7 +137,18 @@ jobs:
           echo "Remaining: $AFTER_COUNT"
 
           echo "=== Reboot required ==="
-          $SSH "test -f /var/run/reboot-required" 2>/dev/null && echo "REBOOT REQUIRED" || echo "No reboot needed"
+          if $SSH "test -f /var/run/reboot-required" 2>/dev/null; then
+            REBOOT_LIST=$($SSH "cat /var/run/reboot-required.pkgs 2>/dev/null")
+            echo "REBOOT REQUIRED"
+            echo "$REBOOT_LIST" | sed 's/^/- /'
+            echo "reboot=yes" >> "$GITHUB_OUTPUT"
+            echo "reboot_list<<EOF" >> "$GITHUB_ENV"
+            echo "$REBOOT_LIST" >> "$GITHUB_ENV"
+            echo "EOF" >> "$GITHUB_ENV"
+          else
+            echo "No reboot needed"
+            echo "reboot=no" >> "$GITHUB_OUTPUT"
+          fi
 
           echo "=== Services check ==="
           for svc in nginx php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
@@ -171,12 +182,19 @@ jobs:
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
           N=$'\n'
+          REBOOT="${{ steps.update.outputs.reboot }}"
+          if [ "$REBOOT" = "yes" ]; then
+            TG_REBOOT="${N}⚠️ Reboot required"
+          else
+            TG_REBOOT=""
+          fi
+
           if [ "$STATUS" = "unreachable" ]; then
             MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
-          elif [ "$U" = "0" ]; then
-            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date"
+          elif [ "$U" = "0" ] && [ "$AFTER" = "0" ]; then
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
           else
-            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}"
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
           fi
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
@@ -207,10 +225,17 @@ jobs:
           echo "| **Status** | ${STATUS} |" >> "$M"
           echo "| **Updated** | ${{ steps.update.outputs.updated }} packages |" >> "$M"
           echo "| **Remaining** | ${AFTER:-?} |" >> "$M"
+          echo "| **Reboot** | ${{ steps.update.outputs.reboot }} |" >> "$M"
           echo "" >> "$M"
           if [ -n "$UPDATED_LIST" ]; then
             echo "### Updated packages" >> "$M"
             echo '```' >> "$M"
             echo "$UPDATED_LIST" >> "$M"
+            echo '```' >> "$M"
+          fi
+          if [ -n "$REBOOT_LIST" ]; then
+            echo "### Reboot required" >> "$M"
+            echo '```' >> "$M"
+            echo "$REBOOT_LIST" >> "$M"
             echo '```' >> "$M"
           fi
