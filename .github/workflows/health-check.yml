@@ -159,12 +159,13 @@ jobs:
           DOMAIN="${{ steps.server-ip.outputs.domain }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
+          N=$'\n'
           if [ "$STATUS" = "unreachable" ]; then
-            MSG="❌ *Server Update* — ${{ matrix.target }}\n📅 $(date '+%Y-%m-%d %H:%M')\nSSH unreachable"
+            MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
           elif [ "${BEFORE:-0}" = "0" ]; then
-            MSG="✅ *Server Update* — ${{ matrix.target }}\n📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s\n🖥 ${DOMAIN}\nNo updates available"
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}No updates available"
           else
-            MSG="✅ *Server Update* — ${{ matrix.target }}\n📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s\n🖥 ${DOMAIN}\n\nBefore: ${BEFORE} (${SECURITY} security)\nAfter:  ${AFTER} remaining"
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Before: ${BEFORE} (${SECURITY} security)${N}After:  ${AFTER} remaining"
           fi
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
