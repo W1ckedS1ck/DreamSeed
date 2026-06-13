@@ -7,11 +7,14 @@ on:
         description: 'Target environment'
         required: true
         type: choice
-        options: [prod, dev-aws, dev-hetz]
+        options: [prod, dev-aws, dev-hetz, prod-hetz]
       confirm:
         description: 'Prod confirmation — type "rollback prod"'
         required: false
         type: string
+
+permissions:
+  contents: read
 
 concurrency:
   group: rollback-${{ inputs.environment }}
@@ -82,9 +85,9 @@ jobs:
                      --query 'Addresses[0].PublicIp' --output text)
               fi
               ;;
-            dev-hetz)
+            dev-hetz|prod-hetz)
               export TF_TOKEN_app_terraform_io="$TF_TOKEN"
-              export TF_WORKSPACE="dev-hetz"
+              export TF_WORKSPACE="$ENV"
               cd terraform/hetzner
               terraform init -upgrade=false > /dev/null
               IP=$(terraform output -raw server_ipv4)
@@ -97,11 +100,11 @@ jobs:
             exit 1
           fi
 
-          echo "ip=$IP" >> $GITHUB_OUTPUT
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
           echo "Found server IP: $IP"
 
       - name: Validate prod confirmation
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' || inputs.environment == 'prod-hetz'
         run: |
           if [[ "${{ inputs.confirm }}" != "rollback prod" ]]; then
             echo "::error::To rollback prod you must set confirm = 'rollback prod'"
@@ -125,19 +128,22 @@ jobs:
           DB=$(echo "$OUTPUT" | grep "^DB:" | tail -1 | sed 's/.*: //')
           SITE=$(echo "$OUTPUT" | grep "^Site:" | tail -1 | sed 's/.*: //')
           TIME=$(echo "$OUTPUT" | grep "^Time:" | tail -1 | sed 's/.*: //')
-          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "db=$DB" >> "$GITHUB_OUTPUT"
-          echo "site=$SITE" >> "$GITHUB_OUTPUT"
-          echo "time=$TIME" >> "$GITHUB_OUTPUT"
+          {
+            echo "project=$PROJECT"
+            echo "db=$DB"
+            echo "site=$SITE"
+            echo "time=$TIME"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set domain
         id: domain
         run: |
           ENV="${{ inputs.environment }}"
           case "$ENV" in
-            prod)    DOMAIN="dreamseed.online" ;;
-            dev-aws) DOMAIN="aws.vitalikuts.online" ;;
-            dev-hetz) DOMAIN="hetz.vitalikuts.online" ;;
+            prod)       DOMAIN="dreamseed.online" ;;
+            prod-hetz)  DOMAIN="dreamseed.online" ;;
+            dev-aws)    DOMAIN="aws.vitalikuts.online" ;;
+            dev-hetz)   DOMAIN="hetz.vitalikuts.online" ;;
           esac
           echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
           echo "Health check domain: $DOMAIN"
@@ -174,8 +180,8 @@ jobs:
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"
@@ -200,3 +206,33 @@ jobs:
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          RESTORE="${{ steps.restore.outcome }}"
+          HEALTH="${{ steps.health.outcome }}"
+          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
+            STATUS="✅ ROLLBACK OK"
+          elif [[ "$RESTORE" != "success" ]]; then
+            STATUS="❌ RESTORE FAILED"
+          else
+            STATUS="⚠️ SITE UNHEALTHY"
+          fi
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Rollback Deploy — ${STATUS}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Environment** | ${{ inputs.environment }} |" >> "$M"
+          echo "| **Server** | ${{ steps.server-ip.outputs.ip }} |" >> "$M"
+          echo "| **Domain** | ${{ steps.domain.outputs.domain }} |" >> "$M"
+          echo "" >> "$M"
+          echo "### Restore" >> "$M"
+          echo "| Metric | Value |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Project | ${{ steps.restore.outputs.project }} |" >> "$M"
+          echo "| DB | ${{ steps.restore.outputs.db }} |" >> "$M"
+          echo "| Site | ${{ steps.restore.outputs.site }} |" >> "$M"
+          echo "| Duration | ${{ steps.restore.outputs.time }} |" >> "$M"

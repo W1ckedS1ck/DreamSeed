@@ -148,30 +148,7 @@
   become: true
   loop: "{{ _ws_remove_dashboards }}"
 
-- name: Fix Grafana dashboard directory ownership and permissions
-  ansible.builtin.file:
-    path: /var/lib/grafana/dashboards
-    owner: grafana
-    group: grafana
-    mode: "0755"
-  become: true
 
-- name: Find Grafana dashboard files
-  ansible.builtin.find:
-    paths: /var/lib/grafana/dashboards
-    file_type: file
-    recurse: true
-  register: _grafana_dash_files
-  become: true
-
-- name: Fix Grafana dashboard file permissions
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    owner: grafana
-    group: grafana
-    mode: "0644"
-  loop: "{{ _grafana_dash_files.files }}"
-  become: true
 
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
@@ -204,13 +181,15 @@
     enabled: true
   become: true
 
+
+
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 30
-  delay: 3
+  retries: 15
+  delay: 7
   changed_when: false
 
 - name: Check if Grafana admin password already set
@@ -220,7 +199,7 @@
 
 - name: Reset Grafana admin password via CLI
   ansible.builtin.command:
-    cmd: grafana-cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
+    cmd: grafana cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
     stdin: "{{ grafana_admin_password }}"
   become: true
   no_log: true
@@ -234,6 +213,7 @@
   ansible.builtin.file:
     path: /etc/grafana/.admin_password_set
     state: touch
+    mode: "0644"
   become: true
   when:
     - grafana_cli_result is defined

@@ -65,22 +65,7 @@
     - send_report.sh
     - common_functions.sh
     - env_loader.py
-
-- name: Upload Telegram bot script
-  ansible.builtin.copy:
-    src: "{{ scripts_dir }}/telegram_bot.py"
-    dest: "{{ scripts_dir_remote }}/telegram_bot.py"
-    owner: ubuntu
-    group: ubuntu
-    mode: "0755"
-
-- name: Upload bot runner script
-  ansible.builtin.copy:
-    src: "{{ scripts_dir }}/run_bot.sh"
-    dest: "{{ scripts_dir_remote }}/run_bot.sh"
-    owner: ubuntu
-    group: ubuntu
-    mode: "0755"
+    - telegram_bot.py
 
 - name: Deploy Telegram bot systemd service
   ansible.builtin.template:
@@ -172,7 +157,7 @@
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
-- name: Check if MODX is installed ({{ db_prefix }}system_settings table exists)
+- name: Check MODX system_settings table
   ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root

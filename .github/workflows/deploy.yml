@@ -7,7 +7,7 @@ on:
         description: 'Target environment'
         required: true
         type: choice
-        options: [prod, dev-aws, dev-hetz]
+        options: [prod, dev-aws, dev-hetz, prod-hetz]
       action:
         description: 'Action'
         required: true
@@ -24,6 +24,11 @@ on:
         description: 'Skip Terraform — reconfigure existing server IP (deploy only)'
         required: false
         type: string
+      skip_dns:
+        description: 'Skip Cloudflare DNS update (default: update)'
+        required: false
+        type: boolean
+        default: false
       confirm:
         description: 'Destroy confirmation — type "destroy prod" to destroy prod, "destroy dev" for dev'
         required: false
@@ -44,6 +49,7 @@ jobs:
   deploy:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -54,24 +60,32 @@ jobs:
         if: inputs.action == 'deploy'
         uses: ./.github/actions/setup-ansible
 
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Mask secrets
         run: |
           [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}" || true
           [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}" || true
           [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}" || true
+
           [[ -n "${{ secrets.CF_ZONE_ID }}" ]] && echo "::add-mask::${{ secrets.CF_ZONE_ID }}" || true
           [[ -n "${{ secrets.HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}" || true
           [[ -n "${{ secrets.BETTERUPTIME_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}" || true
           [[ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]] && echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}" || true
           [[ -n "${{ secrets.VAULT_PASSWORD }}" ]] && echo "::add-mask::${{ secrets.VAULT_PASSWORD }}" || true
           [[ -n "${{ secrets.RCLONE_CONF_BASE64 }}" ]] && echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}" || true
           [[ -n "${{ secrets.USER_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.USER_SSH_PUBLIC_KEY }}" || true
+          [[ -n "${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.VITALI_SSH_PUBLIC_KEY }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
-          # NOTE: TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
+          # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
+          # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
           # because they are pure integers that corrupt log output (IPs, timestamps, counts)
 
       - name: Setup secrets
@@ -79,8 +93,9 @@ jobs:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           DB_PASS: ${{ secrets.DB_PASS }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          PROD_HETZ_HCLOUD_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          VITALI_SSH_PUBLIC_KEY: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
           GRAFANA_PASS: ${{ secrets.GRAFANA_PASS }}
           BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -96,17 +111,17 @@ jobs:
 
           {
             echo "TG_TOKEN=$TG_TOKEN"
-            echo "TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}"
-            echo "TG_THREAD_ID=${{ secrets.TG_THREAD_ID }}"
+            echo "TG_CHAT_ID=${{ vars.TG_CHAT_ID }}"
+            echo "TG_THREAD_ID=${{ vars.TG_THREAD_ID }}"
             echo "DB_PASS=$DB_PASS"
             echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
-            echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
             echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
+            echo "PROD_HETZ_HCLOUD_TOKEN=$PROD_HETZ_HCLOUD_TOKEN"
             echo "GRAFANA_PASS=$GRAFANA_PASS"
             echo "BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
-            echo "ADDITIONAL_SSH_KEYS=\"$USER_SSH_PUBLIC_KEY\""
+            printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "$USER_SSH_PUBLIC_KEY" "$VITALI_SSH_PUBLIC_KEY"
 
             echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_PUSH_URL"
             echo "DEV_GRAFANA_CLOUD_USERNAME=${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
@@ -116,9 +131,12 @@ jobs:
             echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
 
-            # Use existing "Vitali" key and Primary IP in Hetzner Cloud
-            echo "HETZNER_SSH_KEY_NAME=Vitali"
-            echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
+            # Hetzner SSH key and Primary IP (per-target)
+            echo "DEV_HETZ_SSH_KEY_NAME=Vitali"
+            echo "DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1"
+            echo "PROD_HETZ_SSH_KEY_NAME=Vitali.pub"
+            echo "PROD_HETZ_PRIMARY_IP_NAME="
+            echo "PROD_HETZ_ENABLE_PRIMARY_IP=true"
           } > secrets/.env
           chmod 600 secrets/.env
 
@@ -147,6 +165,7 @@ jobs:
           DEPLOY_ARGS=("$ENV")
           [[ "$WEB_SRV" == "apache" ]] && DEPLOY_ARGS+=("-a") || DEPLOY_ARGS+=("-n")
           [[ -n "$SERVER_IP" ]] && DEPLOY_ARGS+=("-i" "$SERVER_IP")
+          [[ "${{ inputs.skip_dns }}" == "true" ]] && DEPLOY_ARGS+=("--no-dns")
           DEPLOY_ARGS+=("-p")
 
           ./deploy.sh "${DEPLOY_ARGS[@]}"
@@ -163,8 +182,8 @@ jobs:
 
           ENV="${{ inputs.environment }}"
 
-          # Prod requires typing "destroy prod"
-          if [[ "$ENV" == "prod" ]]; then
+          # Prod envs require typing "destroy prod"
+          if [[ "$ENV" == "prod" || "$ENV" == "prod-hetz" ]]; then
             if [[ "$DESTROY_CONFIRM" != "destroy prod" ]]; then
               echo "ERROR: To destroy prod you must set confirm = 'destroy prod'"
               exit 1
@@ -184,8 +203,8 @@ jobs:
         if: failure()
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           MSG="❌ *Deploy failed* — ${{ inputs.environment }}
           Action: ${{ inputs.action }}
@@ -200,8 +219,8 @@ jobs:
         if: success() && inputs.action == 'deploy'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           MSG="✅ *Deploy complete* — ${{ inputs.environment }}
           Server: ${{ inputs.server_ip || 'new' }}
@@ -212,3 +231,26 @@ jobs:
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          ACTION="${{ inputs.action }}"
+          ENV="${{ inputs.environment }}"
+          WEB="${{ inputs.web_server }}"
+          SERVER_IP="${{ inputs.server_ip }}"
+          SKIP_DNS="${{ inputs.skip_dns }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## ${ACTION^} ${RESULT}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Environment** | ${ENV} |" >> "$M"
+          echo "| **Web server** | ${WEB} |" >> "$M"
+          echo "| **Action** | ${ACTION} |" >> "$M"
+          echo "| **Server IP** | ${SERVER_IP:-new} |" >> "$M"
+          echo "| **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"

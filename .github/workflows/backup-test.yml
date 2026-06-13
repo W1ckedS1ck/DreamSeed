@@ -13,6 +13,9 @@ on:
           - aws
         default: hetzner
 
+permissions:
+  contents: read
+
 concurrency:
   group: backup-test
   cancel-in-progress: false
@@ -20,7 +23,6 @@ concurrency:
 env:
   TARGET: ${{ inputs.environment || 'hetzner' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
 
 jobs:
   test-restore:
@@ -49,7 +51,8 @@ jobs:
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}"
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}"
           [[ -n "${{ secrets.TF_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TF_API_TOKEN }}"
-          # NOTE: TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
+          # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
+          # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
           # because they are pure integers that corrupt log output (IPs, timestamps, counts)
 
       - name: Record start time
@@ -69,7 +72,6 @@ jobs:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           DB_PASS: ${{ secrets.DB_PASS }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           GRAFANA_PASS: ${{ secrets.GRAFANA_PASS }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -79,19 +81,19 @@ jobs:
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
-        # TG_CHAT_ID, TG_THREAD_ID, DEV/PROD_GRAFANA_CLOUD_USERNAME excluded from env:
+        # TG_CHAT_ID, TG_THREAD_ID — из vars, не маскируются
+        # DEV/PROD_GRAFANA_CLOUD_USERNAME excluded from env:
         # because they are pure integers that trigger substring masking in GitHub Actions.
-        # Written directly to secrets/.env via ${{ }} in the shell script instead.
         run: |
           mkdir -p secrets ~/.ssh
 
           {
             echo "TG_TOKEN=$TG_TOKEN"
-            echo "TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}"
-            echo "TG_THREAD_ID=${{ secrets.TG_THREAD_ID }}"
+            echo "TG_CHAT_ID=${{ vars.TG_CHAT_ID }}"
+            echo "TG_THREAD_ID=${{ vars.TG_THREAD_ID }}"
             echo "DB_PASS=$DB_PASS"
             echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
-            echo "CLOUDFLARE_ZONE_ID=$CF_ZONE_ID"
+
             echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
             echo "GRAFANA_PASS=$GRAFANA_PASS"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
@@ -132,12 +134,14 @@ jobs:
           echo "::add-mask::$GRAFANA_PASS"
           [[ -n "$DEV_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$DEV_GRAFANA_CLOUD_TOKEN"
           [[ -n "$PROD_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$PROD_GRAFANA_CLOUD_TOKEN"
-          echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)" >> "$GITHUB_ENV"
-          [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME" >> "$GITHUB_ENV"
-          echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali}" >> "$GITHUB_ENV"
-          echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}" >> "$GITHUB_ENV"
-          python3 -c "import json, os; k=open(os.path.expanduser('~/.ssh/deploy_key.pub')).read().strip(); print(f'TF_VAR_additional_ssh_keys={json.dumps([k])}')" >> "$GITHUB_ENV"
+          {
+            echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN"
+            echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)"
+            [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME"
+            echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali}"
+            echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+            python3 -c "import json, os; k=open(os.path.expanduser('~/.ssh/deploy_key.pub')).read().strip(); print(f'TF_VAR_additional_ssh_keys={json.dumps([k])}')"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Ansible
         uses: ./.github/actions/setup-ansible
@@ -172,12 +176,20 @@ jobs:
               exit 1
             fi
           done
-          echo "server_ipv4=$(terraform output -raw server_ipv4)" >> $GITHUB_OUTPUT
+          echo "server_ipv4=$(terraform output -raw server_ipv4)" >> "$GITHUB_OUTPUT"
+          # Write IP to Step Summary (visible in Summary tab, bypasses log masking)
+          {
+            echo "### Server connection"
+            echo '```'
+            echo "IP:  $(terraform output -raw server_ipv4)"
+            echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@$(terraform output -raw server_ipv4)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Capture server SSH host key
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          for i in $(seq 1 15); do
+          for _ in $(seq 1 15); do
             ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
             sleep 2
           done
@@ -191,40 +203,44 @@ jobs:
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
 
           # --- DNS ---
-          CF_RESP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-          RECORD_ID=$(echo "$CF_RESP" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
-          if [ -n "$RECORD_ID" ]; then
-            CF_RESP=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CF_ZONE_ID:-}" ]; then
+            echo "[SKIP] DNS update: no Cloudflare token or zone ID"
           else
-            CF_RESP=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
-          fi
-          if echo "$CF_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
-            echo "[OK] DNS: test.dreamseed.online -> $SERVER_IP"
-          else
-            echo "[WARN] DNS update failed"
+            CF_RESP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            RECORD_ID=$(echo "$CF_RESP" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
+            if [ -n "$RECORD_ID" ]; then
+              CF_RESP=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
+            else
+              CF_RESP=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
+            fi
+            if echo "$CF_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
+              echo "[OK] DNS: test.dreamseed.online -> $SERVER_IP"
+            else
+              echo "[WARN] DNS update failed"
+            fi
           fi
 
           # --- Wait for SSH (90 x 2s = 180s, matches deploy.sh for Hetzner) ---
-          echo "Waiting for SSH on $SERVER_IP..."
+          echo "[$(date +%H:%M:%S)] Waiting for SSH on $SERVER_IP..."
           for i in $(seq 1 90); do
-            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+            if ssh -q -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
                 -o BatchMode=yes -o PasswordAuthentication=no \
                 -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
-              echo "SSH ready (attempt $i)"
+              echo "[$(date +%H:%M:%S)] SSH ready (attempt $i)"
               break
             fi
-            if [ $((i % 10)) -eq 1 ] && [ $i -gt 1 ]; then
-              echo "  Attempt $i/90..."
+            if [ $((i % 5)) -eq 0 ]; then
+              echo "[$(date +%H:%M:%S)] SSH attempt $i/90..."
             fi
             [ "$i" -eq 90 ] && {
-              echo "SSH never became available after 180s"
+              echo "[$(date +%H:%M:%S)] SSH never became available after 180s"
               ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
                 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" "exit 0" 2>&1 || true
               exit 1
@@ -233,24 +249,41 @@ jobs:
           done
 
           # --- Wait for cloud-init (matching deploy.sh) ---
-          echo "Waiting for cloud-init..."
-          ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-            "timeout 300 cloud-init status --wait" 2>/dev/null || {
-              for j in $(seq 1 15); do
-                st=$(ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-                  'cloud-init status 2>/dev/null || echo unknown' 2>/dev/null || echo unknown)
-                [[ "$st" == *"status: done"* || "$st" == *"No pending"* ]] && break
-                [[ "$st" == *"status: error"* ]] && { echo "Cloud-init status: error"; exit 1; }
-                [[ $j -eq 15 ]] && { echo "Cloud-init timeout after 30s"; exit 1; }
-                sleep 2
-              done
+          echo "[$(date +%H:%M:%S)] Waiting for cloud-init (max 5 min)..."
+          CI_START=$(date +%s)
+          for j in $(seq 1 150); do
+            ci_out=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 "ubuntu@$SERVER_IP" \
+              'cloud-init status 2>/dev/null' 2>/dev/null || echo "unknown")
+            ci_elapsed=$(( $(date +%s) - CI_START ))
+            case "$ci_out" in
+              *"status: done"*|*"No pending"*)
+                echo "[$(date +%H:%M:%S)] Cloud-init done (${ci_elapsed}s)"
+                break
+                ;;
+              *"status: error"*)
+                echo "[$(date +%H:%M:%S)] Cloud-init status: error"
+                exit 1
+                ;;
+              *)
+                if [ $((j % 5)) -eq 0 ] || [ "$j" -eq 1 ]; then
+                  echo "[$(date +%H:%M:%S)] Cloud-init: running (${ci_elapsed}s)..."
+                fi
+                ;;
+            esac
+            [ "$j" -eq 150 ] && {
+              echo "[$(date +%H:%M:%S)] Cloud-init timeout after ${ci_elapsed}s"
+              exit 1
             }
-          echo "Cloud-init done"
+            sleep 2
+          done
 
           # --- Wait for apt lock ---
-          echo "Waiting for apt lock to release..."
+          echo "[$(date +%H:%M:%S)] Waiting for apt lock to release..."
+          APT_START=$(date +%s)
           ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
             "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
+          APT_ELAPSED=$(( $(date +%s) - APT_START ))
+          [ "$APT_ELAPSED" -gt 0 ] && echo "[$(date +%H:%M:%S)] Apt lock released (${APT_ELAPSED}s)" || true
           sleep 5
 
       - name: Generate config
@@ -321,7 +354,7 @@ jobs:
           pids=()
           cd ansible
           ansible-playbook -i inventory/hosts-test.yml playbook-04-monitor.yml -e @/tmp/test_vault.yml & pids+=($!)
-          TG_CHAT_ID="${{ secrets.TG_CHAT_ID }}" TG_THREAD_ID="${{ secrets.TG_THREAD_ID }}" TG_TOKEN="${{ secrets.TG_TOKEN }}" ansible-playbook -i inventory/hosts-test.yml playbook-05-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
+          TG_CHAT_ID="${{ vars.TG_CHAT_ID }}" TG_THREAD_ID="${{ vars.TG_THREAD_ID }}" TG_TOKEN="${{ secrets.TG_TOKEN }}" ansible-playbook -i inventory/hosts-test.yml playbook-05-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
           failed=0
           for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
           set -e
@@ -333,7 +366,7 @@ jobs:
       - name: Wait for stack to settle
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           for i in $(seq 1 10); do
             vm_ok=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8428/health 2>/dev/null || echo 'not_ready'" 2>/dev/null || echo "not_ready")
@@ -347,7 +380,7 @@ jobs:
         id: initial_content
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ROWS=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo 0")
@@ -357,7 +390,7 @@ jobs:
       - name: Create backup via smart_backup.sh
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running smart_backup.sh ==="
           set +e
@@ -373,7 +406,7 @@ jobs:
       - name: Verify backup files exist
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Local backups ==="
           ssh ubuntu@"$SERVER_IP" "ls -lh /home/ubuntu/backups/project/ 2>/dev/null || echo 'No project backups'"
@@ -394,7 +427,7 @@ jobs:
         id: gdrive_upload
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Uploading backup to GDrive ==="
           set +e
@@ -413,7 +446,7 @@ jobs:
       - name: Verify backup archives integrity
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running verify_backups.sh ==="
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/verify_backups.sh" 2>&1 || true
@@ -421,10 +454,13 @@ jobs:
       - name: Check Grafana proxy
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Checking Grafana via nginx proxy ==="
-          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || echo 0")
+          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+          if [ "$GRAFANA_OK" -lt 1 ]; then
+            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://127.0.0.1/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+          fi
           if [ "$GRAFANA_OK" -ge 1 ]; then
             echo "[PASS] Grafana reachable via nginx proxy"
           else
@@ -435,7 +471,7 @@ jobs:
         id: artifact_hash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Recording artifact hashes before destroy ==="
           PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
@@ -450,7 +486,7 @@ jobs:
       - name: Destroy data — simulate disaster
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Destroying data to simulate disaster ==="
           # Drop all tables (SET FOREIGN_KEY_CHECKS=0 needed for InnoDB FK constraints)
@@ -471,7 +507,7 @@ jobs:
         id: restore
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           RESTORE_START=$(date +%s)
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
@@ -491,7 +527,7 @@ jobs:
         id: verify_content
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Verifying restored content ==="
 
@@ -541,9 +577,11 @@ jobs:
             echo "[FAIL] DB tables: ${TBL_COUNT:-0} (expected 50+)"
           fi
 
-          echo "restore_content_rows=$ROWS" >> "$GITHUB_OUTPUT"
-          echo "restore_table_count=$TBL_COUNT" >> "$GITHUB_OUTPUT"
-          echo "restore_http_code=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+          {
+            echo "restore_content_rows=$ROWS"
+            echo "restore_table_count=$TBL_COUNT"
+            echo "restore_http_code=$HTTP_CODE"
+          } >> "$GITHUB_OUTPUT"
 
           if [ "${ROWS:-0}" -eq 0 ] || [ "${TBL_COUNT:-0}" -lt 50 ]; then
             echo "::error::Restore verification failed — no content restored"
@@ -554,7 +592,7 @@ jobs:
         id: validate_hash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Validating restored artifacts ==="
 
@@ -589,7 +627,7 @@ jobs:
           # PHP error log check
           echo "=== PHP error log (last 20 lines) ==="
           ssh ubuntu@"$SERVER_IP" "sudo tail -20 /var/log/php*-fpm.log 2>/dev/null || echo 'No PHP-FPM log found'" 2>&1 || true
-          PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || echo 0")
+          PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || true")
           if [ "${PHP_ERRORS:-0}" -eq 0 ]; then
             echo "[PASS] No PHP Fatal errors after restore"
           else
@@ -613,7 +651,7 @@ jobs:
         id: disk
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           DISK_USAGE=$(ssh ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
@@ -628,7 +666,7 @@ jobs:
         id: ssl
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           LE_CERT=$(ssh ubuntu@"$SERVER_IP" "test -f /etc/letsencrypt/live/test.dreamseed.online/fullchain.pem && echo yes || echo no" 2>/dev/null || echo "no")
           if [ "$LE_CERT" = "yes" ]; then
@@ -690,9 +728,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
-        # TG_CHAT_ID/TG_THREAD_ID intentionally NOT in env: — they are pure integers
-        # that corrupt log output via GitHub Actions substring masking.
-        # They are sourced from secrets/.env below.
+        # TG_CHAT_ID/TG_THREAD_ID sourced from secrets/.env (vars, not secrets — no masking)
         run: |
           source secrets/.env
           COMMIT_SHA="${{ github.sha }}"
@@ -727,6 +763,27 @@ jobs:
             echo "Destroy exit (ignored — TFC exit code 1 bug)"
           fi
 
+      - name: Cleanup DNS
+        if: always() && steps.terraform.outputs.server_ipv4 != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CF_ZONE_ID" ]; then
+            echo "[WARN] CF token/zone not set, skipping DNS cleanup"
+            exit 0
+          fi
+          RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+            python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
+          if [ -n "$RECORD_ID" ]; then
+            curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+              python3 -c "import sys,json; d=json.load(sys.stdin); print('[OK] DNS deleted' if d.get('success') else '[WARN] DNS delete failed')"
+          else
+            echo "[OK] No DNS record to clean up"
+          fi
+
       - name: Send Telegram report
         if: always()
         env:
@@ -736,9 +793,9 @@ jobs:
           source secrets/.env
           set +a
 
-          ok() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
-          ok_destroy() { [ "$1" = "success" ] && echo "✅" || { [ "$1" = "skipped" ] && echo "⏭️"; }; }
-          ok_yn() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
+          ok() { if [ "$1" = "success" ]; then echo "✅"; else echo "❌"; fi; }
+          ok_destroy() { if [ "$1" = "success" ]; then echo "✅"; elif [ "$1" = "skipped" ]; then echo "⏭️"; fi; }
+          ok_yn() { if [ "$1" = "yes" ]; then echo "✅"; else echo "❌"; fi; }
 
           RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
           RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
@@ -800,3 +857,56 @@ jobs:
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        env:
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          ok_yn() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
+
+          RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
+          RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
+          RESTORE_TIME="${{ steps.restore.outputs.restore_duration }}"
+          ROWS="${{ steps.verify_content.outputs.restore_content_rows }}"
+          TABLES="${{ steps.verify_content.outputs.restore_table_count }}"
+          HTTP_CODE="${{ steps.verify_content.outputs.restore_http_code }}"
+          SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
+          FAILS="${{ steps.service_tests.outputs.test_fails }}"
+          BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+${{ steps.verify_backup.outputs.db_count }}"
+          PROJ_HASH_OK="${{ steps.validate_hash.outputs.project_hash_match }}"
+          DB_HASH_OK="${{ steps.validate_hash.outputs.db_hash_match }}"
+          SSL_STATUS="${{ steps.ssl.outputs.ssl_status }}"
+          DISK_USAGE="${{ steps.disk.outputs.disk_usage }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
+          [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_LINE="⚠️ **${FAILS}**" || FAIL_LINE=""
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Backup Restoration Test ${{ job.status == 'success' && '✅' || '❌' }}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Commit** | \`${COMMIT_SHA}\` on \`${HEAD_REF}\` |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |" >> "$M"
+          echo "| **SSL** | ${SSL_STATUS} |" >> "$M"
+          echo "| **Disk** | ${DISK_USAGE}% |" >> "$M"
+          echo "" >> "$M"
+          echo "### Backup" >> "$M"
+          echo "| Metric | Status |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Local files | ${BACKUP_FILES} |" >> "$M"
+          echo "| GDrive | ${{ steps.gdrive_upload.outputs.gdrive_status }} |" >> "$M"
+          echo "| Hash match | $(ok_yn "$PROJ_HASH_OK") $(ok_yn "$DB_HASH_OK") project/DB |" >> "$M"
+          echo "" >> "$M"
+          echo "### Restore" >> "$M"
+          echo "| Metric | Value |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Result | ${RESTORE_OK} |" >> "$M"
+          echo "| Content rows | ${ROWS} |" >> "$M"
+          echo "| DB tables | ${TABLES} |" >> "$M"
+          echo "| HTTP code | ${HTTP_CODE} |" >> "$M"
+          echo "| Duration | ${RESTORE_TIME} |" >> "$M"
+          echo "" >> "$M"
+          echo "### Service Tests: ${SUMMARY} ${FAIL_LINE}" >> "$M"
