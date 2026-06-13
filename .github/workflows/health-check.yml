@@ -126,7 +126,7 @@ jobs:
           echo "Total: $TOTAL ($SECURITY security)"
 
           echo "=== Running apt upgrade ==="
-          RESULT=$($SSH "sudo apt-get update -qq && sudo apt-get upgrade -y 2>&1")
+          RESULT=$($SSH "sudo apt-get update -qq && sudo apt upgrade -y 2>&1")
           echo "$RESULT" | grep -E "^(Setting up|Preparing to unpack|Unpacking|^[0-9]+ upgraded)"
           UPGRADED=$(echo "$RESULT" | grep -oP '^(\d+) upgraded' || echo "0 upgraded")
           echo "$UPGRADED"
