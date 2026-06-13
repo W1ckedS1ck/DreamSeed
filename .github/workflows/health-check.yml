@@ -1,0 +1,257 @@
+name: Monthly Health Check
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [prod, prod-hetz, dev-hetz, dev-aws]
+        default: prod
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  health-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ github.event_name == 'schedule' && fromJSON('["prod", "prod-hetz"]') || fromJSON(format('["{0}"]', inputs.target)) }}
+    name: Health Check ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup secrets
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          PROD_EIP: ${{ secrets.PROD_EIP }}
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2>/dev/null
+          echo "TG_TOKEN=$TG_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Resolve server IP
+        id: server-ip
+        run: |
+          ENV="${{ matrix.target }}"
+          case "$ENV" in
+            prod)
+              IP="${{ secrets.PROD_EIP }}"
+              if [[ "$IP" == eipalloc-* ]]; then
+                export AWS_ACCESS_KEY_ID="${{ secrets.PROD_ACCESS_KEY }}"
+                export AWS_SECRET_ACCESS_KEY="${{ secrets.PROD_SECRET_KEY }}"
+                export AWS_DEFAULT_REGION="${{ secrets.PROD_REGION }}"
+                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
+                     --query 'Addresses[0].PublicIp' --output text)
+              fi
+              DOMAIN="dreamseed.online"
+              ;;
+            prod-hetz)
+              export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_WORKSPACE="prod-hetz"
+              cd terraform/hetzner
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
+              DOMAIN="dreamseed.online"
+              ;;
+            dev-hetz)
+              export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_WORKSPACE="dev-hetz"
+              cd terraform/hetzner
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
+              DOMAIN="hetz.vitalikuts.online"
+              ;;
+            dev-aws)
+              IP="${{ secrets.DEV_AWS_EIP }}"
+              if [[ "$IP" == eipalloc-* ]]; then
+                export AWS_ACCESS_KEY_ID="${{ secrets.DEV_AWS_ACCESS_KEY }}"
+                export AWS_SECRET_ACCESS_KEY="${{ secrets.DEV_AWS_SECRET_KEY }}"
+                export AWS_DEFAULT_REGION="${{ secrets.DEV_AWS_REGION }}"
+                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
+                     --query 'Addresses[0].PublicIp' --output text)
+              fi
+              DOMAIN="aws.vitalikuts.online"
+              ;;
+          esac
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+          echo "Server: $DOMAIN ($IP)"
+
+      - name: Run health checks
+        id: checks
+        run: |
+          set +e
+          IP="${{ steps.server-ip.outputs.ip }}"
+          DOMAIN="${{ steps.server-ip.outputs.domain }}"
+          SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
+          P=0 W=0 F=0 SKIP=0
+
+          ok()   { echo "[PASS] $1"; ((++P)); }
+          warn() { echo "[WARN] $1"; ((++W)); }
+          fail() { echo "[FAIL] $1"; ((++F)); }
+
+          echo "=== Health Check: $DOMAIN ($IP) ==="
+          echo ""
+
+          # Check SSH reachability first
+          $SSH "true" 2>/dev/null
+          if [ $? -ne 0 ]; then
+            echo "[FAIL] SSH unreachable"
+            fail "SSH connection"
+            echo "test_summary=SSH UNREACHABLE" >> "$GITHUB_OUTPUT"
+            echo "test_fails=1" >> "$GITHUB_OUTPUT"
+            echo "test_warns=0" >> "$GITHUB_OUTPUT"
+            echo "status=failure" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "--- OS & Uptime ---"
+          UPTIME=$($SSH "uptime -p" 2>/dev/null || echo "FAIL")
+          ok "Uptime: $UPTIME"
+          LOAD=$($SSH "uptime | awk -F'load average:' '{print \$2}'" 2>/dev/null || echo "?")
+          ok "Load avg:${LOAD}"
+
+          echo "--- Services ---"
+          for svc in nginx php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
+            if $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active; then
+              ok "$svc"
+            else
+              fail "$svc"
+            fi
+          done
+
+          echo "--- Disk ---"
+          DISK=$($SSH "df -h / | awk 'NR==2 {print \$5,\$4}'" 2>/dev/null || echo "? ?")
+          ok "Disk: $DISK"
+
+          echo "--- Memory ---"
+          MEM=$($SSH "free -h | awk '/^Mem:/ {print \$3\"/\"\$2}'" 2>/dev/null || echo "?")
+          ok "RAM: $MEM"
+
+          echo "--- Reboot required ---"
+          if $SSH "test -f /var/run/reboot-required" 2>/dev/null; then
+            warn "Reboot required (kernel/libc update pending)"
+          else
+            ok "No reboot required"
+          fi
+
+          echo "--- SSL ---"
+          if $SSH "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem" 2>/dev/null; then
+            EXPIRY=$($SSH "openssl x509 -in /etc/letsencrypt/live/$DOMAIN/fullchain.pem -noout -enddate 2>/dev/null | cut -d= -f2" || echo "?")
+            ok "SSL cert expires: $EXPIRY"
+          else
+            warn "SSL: self-signed"
+          fi
+
+          echo "--- HTTP ---"
+          HTTP=$($SSH "curl -sk -o /dev/null -w '%{http_code}' https://localhost/" 2>/dev/null || echo "000")
+          if [ "$HTTP" = "200" ]; then
+            ok "HTTPS $HTTP"
+          else
+            warn "HTTPS $HTTP"
+          fi
+
+          echo "--- Monitoring ---"
+          $SSH "curl -sf http://127.0.0.1:8428/health" > /dev/null 2>&1 && ok "VictoriaMetrics" || warn "VictoriaMetrics"
+          $SSH "curl -sf http://127.0.0.1:9100/metrics 2>/dev/null | grep -q node_cpu" && ok "Node Exporter" || warn "Node Exporter"
+          $SSH "curl -sf http://127.0.0.1:9113/metrics 2>/dev/null | grep -q nginx" && ok "Nginx Exporter" || warn "Nginx Exporter"
+          $SSH "curl -sf http://127.0.0.1:9104/metrics 2>/dev/null | grep -q mysql" && ok "MySQL Exporter" || warn "MySQL Exporter"
+
+          echo "--- MODX ---"
+          $SSH "test -f /var/www/html/index.php" && ok "index.php exists" || fail "index.php missing"
+          $SSH "test -f /var/www/html/core/config/config.inc.php" && ok "Config exists" || fail "Config missing"
+          CACHE=$($SSH "ls /var/www/html/core/cache/ 2>/dev/null | wc -l" || echo "0")
+          ok "Cache entries: $CACHE"
+
+          echo "--- DB ---"
+          TABLES=$($SSH "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"'" 2>/dev/null || echo "0")
+          [ "${TABLES:-0}" -ge 50 ] && ok "DB tables: $TABLES" || warn "DB tables: $TABLES"
+
+          echo "--- Fail2ban ---"
+          for jail in modx-admin grafana; do
+            $SSH "sudo fail2ban-client status $jail 2>/dev/null | grep -q 'Total banned'" && ok "fail2ban $jail" || warn "fail2ban $jail: MISSING"
+          done
+
+          echo ""
+          echo "test_summary=P:${P} F:${F} W:${W}" >> "$GITHUB_OUTPUT"
+          echo "test_fails=${F}" >> "$GITHUB_OUTPUT"
+          echo "test_warns=${W}" >> "$GITHUB_OUTPUT"
+          [ "$F" -eq 0 ] || echo "status=failure" >> "$GITHUB_OUTPUT"
+
+      - name: Notify
+        if: always()
+        env:
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+        run: |
+          SUMMARY="${{ steps.checks.outputs.test_summary }}"
+          FAILS="${{ steps.checks.outputs.test_fails }}"
+          WARNS="${{ steps.checks.outputs.test_warns }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+
+          [ "$FAILS" = "0" ] && STATUS="✅" || STATUS="❌"
+          MSG="${STATUS} *Monthly Health Check* — ${{ matrix.target }}
+          📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${ELAPSED}s
+          🖥 ${{ steps.server-ip.outputs.domain }} (${{ steps.server-ip.outputs.ip }})
+
+          ${SUMMARY}
+          Failures: ${FAILS}  Warnings: ${WARNS}"
+
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=Markdown" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          IP="${{ steps.server-ip.outputs.ip }}"
+          DOMAIN="${{ steps.server-ip.outputs.domain }}"
+          SUMMARY="${{ steps.checks.outputs.test_summary }}"
+          FAILS="${{ steps.checks.outputs.test_fails }}"
+          WARNS="${{ steps.checks.outputs.test_warns }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          [ "$FAILS" = "0" ] && STATUS="✅" || STATUS="❌"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Monthly Health Check ${STATUS}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Target** | ${{ matrix.target }} |" >> "$M"
+          echo "| **Domain** | ${DOMAIN} |" >> "$M"
+          echo "| **Server** | ${IP} |" >> "$M"
+          echo "| **Duration** | ${ELAPSED}s |" >> "$M"
+          echo "| **Result** | ${SUMMARY} |" >> "$M"
+          echo "| **Fails** | ${FAILS} |" >> "$M"
+          echo "| **Warns** | ${WARNS} |" >> "$M"
