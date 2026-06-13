@@ -105,72 +105,46 @@ jobs:
           echo "ip=$IP" >> "$GITHUB_OUTPUT"
           echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
 
-      - name: Update apt packages (safe subset)
+      - name: Update all packages
         id: update
         run: |
           set +e
           IP="${{ steps.server-ip.outputs.ip }}"
           SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
 
-          echo "=== SSH connectivity ==="
           $SSH "true" 2>/dev/null
           if [ $? -ne 0 ]; then
-            echo "UPDATE_STATUS=unreachable" >> "$GITHUB_ENV"
-            echo "test_summary=SSH UNREACHABLE" >> "$GITHUB_OUTPUT"
-            echo "test_updated=0" >> "$GITHUB_OUTPUT"
-            echo "test_pending=0" >> "$GITHUB_OUTPUT"
-            echo "test_reboot=unknown" >> "$GITHUB_OUTPUT"
+            echo "::notice::SSH unreachable"
+            echo "status=unreachable" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "=== Before: upgradable packages ==="
-          UPGRADABLE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...' | sed 's/\/.*//'")
-          TOTAL=$(echo "$UPGRADABLE" | grep -c .)
-          echo "Total upgradable: $TOTAL"
-          echo "$UPGRADABLE" | sed 's/^/- /'
+          echo "=== Before: available updates ==="
+          BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
+          TOTAL=$(echo "$BEFORE" | grep -c .)
+          SECURITY=$($SSH "apt list --upgradable 2>/dev/null | grep -c '\-security' || true")
+          echo "Total: $TOTAL ($SECURITY security)"
 
-          echo "=== Running apt update ==="
-          $SSH "sudo apt update -qq" 2>&1 | tail -1
+          echo "=== Running apt upgrade ==="
+          $SSH "sudo apt-get update -qq && sudo apt-get upgrade -y 2>&1" | tail -5
 
-          echo "=== Upgrading safe packages ==="
-          SAFE_PKGS="nginx certbot fail2ban openssl rclone jq rsync unzip bind9-dnsutils python3-pymysql debsums apt-show-versions"
-          UPGRADE_OUTPUT=$($SSH "sudo apt-get install --only-upgrade -y $SAFE_PKGS 2>&1")
-          UPDATED=$(echo "$UPGRADE_OUTPUT" | grep "^Setting up " | sed 's/Setting up //;s/ (.*\.\.\.)//' || true)
-          UPDATED_COUNT=$(echo "$UPDATED" | grep -c .)
-          echo "Updated: $UPDATED_COUNT packages"
-          [ -n "$UPDATED" ] && echo "$UPDATED" | sed 's/^/- /' || echo "(none)"
+          echo "=== After: remaining updates ==="
+          AFTER=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
+          AFTER_COUNT=$(echo "$AFTER" | grep -c .)
+          echo "Remaining: $AFTER_COUNT"
 
-          echo "=== Still pending (skipped: php, mariadb, kernel...) ==="
-          BEFORE_LIST=$(echo "$UPGRADABLE" | sort)
-          AFTER_LIST=$(echo "$UPDATED" | sed 's/ .*//' | sort)
-          PENDING=$(comm -23 <(echo "$BEFORE_LIST") <(echo "$AFTER_LIST") 2>/dev/null || echo "$UPGRADABLE")
-          PENDING_COUNT=$(echo "$PENDING" | grep -c .)
-          [ "$PENDING_COUNT" -gt 0 ] && echo "$PENDING" | sed 's/^/- /' || echo "(none)"
+          echo "=== Reboot required ==="
+          $SSH "test -f /var/run/reboot-required" 2>/dev/null && echo "REBOOT REQUIRED" || echo "No reboot needed"
 
-          echo "=== Reboot check ==="
-          $SSH "test -f /var/run/reboot-required" 2>/dev/null && REBOOT="yes" || REBOOT="no"
-          [ "$REBOOT" = "yes" ] && echo "⚠️ Reboot required" || echo "No reboot needed"
-
-          echo "=== Restarting updated services ==="
-          $SSH "sudo systemctl restart nginx fail2ban 2>/dev/null; echo done"
-
-          echo "=== Verifying services ==="
-          for svc in nginx php8.3-fpm mariadb victoria-metrics grafana-server; do
+          echo "=== Services check ==="
+          for svc in nginx php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
             $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active && echo "[OK] $svc" || echo "[FAIL] $svc"
           done
 
-          echo "updated_count=$UPDATED_COUNT" >> "$GITHUB_OUTPUT"
-          echo "updated_list<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$UPDATED" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "pending_count=$PENDING_COUNT" >> "$GITHUB_OUTPUT"
-          echo "pending_list<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$PENDING" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "total_count=$TOTAL" >> "$GITHUB_OUTPUT"
-          echo "reboot=$REBOOT" >> "$GITHUB_OUTPUT"
-          echo "test_summary=$TOTAL available → $UPDATED_COUNT updated ($PENDING_COUNT pending)" >> "$GITHUB_OUTPUT"
-          echo "UPDATE_STATUS=ok" >> "$GITHUB_ENV"
+          echo "status=ok" >> "$GITHUB_OUTPUT"
+          echo "before=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "security=$SECURITY" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER_COUNT" >> "$GITHUB_OUTPUT"
 
       - name: Notify
         if: always()
@@ -178,20 +152,20 @@ jobs:
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
-          STATUS_ICON="✅"; [ "${{ env.UPDATE_STATUS }}" = "unreachable" ] && STATUS_ICON="❌"
-          SUMMARY="${{ steps.update.outputs.test_summary }}"
-          UPDATED_COUNT="${{ steps.update.outputs.updated_count }}"
-          PENDING_COUNT="${{ steps.update.outputs.pending_count }}"
-          REBOOT="${{ steps.update.outputs.reboot }}"
+          STATUS="${{ steps.update.outputs.status }}"
+          BEFORE="${{ steps.update.outputs.before }}"
+          AFTER="${{ steps.update.outputs.after }}"
+          SECURITY="${{ steps.update.outputs.security }}"
+          DOMAIN="${{ steps.server-ip.outputs.domain }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
-          REBOOT_LINE=""; [ "$REBOOT" = "yes" ] && REBOOT_LINE=" ⚠️ Reboot required"
-          MSG="${STATUS_ICON} *Weekly Update* — ${{ matrix.target }}
-          📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${ELAPSED}s
-          🖥 ${{ steps.server-ip.outputs.domain }}
-
-          Updated: ${UPDATED_COUNT:-0}
-          Pending: ${PENDING_COUNT:-0}${REBOOT_LINE}"
+          if [ "$STATUS" = "unreachable" ]; then
+            MSG="❌ *Server Update* — ${{ matrix.target }}\n📅 $(date '+%Y-%m-%d %H:%M')\nSSH unreachable"
+          elif [ "${BEFORE:-0}" = "0" ]; then
+            MSG="✅ *Server Update* — ${{ matrix.target }}\n📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s\n🖥 ${DOMAIN}\nNo updates available"
+          else
+            MSG="✅ *Server Update* — ${{ matrix.target }}\n📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s\n🖥 ${DOMAIN}\n\nBefore: ${BEFORE} (${SECURITY} security)\nAfter:  ${AFTER} remaining"
+          fi
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
@@ -202,26 +176,22 @@ jobs:
       - name: Write job summary
         if: always()
         run: |
-          IP="${{ steps.server-ip.outputs.ip }}"
           DOMAIN="${{ steps.server-ip.outputs.domain }}"
-          STATUS="${{ env.UPDATE_STATUS }}"
-          TOTAL="${{ steps.update.outputs.total_count }}"
-          UPDATED_COUNT="${{ steps.update.outputs.updated_count }}"
-          PENDING_COUNT="${{ steps.update.outputs.pending_count }}"
-          REBOOT="${{ steps.update.outputs.reboot }}"
+          IP="${{ steps.server-ip.outputs.ip }}"
+          STATUS="${{ steps.update.outputs.status }}"
+          BEFORE="${{ steps.update.outputs.before }}"
+          AFTER="${{ steps.update.outputs.after }}"
+          SECURITY="${{ steps.update.outputs.security }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
           M="$GITHUB_STEP_SUMMARY"
-          echo "## Weekly Server Update" >> "$M"
+          echo "## Weekly Server Update — ${{ matrix.target }}" >> "$M"
           echo "" >> "$M"
           echo "| | |" >> "$M"
           echo "|---|---|" >> "$M"
-          echo "| **Target** | ${{ matrix.target }} |" >> "$M"
           echo "| **Domain** | ${DOMAIN} |" >> "$M"
           echo "| **Server** | ${IP} |" >> "$M"
           echo "| **Duration** | ${ELAPSED}s |" >> "$M"
           echo "| **Status** | ${STATUS} |" >> "$M"
-          echo "| **Available** | ${TOTAL} |" >> "$M"
-          echo "| **Updated** | ${UPDATED_COUNT:-0} |" >> "$M"
-          echo "| **Pending** | ${PENDING_COUNT:-0} |" >> "$M"
-          echo "| **Reboot** | ${REBOOT} |" >> "$M"
+          echo "| **Before** | ${BEFORE:-?} (${SECURITY:-?} security) |" >> "$M"
+          echo "| **After** | ${AFTER:-?} remaining |" >> "$M"
