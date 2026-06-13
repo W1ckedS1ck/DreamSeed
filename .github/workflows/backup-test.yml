@@ -857,3 +857,60 @@ jobs:
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          set -a
+          source secrets/.env
+          set +a
+
+          ok_yn() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
+
+          RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
+          RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
+          RESTORE_TIME="${{ steps.restore.outputs.restore_duration }}"
+          TESTS="${{ steps.service_tests.outcome }}"
+          ROWS="${{ steps.verify_content.outputs.restore_content_rows }}"
+          TABLES="${{ steps.verify_content.outputs.restore_table_count }}"
+          HTTP_CODE="${{ steps.verify_content.outputs.restore_http_code }}"
+          SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
+          FAILS="${{ steps.service_tests.outputs.test_fails }}"
+          BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+${{ steps.verify_backup.outputs.db_count }}"
+          PROJ_HASH_OK="${{ steps.validate_hash.outputs.project_hash_match }}"
+          DB_HASH_OK="${{ steps.validate_hash.outputs.db_hash_match }}"
+          SSL_STATUS="${{ steps.ssl.outputs.ssl_status }}"
+          DISK_USAGE="${{ steps.disk.outputs.disk_usage }}"
+          DESTROY_OK="${{ steps.destroy.outcome }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
+          [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_LINE="⚠️ **${FAILS}**" || FAIL_LINE=""
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Backup Restoration Test ${{ job.status == 'success' && '✅' || '❌' }}
+
+          | | |
+          |---|---|
+          | **Commit** | \`${{ github.sha }}\` on \`${{ github.head_ref || github.ref_name }}\` |
+          | **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |
+          | **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |
+          | **SSL** | ${SSL_STATUS} |
+          | **Disk** | ${DISK_USAGE}% |
+
+          ### Backup
+          | Metric | Status |
+          |---|---|
+          | Local files | $BACKUP_FILES |
+          | GDrive | ${{ steps.gdrive_upload.outputs.gdrive_status }} |
+          | Hash match | $(ok_yn "$PROJ_HASH_OK") $(ok_yn "$DB_HASH_OK") project/DB |
+
+          ### Restore
+          | Metric | Value |
+          |---|---|
+          | Result | $RESTORE_OK |
+          | Content rows | $ROWS |
+          | DB tables | $TABLES |
+          | HTTP code | $HTTP_CODE |
+          | Duration | ${RESTORE_TIME} |
+
+          ### Service Tests: ${SUMMARY} ${FAIL_LINE}
+          EOF
