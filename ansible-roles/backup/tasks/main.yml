@@ -51,37 +51,11 @@
     - "{{ backup_dir }}/db"
 
 - name: Upload backup scripts
-  ansible.posix.synchronize:
-    src: "{{ scripts_dir }}/"
-    dest: "{{ scripts_dir_remote }}/"
-    rsync_opts:
-      - "--include=smart_backup.sh"
-      - "--include=upload_backups_to_gdrive.sh"
-      - "--include=verify_backups.sh"
-      - "--include=RESTORE_ALL.sh"
-      - "--include=send_report.sh"
-      - "--include=common_functions.sh"
-      - "--include=env_loader.py"
-      - "--include=telegram_bot.py"
-      - "--exclude=*"
-    owner: false
-    group: false
-    perms: false
-    delete: false
-  vars:
-    ansible_rsync_path: /usr/bin/rsync
-
-- name: Fix ownership on uploaded scripts
-  ansible.builtin.file:
-    path: "{{ scripts_dir_remote }}"
-    state: directory
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/{{ item }}"
+    dest: "{{ scripts_dir_remote }}/{{ item }}"
     owner: ubuntu
     group: ubuntu
-    recurse: true
-
-- name: Set executable bit on uploaded scripts
-  ansible.builtin.file:
-    path: "{{ scripts_dir_remote }}/{{ item }}"
     mode: "0755"
   loop:
     - smart_backup.sh
