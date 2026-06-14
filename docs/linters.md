@@ -16,7 +16,7 @@ There are 2 layers of linting:
 | 1 | **ShellCheck** | local + CI | `deploy.sh`, `scripts/*.sh`, `.github/scripts/*.sh` | Bash |
 | 2 | **ruff** | local + CI | `scripts/telegram_bot.py`, `scripts/env_loader.py` | Python |
 | 3 | **ansible-lint** | local + CI | `ansible/playbook-*.yml`, `ansible-roles/*/tasks/*.yml` | YAML/Ansible |
-| 4 | **tflint** | CI | `terraform/aws/*.tf`, `terraform/hetzner/*.tf` | HCL/Terraform |
+| 4 | **tflint** | local + CI | `terraform/aws/*.tf`, `terraform/hetzner/*.tf`, `terraform/grafana/*.tf` | HCL/Terraform |
 | 5 | **terraform validate** | CI | `*.tf` syntax | HCL |
 | 6 | **Trivy** | CI | Security misconfigurations in `terraform/` | IaC Security |
 | 7 | **gitleaks** | CI | Secret scanning across full git history | Git |

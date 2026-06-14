@@ -280,7 +280,7 @@ DreamSeed/
 │   └── group_vars/all.yml
 ├── ansible-roles/         # 15 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks
-├── .tflint.hcl            # Terraform linter config (+ AWS ruleset plugin)
+├── .tflint.hcl            # Terraform linter config (root, drives all providers)
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/
 └── configs/               # fail2ban jails
 ```

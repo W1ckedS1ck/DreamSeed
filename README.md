@@ -35,7 +35,7 @@
 |--------|-------|
 | Deploy time | ~8-15 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
-| Backup frequency (RPO) | 1 hour → Google Drive, 5/15 versions retained |
+| Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
 | Uptime coverage | 16 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
 | CI checks per push | 9 parallel jobs (lint → security → validate) |
 
@@ -63,7 +63,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 | Layer | Tools |
 |---|---|
-| **Infrastructure** | Terraform / OpenTofu · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
+| **Infrastructure** | Terraform · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
@@ -163,7 +163,7 @@ DreamSeed/
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
 ├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
-├── .tflint.hcl               # Terraform linter config (root) + terraform/aws/.tflint.hcl (AWS ruleset)
+├── .tflint.hcl               # Terraform linter config (root, drives all providers)
 ├── renovate.json              # Automated dependency update config
 └── .github/workflows/
     ├── ci.yml                # Full lint + security + validation pipeline

@@ -9,8 +9,8 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | Secret | Purpose | Source | Used in |
 |--------|---------|--------|---------|
 | `TG_TOKEN` | Telegram bot token | BotFather | `deploy.yml`, `backup-test.yml`, `rollback.yml`, ansible (telegram-bot), scripts |
-| `TG_CHAT_ID` | Telegram chat ID | BotFather | Same |
-| `TG_THREAD_ID` | Telegram thread (forum topic) | BotFather | Same |
+| `TG_CHAT_ID` | Telegram chat ID (GitHub `vars`, not `secrets`) | BotFather | Same |
+| `TG_THREAD_ID` | Telegram thread (GitHub `vars`, not `secrets`) | BotFather | Same |
 | `DB_PASS` | MySQL password for MODX | You | `deploy.sh`, ansible (mariadb), scripts |
 | `GRAFANA_PASS` | Grafana admin password | You | `deploy.sh`, ansible (grafana) |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS-01 certbot + auto DNS update) | Cloudflare Dashboard | `deploy.sh`, `backup-test.yml`, ansible (certbot) |

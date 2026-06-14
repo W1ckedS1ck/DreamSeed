@@ -35,7 +35,7 @@ sudo cat /var/log/cloud-init-output.log
 
 If Hetzner `user_data` script failed (e.g., `apt update` timeout):
 
-- The cloud-init script is in `terraform/hetzner/main.tf` under `user_data`
+- The cloud-init script is in `terraform/hetzner/cloud-init.tftpl` (template rendered by Terraform `templatefile()`, see `main.tf`)
 - Common: apt repo timeout, `ADDITIONAL_SSH_KEYS` contains invalid key
 - Fix: fix the issue, then `./deploy.sh <target> -n -i <ip> --no-dns` (re-run Ansible only)
 

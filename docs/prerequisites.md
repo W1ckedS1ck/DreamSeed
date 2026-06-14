@@ -8,7 +8,7 @@ These are checked by `deploy.sh` on every run:
 
 | Tool | Required for | Install |
 |------|-------------|---------|
-| `terraform` or `tofu` (OpenTofu) | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
+| `terraform` | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
 | `ansible-playbook` | Configure server (all 7 playbooks) | `pip install ansible==14.0.0` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
