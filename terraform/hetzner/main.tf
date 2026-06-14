@@ -75,7 +75,7 @@ data "hcloud_primary_ip" "main" {
 resource "hcloud_primary_ip" "main" {
   count             = local.create_primary_ip ? 1 : 0
   name              = "dreamseed-main-${var.environment}"
-  datacenter        = "${var.location}-dc1"
+  location          = var.location
   type              = "ipv4"
   auto_delete       = false
   labels            = local.labels
