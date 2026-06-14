@@ -42,18 +42,6 @@
     mode: "0755"
   become: true
 
-- name: Set Grafana Go memory limit
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/grafana-server.service.d/memory.conf
-    content: |
-      [Service]
-      Environment="GOMEMLIMIT={{ grafana_memory_limit }}"
-    mode: "0644"
-  become: true
-  notify:
-    - Reload systemd
-    - Restart Grafana
-
 - name: Deploy Grafana admin password env file
   ansible.builtin.copy:
     dest: /etc/grafana/grafana.env
