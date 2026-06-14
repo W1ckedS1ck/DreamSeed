@@ -20,12 +20,10 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
-| [aws_eip_association.web](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eip_association) | resource |
 | [aws_instance.web](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance) | resource |
 | [aws_key_pair.deploy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/key_pair) | resource |
 | [aws_security_group.web](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 | [aws_ami.ubuntu](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami) | data source |
-| [aws_eip.reserved](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/eip) | data source |
 
 ## Inputs
 
