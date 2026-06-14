@@ -91,6 +91,10 @@ resource "hcloud_server" "main" {
   firewall_ids      = [hcloud_firewall.web.id]
   delete_protection = var.environment == "prod-hetz"
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   public_net {
     ipv4_enabled = true
     ipv6_enabled = true
