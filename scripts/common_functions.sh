@@ -36,7 +36,7 @@ load_env() {
 
 detect_env() {
     if [[ -f "$SCRIPT_DIR/.env" ]]; then
-        grep -q "^ENV=prod" "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
+        grep -qE '^ENV="?prod' "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
     else
         local h
         h=$(hostname)
