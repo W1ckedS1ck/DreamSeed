@@ -60,7 +60,7 @@
     - {path: /etc/cron.weekly, mode: "0700"}
     - {path: /etc/cron.monthly, mode: "0700"}
     - {path: /etc/ssh/sshd_config, mode: "0600"}
-    - {path: /etc/at.deny, mode: "0600"}
+
 
 # --- Authorized Keys ---
 - name: Add additional SSH public keys
