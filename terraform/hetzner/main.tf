@@ -73,22 +73,22 @@ data "hcloud_primary_ip" "main" {
 }
 
 resource "hcloud_primary_ip" "main" {
-  count             = local.create_primary_ip ? 1 : 0
-  name              = "dreamseed-main-${var.environment}"
-  location          = var.location
-  type              = "ipv4"
-  auto_delete       = false
-  labels            = local.labels
+  count       = local.create_primary_ip ? 1 : 0
+  name        = "dreamseed-main-${var.environment}"
+  location    = var.location
+  type        = "ipv4"
+  auto_delete = false
+  labels      = local.labels
 }
 
 resource "hcloud_server" "main" {
-  name              = "dreamseed-${var.environment}"
-  server_type       = var.server_type
-  image             = "ubuntu-24.04"
-  location          = var.location
-  labels            = local.labels
-  ssh_keys          = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
-  firewall_ids      = [hcloud_firewall.web.id]
+  name         = "dreamseed-${var.environment}"
+  server_type  = var.server_type
+  image        = "ubuntu-24.04"
+  location     = var.location
+  labels       = local.labels
+  ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
+  firewall_ids = [hcloud_firewall.web.id]
   lifecycle {
     create_before_destroy = true
   }
