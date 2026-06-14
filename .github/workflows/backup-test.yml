@@ -81,7 +81,7 @@ jobs:
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
-        # TG_CHAT_ID, TG_THREAD_ID — из vars, не маскируются
+        # TG_CHAT_ID, TG_THREAD_ID — from vars, not masked
         # DEV/PROD_GRAFANA_CLOUD_USERNAME excluded from env:
         # because they are pure integers that trigger substring masking in GitHub Actions.
         run: |

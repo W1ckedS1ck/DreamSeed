@@ -25,6 +25,11 @@ variable "primary_ip_name" {
 variable "environment" {
   description = "Deployment environment (prod, dev-hetz, etc.) — used in resource names to avoid conflicts"
   type        = string
+
+  validation {
+    condition     = can(regex("^(prod|dev|test)(-[a-z]+)?$", var.environment))
+    error_message = "Must match {type}[-{provider}], e.g. prod, dev-aws, prod-hetz, test"
+  }
 }
 
 variable "server_type" {
@@ -34,9 +39,14 @@ variable "server_type" {
 }
 
 variable "location" {
-  description = "Hetzner datacenter location (nbg1, fsn1, hel1, etc.)"
+  description = "Hetzner datacenter location (nbg1, fsn1, hel1, ash)"
   type        = string
   default     = "nbg1"
+
+  validation {
+    condition     = contains(["nbg1", "fsn1", "hel1", "ash"], var.location)
+    error_message = "Must be one of: nbg1, fsn1, hel1, ash"
+  }
 }
 
 variable "additional_ssh_keys" {

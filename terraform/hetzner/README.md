@@ -35,7 +35,7 @@ No modules.
 | <a name="input_enable_primary_ip"></a> [enable\_primary\_ip](#input\_enable\_primary\_ip) | Create a new Primary IP in Hetzner Cloud (only when primary\_ip\_name is empty) | `bool` | `false` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Deployment environment (prod, dev-hetz, etc.) — used in resource names to avoid conflicts | `string` | n/a | yes |
 | <a name="input_hcloud_token"></a> [hcloud\_token](#input\_hcloud\_token) | Hetzner Cloud API token | `string` | n/a | yes |
-| <a name="input_location"></a> [location](#input\_location) | Hetzner datacenter location (nbg1, fsn1, hel1, etc.) | `string` | `"nbg1"` | no |
+| <a name="input_location"></a> [location](#input\_location) | Hetzner datacenter location (nbg1, fsn1, hel1, ash) | `string` | `"nbg1"` | no |
 | <a name="input_primary_ip_name"></a> [primary\_ip\_name](#input\_primary\_ip\_name) | Name of the existing Primary IP in Hetzner Cloud. Empty = dynamic IP | `string` | `""` | no |
 | <a name="input_server_type"></a> [server\_type](#input\_server\_type) | Hetzner server type (cx23, cx33, etc.) | `string` | `"cx23"` | no |
 | <a name="input_ssh_key_name"></a> [ssh\_key\_name](#input\_ssh\_key\_name) | Name of an existing SSH key in Hetzner Cloud. Empty = create from ssh\_public\_key | `string` | `""` | no |

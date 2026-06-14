@@ -92,7 +92,7 @@ export_tf_env() {
         [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && export TF_VAR_primary_ip_name="$HETZNER_PRIMARY_IP_NAME"
         [[ -n "${HETZNER_ENABLE_PRIMARY_IP:-}" ]] && export TF_VAR_enable_primary_ip="$HETZNER_ENABLE_PRIMARY_IP"
         # Build list of additional SSH keys: deploy key + ADDITIONAL_SSH_KEYS env var
-        export TF_VAR_additional_ssh_keys=$(python3 -c "
+        export TF_VAR_additional_ssh_keys="$(python3 -c "
 import os, json
 keys = []
 pk_path = os.environ.get('SSH_PUBLIC_KEY_PATH', '')
@@ -108,7 +108,7 @@ if additional:
         if k and k not in keys:
             keys.append(k)
 print(json.dumps(keys))
-")
+")"
         # Also export ssh_public_key for TF to create CI key if needed
         # NOTE: TF_VAR_additional_ssh_keys is already set above (includes deploy key + ADDITIONAL_SSH_KEYS)
         if [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then

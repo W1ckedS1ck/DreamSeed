@@ -45,14 +45,13 @@ Playbook 02 (web) handles SSL. Three modes, tried in order:
 
 1. **Restore from `secrets/ssl/`** — copies cert files from local repo
 2. **Cloudflare DNS-01** — requires `CLOUDFLARE_API_TOKEN` to be set
-3. **Certbot webroot** — needs DNS pointing to server (checked via `dig @8.8.8.8`)
+3. **Self-signed** — fallback for origin cert (Cloudflare edge serves real cert)
 
 ```
 ssl: mode=MODE → details
   MODE=local-restore   → cert restored from secrets/ssl/
   MODE=dns-cloudflare  → cert issued via DNS-01 challenge
-  MODE=webroot         → cert issued via HTTP-01 (needs DNS)
-  MODE=self-signed     → fallback, browser shows warning
+  MODE=self-signed     → fallback for origin (Cloudflare handles edge SSL)
 ```
 
 If SSL fails → check:

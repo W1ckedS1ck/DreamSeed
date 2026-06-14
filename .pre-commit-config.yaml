@@ -19,6 +19,7 @@ repos:
       - id: shellcheck
         args: [--severity=error]
         types: [shell]
+        exclude: \.tftpl$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.10

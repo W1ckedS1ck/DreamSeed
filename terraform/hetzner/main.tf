@@ -98,24 +98,10 @@ resource "hcloud_server" "main" {
     ipv4         = local.use_existing_ip ? data.hcloud_primary_ip.main[0].id : (local.create_primary_ip ? hcloud_primary_ip.main[0].id : null)
   }
 
-  user_data = <<EOF
-#!/bin/bash
-set -e
-hostnamectl set-hostname dreamseed-${var.environment}
-if ! id ubuntu &>/dev/null; then
-  useradd -m -s /bin/bash -G sudo ubuntu
-  echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
-fi
-%{if length(var.additional_ssh_keys) > 0~}
-mkdir -p /home/ubuntu/.ssh
-%{for key in var.additional_ssh_keys~}
-echo '${base64encode(key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
-%{endfor~}
-chmod 600 /home/ubuntu/.ssh/authorized_keys
-chown -R ubuntu:ubuntu /home/ubuntu/.ssh
-%{endif~}
-apt-get update -qq
-EOF
+  user_data = templatefile("${path.module}/cloud-init.tftpl", {
+    environment         = var.environment
+    additional_ssh_keys = var.additional_ssh_keys
+  })
 }
 
 check "workspace_valid_for_hetzner" {
