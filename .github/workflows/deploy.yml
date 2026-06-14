@@ -84,6 +84,13 @@ jobs:
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" || true
           [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.DEV_AWS_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_ACCESS_KEY }}" || true
+          [[ -n "${{ secrets.DEV_AWS_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_SECRET_KEY }}" || true
+          [[ -n "${{ secrets.DEV_AWS_EIP }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_EIP }}" || true
+          [[ -n "${{ secrets.PROD_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_ACCESS_KEY }}" || true
+          [[ -n "${{ secrets.PROD_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_SECRET_KEY }}" || true
+          [[ -n "${{ secrets.PROD_EIP }}" ]] && echo "::add-mask::${{ secrets.PROD_EIP }}" || true
+
           # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
           # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
           # because they are pure integers that corrupt log output (IPs, timestamps, counts)
@@ -106,6 +113,14 @@ jobs:
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
+          PROD_EIP: ${{ secrets.PROD_EIP }}
         run: |
           mkdir -p secrets ~/.ssh
 
@@ -130,6 +145,16 @@ jobs:
             echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_PUSH_URL"
             echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
+
+            # AWS credentials (per-target)
+            echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
+            echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
+            echo "DEV_AWS_REGION=$DEV_AWS_REGION"
+            echo "DEV_AWS_EIP=$DEV_AWS_EIP"
+            echo "PROD_ACCESS_KEY=$PROD_ACCESS_KEY"
+            echo "PROD_SECRET_KEY=$PROD_SECRET_KEY"
+            echo "PROD_REGION=$PROD_REGION"
+            echo "PROD_EIP=$PROD_EIP"
 
             # Hetzner SSH key and Primary IP (per-target)
             echo "DEV_HETZ_SSH_KEY_NAME=Vitali"
