@@ -82,8 +82,8 @@ jobs:
           [[ -n "${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.VITALI_SSH_PUBLIC_KEY }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" || true
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_URL }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" || true
           [[ -n "${{ secrets.DEV_AWS_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_ACCESS_KEY }}" || true
           [[ -n "${{ secrets.DEV_AWS_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_SECRET_KEY }}" || true
           [[ -n "${{ secrets.DEV_AWS_EIP }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_EIP }}" || true
@@ -111,8 +111,8 @@ jobs:
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
-          PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
-          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          PROD_GRAFANA_CLOUD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
+          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
           DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
@@ -142,7 +142,7 @@ jobs:
             echo "DEV_GRAFANA_CLOUD_USERNAME=${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
             echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
 
-            echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_PUSH_URL"
+            echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_URL"
             echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
 
