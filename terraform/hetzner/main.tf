@@ -79,7 +79,8 @@ resource "hcloud_primary_ip" "main" {
   type              = "ipv4"
   auto_delete       = false
   labels            = local.labels
-  delete_protection = var.environment == "prod-hetz"
+  delete_protection  = var.environment == "prod-hetz"
+  rebuild_protection = var.environment == "prod-hetz"
 }
 
 resource "hcloud_server" "main" {
@@ -90,7 +91,8 @@ resource "hcloud_server" "main" {
   labels            = local.labels
   ssh_keys          = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
   firewall_ids      = [hcloud_firewall.web.id]
-  delete_protection = var.environment == "prod-hetz"
+  delete_protection  = var.environment == "prod-hetz"
+  rebuild_protection = var.environment == "prod-hetz"
 
   public_net {
     ipv4_enabled = true
