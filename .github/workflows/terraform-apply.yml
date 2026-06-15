@@ -1,0 +1,85 @@
+name: Terraform Apply (no Ansible)
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Cloud provider'
+        required: true
+        type: choice
+        options: [aws, hetzner]
+      workspace:
+        description: 'Terraform workspace'
+        required: true
+        type: choice
+        options: [dev-aws, prod, dev-hetz, prod-hetz]
+      mode:
+        description: 'Apply mode'
+        required: true
+        type: choice
+        options: [apply, refresh-only]
+        default: apply
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+
+jobs:
+  apply:
+    name: TF ${{ inputs.mode }} ${{ inputs.workspace }} (${{ inputs.provider }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Set provider env vars
+        run: |
+          echo "TF_DIR=terraform/${{ inputs.provider }}" >> "$GITHUB_ENV"
+          echo "TF_WORKSPACE=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          if [ "${{ inputs.provider }}" = "aws" ]; then
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
+            echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+            echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+            echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" >> "$GITHUB_ENV"
+          fi
+          if [ "${{ inputs.provider }}" = "hetzner" ]; then
+            echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+            echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -input=false
+
+      - name: Remove stale resources from state
+        if: inputs.mode == 'refresh-only' && inputs.provider == 'hetzner'
+        working-directory: ${{ env.TF_DIR }}
+        continue-on-error: true
+        run: |
+          terraform state rm hcloud_primary_ip.main 2>/dev/null || true
+          terraform state rm hcloud_ssh_key.ci_key 2>/dev/null || true
+          terraform state rm hcloud_ssh_key.ci_key[0] 2>/dev/null || true
+          echo "Stale resources removed from state"
+
+      - name: Terraform ${{ inputs.mode }}
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          MODE_FLAG=""
+          [ "${{ inputs.mode }}" = "refresh-only" ] && MODE_FLAG="-refresh-only"
+          if [ "${{ inputs.provider }}" = "aws" ]; then
+            echo "${{ secrets.DEV_AWS_SSH_PUBLIC_KEY }}" > /tmp/key.pub
+            terraform apply -auto-approve -input=false $MODE_FLAG \
+              -var="ssh_public_key_path=/tmp/key.pub" \
+              -var="environment=${{ inputs.workspace }}"
+          else
+            terraform apply -auto-approve -input=false $MODE_FLAG \
+              -var="ssh_key_name=" \
+              -var="ssh_public_key=" \
+              -var="environment=${{ inputs.workspace }}"
+          fi

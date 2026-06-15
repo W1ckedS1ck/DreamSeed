@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ github.event_name == 'schedule' && fromJSON('["prod", "prod-hetz"]') || fromJSON(format('["{0}"]', inputs.target)) }}
+        target: ${{ github.event_name == 'schedule' && fromJSON('["prod-hetz"]') || fromJSON(format('["{0}"]', inputs.target)) }}
     name: Update ${{ matrix.target }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

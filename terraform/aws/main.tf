@@ -84,6 +84,14 @@ resource "aws_security_group" "web" {
     cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
   }
 
+  egress {
+    description = "SMTP (mail.privateemail.com)"
+    from_port   = 587
+    to_port     = 587
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
+  }
+
   tags = {
     Name = "dreamseed-sg-${var.environment}"
   }

@@ -65,6 +65,20 @@ resource "hcloud_firewall" "web" {
     port            = "123"
     destination_ips = ["0.0.0.0/0", "::/0"]
   }
+
+  rule {
+    direction       = "out"
+    protocol        = "tcp"
+    port            = "587"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction       = "out"
+    protocol        = "tcp"
+    port            = "465"
+    destination_ips = ["0.0.0.0/0", "::/0"]
+  }
 }
 
 data "hcloud_primary_ip" "main" {
@@ -89,9 +103,6 @@ resource "hcloud_server" "main" {
   labels       = local.labels
   ssh_keys     = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]
   firewall_ids = [hcloud_firewall.web.id]
-  lifecycle {
-    create_before_destroy = true
-  }
 
   public_net {
     ipv4_enabled = true

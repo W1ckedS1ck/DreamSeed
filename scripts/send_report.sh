@@ -120,7 +120,7 @@ $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
 
     MSG+="
 
-$(escape_md2 "$(date '+%d.%m.%Y %H:%M')")"
+$(date '+%d.%m.%Y %H:%M')"
 
     send_tg "$MSG"
 
