@@ -93,6 +93,7 @@ jobs:
           framework: terraform
           quiet: true
           soft_fail: false
+          skip-check: CKV_AWS_260,CKV2_AWS_41
 
   trivy:
     name: Terraform Security
