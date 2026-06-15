@@ -8,7 +8,7 @@ These are checked by `deploy.sh` on every run:
 
 | Tool | Required for | Install |
 |------|-------------|---------|
-| `terraform` or `tofu` (OpenTofu) | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
+| `terraform` | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
 | `ansible-playbook` | Configure server (all 7 playbooks) | `pip install ansible==14.0.0` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
@@ -48,10 +48,10 @@ All targets require:
 - `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 + DNS update; zone ID auto-detected)
 - `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
 
-Hetzner dev additionally:
+Hetzner (prefixed per-target, can also fall back to unprefixed vars):
 
-- `HETZNER_SSH_KEY_NAME` — name of existing SSH key in Hetzner Cloud (e.g. `Vitali`)
-- `HETZNER_PRIMARY_IP_NAME` — name of existing Primary IP (optional, uses dynamic IP if empty)
+- `DEV_HETZ_SSH_KEY_NAME` or `PROD_HETZ_SSH_KEY_NAME` — existing SSH key in Hetzner Cloud
+- `DEV_HETZ_PRIMARY_IP_NAME` or `PROD_HETZ_PRIMARY_IP_NAME` — existing Primary IP (optional)
 
 Grafana Cloud (per target):
 

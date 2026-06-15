@@ -81,7 +81,7 @@ jobs:
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
-        # TG_CHAT_ID, TG_THREAD_ID — из vars, не маскируются
+        # TG_CHAT_ID, TG_THREAD_ID — from vars, not masked
         # DEV/PROD_GRAFANA_CLOUD_USERNAME excluded from env:
         # because they are pure integers that trigger substring masking in GitHub Actions.
         run: |
@@ -755,12 +755,16 @@ jobs:
           TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
-          terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log || true
+          set +e
+          terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log
+          tf_exit=${PIPESTATUS[0]}
+          set -e
           sync
-          if grep -q "Destroy complete" /tmp/tf_destroy.log; then
-            echo "Destroy OK"
+          if [[ $tf_exit -ne 0 ]]; then
+            grep -q "Destroy complete" /tmp/tf_destroy.log || { echo "Terraform destroy failed (exit $tf_exit)"; exit 1; }
+            echo "Destroy OK (exit $tf_exit ignored — empty state after destroy)"
           else
-            echo "Destroy exit (ignored — TFC exit code 1 bug)"
+            echo "Destroy OK"
           fi
 
       - name: Cleanup DNS

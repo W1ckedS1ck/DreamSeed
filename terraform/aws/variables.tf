@@ -30,4 +30,9 @@ variable "root_volume_size" {
 variable "environment" {
   description = "Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts"
   type        = string
+
+  validation {
+    condition     = can(regex("^(prod|dev|test)(-[a-z]+)?$", var.environment))
+    error_message = "Must match {type}[-{provider}], e.g. prod, dev-aws, prod-hetz, test"
+  }
 }

@@ -18,8 +18,8 @@
        ├─ 4. Wait for cloud-init
        │      timeout 300s + 15×2s fallback
        │
-       ├─ 5. Generate inventory + vault
-       │      hosts-<workspace>.yml, VAULT_TMP (0600)
+        ├─ 5. Generate inventory + vault
+        │      hosts-<workspace>.yml, DEPLOY_VARS_TMP (0600)
        │
        ├─ 6. Ansible (7 playbooks)
        │      01 Base ─── Packages, swap, PHP, MariaDB
@@ -78,10 +78,10 @@ secrets/.env (plaintext, gitignored)
    │   │        → creates secrets/.env from env vars
    │   │        → copies SSH key, vault password, rclone.conf
    │   │
-   │   └─ deploy.sh → VAULT_TMP (mktemp, 0600)
-   │                  │
-   │                  ▼
-   │                  ansible-playbook --extra-vars @VAULT_TMP
+    │   └─ deploy.sh → DEPLOY_VARS_TMP (mktemp, 0600)
+    │                  │
+    │                  ▼
+    │                  ansible-playbook --extra-vars @DEPLOY_VARS_TMP
    │
    └─ Server-side: /home/ubuntu/Scripts/.env (0600)
 ```
@@ -280,7 +280,7 @@ DreamSeed/
 │   └── group_vars/all.yml
 ├── ansible-roles/         # 15 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks
-├── .tflint.hcl            # Terraform linter config (+ AWS ruleset plugin)
+├── .tflint.hcl            # Terraform linter config (root, drives all providers)
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/
 └── configs/               # fail2ban jails
 ```

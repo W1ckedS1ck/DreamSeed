@@ -99,6 +99,7 @@ if [ $FOUND_PATTERNS -eq 0 ]; then
     echo "  ✅ No hardcoded secrets found"
 else
     echo "  ⚠️  Review patterns above - some may be Ansible variables (safe)"
+    ISSUES=$((ISSUES + 1))
 fi
 echo ""
 

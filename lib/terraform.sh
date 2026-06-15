@@ -93,9 +93,8 @@ terraform_destroy() {
     local tf_exit=${PIPESTATUS[0]}
     set -e
     if [[ $tf_exit -ne 0 ]]; then
-        echo "  ⚠ terraform destroy exited with code $tf_exit (ignored — TFC remote backend exit 1 bug)"
+        grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (exit $tf_exit, check $DEPLOY_TF_LOG)"
     fi
-    grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (check $DEPLOY_TF_LOG)"
     cat "$TF_TMP_OUT" >> "$DEPLOY_TF_LOG" && rm -f "$TF_TMP_OUT"
 
     rm -f "$SCRIPT_DIR/secrets/tfstate-backup/${TF_WORKSPACE}"_*.tfstate 2>/dev/null

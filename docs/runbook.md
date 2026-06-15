@@ -3,7 +3,7 @@
 > For **junior support staff**. Covers all alerts from all layers (Grafana, Better Stack, Scripts).
 > All notifications arrive in a single Telegram chat.
 >
-> Last updated: 2026-06-04
+> Last updated: 2026-06-14
 
 ---
 
@@ -140,7 +140,7 @@ Use cloud console to restart:
 
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
-| 1 | G1–G18 | Grafana (on-server) | CPU, RAM, Disk, Nginx, MySQL, PHP-FPM, Site, MODX, VictoriaMetrics, Backup cron | ❌ No |
+| 1 | G1–G16 | Grafana (on-server) | CPU, RAM, Disk, Nginx, MySQL, PHP-FPM, Site, MODX, VictoriaMetrics, Backup cron | ❌ No |
 | 2 | B1–B7 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (4 heartbeats) | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 

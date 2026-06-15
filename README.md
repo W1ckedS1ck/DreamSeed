@@ -35,9 +35,9 @@
 |--------|-------|
 | Deploy time | ~8-15 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
-| Backup frequency (RPO) | 1 hour → Google Drive, 5/15 versions retained |
+| Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
 | Uptime coverage | 16 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
-| CI checks per push | 8 parallel jobs (lint → security → validate) |
+| CI checks per push | 9 parallel jobs (lint → security → validate) |
 
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
@@ -63,14 +63,14 @@ I own **everything below the application layer** — provisioning, configuration
 
 | Layer | Tools |
 |---|---|
-| **Infrastructure** | Terraform / OpenTofu · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
+| **Infrastructure** | Terraform · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
 | **Configuration** | Ansible (15 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL exporters · 16 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **CI/CD** | GitHub Actions (7 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -163,7 +163,7 @@ DreamSeed/
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
 ├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
-├── .tflint.hcl               # Terraform linter config (root) + terraform/aws/.tflint.hcl (AWS ruleset)
+├── .tflint.hcl               # Terraform linter config (root, drives all providers)
 ├── renovate.json              # Automated dependency update config
 └── .github/workflows/
     ├── ci.yml                # Full lint + security + validation pipeline
@@ -226,17 +226,17 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 6 Workflows + Renovate
+### 🧪 CI/CD Pipeline — 7 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 8 parallel checks | Every PR + push to main |
+| **CI** — 9 parallel checks | Every PR + push to main |
 | **Deploy** — single-click deploy | Manual dispatch (all targets) |
 | **Backup Test** — full restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
-| **Test Bench** — Hetzner server benchmark | Manual dispatch |
+| **Health Check** — weekly server update | Weekly Monday + manual |
 
 CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 

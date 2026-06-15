@@ -302,10 +302,25 @@ main() {
         local tf_args=""
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
         [[ "$TF_PROVIDER" == "hetzner" ]] && tf_args="-var=environment=${TARGET}"
+
+        # Pre-apply state backup — rollback point if apply breaks
+        local bk="$SCRIPT_DIR/secrets/tfstate-backup"
+        mkdir -p "$bk"
+        if _tf state pull > "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null && [[ -s "$bk/${TF_WORKSPACE}_pre.tfstate" ]]; then
+            echo "  ✓ Pre-apply state backed up"
+        else
+            rm -f "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null
+        fi
+
         if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
             :  # ok
         else
-            tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform apply failed"
+            tail -30 "$DEPLOY_TF_LOG"
+            if [[ -f "$bk/${TF_WORKSPACE}_pre.tfstate" ]]; then
+                echo "  ⚠ Apply failed. Rollback with:"
+                echo "    cd ${TF_DIR} && ${TERRAFORM} state push ${bk}/${TF_WORKSPACE}_pre.tfstate -force"
+            fi
+            step_fail "Terraform apply failed"
         fi
 
         SERVER_IP=$(_tf output -raw server_ipv4 2>>"$DEPLOY_TF_LOG") || step_fail "Could not get server IP"
@@ -313,15 +328,14 @@ main() {
         [[ "$SERVER_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || step_fail "Invalid IP from Terraform: $SERVER_IP"
         export SERVER_IP
 
-        local bk="$SCRIPT_DIR/secrets/tfstate-backup"
-        mkdir -p "$bk"
+        # Post-apply state backup (timestamped, rotate 5)
         local tmp_bk; tmp_bk=$(mktemp)
         if _tf state pull > "$tmp_bk" 2>/dev/null && [[ -s "$tmp_bk" ]]; then
             mv "$tmp_bk" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
-            ls -1t "$bk/${TF_WORKSPACE}"_*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+            ls -1t "$bk/${TF_WORKSPACE}"_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
         else
             rm -f "$tmp_bk"
-            echo "  ⚠ tfstate backup failed (empty or error)" | tee -a "$LOG"
+            echo "  ⚠ Post-apply state backup failed (empty or error)" | tee -a "$LOG"
         fi
         if [[ "$SKIP_DNS" == "false" ]]; then
             update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
@@ -371,8 +385,7 @@ main() {
     # ----- Wait for apt lock -----
     step_start "Wait for apt lock"
     ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
-        "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done" 2>/dev/null || true
-    sleep 5
+        "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done" 2>/dev/null || true
     step_ok
 
     # ----- Generate inventory + vault -----

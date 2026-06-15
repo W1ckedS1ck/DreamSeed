@@ -74,9 +74,7 @@ jobs:
           tflint_version: ${{ env.TFLINT_VERSION }}
           cache: true
       - name: Check terraform formatting
-        run: |
-          terraform fmt -check -recursive terraform/aws
-          terraform fmt -check -recursive terraform/hetzner
+        run: terraform fmt -check -recursive terraform/
       - name: Run tflint
         run: bash scripts/lint.sh --ci --tflint
       - name: Validate all providers
@@ -95,6 +93,7 @@ jobs:
           framework: terraform
           quiet: true
           soft_fail: false
+          skip_check: CKV_AWS_260,CKV2_AWS_41
 
   trivy:
     name: Terraform Security

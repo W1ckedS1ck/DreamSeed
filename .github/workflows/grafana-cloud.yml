@@ -13,7 +13,7 @@ on:
           - dev
 
 concurrency:
-  group: grafana-cloud-${{ github.event.inputs.workspace }}
+  group: grafana-cloud-${{ inputs.workspace }}
   cancel-in-progress: false
 
 env:
@@ -35,14 +35,14 @@ jobs:
 
       - name: Set TF_WORKSPACE
         env:
-          WORKSPACE_INPUT: ${{ github.event.inputs.workspace }}
+          WORKSPACE_INPUT: ${{ inputs.workspace }}
         run: |
           echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
 
       - name: Write terraform.tfvars.json
         working-directory: terraform/grafana
         env:
-          WORKSPACE_INPUT: ${{ github.event.inputs.workspace }}
+          WORKSPACE_INPUT: ${{ inputs.workspace }}
         run: |
           if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
             jq -n \

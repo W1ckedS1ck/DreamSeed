@@ -106,19 +106,9 @@ resource "aws_instance" "web" {
     }
   }
 
-  user_data = <<EOF
-#!/bin/bash
-set -e
-hostnamectl set-hostname dreamseed-${var.environment}
-# Bootstrap marker — only run apt upgrade on first boot
-if [[ ! -f /etc/.dreamseed-bootstrapped ]]; then
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
-    touch /etc/.dreamseed-bootstrapped
-fi
-sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-systemctl restart ssh
-EOF
+  user_data = templatefile("${path.module}/cloud-init.tftpl", {
+    environment = var.environment
+  })
 
   metadata_options {
     http_tokens = "required"
@@ -133,17 +123,6 @@ EOF
   tags = {
     Name = "dreamseed-${var.environment}"
   }
-}
-
-data "aws_eip" "reserved" {
-  count = var.elastic_ip_allocation_id != "" ? 1 : 0
-  id    = var.elastic_ip_allocation_id
-}
-
-resource "aws_eip_association" "web" {
-  count         = var.elastic_ip_allocation_id != "" ? 1 : 0
-  allocation_id = data.aws_eip.reserved[0].id
-  instance_id   = aws_instance.web.id
 }
 
 check "workspace_valid_for_aws" {

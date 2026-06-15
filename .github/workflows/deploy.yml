@@ -75,6 +75,11 @@ jobs:
           [[ -n "${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" || true
           [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}" || true
           [[ -n "${{ secrets.BETTERUPTIME_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_BACKUP_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_BACKUP_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_GDRIVE_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_GDRIVE_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_VERIFY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_VERIFY_KEY }}" || true
           [[ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]] && echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}" || true
           [[ -n "${{ secrets.VAULT_PASSWORD }}" ]] && echo "::add-mask::${{ secrets.VAULT_PASSWORD }}" || true
           [[ -n "${{ secrets.RCLONE_CONF_BASE64 }}" ]] && echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}" || true
@@ -82,8 +87,15 @@ jobs:
           [[ -n "${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.VITALI_SSH_PUBLIC_KEY }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}" || true
           [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}" || true
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_URL }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" || true
+          [[ -n "${{ secrets.DEV_AWS_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_ACCESS_KEY }}" || true
+          [[ -n "${{ secrets.DEV_AWS_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_SECRET_KEY }}" || true
+          [[ -n "${{ secrets.DEV_AWS_EIP }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_EIP }}" || true
+          [[ -n "${{ secrets.PROD_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_ACCESS_KEY }}" || true
+          [[ -n "${{ secrets.PROD_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_SECRET_KEY }}" || true
+          [[ -n "${{ secrets.PROD_EIP }}" ]] && echo "::add-mask::${{ secrets.PROD_EIP }}" || true
+
           # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
           # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
           # because they are pure integers that corrupt log output (IPs, timestamps, counts)
@@ -98,14 +110,27 @@ jobs:
           VITALI_SSH_PUBLIC_KEY: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
           GRAFANA_PASS: ${{ secrets.GRAFANA_PASS }}
           BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          BETTERUPTIME_BACKUP_KEY: ${{ secrets.BETTERUPTIME_BACKUP_KEY }}
+          BETTERUPTIME_GDRIVE_KEY: ${{ secrets.BETTERUPTIME_GDRIVE_KEY }}
+          BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
+          BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
+          BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.DEV_GRAFANA_CLOUD_PUSH_URL }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
-          PROD_GRAFANA_CLOUD_PUSH_URL: ${{ secrets.PROD_GRAFANA_CLOUD_PUSH_URL }}
-          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          PROD_GRAFANA_CLOUD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
+          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
+          PROD_EIP: ${{ secrets.PROD_EIP }}
         run: |
           mkdir -p secrets ~/.ssh
 
@@ -119,6 +144,11 @@ jobs:
             echo "PROD_HETZ_HCLOUD_TOKEN=$PROD_HETZ_HCLOUD_TOKEN"
             echo "GRAFANA_PASS=$GRAFANA_PASS"
             echo "BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN"
+            echo "BETTERUPTIME_BACKUP_KEY=$BETTERUPTIME_BACKUP_KEY"
+            echo "BETTERUPTIME_GDRIVE_KEY=$BETTERUPTIME_GDRIVE_KEY"
+            echo "BETTERUPTIME_REPORT_DAILY_KEY=$BETTERUPTIME_REPORT_DAILY_KEY"
+            echo "BETTERUPTIME_REPORT_WEEKLY_KEY=$BETTERUPTIME_REPORT_WEEKLY_KEY"
+            echo "BETTERUPTIME_VERIFY_KEY=$BETTERUPTIME_VERIFY_KEY"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
             printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "$USER_SSH_PUBLIC_KEY" "$VITALI_SSH_PUBLIC_KEY"
@@ -127,9 +157,19 @@ jobs:
             echo "DEV_GRAFANA_CLOUD_USERNAME=${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
             echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
 
-            echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_PUSH_URL"
+            echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_URL"
             echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
+
+            # AWS credentials (per-target)
+            echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
+            echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
+            echo "DEV_AWS_REGION=$DEV_AWS_REGION"
+            echo "DEV_AWS_EIP=$DEV_AWS_EIP"
+            echo "PROD_ACCESS_KEY=$PROD_ACCESS_KEY"
+            echo "PROD_SECRET_KEY=$PROD_SECRET_KEY"
+            echo "PROD_REGION=$PROD_REGION"
+            echo "PROD_EIP=$PROD_EIP"
 
             # Hetzner SSH key and Primary IP (per-target)
             echo "DEV_HETZ_SSH_KEY_NAME=Vitali"

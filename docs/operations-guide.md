@@ -35,7 +35,7 @@ sudo cat /var/log/cloud-init-output.log
 
 If Hetzner `user_data` script failed (e.g., `apt update` timeout):
 
-- The cloud-init script is in `terraform/hetzner/main.tf` under `user_data`
+- The cloud-init script is in `terraform/hetzner/cloud-init.tftpl` (template rendered by Terraform `templatefile()`, see `main.tf`)
 - Common: apt repo timeout, `ADDITIONAL_SSH_KEYS` contains invalid key
 - Fix: fix the issue, then `./deploy.sh <target> -n -i <ip> --no-dns` (re-run Ansible only)
 
@@ -45,14 +45,13 @@ Playbook 02 (web) handles SSL. Three modes, tried in order:
 
 1. **Restore from `secrets/ssl/`** — copies cert files from local repo
 2. **Cloudflare DNS-01** — requires `CLOUDFLARE_API_TOKEN` to be set
-3. **Certbot webroot** — needs DNS pointing to server (checked via `dig @8.8.8.8`)
+3. **Self-signed** — fallback for origin cert (Cloudflare edge serves real cert)
 
 ```
 ssl: mode=MODE → details
   MODE=local-restore   → cert restored from secrets/ssl/
   MODE=dns-cloudflare  → cert issued via DNS-01 challenge
-  MODE=webroot         → cert issued via HTTP-01 (needs DNS)
-  MODE=self-signed     → fallback, browser shows warning
+  MODE=self-signed     → fallback for origin (Cloudflare handles edge SSL)
 ```
 
 If SSL fails → check:
