@@ -3,9 +3,6 @@ name: Restore Test
 on:
   schedule:
     - cron: "0 10 * * 1"
-  pull_request:
-    paths:
-      - .github/workflows/test-restore.yml
   workflow_dispatch:
     inputs:
       provider:

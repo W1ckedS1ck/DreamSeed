@@ -70,7 +70,7 @@ jobs:
 
       - name: Terraform Init
         working-directory: terraform/grafana
-        run: terraform init -upgrade=false
+        run: terraform init -upgrade=true
 
       - name: Terraform Plan
         working-directory: terraform/grafana
@@ -79,6 +79,15 @@ jobs:
       - name: Terraform Apply
         working-directory: terraform/grafana
         run: terraform apply -auto-approve
+
+      - name: Verify folder exists
+        run: |
+          FOLDER_UID=$(terraform output -raw folder_uid 2>/dev/null || echo "")
+          if [ -n "$FOLDER_UID" ]; then
+            echo "Folder UID from state: $FOLDER_UID"
+          else
+            echo "No folder in state — skipping verification"
+          fi
 
       - name: Terraform State Output
         working-directory: terraform/grafana
