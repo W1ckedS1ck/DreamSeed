@@ -1,12 +1,16 @@
-name: BackupRestorationTest
+name: Restore Test
 
 on:
   schedule:
     - cron: "0 10 * * 1"
+  pull_request:
+    paths:
+      - .github/workflows/test-restore.yml
   workflow_dispatch:
     inputs:
-      environment:
-        description: Target cloud provider
+      provider:
+        description: Cloud provider for ephemeral test server
+        required: true
         type: choice
         options:
           - hetzner
@@ -17,16 +21,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: backup-test
+  group: restore-test
   cancel-in-progress: false
 
 env:
-  TARGET: ${{ inputs.environment || 'hetzner' }}
+  PROVIDER: ${{ inputs.provider || 'hetzner' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   test-restore:
-    name: Test backup restoration (${{ inputs.environment || 'hetzner' }})
+    name: Test backup restoration (${{ inputs.provider || 'hetzner' }})
     runs-on: ubuntu-latest
     timeout-minutes: 50
 
@@ -35,36 +39,44 @@ jobs:
 
       - uses: ./.github/actions/setup-terraform
 
-      - name: Mask secrets
-        run: |
-          [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}"
-          [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}"
-          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}"
-          [[ -n "${{ secrets.HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}"
-          [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}"
-          [[ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]] && echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}"
-          [[ -n "${{ secrets.VAULT_PASSWORD }}" ]] && echo "::add-mask::${{ secrets.VAULT_PASSWORD }}"
-          [[ -n "${{ secrets.RCLONE_CONF_BASE64 }}" ]] && echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}"
-          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_URL }}"
-          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}"
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_URL }}"
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}"
-          [[ -n "${{ secrets.TF_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TF_API_TOKEN }}"
-          # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
-          # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
-          # because they are pure integers that corrupt log output (IPs, timestamps, counts)
-
       - name: Record start time
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
         id: start_time
 
-      - name: Validate target
+      - name: Mask secrets
         run: |
-          if [ "$TARGET" = "aws" ]; then
-            echo "::error::AWS target not implemented yet — use 'hetzner'"
-            exit 1
-          fi
-          echo "Target: $TARGET"
+          [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}" || true
+          [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}" || true
+          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}" || true
+          [[ -n "${{ secrets.HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_BACKUP_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_BACKUP_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_GDRIVE_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_GDRIVE_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}" || true
+          [[ -n "${{ secrets.BETTERUPTIME_VERIFY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_VERIFY_KEY }}" || true
+          [[ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]] && echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}" || true
+          [[ -n "${{ secrets.VAULT_PASSWORD }}" ]] && echo "::add-mask::${{ secrets.VAULT_PASSWORD }}" || true
+          [[ -n "${{ secrets.RCLONE_CONF_BASE64 }}" ]] && echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}" || true
+          [[ -n "${{ secrets.USER_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.USER_SSH_PUBLIC_KEY }}" || true
+          [[ -n "${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.VITALI_SSH_PUBLIC_KEY }}" || true
+          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_URL }}" || true
+          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_URL }}" || true
+          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
+          [[ -n "${{ secrets.DEV_AWS_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_ACCESS_KEY }}" || true
+          [[ -n "${{ secrets.DEV_AWS_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_SECRET_KEY }}" || true
+          [[ -n "${{ secrets.DEV_AWS_EIP }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_EIP }}" || true
+          [[ -n "${{ secrets.PROD_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_ACCESS_KEY }}" || true
+          [[ -n "${{ secrets.PROD_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_SECRET_KEY }}" || true
+          [[ -n "${{ secrets.PROD_EIP }}" ]] && echo "::add-mask::${{ secrets.PROD_EIP }}" || true
+          [[ -n "${{ secrets.TF_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TF_API_TOKEN }}" || true
+
+          # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
+          # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
+          # because they are pure integers that corrupt log output (IPs, timestamps, counts)
 
       - name: Setup secrets
         env:
@@ -72,17 +84,31 @@ jobs:
           DB_PASS: ${{ secrets.DB_PASS }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          PROD_HETZ_HCLOUD_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          VITALI_SSH_PUBLIC_KEY: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
           GRAFANA_PASS: ${{ secrets.GRAFANA_PASS }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          BETTERUPTIME_BACKUP_KEY: ${{ secrets.BETTERUPTIME_BACKUP_KEY }}
+          BETTERUPTIME_GDRIVE_KEY: ${{ secrets.BETTERUPTIME_GDRIVE_KEY }}
+          BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
+          BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
+          BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
-        # TG_CHAT_ID, TG_THREAD_ID — from vars, not masked
-        # DEV/PROD_GRAFANA_CLOUD_USERNAME excluded from env:
-        # because they are pure integers that trigger substring masking in GitHub Actions.
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
+          PROD_EIP: ${{ secrets.PROD_EIP }}
         run: |
           mkdir -p secrets ~/.ssh
 
@@ -92,26 +118,44 @@ jobs:
             echo "TG_THREAD_ID=${{ vars.TG_THREAD_ID }}"
             echo "DB_PASS=$DB_PASS"
             echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
-
             echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
+            echo "PROD_HETZ_HCLOUD_TOKEN=$PROD_HETZ_HCLOUD_TOKEN"
             echo "GRAFANA_PASS=$GRAFANA_PASS"
+            echo "BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN"
+            echo "BETTERUPTIME_BACKUP_KEY=$BETTERUPTIME_BACKUP_KEY"
+            echo "BETTERUPTIME_GDRIVE_KEY=$BETTERUPTIME_GDRIVE_KEY"
+            echo "BETTERUPTIME_REPORT_DAILY_KEY=$BETTERUPTIME_REPORT_DAILY_KEY"
+            echo "BETTERUPTIME_REPORT_WEEKLY_KEY=$BETTERUPTIME_REPORT_WEEKLY_KEY"
+            echo "BETTERUPTIME_VERIFY_KEY=$BETTERUPTIME_VERIFY_KEY"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
-            echo "SSH_KEY=${HOME}/.ssh/deploy_key"
-            echo "HETZNER_SSH_KEY_NAME=Vitali.pub"
-            echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
+            printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "$USER_SSH_PUBLIC_KEY" "$VITALI_SSH_PUBLIC_KEY"
+
             echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_URL"
             echo "DEV_GRAFANA_CLOUD_USERNAME=${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}"
             echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
+
             echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_URL"
             echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
+
+            echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
+            echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
+            echo "DEV_AWS_REGION=$DEV_AWS_REGION"
+            echo "DEV_AWS_EIP=$DEV_AWS_EIP"
+            echo "PROD_ACCESS_KEY=$PROD_ACCESS_KEY"
+            echo "PROD_SECRET_KEY=$PROD_SECRET_KEY"
+            echo "PROD_REGION=$PROD_REGION"
+            echo "PROD_EIP=$PROD_EIP"
+
+            echo "HETZNER_SSH_KEY_NAME=Vitali.pub"
+            echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
           } > secrets/.env
           chmod 600 secrets/.env
 
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
+          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2>/dev/null
 
           echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
           chmod 600 ~/.vault_pass_dreamseed
@@ -126,21 +170,41 @@ jobs:
       - name: Load secrets and export TF vars
         run: |
           source secrets/.env
-          echo "::add-mask::$HCLOUD_TOKEN"
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$DB_PASS"
           echo "::add-mask::$TG_TOKEN"
           echo "::add-mask::$GRAFANA_PASS"
+          [[ -n "$HCLOUD_TOKEN" ]] && echo "::add-mask::$HCLOUD_TOKEN"
+          [[ -n "$PROD_HETZ_HCLOUD_TOKEN" ]] && echo "::add-mask::$PROD_HETZ_HCLOUD_TOKEN"
           [[ -n "$DEV_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$DEV_GRAFANA_CLOUD_TOKEN"
           [[ -n "$PROD_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$PROD_GRAFANA_CLOUD_TOKEN"
-          {
-            echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN"
-            echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)"
-            [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME"
-            echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali.pub}"
-            echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-            python3 -c "import json, os; k=open(os.path.expanduser('~/.ssh/deploy_key.pub')).read().strip(); print(f'TF_VAR_additional_ssh_keys={json.dumps([k])}')"
-          } >> "$GITHUB_ENV"
+          [[ -n "$DEV_AWS_ACCESS_KEY" ]] && echo "::add-mask::$DEV_AWS_ACCESS_KEY"
+          [[ -n "$DEV_AWS_SECRET_KEY" ]] && echo "::add-mask::$DEV_AWS_SECRET_KEY"
+          [[ -n "$PROD_ACCESS_KEY" ]] && echo "::add-mask::$PROD_ACCESS_KEY"
+          [[ -n "$PROD_SECRET_KEY" ]] && echo "::add-mask::$PROD_SECRET_KEY"
+
+          if [ "$PROVIDER" = "aws" ]; then
+            {
+              echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY"
+              echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY"
+              echo "AWS_DEFAULT_REGION=${DEV_AWS_REGION:-us-west-1}"
+              echo "TF_VAR_environment=test"
+              echo "TF_VAR_ssh_public_key_path=${HOME}/.ssh/deploy_key.pub"
+              echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+            } >> "$GITHUB_ENV"
+          else
+            {
+              echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN"
+              echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)"
+              echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali.pub}"
+              [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && echo "TF_VAR_primary_ip_name=$HETZNER_PRIMARY_IP_NAME"
+              echo "TF_VAR_enable_primary_ip=true"
+              echo "TF_VAR_environment=test"
+              echo "TF_VAR_server_type=cx23"
+              echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+              python3 -c "import json, os; k=open(os.path.expanduser('~/.ssh/deploy_key.pub')).read().strip(); print(f'TF_VAR_additional_ssh_keys={json.dumps([k])}')"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Resolve Cloudflare zone ID
         id: cf_zone
@@ -171,7 +235,7 @@ jobs:
         uses: ./.github/actions/setup-ansible
 
       - name: Terraform Init
-        working-directory: terraform/hetzner
+        working-directory: terraform/${{ inputs.provider || 'hetzner' }}
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
           TF_WORKSPACE: test
@@ -180,16 +244,14 @@ jobs:
 
       - name: Terraform Apply
         id: terraform
-        working-directory: terraform/hetzner
+        working-directory: terraform/${{ inputs.provider || 'hetzner' }}
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
           TF_WORKSPACE: test
           TF_VAR_environment: test
         run: |
           for try in 1 2; do
-            if terraform apply -auto-approve -no-color \
-                -var="environment=test" \
-                -replace="hcloud_server.main"; then
+            if terraform apply -auto-approve -no-color; then
               break
             fi
             if [ "$try" -lt 2 ]; then
@@ -201,7 +263,6 @@ jobs:
             fi
           done
           echo "server_ipv4=$(terraform output -raw server_ipv4)" >> "$GITHUB_OUTPUT"
-          # Write IP to Step Summary (visible in Summary tab, bypasses log masking)
           {
             echo "### Server connection"
             echo '```'
@@ -251,9 +312,14 @@ jobs:
             fi
           fi
 
-          # --- Wait for SSH (90 x 2s = 180s, matches deploy.sh for Hetzner) ---
+          # --- Wait for SSH ---
           echo "[$(date +%H:%M:%S)] Waiting for SSH on $SERVER_IP..."
-          for i in $(seq 1 90); do
+          if [ "$PROVIDER" = "aws" ]; then
+            MAX_ATTEMPTS=40; SLEEP_SEC=10
+          else
+            MAX_ATTEMPTS=90; SLEEP_SEC=2
+          fi
+          for i in $(seq 1 $MAX_ATTEMPTS); do
             if ssh -q -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
                 -o BatchMode=yes -o PasswordAuthentication=no \
                 -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>/dev/null; then
@@ -261,18 +327,18 @@ jobs:
               break
             fi
             if [ $((i % 5)) -eq 0 ]; then
-              echo "[$(date +%H:%M:%S)] SSH attempt $i/90..."
+              echo "[$(date +%H:%M:%S)] SSH attempt $i/$MAX_ATTEMPTS..."
             fi
-            [ "$i" -eq 90 ] && {
-              echo "[$(date +%H:%M:%S)] SSH never became available after 180s"
+            [ "$i" -eq $MAX_ATTEMPTS ] && {
+              echo "[$(date +%H:%M:%S)] SSH never became available"
               ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
                 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$SERVER_IP" "exit 0" 2>&1 || true
               exit 1
             }
-            sleep 2
+            sleep $SLEEP_SEC
           done
 
-          # --- Wait for cloud-init (matching deploy.sh) ---
+          # --- Wait for cloud-init ---
           echo "[$(date +%H:%M:%S)] Waiting for cloud-init (max 5 min)..."
           CI_START=$(date +%s)
           for j in $(seq 1 150); do
@@ -428,6 +494,7 @@ jobs:
           ssh ubuntu@"$SERVER_IP" "cat /home/ubuntu/backups/logs/backup_*.log 2>/dev/null || echo 'No log files'" 2>&1 || true
 
       - name: Verify backup files exist
+        id: verify_backup
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
@@ -445,7 +512,6 @@ jobs:
           fi
           echo "project_count=$PROJ_COUNT" >> "$GITHUB_OUTPUT"
           echo "db_count=$DB_COUNT" >> "$GITHUB_OUTPUT"
-        id: verify_backup
 
       - name: Upload backup to GDrive
         id: gdrive_upload
@@ -513,14 +579,11 @@ jobs:
           ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Destroying data to simulate disaster ==="
-          # Drop all tables (SET FOREIGN_KEY_CHECKS=0 needed for InnoDB FK constraints)
           ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SET FOREIGN_KEY_CHECKS=0; SELECT CONCAT(\"DROP TABLE IF EXISTS \", table_name, \";\") FROM information_schema.tables WHERE table_schema=\"modx_db\"' | mysql modx_db" 2>&1
           SSH_EXIT=$?
           echo "DROP TABLES exit code: $SSH_EXIT"
-          # Remove project files
           ssh ubuntu@"$SERVER_IP" "sudo rm -rf /var/www/html/* 2>/dev/null; sudo find /var/www/html -maxdepth 1 -name '.*' -not -name '.' -not -name '..' -delete 2>/dev/null; echo 'Project files destroyed'"
-          # Verify destruction
           TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"' 2>/dev/null || echo 0")
           echo "Tables after destruction: $TBL_COUNT (expect 0)"
@@ -547,6 +610,7 @@ jobs:
           if [ "$RC" -ne 0 ]; then
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
           fi
+
       - name: Verify restored content
         id: verify_content
         run: |
@@ -555,7 +619,6 @@ jobs:
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Verifying restored content ==="
 
-          # Site HTTP
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" \
             "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/" 2>/dev/null || echo "000")
           echo "site_http=$HTTP_CODE"
@@ -565,21 +628,18 @@ jobs:
             echo "[FAIL] Site returned HTTP $HTTP_CODE"
           fi
 
-          # MODX index.php
           if ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/index.php" 2>/dev/null; then
             echo "[PASS] index.php exists"
           else
             echo "[FAIL] index.php missing"
           fi
 
-          # MODX config
           if ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" 2>/dev/null; then
             echo "[PASS] config exists"
           else
             echo "[FAIL] config missing"
           fi
 
-          # DB content rows
           ROWS=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo 0")
           echo "content_rows=$ROWS"
@@ -591,7 +651,6 @@ jobs:
             echo "[FAIL] DB content empty"
           fi
 
-          # DB table count
           TBL_COUNT=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"modx_db\"'" 2>/dev/null || echo 0)
           echo "table_count=$TBL_COUNT"
@@ -620,7 +679,6 @@ jobs:
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Validating restored artifacts ==="
 
-          # Compare project hash
           NEW_HASH=$(ssh ubuntu@"$SERVER_IP" \
             "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           OLD_HASH="${{ steps.artifact_hash.outputs.project_hash }}"
@@ -634,7 +692,6 @@ jobs:
             echo "project_hash_match=no" >> "$GITHUB_OUTPUT"
           fi
 
-          # Compare DB hash
           NEW_DB=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
           OLD_DB="${{ steps.artifact_hash.outputs.db_hash }}"
@@ -648,7 +705,6 @@ jobs:
             echo "db_hash_match=no" >> "$GITHUB_OUTPUT"
           fi
 
-          # PHP error log check
           echo "=== PHP error log (last 20 lines) ==="
           ssh ubuntu@"$SERVER_IP" "sudo tail -20 /var/log/php*-fpm.log 2>/dev/null || echo 'No PHP-FPM log found'" 2>&1 || true
           PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || true")
@@ -658,7 +714,6 @@ jobs:
             echo "[WARN] $PHP_ERRORS PHP Fatal errors found after restore"
           fi
 
-          # MODX cache state
           echo "=== MODX cache ==="
           CACHE_DIRS=$(ssh ubuntu@"$SERVER_IP" "ls /var/www/html/core/cache/ 2>/dev/null | wc -l" || echo 0)
           echo "Cache entries: $CACHE_DIRS"
@@ -752,14 +807,13 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
-        # TG_CHAT_ID/TG_THREAD_ID sourced from secrets/.env (vars, not secrets — no masking)
         run: |
           source secrets/.env
           COMMIT_SHA="${{ github.sha }}"
           COMMIT_SHORT="${COMMIT_SHA:0:7}"
           BRANCH="$HEAD_REF"
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          MSG="❌ *Backup Restoration Test FAILED*
+          MSG="❌ *Restore Test FAILED*
           📅 $(date '+%Y-%m-%d %H:%M')
           🖥 ${SERVER_IP:-N/A}
           🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`
@@ -773,11 +827,14 @@ jobs:
       - name: Terraform Destroy
         id: destroy
         if: always() && steps.terraform.outputs.server_ipv4 != ''
-        working-directory: terraform/hetzner
+        working-directory: terraform/${{ inputs.provider || 'hetzner' }}
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
           TF_WORKSPACE: test
           TF_VAR_environment: test
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.DEV_AWS_REGION }}
         run: |
           set +e
           terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log
@@ -867,7 +924,7 @@ jobs:
           BRANCH="$HEAD_REF"
 
           MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
-            "📦 *Backup Restoration Test* $STATUS" \
+            "📦 *Restore Test* $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`" \
@@ -911,10 +968,11 @@ jobs:
           [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_LINE="⚠️ **${FAILS}**" || FAIL_LINE=""
 
           M="$GITHUB_STEP_SUMMARY"
-          echo "## Backup Restoration Test ${{ job.status == 'success' && '✅' || '❌' }}" >> "$M"
+          echo "## Restore Test ${{ job.status == 'success' && '✅' || '❌' }}" >> "$M"
           echo "" >> "$M"
           echo "| | |" >> "$M"
           echo "|---|---|" >> "$M"
+          echo "| **Provider** | ${{ env.PROVIDER }} |" >> "$M"
           echo "| **Commit** | \`${COMMIT_SHA}\` on \`${HEAD_REF}\` |" >> "$M"
           echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
           echo "| **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |" >> "$M"

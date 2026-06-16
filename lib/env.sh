@@ -83,6 +83,17 @@ export_tf_env() {
         export AWS_DEFAULT_REGION="$AWS_REGION"
         [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
         [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
+        # Build list of additional SSH keys from ADDITIONAL_SSH_KEYS env var
+        # (CI deploy key is handled separately via aws_key_pair.deploy)
+        export TF_VAR_additional_ssh_keys="$(python3 -c "
+import os, json
+additional = os.environ.get('ADDITIONAL_SSH_KEYS', '')
+if additional:
+    keys = [k.strip() for k in additional.strip().split('\n') if k.strip()]
+else:
+    keys = []
+print(json.dumps(keys))
+")"
     }
     [[ "$TF_PROVIDER" == "hetzner" ]] && {
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"

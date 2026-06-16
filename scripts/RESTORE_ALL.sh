@@ -218,6 +218,11 @@ if [ "$MODE" != "--auto-latest" ]; then
         *) echo -e "${YELLOW}Default: local${NC}"; SOURCE="local"; echo "" ;;
     esac
 
+    # DESIGN: ENV_SUFFIX is intentionally empty — interactive restore always
+    # browses prod cloud paths (DreamSeed/backups/project/ and db/).
+    # Dev environments have no independent backup pipeline; they are ephemeral
+    # copies of prod. Dev cloud uploads go to *-dev/ paths but are never
+    # consumed by any restore flow. See detect_env() in common_functions.sh.
     ENV_SUFFIX=""
 
     # ================================================
@@ -297,8 +302,9 @@ else
         mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db"
 
         # IMPORTANT: Auto-latest mode ALWAYS restores from PROD backups, regardless of environment.
-        # Dev servers MUST use prod data. This is intentional — do not add ENV_SUFFIX here.
-        # Interactive mode (above) uses ENV_SUFFIX to allow selecting env-specific backups.
+        # Dev servers MUST use prod data. This is intentional — dev has no separate backup pipeline.
+        # Interactive mode keeps ENV_SUFFIX="" for the same reason (line 222).
+        # Do not add ENV_SUFFIX here. See detect_env() in common_functions.sh for design rationale.
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
             --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \

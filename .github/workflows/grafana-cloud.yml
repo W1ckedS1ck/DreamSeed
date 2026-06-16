@@ -47,7 +47,7 @@ jobs:
           if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
             jq -n \
               --arg url "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" \
-              --arg token "${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}" \
+              --arg token "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" \
               --arg sm_token "${{ secrets.PROD_SM_ACCESS_TOKEN }}" \
               --arg domain "dreamseed.online" \
               --arg sm_url "https://synthetic-monitoring-api-us-east-0.grafana.net" \

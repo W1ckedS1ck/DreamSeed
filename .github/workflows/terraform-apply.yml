@@ -41,15 +41,35 @@ jobs:
         run: |
           echo "TF_DIR=terraform/${{ inputs.provider }}" >> "$GITHUB_ENV"
           echo "TF_WORKSPACE=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          case "${{ inputs.workspace }}" in
+            prod*)
+              IS_PROD=true
+              ;;
+            *)
+              IS_PROD=false
+              ;;
+          esac
           if [ "${{ inputs.provider }}" = "aws" ]; then
-            echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
-            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
-            echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+            if [ "$IS_PROD" = "true" ]; then
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.PROD_EIP }}" >> "$GITHUB_ENV"
+            else
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" >> "$GITHUB_ENV"
+            fi
             echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
-            echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" >> "$GITHUB_ENV"
           fi
           if [ "${{ inputs.provider }}" = "hetzner" ]; then
-            echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+            if [ "$IS_PROD" = "true" ]; then
+              echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+            else
+              echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"
+            fi
             echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
           fi
 
@@ -73,7 +93,12 @@ jobs:
           MODE_FLAG=""
           [ "${{ inputs.mode }}" = "refresh-only" ] && MODE_FLAG="-refresh-only"
           if [ "${{ inputs.provider }}" = "aws" ]; then
-            echo "${{ secrets.DEV_AWS_SSH_PUBLIC_KEY }}" > /tmp/key.pub
+            case "${{ inputs.workspace }}" in
+              prod)    SSH_KEY_SECRET="${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ;;
+              dev-aws) SSH_KEY_SECRET="${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ;;
+              *)       echo "::error::Unknown workspace ${{ inputs.workspace }} for AWS provider"; exit 1 ;;
+            esac
+            echo "$SSH_KEY_SECRET" > /tmp/key.pub
             terraform apply -auto-approve -input=false $MODE_FLAG \
               -var="ssh_public_key_path=/tmp/key.pub" \
               -var="environment=${{ inputs.workspace }}"

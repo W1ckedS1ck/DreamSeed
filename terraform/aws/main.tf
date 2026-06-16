@@ -115,7 +115,8 @@ resource "aws_instance" "web" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.tftpl", {
-    environment = var.environment
+    environment         = var.environment
+    additional_ssh_keys = var.additional_ssh_keys
   })
 
   metadata_options {

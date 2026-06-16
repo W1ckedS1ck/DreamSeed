@@ -27,6 +27,12 @@ variable "root_volume_size" {
   default     = 30
 }
 
+variable "additional_ssh_keys" {
+  description = "Additional SSH public keys to inject via cloud-init (in addition to the deploy key)"
+  type        = list(string)
+  default     = []
+}
+
 variable "environment" {
   description = "Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts"
   type        = string

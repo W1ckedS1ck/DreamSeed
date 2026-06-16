@@ -13,6 +13,13 @@ load_env "$SCRIPT_DIR/.env"
 # ====== Start time ======
 START_TIME=$(date +%s)
 
+# NOTE: Dev environments upload to DreamSeed/backups/{project,db}-dev/ (via
+# ENV suffix from detect_env()), but ALL restore paths (deploy's restore role,
+# RESTORE_ALL.sh --auto-latest, RESTORE_ALL.sh interactive) pull from prod
+# paths only. Dev backups in the cloud are informational / safety net only.
+# This is intentional: dev is an ephemeral copy of prod, not independent.
+# Do not add restore-from-dev logic without understanding this design.
+
 # ====== Settings ======
 LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 PROJECT_DIR="$LOCAL_BACKUP_DIR/project"

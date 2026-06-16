@@ -33,13 +33,6 @@ jobs:
 
       - uses: ./.github/actions/setup-terraform
 
-      - name: Derive SSH public key
-        run: |
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/deploy_key
-          chmod 600 /tmp/deploy_key
-          ssh-keygen -y -f /tmp/deploy_key > /tmp/deploy_key.pub
-          echo "SSH_PUB_KEY=$(cat /tmp/deploy_key.pub)" >> "$GITHUB_ENV"
-
       - name: Terraform Init
         working-directory: terraform/hetzner
         run: terraform init
@@ -49,8 +42,8 @@ jobs:
         working-directory: terraform/hetzner
         run: |
           terraform plan -detailed-exitcode -no-color \
-            -var="ssh_public_key=$SSH_PUB_KEY" \
-            -var="ssh_key_name=" \
+            -var="ssh_key_name=Vitali.pub" \
+            -var="enable_primary_ip=true" \
             -out=/tmp/prod-hetz.tfplan 2>&1 | tee /tmp/plan.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -eq 1 ]; then

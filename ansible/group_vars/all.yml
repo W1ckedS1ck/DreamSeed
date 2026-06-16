@@ -24,6 +24,11 @@ php_version: "{{ ansible_facts.php_version | default('8.3') }}"  # auto-detected
 # ========================
 #  Backup
 # ========================
+# DESIGN NOTE: Dev environments have NO independent backup pipeline.
+# The restore role always pulls from prod paths. Dev uploads go to
+# *-dev/ cloud paths but are never consumed by any restore flow.
+# This is intentional — dev is an ephemeral copy of prod, not a
+# standalone environment with its own data lifecycle.
 backup_cron_enabled: true
 backup_project_keep: 5
 backup_db_keep: 15
@@ -89,7 +94,6 @@ deploy_env: "{{ lookup('env', 'DEPLOY_ENV') | default('unknown', true) }}"
 # ========================
 #  Security
 # ========================
-dev_write_perms: false
 additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per line)
 
 # ========================

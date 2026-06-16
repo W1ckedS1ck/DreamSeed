@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 hostnamectl set-hostname dreamseed-${environment}
+%{if length(additional_ssh_keys) > 0~}
+mkdir -p /home/ubuntu/.ssh
+%{for key in additional_ssh_keys~}
+echo '${base64encode(key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
+%{endfor~}
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+%{endif~}
 # Bootstrap marker — only run apt upgrade on first boot
 if [[ ! -f /etc/.dreamseed-bootstrapped ]]; then
     apt-get update -qq

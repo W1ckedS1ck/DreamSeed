@@ -114,6 +114,13 @@ resource "hcloud_server" "main" {
     environment         = var.environment
     additional_ssh_keys = var.additional_ssh_keys
   })
+
+  lifecycle {
+    ignore_changes = [
+      ssh_keys,
+      user_data,
+    ]
+  }
 }
 
 check "workspace_valid_for_hetzner" {

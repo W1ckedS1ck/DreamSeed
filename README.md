@@ -172,7 +172,8 @@ DreamSeed/
     ├── backup-test.yml       # Full backup/restore verification with app health checks
     ├── rollback.yml          # Emergency rollback with prod confirmation
     ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
-    └── health-check.yml      # Weekly server update (apt upgrade + reboot check)
+    ├── health-check.yml      # Weekly server update (apt upgrade + reboot check)
+    └── terraform-apply.yml   # Quick TF apply without Ansible
 ```
 
 ---
@@ -226,7 +227,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 7 Workflows + Renovate
+### 🧪 CI/CD Pipeline — 8 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
@@ -237,6 +238,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
 | **Health Check** — weekly server update | Weekly Monday + manual |
+| **Terraform Apply** — quick TF apply without Ansible | Manual dispatch |
 
 CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 

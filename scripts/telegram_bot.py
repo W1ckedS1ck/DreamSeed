@@ -63,11 +63,6 @@ def start_health_server():
 
 
 
-def escape_md2(text):
-    text = str(text).replace('\\', '\\\\')
-    special_chars = r'_*[]()~`>#+-=|{}.!'
-    return ''.join(f'\\{c}' if c in special_chars else c for c in text)
-
 def get_size(filepath_or_bytes):
     if not filepath_or_bytes:
         return "-"

@@ -416,7 +416,6 @@ data = {
     'web_server': os.environ.get('WEB_SERVER', ''),
     'domain': os.environ.get('DEPLOY_DOMAIN', ''),
     'domain_www': target.startswith('prod'),
-    'dev_write_perms': not target.startswith('prod'),
     'php_version': os.environ.get('PHP_VERSION', ''),
     'secrets_dir': f'{script_dir}/secrets',
     'configs_dir': f'{script_dir}/configs',

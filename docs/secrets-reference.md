@@ -1,76 +1,66 @@
 # GitHub Secrets Reference
 
-Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com/W1ckedS1ck/DreamSeed) repository, their purpose, and where they are consumed.
+Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com/W1ckedS1ck/DreamSeed) repository.
 
 ---
 
 ## Required (all targets)
 
-| Secret | Purpose | Source | Used in |
-|--------|---------|--------|---------|
-| `TG_TOKEN` | Telegram bot token | BotFather | `deploy.yml`, `backup-test.yml`, `rollback.yml`, ansible (telegram-bot), scripts |
-| `TG_CHAT_ID` | Telegram chat ID (GitHub `vars`, not `secrets`) | BotFather | Same |
-| `TG_THREAD_ID` | Telegram thread (GitHub `vars`, not `secrets`) | BotFather | Same |
-| `DB_PASS` | MySQL password for MODX | You | `deploy.sh`, ansible (mariadb), scripts |
-| `GRAFANA_PASS` | Grafana admin password | You | `deploy.sh`, ansible (grafana) |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS-01 certbot + auto DNS update) | Cloudflare Dashboard | `deploy.sh`, `backup-test.yml`, ansible (certbot) |
-| `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible + git push) | `~/.ssh/github` | `deploy.yml`, `backup-test.yml`, `rollback.yml`, `deploy.sh` |
-| `VAULT_PASSWORD` | ansible-vault password | You | `deploy.yml`, `backup-test.yml`, `rollback.yml`, `deploy.sh` |
-| `TF_API_TOKEN` | Terraform Cloud API token | Terraform Cloud → Tokens | `deploy.yml`, `rollback.yml`, `backup-test.yml` |
-| `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `rclone config file` → base64 | `deploy.yml`, `backup-test.yml`, `deploy.sh` |
-| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | Better Stack → Settings → API | `deploy.yml`, server scripts |
+| Secret / Var | Purpose | Used in |
+|-------------|---------|---------|
+| `TG_TOKEN` | Telegram bot token | `deploy.yml`, `backup-test.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
+| `TG_CHAT_ID` (var) | Telegram chat ID | `deploy.yml`, `backup-test.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
+| `TG_THREAD_ID` (var) | Telegram thread/topic ID | Same |
+| `DB_PASS` | MySQL password for MODX | `deploy.yml`, `backup-test.yml` |
+| `GRAFANA_PASS` | Grafana admin password | `deploy.yml`, `backup-test.yml` |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS certbot + auto DNS update) | `deploy.yml`, `backup-test.yml` |
+| `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible) | `deploy.yml`, `backup-test.yml`, `health-check.yml`, `rollback.yml` |
+| `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `backup-test.yml`, `rollback.yml` |
+| `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml` |
+| `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `backup-test.yml` |
+| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml` |
 
 ---
 
 ## SSH keys
 
-| Secret | Purpose | Source | Used in |
-|--------|---------|--------|---------|
-| `SSH_PRIVATE_KEY` | Deploy key (Ansible + git push via `~/.ssh/github`) | `~/.ssh/github` pair | All deploys |
-| `USER_SSH_PUBLIC_KEY` | Developer's public key | GitHub → Settings → SSH Keys | `deploy.yml` → `ADDITIONAL_SSH_KEYS` |
-| `VITALI_SSH_PUBLIC_KEY` | Vitali's public key | `~/.ssh/Vitali.pub` | `deploy.yml` → `ADDITIONAL_SSH_KEYS` |
-| `TESTHETZ_SSH_KEY` | Private key for GeekBench test server | You | `test-bench.yml` |
-| `DEV_AWS_SSH_PUBLIC_KEY` | Public key for AWS dev (drift detection) | You | `drift-detection.yml` |
+| Secret | Purpose | Used in |
+|--------|---------|---------|
+| `SSH_PRIVATE_KEY` | Deploy key (Ansible) | See above |
+| `USER_SSH_PUBLIC_KEY` | Developer's public key → `ADDITIONAL_SSH_KEYS` | `deploy.yml` |
+| `VITALI_SSH_PUBLIC_KEY` | Vitali's public key → `ADDITIONAL_SSH_KEYS` + AWS prod Terraform | `deploy.yml`, `terraform-apply.yml` |
+| `DEV_AWS_SSH_PUBLIC_KEY` | Public key for AWS dev Terraform | `terraform-apply.yml` |
 
 ---
 
-## AWS (prod)
+## AWS
+
+### prod
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `lib/env.sh`, `rollback.yml` |
+| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
 | `PROD_SECRET_KEY` | AWS Secret Key | Same |
 | `PROD_REGION` | AWS region (`us-west-1`) | Same |
 | `PROD_EIP` | Elastic IP allocation ID (`eipalloc-xxx`) | Same |
 
-## AWS (dev-aws)
+### dev-aws
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `lib/env.sh`, `rollback.yml` |
+| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
 | `DEV_AWS_SECRET_KEY` | AWS Secret Key | Same |
 | `DEV_AWS_REGION` | AWS region (`us-west-1`) | Same |
 | `DEV_AWS_EIP` | Elastic IP allocation ID | Same |
 
 ---
 
-## Hetzner (dev-hetz)
+## Hetzner
 
-| Secret | Purpose | Used in |
-|--------|---------|---------|
-| `HCLOUD_TOKEN` | Hetzner Cloud API token | `deploy.sh`, `lib/env.sh`, `backup-test.yml` |
-
-## Hetzner (prod-hetz)
-
-| Secret | Purpose | Used in |
-|--------|---------|---------|
-| `PROD_HETZ_HCLOUD_TOKEN` | Hetzner Cloud API token (new account) | `deploy.yml`, `lib/env.sh` |
-
-## Hetzner (testhetz — GeekBench)
-
-| Secret | Purpose | Used in |
-|--------|---------|---------|
-| `TESTHETZ_HCLOUD_TOKEN` | Hetzner Cloud API token (test account) | `test-bench.yml` |
+| Secret | Target | Purpose | Used in |
+|--------|--------|---------|---------|
+| `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `backup-test.yml`, `terraform-apply.yml` |
+| `PROD_HETZ_HCLOUD_TOKEN` | prod-hetz | Hetzner Cloud API token | `deploy.yml`, `drift-detection.yml`, `terraform-apply.yml` |
 
 ---
 
@@ -78,23 +68,36 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret | Env | Purpose | Used in |
 |--------|-----|---------|---------|
-| `PROD_GRAFANA_CLOUD_URL` | prod | Push URL for vmagent | `deploy.yml`, `backup-test.yml`, `grafana-cloud.yml` |
-| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username | `deploy.yml`, `backup-test.yml` |
-| `PROD_GRAFANA_CLOUD_TOKEN` | prod | vmagent API token | `deploy.yml`, `backup-test.yml` |
-| `PROD_GRAFANA_CLOUD_SA_TOKEN` | prod | Service Account token (Terraform) | `grafana-cloud.yml` |
-| `PROD_SM_ACCESS_TOKEN` | prod | Synthetic Monitoring token | `grafana-cloud.yml` |
-| `DEV_GRAFANA_CLOUD_PUSH_URL` | dev | Push URL for vmagent | `deploy.yml`, `backup-test.yml` |
-| `DEV_GRAFANA_CLOUD_URL` | dev | Alias for PUSH_URL | Same |
+| `DEV_GRAFANA_CLOUD_URL` | dev | Push URL for vmagent | `deploy.yml`, `backup-test.yml`, `grafana-cloud.yml` |
 | `DEV_GRAFANA_CLOUD_USERNAME` | dev | vmagent username | `deploy.yml`, `backup-test.yml` |
 | `DEV_GRAFANA_CLOUD_TOKEN` | dev | vmagent API token | `deploy.yml`, `backup-test.yml` |
 | `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token (Terraform) | `grafana-cloud.yml` |
 | `DEV_SM_ACCESS_TOKEN` | dev | Synthetic Monitoring token | `grafana-cloud.yml` |
+| `PROD_GRAFANA_CLOUD_URL` | prod | Push URL for vmagent | `deploy.yml`, `backup-test.yml`, `grafana-cloud.yml` |
+| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username | `deploy.yml`, `backup-test.yml` |
+| `PROD_GRAFANA_CLOUD_TOKEN` | prod | vmagent API + SA token | `deploy.yml`, `backup-test.yml`, `grafana-cloud.yml` |
+| `PROD_SM_ACCESS_TOKEN` | prod | Synthetic Monitoring token | `grafana-cloud.yml` |
+
+---
+
+## Better Uptime (heartbeats)
+
+All set in `deploy.yml` and consumed by the respective server scripts.
+
+| Secret | Script |
+|--------|--------|
+| `BETTERUPTIME_BACKUP_KEY` | `smart_backup.sh` |
+| `BETTERUPTIME_GDRIVE_KEY` | `upload_backups_to_gdrive.sh` |
+| `BETTERUPTIME_REPORT_DAILY_KEY` | `send_report.sh` (daily) |
+| `BETTERUPTIME_REPORT_WEEKLY_KEY` | `send_report.sh` (weekly) |
+| `BETTERUPTIME_VERIFY_KEY` | `verify_backups.sh` |
 
 ---
 
 ## Legacy (unused — safe to delete)
 
-| Secret | Created | Notes |
-|--------|---------|-------|
-| `INFRACOST_API_KEY` | 2026-05-20 | Kept in GitHub Secrets (not used in code) |
-| `INFRACOST_CLI_AUTHENTICATION_TOKEN` | 2026-05-15 | Not referenced anywhere |
+| Secret | Notes |
+|--------|-------|
+| `INFRACOST_API_KEY` | Infracost API key, not referenced in any workflow |
+| `TESTHETZ_HCLOUD_TOKEN` | Hetzner Cloud token for non-existent `test-bench.yml` |
+| `TESTHETZ_SSH_KEY` | SSH key for non-existent `test-bench.yml` |

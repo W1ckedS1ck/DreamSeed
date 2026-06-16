@@ -34,6 +34,15 @@ load_env() {
     OWNER="${OWNER:-}"
 }
 
+# Detect environment suffix for backup paths.
+# Prod → ""  (backs up to DreamSeed/backups/project/ and db/)
+# Dev  → "-dev" (backs up to DreamSeed/backups/project-dev/ and db-dev/)
+#
+# DESIGN NOTE: Dev uploads to dev-specific paths, but ALL restore logic
+# (deploy restore role, RESTORE_ALL.sh --auto-latest, interactive mode)
+# pulls from prod paths only. Dev is an ephemeral copy of prod — it has
+# no independent backup pipeline. Dev cloud backups exist as a safety
+# net only; they are never consumed by any restore flow.
 detect_env() {
     if [[ -f "$SCRIPT_DIR/.env" ]]; then
         grep -qE '^ENV="?prod' "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
@@ -101,10 +110,6 @@ prune_cloud_backups() {
             [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/$file"
         done
     fi
-}
-
-escape_md2() {
-    echo "$1" | sed 's/[][_*()~`>#+=|{}.!@:-]/\\&/g'
 }
 
 rotate_files() {
