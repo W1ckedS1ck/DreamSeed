@@ -8,10 +8,10 @@ data "grafana_synthetic_monitoring_probes" "main" {
 }
 
 locals {
-  sm_probes_america = ["NorthCalifornia", "Ohio", "South Carolina"]
+  sm_probes_america = ["NorthCalifornia", "Ohio", "Montreal"]
 }
 
-# --- HTTP check — main site (3 America probes, every 15 min) ---
+# --- HTTP check — main site (US West + Central + Canada, every 15 min) ---
 resource "grafana_synthetic_monitoring_check" "http_main" {
   count     = var.sm_enabled ? 1 : 0
   provider  = grafana.sm
