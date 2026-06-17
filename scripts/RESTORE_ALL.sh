@@ -50,6 +50,7 @@ fi
 SITE_URL="https://${SITE_DOMAIN:-localhost}"
 
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
+PROJECT_DIR="$(realpath "$PROJECT_DIR" 2>/dev/null || echo "$PROJECT_DIR")"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 
 ENV=$(detect_env)
@@ -383,9 +384,10 @@ RESTORE_TEMP_DIRS+=("$PRE_RESTORE_BACKUP_DIR")
 
 if [ -n "$SELECTED_DB" ]; then
     BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
-    if mysqldump "$DB_NAME" 2>/dev/null | gzip > "$BACKUP_DB_FILE"; then
+    if mysqldump --single-transaction "$DB_NAME" 2>/dev/null | gzip > "$BACKUP_DB_FILE"; then
         echo -e "${GREEN}✓ Database snapshot: $(du -h "$BACKUP_DB_FILE" | cut -f1)${NC}"
     else
+        rm -f "$BACKUP_DB_FILE"
         echo -e "${YELLOW}⚠️  Database snapshot failed (continuing)${NC}"
     fi
 fi

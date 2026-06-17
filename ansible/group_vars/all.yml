@@ -3,7 +3,7 @@
 #  General
 # ========================
 ansible_python_interpreter: /usr/bin/python3
-domain: ""
+domain: "{{ lookup('env', 'DEPLOY_DOMAIN') | mandatory('domain required — run via deploy.sh or pass -e domain=...') }}"
 domain_www: true
 admin_email: "hello@dreamseed.online"
 web_server: "nginx"
@@ -15,11 +15,12 @@ db_name: "modx_db"
 db_user: "modx_user"
 db_prefix: "modx_"
 db_pass: "{{ lookup('env', 'DB_PASS') | mandatory('DB_PASS environment variable is required') }}"
+db_min_tables: 100
 
 # ========================
 #  PHP
 # ========================
-php_version: "{{ ansible_facts.php_version | default('8.3') }}"  # auto-detected in playbook-01, cached for subsequent playbooks
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}"  # fallback to highest available if missing in apt
 
 # ========================
 #  Backup
@@ -89,7 +90,7 @@ configs_dir: "{{ playbook_dir }}/../configs"
 # ========================
 #  Environment
 # ========================
-deploy_env: "{{ lookup('env', 'DEPLOY_ENV') | default('unknown', true) }}"
+deploy_env: "{{ lookup('env', 'DEPLOY_ENV') | mandatory('DEPLOY_ENV required — run via deploy.sh or pass -e deploy_env=...') }}"
 
 # ========================
 #  Security

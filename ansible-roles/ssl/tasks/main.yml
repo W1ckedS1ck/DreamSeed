@@ -197,17 +197,22 @@
     name: www-data
     groups: ssl-cert
     append: true
+  register: ssl_group_add
 
 - name: Restart nginx to apply ssl-cert group membership
   become: true
   ansible.builtin.systemd:
     name: nginx
     state: restarted
-  when: web_server == 'nginx'
+  when:
+    - web_server == 'nginx'
+    - ssl_group_add is changed
 
 - name: Restart apache to apply ssl-cert group membership
   become: true
   ansible.builtin.systemd:
     name: apache2
     state: restarted
-  when: web_server == 'apache'
+  when:
+    - web_server == 'apache'
+    - ssl_group_add is changed

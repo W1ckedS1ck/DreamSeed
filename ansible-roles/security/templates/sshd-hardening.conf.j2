@@ -5,7 +5,7 @@ X11Forwarding no
 AllowTcpForwarding no
 AllowAgentForwarding no
 MaxAuthTries 3
-MaxSessions 2
+MaxSessions 10
 ClientAliveCountMax 2
 LogLevel VERBOSE
 AllowUsers {{ ansible_user | default('ubuntu') }}

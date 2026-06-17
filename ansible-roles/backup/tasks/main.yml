@@ -28,6 +28,10 @@
 - name: Create root MySQL config for cron jobs
   ansible.builtin.copy:
     content: |
+      [client]
+      user=root
+      password={{ db_pass }}
+
       [mysql]
       user=root
       password={{ db_pass }}

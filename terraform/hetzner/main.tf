@@ -73,12 +73,6 @@ resource "hcloud_firewall" "web" {
     destination_ips = ["0.0.0.0/0", "::/0"]
   }
 
-  rule {
-    direction       = "out"
-    protocol        = "tcp"
-    port            = "465"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-  }
 }
 
 data "hcloud_primary_ip" "main" {

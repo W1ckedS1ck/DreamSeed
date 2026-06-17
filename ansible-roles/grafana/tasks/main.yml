@@ -187,5 +187,4 @@
   become: true
   no_log: true
   changed_when: false
-  failed_when: false
   when: grafana_admin_password | default('') | length > 0

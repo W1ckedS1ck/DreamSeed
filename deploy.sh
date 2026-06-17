@@ -275,7 +275,7 @@ main() {
         if [[ "${CI:-}" == "true" ]]; then
             echo "  CI mode — confirmation skipped"
         else
-            read -rp "  Continue? [y/N] " confirm
+            read -rp "  Continue? [y/N] " confirm < /dev/tty
             [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
         fi
     fi
@@ -299,9 +299,9 @@ main() {
         terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform init failed"; }
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
 
-        local tf_args=""
-        [[ "$TF_PROVIDER" == "aws" ]] && tf_args="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
-        [[ "$TF_PROVIDER" == "hetzner" ]] && tf_args="-var=environment=${TARGET}"
+        local tf_args=()
+        [[ "$TF_PROVIDER" == "aws" ]] && tf_args+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")
+        [[ "$TF_PROVIDER" == "hetzner" ]] && tf_args+=(-var="environment=${TARGET}")
 
         # Pre-apply state backup — rollback point if apply breaks
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
@@ -312,7 +312,7 @@ main() {
             rm -f "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null
         fi
 
-        if _tf apply -auto-approve -no-color $tf_args >> "$DEPLOY_TF_LOG" 2>&1; then
+        if _tf apply -auto-approve -no-color "${tf_args[@]}" >> "$DEPLOY_TF_LOG" 2>&1; then
             :  # ok
         else
             tail -30 "$DEPLOY_TF_LOG"
@@ -395,11 +395,11 @@ main() {
 all:
   hosts:
     dreamseed:
-      ansible_host: ${SERVER_IP}
+      ansible_host: "${SERVER_IP}"
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: ${SSH_KEY}
+      ansible_ssh_private_key_file: "${SSH_KEY}"
       ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
-      server_ip: ${SERVER_IP}
+      server_ip: "${SERVER_IP}"
 INVEOF
 
     DEPLOY_VARS_TMP=$(mktemp); chmod 600 "$DEPLOY_VARS_TMP"
@@ -416,7 +416,7 @@ data = {
     'web_server': os.environ.get('WEB_SERVER', ''),
     'domain': os.environ.get('DEPLOY_DOMAIN', ''),
     'domain_www': target.startswith('prod'),
-    'php_version': os.environ.get('PHP_VERSION', ''),
+
     'secrets_dir': f'{script_dir}/secrets',
     'configs_dir': f'{script_dir}/configs',
     'scripts_dir': f'{script_dir}/scripts',

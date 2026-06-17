@@ -200,7 +200,7 @@
     mode: "0640"
   when: modx_config_file.stat.exists
 
-- name: Secure MODX core directories
+- name: Secure MODX core directories (recursive — static files)
   become: true
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -209,10 +209,21 @@
     mode: "{{ item.mode }}"
     recurse: true
   loop:
-    - {path: "{{ web_root }}/core/cache", owner: www-data, mode: "u=rwX,g=rwX,o="}
-    - {path: "{{ web_root }}/core/logs", owner: www-data, mode: "u=rwX,g=rwX,o="}
     - {path: "{{ web_root }}/core/model", owner: root, mode: "u=rwX,g=rwX,o="}
     - {path: "{{ web_root }}/core/components", owner: root, mode: "u=rwX,g=rwX,o="}
+  when: modx_config_file.stat.exists
+
+- name: Secure MODX cache/logs directories (no recurse — FPM manages files)
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: www-data
+    group: www-data
+    mode: "u=rwX,g=rwX,o="
+    state: directory
+  loop:
+    - "{{ web_root }}/core/cache"
+    - "{{ web_root }}/core/logs"
   when: modx_config_file.stat.exists
 
 # --- Developer Write Permissions ---

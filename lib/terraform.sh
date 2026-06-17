@@ -29,6 +29,11 @@ terraform_ensure_workspace() {
 }
 
 terraform_init_if_needed() {
+    if [[ -z "${TF_API_TOKEN:-}" ]]; then
+        echo "  ✗ TF_API_TOKEN not set — required for Terraform Cloud remote backend"
+        echo "    Set it in secrets/.env or export TF_API_TOKEN=..."
+        return 1
+    fi
     # Ensure TFC workspace exists before init (first deploy creates workspace via API)
     terraform_ensure_workspace
     local ws
@@ -46,15 +51,15 @@ terraform_destroy() {
         echo "  ⚠  PRODUCTION DESTROY REQUESTED  ⚠"
         echo "  This will PERMANENTLY DELETE: $DEPLOY_DOMAIN"
         echo ""
-        read -rp "  Step 1/3 — Do you REALLY want to destroy $TARGET? [y/N] " a1
+        read -rp "  Step 1/3 — Do you REALLY want to destroy $TARGET? [y/N] " a1 < /dev/tty
         [[ ! "${a1:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
-        read -rp "  Step 2/3 — Are you absolutely sure? [y/N] " a2
+        read -rp "  Step 2/3 — Are you absolutely sure? [y/N] " a2 < /dev/tty
         [[ ! "${a2:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
         echo "  Step 3/3 — Type 'destroy $TARGET' to confirm: "
-        read -rp "  > " a3
+        read -rp "  > " a3 < /dev/tty
         [[ "$a3" != "destroy ${TARGET}" ]] && { echo "Aborted."; exit 0; }
     else
-        read -rp "  Destroy $TARGET? [y/N] " a
+        read -rp "  Destroy $TARGET? [y/N] " a < /dev/tty
         [[ ! "${a:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
     fi
 
@@ -72,8 +77,8 @@ terraform_destroy() {
 
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
-    local var_arg=""
-    [[ "$TF_PROVIDER" == "aws" ]] && var_arg="-var=ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+    local var_arg=()
+    [[ "$TF_PROVIDER" == "aws" ]] && var_arg+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")
 
     if [[ "$TF_PROVIDER" == "aws" ]] && [[ "$TARGET" == "prod" ]]; then
         echo "  ⚠ Removing termination protection..."
@@ -87,9 +92,8 @@ terraform_destroy() {
     echo "  ━━━ Destroying resources ($TARGET)"
 
     TF_TMP_OUT=$(mktemp)
-    # shellcheck disable=SC2086
     set +e
-    _tf destroy -auto-approve -no-color $var_arg 2>&1 | tee -a "$TF_TMP_OUT"
+    _tf destroy -auto-approve -no-color "${var_arg[@]}" 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
     set -e
     if [[ $tf_exit -ne 0 ]]; then
