@@ -86,6 +86,12 @@ if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then
     ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"
 fi
 
+# ====== Suppress alert on fresh servers (<1h uptime — backup cron races with manual steps) ======
+UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 999999)
+if [ "$HAS_ERROR" -eq 1 ] && [ "$UPTIME" -lt 3600 ]; then
+    exit 0
+fi
+
 # ====== Send alert only on failure ======
 if [ "$HAS_ERROR" -eq 1 ]; then
     END_TIME=$(date +%s)

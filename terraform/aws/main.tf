@@ -136,7 +136,7 @@ resource "aws_instance" "web" {
 
 check "workspace_valid_for_aws" {
   assert {
-    condition     = contains(["prod", "dev-aws"], terraform.workspace)
-    error_message = "AWS provider can only be used with workspace prod or dev-aws (got: ${terraform.workspace})"
+    condition     = contains(["prod", "dev-aws", "test"], terraform.workspace)
+    error_message = "AWS provider can only be used with workspace prod, dev-aws, or test (got: ${terraform.workspace})"
   }
 }
