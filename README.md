@@ -3,7 +3,7 @@
 ![CI](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg)
 ![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
-![BackupRestorationTest](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/backup-test.yml/badge.svg)
+![BackupRestorationTest](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/test-restore.yml/badge.svg)
 ![Gitleaks](https://img.shields.io/badge/Gitleaks-passed-00C853?logo=gitleaks)
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
@@ -169,7 +169,7 @@ DreamSeed/
     ├── ci.yml                # Full lint + security + validation pipeline
     ├── deploy.yml            # One-button deploy via GitHub Actions
     ├── drift-detection.yml   # Daily terraform plan against prod
-    ├── backup-test.yml       # Full backup/restore verification with app health checks
+    ├── test-restore.yml      # Full backup/restore verification with app health checks
     ├── rollback.yml          # Emergency rollback with prod confirmation
     ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
     ├── health-check.yml      # Weekly server update (apt upgrade + reboot check)

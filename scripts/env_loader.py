@@ -15,7 +15,12 @@ def load_env(env_path: str = "") -> None:
     if not os.path.isfile(env_path):
         print(f"[ERROR] .env not found: {env_path}", file=sys.stderr)
         sys.exit(1)
-    with open(env_path) as f:
+    try:
+        f = open(env_path)
+    except PermissionError:
+        print(f"[ERROR] Permission denied: {env_path}", file=sys.stderr)
+        sys.exit(1)
+    with f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:

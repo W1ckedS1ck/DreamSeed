@@ -284,7 +284,7 @@ payload["custom_webhook_template_attributes"] = {
     ],
     "body_template": {
         "chat_id": chat_id,
-        "message_thread_id": int(thread),
+        "message_thread_id": int(thread) if thread else None,
         "parse_mode": "HTML",
         "text": text
     }
