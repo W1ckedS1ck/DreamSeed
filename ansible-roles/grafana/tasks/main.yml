@@ -10,7 +10,7 @@
   become: true
 
 - name: Add Grafana repository
-  community.general.deb822_repository:
+  ansible.builtin.deb822_repository:
     name: grafana
     types: [deb]
     uris: https://apt.grafana.com
