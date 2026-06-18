@@ -9,7 +9,7 @@ inputs:
   collections:
     description: Ansible collections to install
     required: false
-    default: ansible.mysql ansible.posix
+    default: ansible.mysql ansible.posix community.general
 
 runs:
   using: composite
