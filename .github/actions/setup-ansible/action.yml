@@ -9,7 +9,7 @@ inputs:
   collections:
     description: Ansible collections to install
     required: false
-    default: ansible.mysql ansible.posix community.general
+    default: ansible.mysql ansible.posix
 
 runs:
   using: composite
@@ -29,5 +29,5 @@ runs:
     - run: pip install -r ${{ inputs.requirements-file }} --quiet
       shell: bash
 
-    - run: ansible-galaxy collection install --force ${{ inputs.collections }}
+    - run: ansible-galaxy collection install ${{ inputs.collections }}
       shell: bash
