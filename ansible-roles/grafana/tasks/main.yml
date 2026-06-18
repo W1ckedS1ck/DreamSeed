@@ -18,8 +18,14 @@
     components: [main]
     signed_by: /usr/share/keyrings/grafana.gpg
     state: present
+  become: true
+  register: grafana_repo
+
+- name: Update apt cache after adding Grafana repo
+  ansible.builtin.apt:
     update_cache: true
   become: true
+  when: grafana_repo is changed
 
 - name: Install Grafana
   ansible.builtin.apt:
