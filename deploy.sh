@@ -416,6 +416,7 @@ data = {
     'web_server': os.environ.get('WEB_SERVER', ''),
     'domain': os.environ.get('DEPLOY_DOMAIN', ''),
     'domain_www': target.startswith('prod'),
+    'cloudflare_enabled': target.startswith('prod'),
 
     'secrets_dir': f'{script_dir}/secrets',
     'configs_dir': f'{script_dir}/configs',

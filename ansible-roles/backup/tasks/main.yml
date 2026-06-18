@@ -148,7 +148,7 @@
       "DELETE FROM \`{{ db_name }}\`.\`{{ db_prefix | default('modx_') }}session\`
       WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
       2>&1 | logger -t session-cleanup
-    user: root
+    user: ubuntu
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
