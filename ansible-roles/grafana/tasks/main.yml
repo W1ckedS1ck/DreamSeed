@@ -18,6 +18,7 @@
     components: [main]
     signed_by: /usr/share/keyrings/grafana.gpg
     state: present
+    update_cache: true
   become: true
 
 - name: Install Grafana
