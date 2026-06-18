@@ -847,6 +847,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.DEV_AWS_REGION }}
         run: |
+          # Skip destroy if no resources exist (TFC shows "Errored" on empty state destroy)
+          RESOURCES=$(terraform state list 2>/dev/null | wc -l)
+          if [ "$RESOURCES" -eq 0 ]; then
+            echo "No resources to destroy — workspace already empty"
+            exit 0
+          fi
           set +e
           terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log
           tf_exit=${PIPESTATUS[0]}
