@@ -216,7 +216,7 @@
 - name: Secure MODX cache/logs directories (no recurse — FPM manages files)
   become: true
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: "{{ item }}"
     owner: www-data
     group: www-data
     mode: "u=rwX,g=rwX,o="
