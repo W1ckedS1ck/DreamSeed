@@ -29,5 +29,5 @@ runs:
     - run: pip install -r ${{ inputs.requirements-file }} --quiet
       shell: bash
 
-    - run: ansible-galaxy collection install ${{ inputs.collections }}
+    - run: ansible-galaxy collection install --force ${{ inputs.collections }}
       shell: bash
