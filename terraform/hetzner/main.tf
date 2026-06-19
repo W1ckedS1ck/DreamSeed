@@ -114,16 +114,12 @@ resource "hcloud_server" "main" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes = [
-      ssh_keys,
-      user_data,
-    ]
   }
 }
 
 check "workspace_valid_for_hetzner" {
   assert {
-    condition     = contains(["dev-hetz", "test", "prod-hetz"], terraform.workspace)
-    error_message = "Hetzner provider can only be used with workspace dev-hetz, test, or prod-hetz (got: ${terraform.workspace})"
+    condition     = contains(["dev-hetz", "test", "prod-hetz"], var.environment)
+    error_message = "Hetzner provider can only be used with environment dev-hetz, test, or prod-hetz (got: ${var.environment})"
   }
 }

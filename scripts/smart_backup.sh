@@ -36,7 +36,9 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
 
 # ====== Lock against parallel runs ======
 trap 'exec 9>&-' EXIT
-LOCK_FILE="/tmp/smart_backup.lock"
+LOCK_DIR="${HOME:-/tmp}/.locks"
+mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
+LOCK_FILE="$LOCK_DIR/smart_backup.lock"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
     echo "Backup already running (lock: $LOCK_FILE)" >&2

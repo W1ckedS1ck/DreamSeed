@@ -15,6 +15,7 @@ chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 %{endif~}
 # Bootstrap marker — only run apt upgrade on first boot
 if [[ ! -f /etc/.dreamseed-bootstrapped ]]; then
+    apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
     touch /etc/.dreamseed-bootstrapped
 fi

@@ -2,7 +2,9 @@
 set -euo pipefail
 
 # ====== Prevent concurrent executions ======
-LOCK_FILE="/tmp/restore_all.lock"
+LOCK_DIR="${HOME:-/tmp}/.locks"
+mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
+LOCK_FILE="$LOCK_DIR/restore_all.lock"
 exec 9>"$LOCK_FILE"
 if ! flock -n -x 9; then
     echo "ERROR: Restore already in progress ($LOCK_FILE)"

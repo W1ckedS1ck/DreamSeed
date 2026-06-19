@@ -160,7 +160,9 @@ main() {
 
     LOCK_ACQUIRED=false
     if command -v flock &>/dev/null; then
-        LOCK_FILE="/tmp/deploy-${TARGET}.lock"
+        LOCK_DIR="${HOME:-/tmp}/.locks"
+        mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
+        LOCK_FILE="$LOCK_DIR/deploy-${TARGET}.lock"
         exec 200>"$LOCK_FILE"
         if ! flock -n 200; then
             local stale_pid
