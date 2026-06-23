@@ -26,7 +26,7 @@
       "fileMatch": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["monitoring_node_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
+      "matchStrings": ["monitoring_node_version: \"{{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) }}\""],
       "depNameTemplate": "prometheus/node_exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -37,7 +37,7 @@
       "fileMatch": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["monitoring_nginx_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
+      "matchStrings": ["monitoring_nginx_version: \"{{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) }}\""],
       "depNameTemplate": "nginxinc/nginx-prometheus-exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -48,7 +48,7 @@
       "fileMatch": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["monitoring_mysql_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
+      "matchStrings": ["monitoring_mysql_version: \"{{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) }}\""],
       "depNameTemplate": "prometheus/mysqld_exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -59,7 +59,7 @@
       "fileMatch": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["monitoring_vm_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
+      "matchStrings": ["monitoring_vm_version: \"{{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) }}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -70,7 +70,7 @@
       "fileMatch": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["grafana_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
+      "matchStrings": ["grafana_version: \"{{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) }}\""],
       "depNameTemplate": "grafana/grafana",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -81,7 +81,7 @@
       "fileMatch": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["monitoring_apache_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
+      "matchStrings": ["monitoring_apache_version: \"{{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) }}\""],
       "depNameTemplate": "Lusitaniae/apache_exporter",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
@@ -92,7 +92,7 @@
       "fileMatch": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["monitoring_vmagent_version: \"{{.*?default\\('(?<currentValue>[^']+)'.*\\) }}\""],
+      "matchStrings": ["monitoring_vmagent_version: \"{{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) }}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
