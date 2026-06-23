@@ -41,7 +41,7 @@ fi
 DB_BACKUP=$(find "$BACKUP_DIR/db" -maxdepth 1 -name "db_${DB_NAME}_*.sql.gz" -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
 if [[ -n "$DB_BACKUP" && -f "$DB_BACKUP" ]]; then
-    if sudo gunzip -t "$DB_BACKUP" > /dev/null 2>&1; then
+    if gunzip -t "$DB_BACKUP" > /dev/null 2>&1; then
         sql_head=$(zcat "$DB_BACKUP" 2>/dev/null | head -1000) || true
         if grep -q "CREATE TABLE\|INSERT INTO" <<< "$sql_head" 2>/dev/null; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ DB backup OK: $(basename "$DB_BACKUP")" >> "$LOG_FILE"
