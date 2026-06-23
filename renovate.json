@@ -159,6 +159,14 @@
       "pinDigests": true
     },
     {
+      "description": "Auto-approve actions/checkout updates",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["actions/checkout"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
       "description": "Group VictoriaMetrics server and vmagent — always released together",
       "matchPackageNames": ["VictoriaMetrics/VictoriaMetrics"],
       "matchManagers": ["custom.regex"],
