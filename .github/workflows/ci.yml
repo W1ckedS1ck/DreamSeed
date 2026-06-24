@@ -57,6 +57,7 @@ jobs:
         with:
           python-version: '3.x'
           cache: pip
+          cache-dependency-path: ansible/requirements-deploy.txt
       - name: Lint Jinja2 templates
         run: |
           pip install j2lint==1.2.0 --quiet
@@ -155,6 +156,7 @@ jobs:
         with:
           python-version: '3.x'
           cache: pip
+          cache-dependency-path: ansible/requirements-deploy.txt
       - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.npm
