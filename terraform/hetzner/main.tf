@@ -94,7 +94,6 @@ resource "hcloud_primary_ip" "main" {
   auto_delete = false
   labels      = local.labels
   delete_protection  = var.environment == "prod-hetz"
-  rebuild_protection = var.environment == "prod-hetz"
 }
 
 resource "hcloud_server" "main" {
@@ -121,9 +120,6 @@ resource "hcloud_server" "main" {
 
   lifecycle {
     create_before_destroy = true
-  }
-
-  lifecycle {
     ignore_changes = [
       ssh_keys,
       user_data,
