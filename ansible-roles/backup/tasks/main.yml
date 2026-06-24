@@ -148,10 +148,10 @@
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
-- name: Setup backup verification cron (daily at 4 AM)
+- name: Setup backup verification cron (daily at 4:30 AM)
   ansible.builtin.cron:
     name: "DreamSeed backup verification"
-    minute: "0"
+    minute: "30"
     hour: "4"
     job: "{{ scripts_dir_remote }}/verify_backups.sh"
     user: ubuntu

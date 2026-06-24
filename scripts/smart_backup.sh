@@ -86,16 +86,18 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
 
+TMP_DB_BACKUP="${DB_BACKUP}.tmp"
 set +o pipefail
-mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$DB_BACKUP"
+mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
 
-if [ "${DUMP_RC[0]}" -eq 0 ] && [ "${DUMP_RC[1]}" -eq 0 ] && [ -s "$DB_BACKUP" ]; then
+if [ "${DUMP_RC[0]}" -eq 0 ] && [ "${DUMP_RC[1]}" -eq 0 ] && [ -s "$TMP_DB_BACKUP" ]; then
+    mv "$TMP_DB_BACKUP" "$DB_BACKUP"
     DB_STATUS="✅ Database backed up"
     rotate_files "$BACKUP_DIR/db/db_${DB_NAME}_*.sql.gz" "$DB_KEEP"
 else
-    rm -f "$DB_BACKUP"
+    rm -f "$TMP_DB_BACKUP"
     DB_STATUS="❌ Database dump failed"
 fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
