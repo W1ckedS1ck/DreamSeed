@@ -8,6 +8,9 @@
 
 set -euo pipefail
 
+# Ensure HOME is set for temp directories
+export HOME="${HOME:?ERROR: HOME environment variable not set}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common_functions.sh
 source "$SCRIPT_DIR/scripts/common_functions.sh"
@@ -241,7 +244,7 @@ else
 
     ensure_webhook() {
         local name="$1" started="$2" resolved="$3" text="$4"
-        local wh_json; wh_json=$(mktemp /tmp/bs_webhook_XXXXXX.json)
+        local wh_json; wh_json=$(mktemp "${HOME:?}/.tmp_bs_webhook_XXXXXX.json")
         trap 'rm -f "$wh_json"' RETURN
 
         # Check if webhook already exists by name

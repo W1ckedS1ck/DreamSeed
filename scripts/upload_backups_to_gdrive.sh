@@ -27,6 +27,12 @@ DB_DIR="$LOCAL_BACKUP_DIR/db"
 
 RCLONE_REMOTE="gdrive"
 
+# Validate rclone remote name
+if ! [[ "$RCLONE_REMOTE" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    echo "ERROR: Invalid rclone remote name: $RCLONE_REMOTE (must be alphanumeric + underscore)"
+    exit 1
+fi
+
 ENV=$(detect_env)
 ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 REMOTE_BASE="DreamSeed/backups"

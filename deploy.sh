@@ -41,6 +41,14 @@ DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
 > "$LOG"; chmod 600 "$LOG"
 > "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
 
+# Rotate deploy_history.log if over 50MB
+if [[ -f "$DEPLOY_HISTORY" ]] && [[ $(stat -f%z "$DEPLOY_HISTORY" 2>/dev/null || stat -c%s "$DEPLOY_HISTORY" 2>/dev/null || echo 0) -gt 52428800 ]]; then
+    for i in {9..1}; do
+        [[ -f "$DEPLOY_HISTORY.$i" ]] && mv "$DEPLOY_HISTORY.$i" "$DEPLOY_HISTORY.$((i+1))"
+    done
+    mv "$DEPLOY_HISTORY" "$DEPLOY_HISTORY.1"
+fi
+
 # Load modules
 source "$SCRIPT_DIR/lib/helpers.sh"
 source "$SCRIPT_DIR/lib/env.sh"

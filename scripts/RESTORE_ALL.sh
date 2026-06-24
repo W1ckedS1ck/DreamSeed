@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# Ensure HOME is set for temp directories
+export HOME="${HOME:?ERROR: HOME environment variable not set}"
+
 # ====== Prevent concurrent executions ======
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
@@ -27,6 +30,18 @@ fi
 # ====== Validate required env vars ======
 : "${DB_NAME:?ERROR: DB_NAME not set in .env or environment}"
 : "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
+
+# Setup restore log
+RESTORE_LOG="/home/ubuntu/backups/restore_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$(dirname "$RESTORE_LOG")"
+{
+    echo "=== RESTORE STARTED ==="
+    echo "Time: $(date)"
+    echo "Mode: $1"
+    echo "User: $USER"
+    echo "Host: $(hostname)"
+} >> "$RESTORE_LOG"
+
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
 
@@ -184,7 +199,7 @@ select_backup_cloud() {
         selected_name="${selected_name%;*}"
         echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")" >&2
         echo -e "${YELLOW}Downloading...${NC}" >&2
-        local temp_dir; temp_dir=$(mktemp -d /tmp/restore_XXXXXX)
+        local temp_dir; temp_dir=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
         local temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
@@ -382,7 +397,7 @@ else
     echo "Backing up current state..."
 fi
 
-PRE_RESTORE_BACKUP_DIR=$(mktemp -d /tmp/pre_restore_XXXXXX)
+PRE_RESTORE_BACKUP_DIR=$(mktemp -d "${HOME:?}/.tmp_pre_restore_XXXXXX")
 RESTORE_TEMP_DIRS+=("$PRE_RESTORE_BACKUP_DIR")
 
 if [ -n "$SELECTED_DB" ]; then
@@ -419,7 +434,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo "Restoring project..."
     fi
 
-    TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
+    TEMP_EXTRACT=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
     if timeout 1800 sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
         [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
         extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
@@ -471,7 +486,7 @@ if [ -n "$SELECTED_DB" ]; then
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || true)
 
-    TEMP_SQL=$(mktemp /tmp/restore_XXXXXX.sql)
+    TEMP_SQL=$(mktemp "${HOME:?}/.tmp_restore_XXXXXX.sql")
     chmod 600 "$TEMP_SQL"
     if ! timeout 300 gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
         rm -f "$TEMP_SQL"

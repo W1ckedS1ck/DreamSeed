@@ -49,6 +49,17 @@ fi
 echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
     curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 
+# ====== Pre-flight: disk space check ======
+AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{print $4}')
+if [ "$AVAILABLE_MB" -lt 500 ]; then
+    MSG="🔴 <b>BACKUP BLOCKED</b> — $ENV_DISPLAY_ESCAPED
+Disk space critical: ${AVAILABLE_MB}MB available (need ≥500MB)
+Cleanup old backups or expand disk."
+    send_tg "$MSG"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Disk space critical: ${AVAILABLE_MB}MB" >> "$LOG_FILE"
+    exit 1
+fi
+
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
 

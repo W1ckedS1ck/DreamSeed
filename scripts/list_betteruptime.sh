@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# Ensure HOME is set for temp directories
+export HOME="${HOME:?ERROR: HOME environment variable not set}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common_functions.sh
 source "$SCRIPT_DIR/scripts/common_functions.sh"
@@ -24,8 +27,8 @@ echo -e "${CYAN}═════════════════════�
 fetch_and_format() {
     local endpoint="$1" label="$2"
     local json_tmp py_tmp
-    json_tmp=$(mktemp /tmp/bs_json_XXXXXX)
-    py_tmp=$(mktemp /tmp/bs_py_XXXXXX)
+    json_tmp=$(mktemp "${HOME:?}/.tmp_bs_json_XXXXXX")
+    py_tmp=$(mktemp "${HOME:?}/.tmp_bs_py_XXXXXX")
     curl -s "$API/$endpoint" -H "$AUTH" > "$json_tmp"
 
     cat > "$py_tmp" << 'PYEOF'
