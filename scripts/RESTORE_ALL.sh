@@ -17,9 +17,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
+MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX,,}"
 
-if ! [[ "$MODX_TABLE_PREFIX" =~ ^[A-Za-z0-9_]+$ ]]; then
-    echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'"
+if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
+    echo "ERROR: MODX_TABLE_PREFIX contains invalid characters or uppercase letters: '$MODX_TABLE_PREFIX'"
     exit 1
 fi
 
@@ -340,14 +341,14 @@ else
 fi
 
 if [ -n "$SELECTED_PROJECT" ]; then
-    if ! sudo tar -tzf "$SELECTED_PROJECT" >/dev/null 2>&1; then
+    if ! timeout 300 sudo tar -tzf "$SELECTED_PROJECT" >/dev/null 2>&1; then
         echo -e "${RED}✗ Project archive corrupted: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
     echo -e "${GREEN}✓ Project archive: OK${NC}"
 fi
 if [ -n "$SELECTED_DB" ]; then
-    if ! gunzip -t "$SELECTED_DB" 2>/dev/null; then
+    if ! timeout 300 gunzip -t "$SELECTED_DB" 2>/dev/null; then
         echo -e "${RED}✗ DB archive corrupted: $(basename "$SELECTED_DB")${NC}"
         exit 1
     fi
@@ -419,7 +420,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
     fi
 
     TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
-    if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
+    if timeout 1800 sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
         [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
         extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
         if [[ ! -d "$extracted_dir" ]]; then
@@ -472,12 +473,12 @@ if [ -n "$SELECTED_DB" ]; then
 
     TEMP_SQL=$(mktemp /tmp/restore_XXXXXX.sql)
     chmod 600 "$TEMP_SQL"
-    if ! gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
+    if ! timeout 300 gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"
         echo -e "${RED}✗ Failed to decompress archive!${NC}"
     else
-        if mysql "$DB_NAME" < "$TEMP_SQL"; then
+        if timeout 1800 mysql "$DB_NAME" < "$TEMP_SQL"; then
             mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null
 
             COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")

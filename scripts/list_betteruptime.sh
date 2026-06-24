@@ -93,7 +93,7 @@ for item in data.get('data', []):
 PYEOF
 
     echo -e "${CYAN}${label}${NC}"
-    printf "${CYAN}%s${NC}\n" "$(printf '─%.0s' $(eval "echo {1..${#label}}"))"
+    printf "${CYAN}%*s${NC}\n" "${#label}" | tr ' ' '─'
     python3 "$py_tmp" "$json_tmp"
 
     rm -f "$json_tmp" "$py_tmp"

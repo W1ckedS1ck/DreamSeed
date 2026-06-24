@@ -102,7 +102,7 @@ brew install shellcheck
 pip install ruff
 
 # Ansible (pinned version matching CI)
-pip install -r ansible/requirements.txt
+pip install -r ansible/requirements-deploy.txt
 
 # Terraform
 brew install tflint

@@ -73,7 +73,7 @@ secrets/.env (plaintext, gitignored)
    │
    ├─ CI (GitHub Actions)
    │   │
-   │   ├─ deploy.yml / backup-test.yml
+   │   ├─ deploy.yml / test-restore.yml
    │   │   env: block with individual ${{ secrets.* }}
    │   │        → creates secrets/.env from env vars
    │   │        → copies SSH key, vault password, rclone.conf
@@ -247,7 +247,7 @@ Manual dispatch    Deploy                Setup → secrets → deploy.sh / destr
 Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
   daily                                  (AWS prod only)
 
-Schedule Mon 10:00 Backup Test           Provision Hetzner → Ansible deploy
+Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
    manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
                                           → DAST scan (nuclei)
                                           → Lynis audit

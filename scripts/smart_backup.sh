@@ -66,11 +66,11 @@ fi
 if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
-    if sudo tar -czf "$PROJECT_BACKUP" \
+    if timeout 1800 sudo tar -czf "$PROJECT_BACKUP" \
         --exclude="html/core/cache" \
         --exclude="html/core/backup" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
-       sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
+       timeout 300 sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
         PROJECT_STATUS="✅ Project backed up"
@@ -89,7 +89,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
 DB_STATUS=""
 
 set +o pipefail
-mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$DB_BACKUP"
+timeout 1800 mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
 

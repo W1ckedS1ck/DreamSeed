@@ -41,7 +41,7 @@ UPLOAD_MSG=""
 # ====== 1. Upload project ======
 LAST_PROJECT=$(find "$PROJECT_DIR" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_PROJECT" ]; then
-    if ! rclone copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --ignore-existing; then
+    if ! timeout 1800 rclone copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --ignore-existing; then
         UPLOAD_MSG+="❌ Project upload error
 "
         HAS_ERROR=1
@@ -55,7 +55,7 @@ fi
 # ====== 2. Upload database ======
 LAST_DB=$(find "$DB_DIR" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_DB" ]; then
-    if ! rclone copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --ignore-existing; then
+    if ! timeout 1800 rclone copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --ignore-existing; then
         UPLOAD_MSG+="❌ DB upload error
 "
         HAS_ERROR=1
@@ -80,7 +80,7 @@ prune_cloud_backups "db" "$MAX_DB_BACKUPS" || {
 }
 
 # Trash
-rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null
+timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null
 
 if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then
     ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"

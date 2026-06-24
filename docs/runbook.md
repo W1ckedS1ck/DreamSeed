@@ -992,7 +992,7 @@ ssh aws "sudo systemctl restart grafana-server"
 **Causes:**
 
 1. `smart_backup.sh` failed (project or DB error)
-2. `BETTERUPTIME_BACKUP_KEY` missing from server `.env` (auto-created by `setup_betteruptime.sh` during deploy)
+2. `BETTERUPTIME_BACKUP_KEY` missing from server `.env` (seeded by Ansible backup role from GitHub secrets)
 3. Network issue prevented curl to Better Stack
 
 **Diagnose:**
@@ -1015,7 +1015,7 @@ Look for one of these last lines:
   ssh prod "grep BETTERUPTIME_BACKUP_KEY /home/ubuntu/Scripts/.env"
   ```
 
-  If empty → redeploy (run Ansible backup role which calls `setup_betteruptime.sh`), or manually add from local `secrets/.env`.
+  If empty → redeploy (Ansible backup role re-generates `.env` from GitHub secrets), or manually add from local `secrets/.env`.
 
 - **Backup failed:**
 

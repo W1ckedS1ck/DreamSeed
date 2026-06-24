@@ -8,16 +8,16 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret / Var | Purpose | Used in |
 |-------------|---------|---------|
-| `TG_TOKEN` | Telegram bot token | `deploy.yml`, `backup-test.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
-| `TG_CHAT_ID` (var) | Telegram chat ID | `deploy.yml`, `backup-test.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
+| `TG_TOKEN` | Telegram bot token | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
+| `TG_CHAT_ID` (var) | Telegram chat ID | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
 | `TG_THREAD_ID` (var) | Telegram thread/topic ID | Same |
-| `DB_PASS` | MySQL password for MODX | `deploy.yml`, `backup-test.yml` |
-| `GRAFANA_PASS` | Grafana admin password | `deploy.yml`, `backup-test.yml` |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS certbot + auto DNS update) | `deploy.yml`, `backup-test.yml` |
-| `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible) | `deploy.yml`, `backup-test.yml`, `health-check.yml`, `rollback.yml` |
-| `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `backup-test.yml`, `rollback.yml` |
+| `DB_PASS` | MySQL password for MODX | `deploy.yml`, `test-restore.yml` |
+| `GRAFANA_PASS` | Grafana admin password | `deploy.yml`, `test-restore.yml` |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS certbot + auto DNS update) | `deploy.yml`, `test-restore.yml` |
+| `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible) | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml` |
+| `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `test-restore.yml`, `rollback.yml` |
 | `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml` |
-| `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `backup-test.yml` |
+| `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
 | `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml` |
 
 ---
@@ -59,7 +59,7 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret | Target | Purpose | Used in |
 |--------|--------|---------|---------|
-| `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `backup-test.yml`, `terraform-apply.yml` |
+| `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml` |
 | `PROD_HETZ_HCLOUD_TOKEN` | prod-hetz | Hetzner Cloud API token | `deploy.yml`, `drift-detection.yml`, `terraform-apply.yml` |
 
 ---
@@ -68,14 +68,14 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret | Env | Purpose | Used in |
 |--------|-----|---------|---------|
-| `DEV_GRAFANA_CLOUD_URL` | dev | Push URL for vmagent | `deploy.yml`, `backup-test.yml`, `grafana-cloud.yml` |
-| `DEV_GRAFANA_CLOUD_USERNAME` | dev | vmagent username | `deploy.yml`, `backup-test.yml` |
-| `DEV_GRAFANA_CLOUD_TOKEN` | dev | vmagent API token | `deploy.yml`, `backup-test.yml` |
+| `DEV_GRAFANA_CLOUD_URL` | dev | Push URL for vmagent | `deploy.yml`, `test-restore.yml`, `grafana-cloud.yml` |
+| `DEV_GRAFANA_CLOUD_USERNAME` | dev | vmagent username | `deploy.yml`, `test-restore.yml` |
+| `DEV_GRAFANA_CLOUD_TOKEN` | dev | vmagent API token | `deploy.yml`, `test-restore.yml` |
 | `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token (Terraform) | `grafana-cloud.yml` |
 | `DEV_SM_ACCESS_TOKEN` | dev | Synthetic Monitoring token | `grafana-cloud.yml` |
-| `PROD_GRAFANA_CLOUD_URL` | prod | Push URL for vmagent | `deploy.yml`, `backup-test.yml`, `grafana-cloud.yml` |
-| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username | `deploy.yml`, `backup-test.yml` |
-| `PROD_GRAFANA_CLOUD_TOKEN` | prod | vmagent API + SA token | `deploy.yml`, `backup-test.yml`, `grafana-cloud.yml` |
+| `PROD_GRAFANA_CLOUD_URL` | prod | Push URL for vmagent | `deploy.yml`, `test-restore.yml`, `grafana-cloud.yml` |
+| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username | `deploy.yml`, `test-restore.yml` |
+| `PROD_GRAFANA_CLOUD_TOKEN` | prod | vmagent API + SA token | `deploy.yml`, `test-restore.yml`, `grafana-cloud.yml` |
 | `PROD_SM_ACCESS_TOKEN` | prod | Synthetic Monitoring token | `grafana-cloud.yml` |
 
 ---

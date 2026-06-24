@@ -38,7 +38,6 @@
 | Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
 | Uptime coverage | 16 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
 | CI checks per push | 9 parallel jobs (lint → security → validate) |
-
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
 ---
@@ -223,7 +222,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 
 - **Local:** hourly project (hash-checked, skip if unchanged) + DB dump (always), rotated 5/15 versions
 - **Cloud:** hourly upload to Google Drive via rclone, rotated 10 project + 100 DB versions
-- **Restore:** `RESTORE_ALL.sh --auto-latest` — downloads latest backup from GDrive, extracts, restores DB, clears cache, restarts services. **Full CI verification every week** (`backup-test.yml`)
+- **Restore:** `RESTORE_ALL.sh --auto-latest` — downloads latest backup from GDrive, extracts, restores DB, clears cache, restarts services. **Full CI verification every week** (`test-restore.yml`)
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
@@ -233,7 +232,7 @@ Grafana dashboards, datasources, **and 16 alert rules** deployed automatically �
 |----------|---------|
 | **CI** — 9 parallel checks | Every PR + push to main |
 | **Deploy** — single-click deploy | Manual dispatch (all targets) |
-| **Backup Test** — full restore drill | Weekly Monday + manual |
+| **Restore Test** — full backup/restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
