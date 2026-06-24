@@ -8,7 +8,6 @@ data "grafana_synthetic_monitoring_probes" "main" {
 }
 
 locals {
-  sm_probes_us  = ["NorthCalifornia", "Ohio", "NorthVirginia"]
   sm_probes_all = ["NorthCalifornia", "Ohio", "NorthVirginia", "Frankfurt"]
 }
 
