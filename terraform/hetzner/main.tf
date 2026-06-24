@@ -73,12 +73,6 @@ resource "hcloud_firewall" "web" {
     destination_ips = ["0.0.0.0/0", "::/0"]
   }
 
-  rule {
-    direction       = "out"
-    protocol        = "tcp"
-    port            = "465"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-  }
 }
 
 data "hcloud_primary_ip" "main" {
@@ -129,7 +123,7 @@ resource "hcloud_server" "main" {
 
 check "workspace_valid_for_hetzner" {
   assert {
-    condition     = contains(["dev-hetz", "test", "prod-hetz"], terraform.workspace)
-    error_message = "Hetzner provider can only be used with workspace dev-hetz, test, or prod-hetz (got: ${terraform.workspace})"
+    condition     = contains(["dev-hetz", "test", "prod-hetz"], var.environment)
+    error_message = "Hetzner provider can only be used with environment dev-hetz, test, or prod-hetz (got: ${var.environment})"
   }
 }

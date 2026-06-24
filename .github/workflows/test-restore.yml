@@ -507,6 +507,20 @@ jobs:
             echo "::error::Backup creation failed — no backup files found"
             exit 1
           fi
+          # Verify backup freshness — newest file must be <5 min old
+          PROJ_AGE=$(ssh ubuntu@"$SERVER_IP" \
+            "echo \$(( \$(date +%s) - \$(stat -c '%Y' \$(ls -t /home/ubuntu/backups/project/DreamSeed_*.tar.gz 2>/dev/null | head -1) 2>/dev/null || echo 0) ))" \
+            2>/dev/null || echo 999)
+          DB_AGE=$(ssh ubuntu@"$SERVER_IP" \
+            "echo \$(( \$(date +%s) - \$(stat -c '%Y' \$(ls -t /home/ubuntu/backups/db/db_*.sql.gz 2>/dev/null | head -1) 2>/dev/null || echo 0) ))" \
+            2>/dev/null || echo 999)
+          echo "Newest project backup age: ${PROJ_AGE}s"
+          echo "Newest DB backup age: ${DB_AGE}s"
+          if [ "${PROJ_AGE:-999}" -gt 300 ] || [ "${DB_AGE:-999}" -gt 300 ]; then
+            echo "::error::Backup freshness check failed — backups older than 5 minutes"
+            exit 1
+          fi
+          echo "[PASS] Fresh backup verified (both <5 min old)"
           echo "project_count=$PROJ_COUNT" >> "$GITHUB_OUTPUT"
           echo "db_count=$DB_COUNT" >> "$GITHUB_OUTPUT"
 
@@ -833,6 +847,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.DEV_AWS_REGION }}
         run: |
+          # Skip destroy if no resources exist (TFC shows "Errored" on empty state destroy)
+          RESOURCES=$(terraform state list 2>/dev/null | wc -l)
+          if [ "$RESOURCES" -eq 0 ]; then
+            echo "No resources to destroy — workspace already empty"
+            exit 0
+          fi
           set +e
           terraform destroy -auto-approve -no-color 2>&1 | tee /tmp/tf_destroy.log
           tf_exit=${PIPESTATUS[0]}

@@ -36,7 +36,9 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
 
 # ====== Lock against parallel runs ======
 trap 'exec 9>&-' EXIT
-LOCK_FILE="/tmp/smart_backup.lock"
+LOCK_DIR="${HOME:-/tmp}/.locks"
+mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
+LOCK_FILE="$LOCK_DIR/smart_backup.lock"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
     echo "Backup already running (lock: $LOCK_FILE)" >&2
@@ -46,6 +48,17 @@ fi
 # Cron heartbeat — always fires, even if backup fails
 echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
     curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+
+# ====== Pre-flight: disk space check ======
+AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{print $4}')
+if [ "$AVAILABLE_MB" -lt 500 ]; then
+    MSG="🔴 <b>BACKUP BLOCKED</b> — $ENV_DISPLAY_ESCAPED
+Disk space critical: ${AVAILABLE_MB}MB available (need ≥500MB)
+Cleanup old backups or expand disk."
+    send_tg "$MSG"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Disk space critical: ${AVAILABLE_MB}MB" >> "$LOG_FILE"
+    exit 1
+fi
 
 # ====== Project backup (only if changed) ======
 PROJECT_STATUS=""
@@ -64,11 +77,11 @@ fi
 if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
-    if sudo tar -czf "$PROJECT_BACKUP" \
+    if timeout 1800 sudo tar -czf "$PROJECT_BACKUP" \
         --exclude="html/core/cache" \
         --exclude="html/core/backup" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
-       sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
+       timeout 300 sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
         PROJECT_STATUS="✅ Project backed up"
@@ -88,7 +101,7 @@ DB_STATUS=""
 
 TMP_DB_BACKUP="${DB_BACKUP}.tmp"
 set +o pipefail
-mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
+timeout 1800 mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
 

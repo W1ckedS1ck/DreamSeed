@@ -88,9 +88,13 @@ send_tg() {
         --data-urlencode "parse_mode=$parse_mode"
     )
     [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
-    local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$tg_url" "${data[@]}" 2>/dev/null) || true
-    [[ "$http_code" != "200" ]] && echo "WARNING: Telegram send failed (HTTP ${http_code:-000})" >&2 || true
+    local tg_resp
+    tg_resp=$(curl -s -m 10 -X POST "$tg_url" "${data[@]}" 2>/dev/null) || true
+    if ! echo "$tg_resp" | jq -e '.ok == true' >/dev/null 2>&1; then
+        local err
+        err=$(echo "$tg_resp" | jq -r '.description // "unknown"' 2>/dev/null || echo "unknown")
+        echo "WARNING: Telegram send failed: $err" >&2
+    fi
 }
 
 ping_heartbeat() {
@@ -102,12 +106,12 @@ ping_heartbeat() {
 prune_cloud_backups() {
     local subdir="$1" max="$2"
     local all
-    all=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/" --files-only 2>/dev/null | sort -r) || return 1
+    all=$(timeout 60 rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/" --files-only 2>/dev/null | sort -r) || return 1
     local count
     count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]')
     if [ "$count" -gt "$max" ]; then
         printf '%s\n' "$all" | tail -n +$((max + 1)) | while read -r file; do
-            [ -n "$file" ] && rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/$file"
+            [ -n "$file" ] && timeout 60 rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/$file"
         done
     fi
 }
@@ -128,5 +132,5 @@ rotate_files() {
 
 export_metric() {
     local payload="$1"
-    echo "$payload" | curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+    echo "$payload" | timeout 10 curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 }

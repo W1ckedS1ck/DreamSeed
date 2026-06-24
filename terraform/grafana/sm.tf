@@ -1,17 +1,17 @@
 # Grafana Cloud Synthetic Monitoring — fit within free tier (100k API checks/mo).
-# Budget: main site (4 probes×15min ≈ 11.5k) + multi (2 probes×30min ≈ 2.9k)
-#         + grafana (2 probes×30min ≈ 2.9k) + SSL (1 probe×24h ≈ 30)
-#         + SSL (1 probe×1h ≈ 720) ≈ 18k checks/mo — well within 100k free tier.
+# Budget: main site (3 America probes×15min ≈ 8.5k) + multi (2 probes×30min ≈ 2.9k)
+#         + grafana (2 probes×30min ≈ 2.9k) + SSL (1 probe×1h ≈ 720)
+#         ≈ 15k checks/mo — well within 100k free tier.
 
 data "grafana_synthetic_monitoring_probes" "main" {
   provider = grafana.sm
 }
 
 locals {
-  sm_probes_all = ["NorthCalifornia", "Ohio", "NorthVirginia", "Frankfurt"]
+  sm_probes_america = ["NorthCalifornia", "Ohio", "Montreal"]
 }
 
-# --- HTTP check — main site (all 4 regions, every 15 min) ---
+# --- HTTP check — main site (US West + Central + Canada, every 15 min) ---
 resource "grafana_synthetic_monitoring_check" "http_main" {
   count     = var.sm_enabled ? 1 : 0
   provider  = grafana.sm
@@ -32,7 +32,7 @@ resource "grafana_synthetic_monitoring_check" "http_main" {
     }
   }
 
-  probes = [for p in local.sm_probes_all : data.grafana_synthetic_monitoring_probes.main.probes[p]]
+  probes = [for p in local.sm_probes_america : data.grafana_synthetic_monitoring_probes.main.probes[p]]
 
   labels = {
     env    = terraform.workspace

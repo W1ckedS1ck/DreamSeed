@@ -13,8 +13,16 @@ validate_env_file() {
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
         if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
             local val="${line#*=}"
+            if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
+                echo "Error: code injection detected in $f:$n: $line" >&2
+                exit 1
+            fi
             [[ "$val" =~ ^\" && ! "$val" =~ \"$ ]] && in_quote=1 || in_quote=0
         elif [[ "$in_quote" -eq 1 ]]; then
+            if [[ "$line" == *'$('* || "$line" == *'`'* ]]; then
+                echo "Error: code injection detected in $f:$n: $line" >&2
+                exit 1
+            fi
             [[ "$line" =~ \"$ ]] && in_quote=0
             continue
         else
@@ -37,7 +45,7 @@ resolve_env_file() {
         [[ ! -f "$pw" ]] && { echo "Error: vault password file not found: $pw" >&2; exit 1; }
         [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
         local tmp; tmp=$(mktemp); chmod 600 "$tmp"
-        ansible-vault view "$f" --vault-password-file "$pw" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
+        ANSIBLE_VAULT_PASSWORD_FILE="$pw" ansible-vault view "$f" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
         [[ -s "$tmp" ]] || { echo "Error: vault decrypted file is empty" >&2; exit 1; }
         ENV_DECRYPTED_TMP="$tmp"
         printf '%s' "$tmp"

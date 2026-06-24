@@ -41,10 +41,10 @@ jobs:
         with:
           python-version: '3.x'
           cache: pip
-          cache-dependency-path: ansible/requirements.txt
+          cache-dependency-path: ansible/requirements-deploy.txt
       - name: Run ansible-lint
         run: |
-          pip install -r ansible/requirements.txt --quiet
+          pip install -r ansible/requirements-deploy.txt --quiet
           bash scripts/lint.sh --ci --ansible-lint
 
   j2lint:

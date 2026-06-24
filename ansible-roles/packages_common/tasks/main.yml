@@ -5,20 +5,27 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Detect available PHP version
+- name: Check if requested PHP version is available
+  ansible.builtin.shell: apt-cache show "php{{ php_version }}" >/dev/null 2>&1 && echo ok || echo missing
+  args:
+    executable: /bin/bash
+  register: php_avail
+  changed_when: false
+  failed_when: false
+
+- name: Fallback to highest available PHP version
   ansible.builtin.shell: |
-    set -o pipefail
     apt-cache search '^php[0-9]\.[0-9]$' | grep -oP 'php\K[0-9]\.[0-9]' | sort -V | tail -1
   args:
     executable: /bin/bash
-  register: detected_php
+  register: php_fallback
   changed_when: false
+  when: php_avail.stdout == "missing"
 
-- name: Set php_version from detected
+- name: Set fallback php_version
   ansible.builtin.set_fact:
-    php_version: "{{ detected_php.stdout }}"
-    cacheable: true
-  when: detected_php.stdout != ""
+    php_version: "{{ php_fallback.stdout }}"
+  when: php_avail.stdout == "missing"
 
 - name: Install common packages
   become: true
@@ -131,3 +138,4 @@
     path: /etc/fstab
     line: "/swapfile none swap sw 0 0"
     state: present
+  when: swapfile_stat.stat.exists

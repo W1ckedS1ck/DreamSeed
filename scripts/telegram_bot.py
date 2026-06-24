@@ -238,17 +238,17 @@ def main():
                             response = "Use /status or /backups"
 
                         send_kwargs = {'chat_id': chat_id, 'text': response, 'parse_mode': 'HTML'}
-                        if TG_THREAD_ID is not None:
+                        if TG_THREAD_ID:
                             send_kwargs['message_thread_id'] = TG_THREAD_ID
 
                         resp = requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
-                                  json=send_kwargs)
+                                  json=send_kwargs, timeout=10)
                         if resp.status_code == 429:
                             retry_after = resp.json().get('parameters', {}).get('retry_after', 5)
                             log.warning("Telegram 429 rate limit, retrying after %ds", retry_after)
                             time.sleep(retry_after)
                             resp = requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
-                                      json=send_kwargs)
+                                      json=send_kwargs, timeout=10)
                         if not resp.json().get('ok'):
                             log.warning("Telegram API error: %s", resp.text)
 

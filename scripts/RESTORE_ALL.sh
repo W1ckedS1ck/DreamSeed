@@ -1,8 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# Ensure HOME is set for temp directories
+export HOME="${HOME:?ERROR: HOME environment variable not set}"
+
 # ====== Prevent concurrent executions ======
-LOCK_FILE="/tmp/restore_all.lock"
+LOCK_DIR="${HOME:-/tmp}/.locks"
+mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
+LOCK_FILE="$LOCK_DIR/restore_all.lock"
 exec 9>"$LOCK_FILE"
 if ! flock -n -x 9; then
     echo "ERROR: Restore already in progress ($LOCK_FILE)"
@@ -15,15 +20,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
+MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX,,}"
 
-if ! [[ "$MODX_TABLE_PREFIX" =~ ^[A-Za-z0-9_]+$ ]]; then
-    echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'"
+if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
+    echo "ERROR: MODX_TABLE_PREFIX contains invalid characters or uppercase letters: '$MODX_TABLE_PREFIX'"
     exit 1
 fi
 
 # ====== Validate required env vars ======
 : "${DB_NAME:?ERROR: DB_NAME not set in .env or environment}"
 : "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
+
+# Setup restore log
+RESTORE_LOG="/home/ubuntu/backups/restore_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$(dirname "$RESTORE_LOG")"
+{
+    echo "=== RESTORE STARTED ==="
+    echo "Time: $(date)"
+    echo "Mode: $1"
+    echo "User: $USER"
+    echo "Host: $(hostname)"
+} >> "$RESTORE_LOG"
+
 # Parse mode
 MODE="${1:-interactive}"  # interactive or --auto-latest
 
@@ -50,6 +68,7 @@ fi
 SITE_URL="https://${SITE_DOMAIN:-localhost}"
 
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
+PROJECT_DIR="$(realpath "$PROJECT_DIR" 2>/dev/null || echo "$PROJECT_DIR")"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 
 ENV=$(detect_env)
@@ -180,7 +199,7 @@ select_backup_cloud() {
         selected_name="${selected_name%;*}"
         echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")" >&2
         echo -e "${YELLOW}Downloading...${NC}" >&2
-        local temp_dir; temp_dir=$(mktemp -d /tmp/restore_XXXXXX)
+        local temp_dir; temp_dir=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
         local temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
@@ -337,14 +356,14 @@ else
 fi
 
 if [ -n "$SELECTED_PROJECT" ]; then
-    if ! sudo tar -tzf "$SELECTED_PROJECT" >/dev/null 2>&1; then
+    if ! timeout 300 sudo tar -tzf "$SELECTED_PROJECT" >/dev/null 2>&1; then
         echo -e "${RED}✗ Project archive corrupted: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
     echo -e "${GREEN}✓ Project archive: OK${NC}"
 fi
 if [ -n "$SELECTED_DB" ]; then
-    if ! gunzip -t "$SELECTED_DB" 2>/dev/null; then
+    if ! timeout 300 gunzip -t "$SELECTED_DB" 2>/dev/null; then
         echo -e "${RED}✗ DB archive corrupted: $(basename "$SELECTED_DB")${NC}"
         exit 1
     fi
@@ -378,14 +397,15 @@ else
     echo "Backing up current state..."
 fi
 
-PRE_RESTORE_BACKUP_DIR=$(mktemp -d /tmp/pre_restore_XXXXXX)
+PRE_RESTORE_BACKUP_DIR=$(mktemp -d "${HOME:?}/.tmp_pre_restore_XXXXXX")
 RESTORE_TEMP_DIRS+=("$PRE_RESTORE_BACKUP_DIR")
 
 if [ -n "$SELECTED_DB" ]; then
     BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
-    if mysqldump "$DB_NAME" 2>/dev/null | gzip > "$BACKUP_DB_FILE"; then
+    if mysqldump --single-transaction "$DB_NAME" 2>/dev/null | gzip > "$BACKUP_DB_FILE"; then
         echo -e "${GREEN}✓ Database snapshot: $(du -h "$BACKUP_DB_FILE" | cut -f1)${NC}"
     else
+        rm -f "$BACKUP_DB_FILE"
         echo -e "${YELLOW}⚠️  Database snapshot failed (continuing)${NC}"
     fi
 fi
@@ -414,8 +434,8 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo "Restoring project..."
     fi
 
-    TEMP_EXTRACT=$(mktemp -d /tmp/restore_XXXXXX)
-    if sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
+    TEMP_EXTRACT=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
+    if timeout 1800 sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
         [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
         extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
         if [[ ! -d "$extracted_dir" ]]; then
@@ -466,14 +486,14 @@ if [ -n "$SELECTED_DB" ]; then
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || true)
 
-    TEMP_SQL=$(mktemp /tmp/restore_XXXXXX.sql)
+    TEMP_SQL=$(mktemp "${HOME:?}/.tmp_restore_XXXXXX.sql")
     chmod 600 "$TEMP_SQL"
-    if ! gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
+    if ! timeout 300 gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"
         echo -e "${RED}✗ Failed to decompress archive!${NC}"
     else
-        if mysql "$DB_NAME" < "$TEMP_SQL"; then
+        if timeout 1800 mysql "$DB_NAME" < "$TEMP_SQL"; then
             mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null
 
             COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")

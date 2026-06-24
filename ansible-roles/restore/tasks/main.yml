@@ -118,7 +118,7 @@
           tar -tzf "$_archive" > /dev/null 2>&1 || { echo "Corrupt archive: $_archive"; exit 1; }
           mv "$_web" "${_web}.bak.$$" 2>/dev/null || true
           mkdir -p "$_web"
-          if ! tar -xzf "$_archive" -C /var/www/; then
+          if ! tar -xzf "$_archive" -C "$(dirname "$_web")"; then
             mv "${_web}.bak.$$"/* "$_web" 2>/dev/null || true
             rm -rf "${_web}.bak.$$" 2>/dev/null || true
             exit 1
@@ -228,7 +228,7 @@
         executable: /bin/bash
       register: restore_db_table_count
       changed_when: false
-      failed_when: (restore_db_table_count.stdout | int) < 50
+      failed_when: (restore_db_table_count.stdout | int) < db_min_tables
       when: restore_latest_db.stdout | trim != ""
 
     - name: Cleanup DB archive
