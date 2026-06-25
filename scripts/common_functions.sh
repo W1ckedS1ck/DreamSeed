@@ -45,7 +45,7 @@ load_env() {
 # net only; they are never consumed by any restore flow.
 detect_env() {
     if [[ -f "$SCRIPT_DIR/.env" ]]; then
-        grep -qE '^ENV="?prod' "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
+        grep -qE '^ENV\s*=\s*"?prod"?' "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
     else
         local h
         h=$(hostname)
@@ -106,12 +106,12 @@ ping_heartbeat() {
 prune_cloud_backups() {
     local subdir="$1" max="$2"
     local all
-    all=$(timeout 60 rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/" --files-only 2>/dev/null | sort -r) || return 1
+    all=$(timeout 60 rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/" --files-only 2>/dev/null | sort -r) || return 1
     local count
     count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]')
     if [ "$count" -gt "$max" ]; then
         printf '%s\n' "$all" | tail -n +$((max + 1)) | while read -r file; do
-            [ -n "$file" ] && timeout 60 rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV}/$file"
+            [ -n "$file" ] && timeout 60 rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/$file"
         done
     fi
 }
