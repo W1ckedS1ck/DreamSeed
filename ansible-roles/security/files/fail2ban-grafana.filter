@@ -9,4 +9,4 @@ failregex = ^.*t=.*lvl=info msg="Invalid username or password" .* remote_addr=<H
 ignoreregex =
 
 [Init]
-datepattern = %%Y-%%m-%%d %%H:%%M:%%S
+datepattern = %Y-%m-%d %H:%M:%S

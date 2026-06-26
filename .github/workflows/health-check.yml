@@ -36,6 +36,11 @@ jobs:
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
+      - name: Mask secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets_json: '${{ toJSON(secrets) }}'
+
       - name: Setup secrets
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
