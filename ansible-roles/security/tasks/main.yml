@@ -226,6 +226,36 @@
     - "{{ web_root }}/core/logs"
   when: modx_config_file.stat.exists
 
+# --- Unattended Upgrades ---
+- name: Install unattended-upgrades
+  become: true
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+
+- name: Configure automatic security updates
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/50-dreamseed-unattended
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable unattended-upgrades timer
+  become: true
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    state: started
+    enabled: true
+
 # --- Developer Write Permissions ---
 - name: Add ubuntu user to www-data group
   become: true

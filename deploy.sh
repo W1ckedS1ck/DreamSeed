@@ -456,7 +456,7 @@ with open(dst, 'w') as f:
 " "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_TMP"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ ! "$TARGET" =~ ^prod ]] && while IFS= read -r v; do unset "$v"; done < <(compgen -v BETTERUPTIME_)
+    [[ ! "$TARGET" =~ ^prod ]] && while IFS='=' read -r v _; do unset "$v"; done < <(env | grep '^BETTERUPTIME_')
 
     # ----- Verify SSH host key (new server only) -----
     if [[ "$SKIP_TERRAFORM" == "false" ]]; then

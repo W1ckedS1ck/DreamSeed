@@ -64,38 +64,9 @@ jobs:
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Mask secrets
-        run: |
-          [[ -n "${{ secrets.TG_TOKEN }}" ]] && echo "::add-mask::${{ secrets.TG_TOKEN }}" || true
-          [[ -n "${{ secrets.DB_PASS }}" ]] && echo "::add-mask::${{ secrets.DB_PASS }}" || true
-          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.CLOUDFLARE_API_TOKEN }}" || true
-          [[ -n "${{ secrets.HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.HCLOUD_TOKEN }}" || true
-          [[ -n "${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" || true
-          [[ -n "${{ secrets.GRAFANA_PASS }}" ]] && echo "::add-mask::${{ secrets.GRAFANA_PASS }}" || true
-          [[ -n "${{ secrets.BETTERUPTIME_API_TOKEN }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_API_TOKEN }}" || true
-          [[ -n "${{ secrets.BETTERUPTIME_BACKUP_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_BACKUP_KEY }}" || true
-          [[ -n "${{ secrets.BETTERUPTIME_GDRIVE_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_GDRIVE_KEY }}" || true
-          [[ -n "${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}" || true
-          [[ -n "${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}" || true
-          [[ -n "${{ secrets.BETTERUPTIME_VERIFY_KEY }}" ]] && echo "::add-mask::${{ secrets.BETTERUPTIME_VERIFY_KEY }}" || true
-          [[ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]] && echo "::add-mask::${{ secrets.SSH_PRIVATE_KEY }}" || true
-          [[ -n "${{ secrets.VAULT_PASSWORD }}" ]] && echo "::add-mask::${{ secrets.VAULT_PASSWORD }}" || true
-          [[ -n "${{ secrets.RCLONE_CONF_BASE64 }}" ]] && echo "::add-mask::${{ secrets.RCLONE_CONF_BASE64 }}" || true
-          [[ -n "${{ secrets.USER_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.USER_SSH_PUBLIC_KEY }}" || true
-          [[ -n "${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ]] && echo "::add-mask::${{ secrets.VITALI_SSH_PUBLIC_KEY }}" || true
-          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_URL }}" || true
-          [[ -n "${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}" || true
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_URL }}" || true
-          [[ -n "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" ]] && echo "::add-mask::${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" || true
-          [[ -n "${{ secrets.DEV_AWS_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_ACCESS_KEY }}" || true
-          [[ -n "${{ secrets.DEV_AWS_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_SECRET_KEY }}" || true
-          [[ -n "${{ secrets.DEV_AWS_EIP }}" ]] && echo "::add-mask::${{ secrets.DEV_AWS_EIP }}" || true
-          [[ -n "${{ secrets.PROD_ACCESS_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_ACCESS_KEY }}" || true
-          [[ -n "${{ secrets.PROD_SECRET_KEY }}" ]] && echo "::add-mask::${{ secrets.PROD_SECRET_KEY }}" || true
-          [[ -n "${{ secrets.PROD_EIP }}" ]] && echo "::add-mask::${{ secrets.PROD_EIP }}" || true
-
-          # NOTE: TG_CHAT_ID, TG_THREAD_ID — vars, not secrets, no masking
-          # DEV/PROD_GRAFANA_CLOUD_USERNAME are NOT masked
-          # because they are pure integers that corrupt log output (IPs, timestamps, counts)
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets_json: '${{ toJSON(secrets) }}'
 
       - name: Setup secrets
         env:
