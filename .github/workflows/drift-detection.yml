@@ -43,6 +43,7 @@ jobs:
         run: |
           terraform plan -detailed-exitcode -no-color \
             -var="ssh_key_name=Vitali.pub" \
+            -var="enable_primary_ip=true" \
             -out=/tmp/prod-hetz.tfplan 2>&1 | tee /tmp/plan.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -eq 1 ]; then

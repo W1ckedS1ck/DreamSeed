@@ -88,6 +88,13 @@ resource "hcloud_primary_ip" "main" {
   auto_delete       = false
   labels            = local.labels
   delete_protection = var.environment == "prod-hetz"
+
+  lifecycle {
+    ignore_changes = [
+      assignee_id,
+      assignee_type,
+    ]
+  }
 }
 
 resource "hcloud_server" "main" {
