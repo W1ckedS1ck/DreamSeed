@@ -114,6 +114,10 @@ resource "hcloud_server" "main" {
 
   lifecycle {
     create_before_destroy = true
+    ignore_changes = [
+      ssh_keys,
+      user_data,
+    ]
   }
 }
 

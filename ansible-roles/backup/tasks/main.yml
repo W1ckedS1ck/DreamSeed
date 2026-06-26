@@ -144,18 +144,17 @@
     minute: "42"
     hour: "4"
     job: >-
-      mysql -u root -e
+      mysql -e
       "DELETE FROM \`{{ db_name }}\`.\`{{ db_prefix | default('modx_') }}session\`
       WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
       2>&1 | logger -t session-cleanup
-    user: ubuntu
+    user: root
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
-  become: true
 
-- name: Setup backup verification cron (daily at 4:02 AM)
+- name: Setup backup verification cron (daily at 4:30 AM)
   ansible.builtin.cron:
     name: "DreamSeed backup verification"
-    minute: "2"
+    minute: "30"
     hour: "4"
     job: "{{ scripts_dir_remote }}/verify_backups.sh"
     user: ubuntu
