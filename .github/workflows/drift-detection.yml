@@ -22,33 +22,31 @@ jobs:
     name: Detect drift — ${{ matrix.target }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    continue-on-error: ${{ matrix.provider == 'dev' }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: prod-aws
             tf_dir: terraform/aws
             tf_workspace: prod
-            tf_provider: aws
-            env_prefix: PROD
-            notify: 'true'
+            environment: prod
+            provider: prod
           - target: prod-hetz
             tf_dir: terraform/hetzner
             tf_workspace: prod-hetz
-            tf_provider: hetzner
-            env_prefix: PROD_HETZ
-            notify: 'true'
+            environment: prod-hetz
+            provider: prod
           - target: dev-aws
             tf_dir: terraform/aws
             tf_workspace: dev-aws
-            tf_provider: aws
-            env_prefix: DEV_AWS
-            notify: 'false'
+            environment: dev-aws
+            provider: dev
           - target: dev-hetz
             tf_dir: terraform/hetzner
             tf_workspace: dev-hetz
-            tf_provider: hetzner
-            env_prefix: DEV_HETZ
-            notify: 'false'
+            environment: dev-hetz
+            provider: dev
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
       TF_WORKSPACE: ${{ matrix.tf_workspace }}
@@ -59,17 +57,21 @@ jobs:
       - uses: ./.github/actions/setup-terraform
 
       - name: Set up credentials
-        env:
-          ENV_PREFIX: ${{ matrix.env_prefix }}
         run: |
-          if [ "${{ matrix.tf_provider }}" = "aws" ]; then
-            echo "TF_VAR_access_key=${{ secrets[format('{0}_ACCESS_KEY', matrix.env_prefix)] }}" >> "$GITHUB_ENV"
-            echo "TF_VAR_secret_key=${{ secrets[format('{0}_SECRET_KEY', matrix.env_prefix)] }}" >> "$GITHUB_ENV"
-            echo "TF_VAR_region=${{ secrets[format('{0}_REGION', matrix.env_prefix)] }}" >> "$GITHUB_ENV"
-          else
-            echo "TF_VAR_hcloud_token=${{ secrets[format('{0}_HCLOUD_TOKEN', matrix.env_prefix)] }}" >> "$GITHUB_ENV"
-          fi
-          echo "TF_VAR_environment=${{ matrix.tf_workspace }}" >> "$GITHUB_ENV"
+          case "${{ matrix.target }}" in
+            prod-aws|dev-aws)
+              echo "TF_VAR_access_key=${{ secrets[format('{0}_ACCESS_KEY', matrix.environment)] }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_secret_key=${{ secrets[format('{0}_SECRET_KEY', matrix.environment)] }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_region=${{ secrets[format('{0}_REGION', matrix.environment)] }}" >> "$GITHUB_ENV"
+              ;;
+            prod-hetz)
+              echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              ;;
+            dev-hetz)
+              echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              ;;
+          esac
+          echo "TF_VAR_environment=${{ matrix.environment }}" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         working-directory: ${{ matrix.tf_dir }}
@@ -82,7 +84,7 @@ jobs:
           PLAN_FILE="/tmp/${{ matrix.target }}.tfplan"
           terraform plan -detailed-exitcode -no-color \
             -var="ssh_key_name=Vitali.pub" \
-            ${{ matrix.tf_provider == 'hetzner' && '-var="enable_primary_ip=true"' || '' }} \
+            ${{ contains(matrix.target, 'hetz') && '-var="enable_primary_ip=true"' || '' }} \
             -out="$PLAN_FILE" 2>&1 | tee /tmp/plan.log
           rc=${PIPESTATUS[0]}
 
@@ -91,8 +93,7 @@ jobs:
             exit 1
           fi
 
-          # Parse JSON to detect actual resource changes (version-stable approach)
-          CHANGES=$(terraform show -json "$PLAN_FILE" | jq '[.resource_changes[] | select(.change.actions != ["no-op"] and (.change.actions[0] != "no-op"))] | length' 2>/dev/null || echo "0")
+          CHANGES=$(terraform show -json "$PLAN_FILE" | jq '[.resource_changes[] | select(.change.actions != ["no-op"])] | length' 2>/dev/null || echo "0")
 
           if [ "$CHANGES" -gt 0 ]; then
             echo "has_drift=true" >> "$GITHUB_OUTPUT"
@@ -110,7 +111,7 @@ jobs:
           terraform show -json "/tmp/${{ matrix.target }}.tfplan" | jq '.resource_changes[] | select(.change.actions != ["no-op"]) | {address: .address, actions: .change.actions}' 2>/dev/null || true
 
       - name: Report and notify drift (prod only)
-        if: steps.plan.outputs.has_drift == 'true' && matrix.notify == 'true'
+        if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'prod'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
@@ -130,6 +131,6 @@ jobs:
           exit 1
 
       - name: Log drift (dev — no fail)
-        if: steps.plan.outputs.has_drift == 'true' && matrix.notify == 'false'
+        if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'dev'
         run: |
           echo "::notice::Drift detected on ${{ matrix.target }} (dev) — ${{ steps.plan.outputs.changes }} changes. Not failing CI."

@@ -74,8 +74,14 @@
   register: swapfile_stat
 
 - name: Check if swap is already active
+  become: true
+  ansible.builtin.shell: swapon --show | wc -l
+  register: swap_active_check
+  changed_when: false
+
+- name: Set swap_is_active fact
   ansible.builtin.set_fact:
-    swap_is_active: "{{ ansible_facts['swaptotal_mb'] | int > 0 }}"
+    swap_is_active: "{{ swap_active_check.stdout | int > 0 }}"
 
 - name: Create swap file (2 GB)
   become: true
