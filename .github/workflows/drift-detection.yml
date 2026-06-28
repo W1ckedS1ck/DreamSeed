@@ -59,19 +59,27 @@ jobs:
       - name: Set up credentials
         run: |
           case "${{ matrix.target }}" in
-            prod-aws|dev-aws)
-              echo "TF_VAR_access_key=${{ secrets[format('{0}_ACCESS_KEY', matrix.environment)] }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_secret_key=${{ secrets[format('{0}_SECRET_KEY', matrix.environment)] }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_region=${{ secrets[format('{0}_REGION', matrix.environment)] }}" >> "$GITHUB_ENV"
+            prod-aws)
+              echo "TF_VAR_access_key=${{ secrets.PROD_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_secret_key=${{ secrets.PROD_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_region=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=prod" >> "$GITHUB_ENV"
+              ;;
+            dev-aws)
+              echo "TF_VAR_access_key=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_secret_key=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_region=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=dev-aws" >> "$GITHUB_ENV"
               ;;
             prod-hetz)
               echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=prod-hetz" >> "$GITHUB_ENV"
               ;;
             dev-hetz)
               echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
               ;;
           esac
-          echo "TF_VAR_environment=${{ matrix.environment }}" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         working-directory: ${{ matrix.tf_dir }}
