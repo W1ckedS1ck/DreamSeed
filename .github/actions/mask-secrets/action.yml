@@ -6,7 +6,7 @@ description: 'Mask all repository secrets in CI logs to prevent leakage.
 
 inputs:
   secrets_json:
-    description: 'Output of ${{ toJSON(secrets) }} — all secret values to mask'
+    description: 'Output of toJSON(secrets) — all secret values to mask'
     required: true
 
 runs:

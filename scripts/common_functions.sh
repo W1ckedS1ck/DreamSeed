@@ -106,7 +106,7 @@ ping_heartbeat() {
 prune_cloud_backups() {
     local subdir="$1" max="$2"
     local all
-    all=$(timeout 60 rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/" --files-only 2>/dev/null | sort -r) || return 1
+    all=$(timeout 60 rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/" --files-only 2>/dev/null | sort -r) || return 0
     local count
     count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]')
     if [ "$count" -gt "$max" ]; then
