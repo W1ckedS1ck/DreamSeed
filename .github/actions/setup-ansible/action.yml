@@ -28,7 +28,7 @@ runs:
 
     - run: |
         python -m pip install --quiet uv
-        uv pip install --system --quiet -r ${{ inputs.requirements-file }}
+        uv pip install --system --break-system-packages --quiet -r ${{ inputs.requirements-file }}
       shell: bash
 
     - run: ansible-galaxy collection install ${{ inputs.collections }}
