@@ -7,6 +7,15 @@
     mode: "0644"
   notify: Restart Redis
 
+- name: Ensure Redis data directory exists
+  become: true
+  ansible.builtin.file:
+    path: /var/lib/redis
+    state: directory
+    owner: redis
+    group: redis
+    mode: "0755"
+
 - name: Ensure Redis is running
   become: true
   ansible.builtin.systemd:
