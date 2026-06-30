@@ -40,7 +40,7 @@
   ansible.builtin.copy:
     dest: /etc/vmagent/credentials.env
     content: |
-      VM_CLOUD_URL={{ grafana_cloud_url }}
+      VM_CLOUD_URL={{ grafana_cloud_url }}/api/prom/push
       VM_CLOUD_USER={{ grafana_cloud_username }}
       VM_CLOUD_PASS={{ grafana_cloud_token }}
     owner: vmagent
