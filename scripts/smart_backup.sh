@@ -100,8 +100,8 @@ DB_STATUS=""
 
 TMP_DB_BACKUP="${DB_BACKUP}.tmp"
 set +o pipefail
-mysql "$DB_NAME" -e "TRUNCATE \`${DB_PREFIX:-modx_}session\`;" 2>/dev/null || true
 timeout 1800 mysqldump --single-transaction --routines --events --triggers \
+    --ignore-table="${DB_NAME}.${DB_PREFIX:-modx_}session" \
     "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
