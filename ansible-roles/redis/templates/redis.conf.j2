@@ -1,0 +1,21 @@
+# Managed by Ansible — DreamSeed Redis
+bind 127.0.0.1
+port 6379
+daemonize no
+supervised systemd
+loglevel notice
+
+# Session data: 256 MB ceiling, LRU eviction
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+
+# Persistence off — session data is ephemeral
+save ""
+
+# Basic hardening
+rename-command FLUSHALL ""
+rename-command FLUSHDB ""
+rename-command CONFIG ""
+rename-command SHUTDOWN ""
+rename-command DEBUG ""
+rename-command SCRIPT ""

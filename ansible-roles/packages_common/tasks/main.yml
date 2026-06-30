@@ -50,6 +50,8 @@
       - debsums
       - apt-show-versions
       - libpam-tmpdir
+      - "redis-server"
+      - "php{{ php_version }}-redis"
       - libpam-pwquality
       - unattended-upgrades
     state: present

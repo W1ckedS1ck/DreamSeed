@@ -138,7 +138,7 @@
     state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
-- name: Setup session cleanup cron (daily, 7-day retention)
+- name: Setup session cleanup cron (daily, 7-day retention) — disabled with Redis
   ansible.builtin.cron:
     name: "DreamSeed session cleanup"
     minute: "42"
@@ -149,7 +149,7 @@
       WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
       2>&1 | logger -t session-cleanup
     user: root
-    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+    state: absent
 
 - name: Setup backup verification cron (daily at 4:30 AM)
   ansible.builtin.cron:
