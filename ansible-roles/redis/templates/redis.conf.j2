@@ -9,8 +9,14 @@ loglevel notice
 maxmemory 256mb
 maxmemory-policy allkeys-lru
 
-# Persistence off — session data is ephemeral
-save ""
+# RDB Persistence — recover sessions after crash/restart
+save 900 1              # Snapshot every 15 min if ≥1 key changed
+save 300 10             # or every 5 min if ≥10 keys changed
+dir /var/lib/redis      # RDB file location
+dbfilename dump.rdb     # RDB file name
+
+# NO AOF — avoid disk I/O overhead for ephemeral session data
+appendonly no
 
 # Basic hardening
 rename-command FLUSHALL ""
