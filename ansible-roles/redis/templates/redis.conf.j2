@@ -10,9 +10,10 @@ maxmemory 256mb
 maxmemory-policy allkeys-lru
 
 # RDB Persistence — recover sessions after crash/restart
-save 900 1              # Snapshot every 15 min if ≥1 key changed (typical: every 15 min on prod)
-dir /var/lib/redis      # RDB file location
-dbfilename dump.rdb     # RDB file name
+# Snapshot every 15 min if ≥1 key changed
+save 900 1
+dir /var/lib/redis
+dbfilename dump.rdb
 
 # NO AOF — avoid disk I/O overhead for ephemeral session data
 appendonly no

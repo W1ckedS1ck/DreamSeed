@@ -64,9 +64,27 @@ jobs:
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets_json: '${{ toJSON(secrets) }}'
+        run: |
+          python3 -c '
+          import json, os
+
+          SKIP_KEYS = {
+              "DEV_GRAFANA_CLOUD_USERNAME",
+              "PROD_GRAFANA_CLOUD_USERNAME",
+              "DEV_AWS_REGION",
+              "PROD_REGION",
+          }
+
+          # Build secrets dict from environment variables
+          data = {
+              k: v for k, v in os.environ.items()
+              if any(x in k for x in ["TOKEN", "KEY", "PASS", "GRAFANA", "AWS", "PROD", "TG"])
+          }
+
+          for k, v in data.items():
+              if k not in SKIP_KEYS and v:
+                  print("::add-mask::" + v)
+          '
 
       - name: Setup secrets
         env:
