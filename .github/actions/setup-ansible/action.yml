@@ -16,9 +16,9 @@ runs:
   steps:
     - uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
       with:
-        path: ~/.cache/uv
-        key: uv-${{ runner.os }}-${{ hashFiles(inputs.requirements-file) }}
-        restore-keys: uv-${{ runner.os }}-
+        path: ~/.cache/pip
+        key: pip-${{ runner.os }}-${{ hashFiles(inputs.requirements-file) }}
+        restore-keys: pip-${{ runner.os }}-
 
     - uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
       with:
@@ -26,10 +26,7 @@ runs:
         key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
         restore-keys: ansible-collections-${{ runner.os }}-
 
-    - run: |
-        python -m pip install --quiet uv
-        uv pip install --user --break-system-packages --quiet --python "$(which python)" -r ${{ inputs.requirements-file }}
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    - run: pip install -r ${{ inputs.requirements-file }} --quiet
       shell: bash
 
     - run: ansible-galaxy collection install ${{ inputs.collections }}
