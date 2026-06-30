@@ -140,9 +140,6 @@
     mode: "0644"
   notify: Reload sysctl
 
-- name: Apply sysctl hardening
-  ansible.builtin.meta: flush_handlers
-
 # --- Core Dumps ---
 - name: Disable core dumps (limits)
   become: true

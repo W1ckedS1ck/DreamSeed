@@ -138,7 +138,7 @@ if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
 else echo "  ✗ cron: backup not set"; fail=1; fi
 
 # --- fail2ban ---
-jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
+jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
 if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
 else echo "  ⚠ fail2ban: no jails ($jails)"; fi
 
