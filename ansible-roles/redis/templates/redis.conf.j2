@@ -9,16 +9,13 @@ loglevel notice
 maxmemory 256mb
 maxmemory-policy allkeys-lru
 
-# RDB Persistence — recover sessions after crash/restart
-save 900 1              # Snapshot every 15 min if ≥1 key changed (typical: every 15 min on prod)
-dir /var/lib/redis      # RDB file location
-dbfilename dump.rdb     # RDB file name
+# Persistence: OFF for now — debug RDB issues before enabling
+# save 900 1
+# dir /var/lib/redis
+# dbfilename dump.rdb
+# appendonly no
 
-# NO AOF — avoid disk I/O overhead for ephemeral session data
-appendonly no
-
-# Resilience: keep accepting writes even if RDB persistence fails
-# If /var/lib/redis fills or permissions break, Redis won't block session writes
+# Resilience: keep accepting writes even if persistence fails
 stop-writes-on-bgsave-error no
 
 # Basic hardening
