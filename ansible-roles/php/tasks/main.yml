@@ -40,6 +40,12 @@
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
 
+- name: Clear MODX system settings cache
+  become: true
+  ansible.builtin.shell:
+    cmd: rm -f /var/www/html/core/cache/system_settings/config.cache.php
+  changed_when: false
+
 - name: Ensure PHP-FPM is running
   become: true
   ansible.builtin.systemd:
