@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# Validate required commands
 for cmd in curl tar gzip find mysqldump; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
 done
@@ -101,7 +100,9 @@ DB_STATUS=""
 
 TMP_DB_BACKUP="${DB_BACKUP}.tmp"
 set +o pipefail
-timeout 1800 mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
+mysql "$DB_NAME" -e "TRUNCATE \`${DB_PREFIX:-modx_}session\`;" 2>/dev/null || true
+timeout 1800 mysqldump --single-transaction --routines --events --triggers \
+    "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
 

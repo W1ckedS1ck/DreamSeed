@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# Path for cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # ====== Load shared functions ======
@@ -85,7 +84,6 @@ prune_cloud_backups "db" "$MAX_DB_BACKUPS" || {
     HAS_ERROR=1
 }
 
-# Trash
 timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null
 
 if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then

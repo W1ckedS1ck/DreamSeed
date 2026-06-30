@@ -9,7 +9,6 @@ LOG_DIR="${LOG_DIR:-$SCRIPT_DIR/logs}"
 export LC_ALL=C.UTF-8
 PHP_VERSION="${PHP_VERSION:-8.3}"
 
-# Executable paths
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
 TERRAFORM="${TERRAFORM:-}"
 if [[ -z "$TERRAFORM" ]]; then
@@ -19,15 +18,12 @@ if [[ -z "$TERRAFORM" ]]; then
     fi
 fi
 
-# Colors (stripped in non-TTY)
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; NC=$'\033[0m'
 [[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; NC=''; }
 TTY=$([[ -t 1 ]] && echo true || echo false)
 
-# Timeouts
 CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
 
-# State
 TARGET="" WEB_SERVER="" TF_PROVIDER="" TF_WORKSPACE="" TARGET_PREFIX=""
 DEPLOY_DOMAIN="" ENV_FILE="" TF_DIR="" SERVER_IP=""
 SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false SKIP_DNS=false
