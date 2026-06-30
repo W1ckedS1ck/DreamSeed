@@ -10,9 +10,13 @@
   become: true
 
 - name: Add Grafana repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main"
-    filename: grafana
+  ansible.builtin.deb822_repository:
+    name: grafana
+    types: [deb]
+    uris: https://apt.grafana.com
+    suites: stable
+    components: [main]
+    signed_by: /usr/share/keyrings/grafana.gpg
     state: present
   become: true
 
