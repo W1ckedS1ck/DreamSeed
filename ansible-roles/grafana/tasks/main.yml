@@ -112,6 +112,7 @@
   loop:
     - mysql-database.json
     - node-exporter-full.json
+    - redis.json
     - victoria-metrics-single-node.json
 
 - name: Set web server dashboard lists

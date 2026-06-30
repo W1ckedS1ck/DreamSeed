@@ -5,6 +5,7 @@ locals {
     node_exporter    = { gid = 1860 }
     mysql            = { gid = 7362 }
     nginx            = { gid = 17452 }
+    redis            = { gid = 763 }
     victoria_metrics = { gid = 10229 }
   }
 
@@ -41,6 +42,19 @@ locals {
         })
       })),
       "$${DS_PROMETHEUS}", local.cloud_prom
+    )
+    redis = replace(
+      jsonencode(merge(local.raw["redis"], {
+        id = null
+        templating = merge(local.raw["redis"].templating, {
+          list = [for v in local.raw["redis"].templating.list : v if v.name != "namespace"]
+          # Make instance query namespace-independent
+          list = try([for v in local.raw["redis"].templating.list : merge(v, {
+            query = v.name == "instance" ? "label_values(redis_up, instance)" : v.query
+          }) if v.name != "namespace"], [])
+        })
+      })),
+      "$${DS_PROM}", local.cloud_prom
     )
     victoria_metrics = replace(
       replace(
