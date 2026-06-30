@@ -130,6 +130,7 @@ fi
 if [[ "$WEB_SVC" == "apache2" ]]; then
     _check_ep 9117 apache_ apache_exporter || fail=1
 fi
+_check_ep 9121 redis_ redis_exporter || fail=1
 # --- Backup cron ---
 if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
   echo "  ✓ cron: backup"
