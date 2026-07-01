@@ -36,6 +36,10 @@ jobs:
         with:
           cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
 
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Setup secrets
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -220,6 +224,8 @@ jobs:
             STATUS="⚠️ SITE UNHEALTHY"
           fi
 
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch || 0 }} ))
+
           M="$GITHUB_STEP_SUMMARY"
           echo "## Rollback Deploy — ${STATUS}" >> "$M"
           echo "" >> "$M"
@@ -228,6 +234,9 @@ jobs:
           echo "| **Environment** | ${{ inputs.environment }} |" >> "$M"
           echo "| **Server** | ${{ steps.server-ip.outputs.ip }} |" >> "$M"
           echo "| **Domain** | ${{ steps.domain.outputs.domain }} |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
           echo "" >> "$M"
           echo "### Restore" >> "$M"
           echo "| Metric | Value |" >> "$M"

@@ -37,6 +37,10 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: ./.github/actions/setup-terraform
 
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Set provider env vars
         run: |
           echo "TF_DIR=terraform/${{ inputs.provider }}" >> "$GITHUB_ENV"
@@ -108,3 +112,22 @@ jobs:
               -var="ssh_public_key=" \
               -var="environment=${{ inputs.workspace }}"
           fi
+
+      - name: Write job summary
+        if: always()
+        run: |
+          MODE="${{ inputs.mode }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Terraform ${MODE} ${RESULT}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Provider** | ${{ inputs.provider }} |" >> "$M"
+          echo "| **Workspace** | ${{ inputs.workspace }} |" >> "$M"
+          echo "| **Mode** | ${MODE} |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"

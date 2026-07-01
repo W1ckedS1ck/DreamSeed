@@ -137,3 +137,21 @@ jobs:
         if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'dev'
         run: |
           echo "::notice::Drift detected on ${{ matrix.target }} (dev) — ${{ steps.plan.outputs.changes }} changes. Not failing CI."
+
+      - name: Write job summary
+        if: always()
+        run: |
+          DRIFT="${{ steps.plan.outputs.has_drift }}"
+          CHANGES="${{ steps.plan.outputs.changes }}"
+          STATUS="${DRIFT:+⚠️ Drift ($CHANGES changes)}"
+          STATUS="${STATUS:-✅ No drift}"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Drift Detection — ${{ matrix.target }}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Status** | ${STATUS} |" >> "$M"
+          echo "| **Provider** | ${{ matrix.provider }} |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
