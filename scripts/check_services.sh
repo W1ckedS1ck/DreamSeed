@@ -30,7 +30,7 @@ done
 fail=0
 
 # --- Services ---
-for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "mysqld_exporter" "victoria-metrics" "grafana-server" "telegram-bot"; do
+for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_exporter" "victoria-metrics" "grafana-server" "telegram-bot"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"
