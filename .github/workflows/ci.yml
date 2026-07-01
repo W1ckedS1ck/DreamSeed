@@ -173,6 +173,22 @@ jobs:
           sudo apt-get install -y gitleaks -qq 2>/dev/null || \
             (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
              sudo tar -xz -C /usr/local/bin gitleaks)
+      - name: Install pre-commit system deps
+        run: |
+          # actionlint
+          curl -sL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | \
+            sudo tar -xz -C /usr/local/bin actionlint
+
+          # j2lint
+          pip install j2lint --quiet
+
+          # tflint (v0.63.1 — matching CI env)
+          curl -sL "https://github.com/terraform-linters/tflint/releases/download/v0.63.1/tflint_linux_amd64.zip" | \
+            sudo tar -xz -C /usr/local/bin tflint
+          tflint --init --config .tflint.hcl 2>/dev/null || true
+
+          # ansible-lint
+          pip install ansible-core ansible-lint --quiet
       - name: Run pre-commit hooks (changed files only)
         run: |
           pip install pre-commit
