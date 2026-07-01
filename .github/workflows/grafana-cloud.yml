@@ -92,3 +92,29 @@ jobs:
       - name: Terraform State Output
         working-directory: terraform/grafana
         run: terraform output -json || echo "No outputs"
+
+      - name: Generate Summary
+        working-directory: terraform/grafana
+        if: always()
+        run: |
+          echo "## Grafana Cloud Deployment — ${{ inputs.workspace }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          UIDS=$(terraform output -json 2>/dev/null | grep -o '"[a-zA-Z_]*": "[^"]*"' | sed 's/": "/: /' | sed 's/"//g' || true)
+          if [ -n "$UIDS" ]; then
+            echo "### Dashboards Deployed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "$UIDS" | while read -r line; do
+              echo "- $line" >> "$GITHUB_STEP_SUMMARY"
+            done
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          SM_CHECKS=$(terraform output -json 2>/dev/null | grep -o '"[a-z_]*": "[0-9]*"' | sed 's/": "/: /' | sed 's/"//g' || true)
+          if [ -n "$SM_CHECKS" ]; then
+            echo "### Synthetic Monitoring Checks" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "$SM_CHECKS" | while read -r line; do
+              echo "- $line" >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
