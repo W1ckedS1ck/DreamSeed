@@ -32,17 +32,14 @@ jobs:
       - name: Display Deployment Info
         run: |
           if [[ "${{ inputs.workspace }}" == "prod" ]]; then
-            echo "::error title=🔴 PRODUCTION DEPLOYMENT::Target: prod (Grafana Cloud Production)"
-            echo "🔴 PRODUCTION DEPLOYMENT"
-            echo "========================"
+            echo "##[group]🔴 PRODUCTION DEPLOYMENT - Workspace: prod"
+            echo "Target: PRODUCTION"
+            echo "##[endgroup]"
           else
-            echo "::notice title=🟢 DEV DEPLOYMENT::Target: dev (Grafana Cloud Dev)"
-            echo "🟢 DEV DEPLOYMENT"
-            echo "================="
+            echo "##[group]🟢 DEV DEPLOYMENT - Workspace: dev"
+            echo "Target: DEV"
+            echo "##[endgroup]"
           fi
-          echo "Workspace: ${{ inputs.workspace }}"
-          echo "Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-          echo ""
 
       - uses: ./.github/actions/setup-terraform
         with:
