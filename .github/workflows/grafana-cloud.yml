@@ -22,6 +22,7 @@ env:
 
 jobs:
   plan-and-apply:
+    name: Grafana Cloud — ${{ inputs.workspace == 'prod' && '🔴 PRODUCTION' || '🟢 DEV' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -29,17 +30,13 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      - name: Display Deployment Info
-        run: |
-          if [[ "${{ inputs.workspace }}" == "prod" ]]; then
-            echo "##[group]🔴 PRODUCTION DEPLOYMENT - Workspace: prod"
-            echo "Target: PRODUCTION"
-            echo "##[endgroup]"
-          else
-            echo "##[group]🟢 DEV DEPLOYMENT - Workspace: dev"
-            echo "Target: DEV"
-            echo "##[endgroup]"
-          fi
+      - name: "🔴 PRODUCTION — Deploying to prod workspace"
+        if: ${{ inputs.workspace == 'prod' }}
+        run: echo "Deploying to PRODUCTION"
+
+      - name: "🟢 DEV — Deploying to dev workspace"
+        if: ${{ inputs.workspace == 'dev' }}
+        run: echo "Deploying to DEV"
 
       - uses: ./.github/actions/setup-terraform
         with:
