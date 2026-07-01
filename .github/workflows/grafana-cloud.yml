@@ -103,11 +103,11 @@ jobs:
           if [[ "${{ inputs.workspace }}" == "prod" ]]; then
             TARGET="PROD"
             echo "| **Target** | \`$TARGET\` |" >> "$M"
-            echo "| **Grafana** | \`https://dreamseed.grafana.net\` |" >> "$M"
+            echo "| **Grafana** | dreamseed.grafana.net |" >> "$M"
           else
             TARGET="DEV"
             echo "| **Target** | \`$TARGET\` |" >> "$M"
-            echo "| **Grafana** | \`https://vitalikuts.grafana.net\` |" >> "$M"
+            echo "| **Grafana** | vitalikuts.grafana.net |" >> "$M"
           fi
 
           echo "## Grafana Cloud Deployment" >> "$M"
