@@ -40,11 +40,6 @@ jobs:
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
         id: start_time
 
-      - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets_json: '${{ toJSON(secrets) }}'
-
       - name: Setup secrets
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
@@ -241,6 +236,7 @@ jobs:
       - name: Capture server SSH host key
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ssh-keygen -R "$SERVER_IP" 2>/dev/null || true
           for _ in $(seq 1 15); do
             ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
             sleep 2
