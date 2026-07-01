@@ -30,14 +30,6 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      - name: "🔴 PRODUCTION — Deploying to prod workspace"
-        if: ${{ inputs.workspace == 'prod' }}
-        run: echo "Deploying to PRODUCTION"
-
-      - name: "🟢 DEV — Deploying to dev workspace"
-        if: ${{ inputs.workspace == 'dev' }}
-        run: echo "Deploying to DEV"
-
       - uses: ./.github/actions/setup-terraform
         with:
           cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
@@ -47,14 +39,6 @@ jobs:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
         run: |
           echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
-          echo "DEPLOY_TARGET=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
-          if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
-            echo "DEPLOY_ORG=Grafana Cloud (Production)" >> "$GITHUB_ENV"
-            echo "DEPLOY_EMOJI=🔴" >> "$GITHUB_ENV"
-          else
-            echo "DEPLOY_ORG=Grafana Cloud (Dev)" >> "$GITHUB_ENV"
-            echo "DEPLOY_EMOJI=🟢" >> "$GITHUB_ENV"
-          fi
 
       - name: Write terraform.tfvars.json
         working-directory: terraform/grafana
@@ -114,34 +98,37 @@ jobs:
         working-directory: terraform/grafana
         if: always()
         run: |
-          {
-            echo "## $DEPLOY_EMOJI Grafana Cloud Deployment"
-            echo ""
-            echo "| | |"
-            echo "|---|---|"
-            echo "| **Target** | \`$DEPLOY_TARGET\` |"
-            echo "| **Organization** | $DEPLOY_ORG |"
-            echo ""
-            echo "### 📊 Dashboards"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
+          M="$GITHUB_STEP_SUMMARY"
+
+          if [[ "${{ inputs.workspace }}" == "prod" ]]; then
+            TARGET="PROD"
+            GRAFANA_URL="https://dreamseed.grafana.net"
+          else
+            TARGET="DEV"
+            GRAFANA_URL="https://vitalikuts.grafana.net"
+          fi
+
+          echo "## Grafana Cloud Deployment" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Target** | \`$TARGET\` |" >> "$M"
+          echo "| **Grafana** | [$GRAFANA_URL]($GRAFANA_URL) |" >> "$M"
+          echo "" >> "$M"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
-          echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- **\(.key | ascii_upcase)** — UID: `\(.value)`"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)" >> "$GITHUB_STEP_SUMMARY"
 
-          {
-            echo ""
-            echo "### 🔍 Synthetic Monitoring Checks"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "### 📊 Dashboards" >> "$M"
+          echo "" >> "$M"
+          echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- **\(.key | ascii_upcase)** — UID: `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
+          echo "" >> "$M"
 
-          echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 🔍 Synthetic Monitoring" >> "$M"
+          echo "" >> "$M"
+          echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
+          echo "" >> "$M"
 
-          {
-            echo ""
-            echo "### 📁 Folder"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
-
+          echo "### 📁 Folder UID" >> "$M"
+          echo "" >> "$M"
           FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
-          echo "\`$FOLDER\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$FOLDER\`" >> "$M"
