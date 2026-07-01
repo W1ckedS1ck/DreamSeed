@@ -162,10 +162,17 @@ main() {
     parse_args "$@"
     resolve_target
 
-    # Set Grafana Cloud URL based on target
-    local grafana_url_var="${TARGET_PREFIX}_GRAFANA_CLOUD_URL"
-    local grafana_user_var="${TARGET_PREFIX}_GRAFANA_CLOUD_USERNAME"
-    local grafana_token_var="${TARGET_PREFIX}_GRAFANA_CLOUD_TOKEN"
+    # Set Grafana Cloud URL based on environment (dev or prod)
+    # Only 2 workspaces: DEV (for dev-aws + dev-hetz) and PROD (for prod-aws + prod-hetz)
+    if [[ "$TARGET" == prod* ]]; then
+        grafana_url_var="PROD_GRAFANA_CLOUD_URL"
+        grafana_user_var="PROD_GRAFANA_CLOUD_USERNAME"
+        grafana_token_var="PROD_GRAFANA_CLOUD_TOKEN"
+    else
+        grafana_url_var="DEV_GRAFANA_CLOUD_URL"
+        grafana_user_var="DEV_GRAFANA_CLOUD_USERNAME"
+        grafana_token_var="DEV_GRAFANA_CLOUD_TOKEN"
+    fi
 
     # Export env vars for Ansible to pick up
     export GRAFANA_CLOUD_URL="${!grafana_url_var:-}"
