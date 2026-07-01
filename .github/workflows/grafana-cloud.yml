@@ -38,6 +38,14 @@ jobs:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
         run: |
           echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
+          echo "DEPLOY_TARGET=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
+          if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
+            echo "DEPLOY_ORG=Grafana Cloud (Production)" >> "$GITHUB_ENV"
+            echo "DEPLOY_EMOJI=🔴" >> "$GITHUB_ENV"
+          else
+            echo "DEPLOY_ORG=Grafana Cloud (Dev)" >> "$GITHUB_ENV"
+            echo "DEPLOY_EMOJI=🟢" >> "$GITHUB_ENV"
+          fi
 
       - name: Write terraform.tfvars.json
         working-directory: terraform/grafana
@@ -97,22 +105,34 @@ jobs:
         working-directory: terraform/grafana
         if: always()
         run: |
-          echo "## Grafana Cloud Deployment — ${{ inputs.workspace }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## $DEPLOY_EMOJI Grafana Cloud Deployment"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Target** | \`$DEPLOY_TARGET\` |"
+            echo "| **Organization** | $DEPLOY_ORG |"
+            echo ""
+            echo "### 📊 Dashboards"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
+          echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- [\(.key | ascii_upcase)](https://grafana.com/grafana/dashboards/d/\(.value)) — `\(.value)`"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)" >> "$GITHUB_STEP_SUMMARY"
 
-          echo "### 📊 Dashboards" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "$OUTPUT" | jq -r '.dashboard_urls.value | to_entries[] | "- [\(.key | ascii_upcase)](\(.value)) `\(.key)`"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "### 🔍 Synthetic Monitoring Checks"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "### 🔍 Synthetic Monitoring Checks" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)" >> "$GITHUB_STEP_SUMMARY"
 
-          echo "### 📁 Folder UID" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "### 📁 Folder"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
           FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
           echo "\`$FOLDER\`" >> "$GITHUB_STEP_SUMMARY"
