@@ -60,7 +60,7 @@ usage() {
     cat << 'EOF'
 DreamSeed Deploy Script  v2.0.0
 
-Usage: $0 TARGET -n|-a [OPTIONS]
+Usage: deploy.sh TARGET -n|-a [OPTIONS]
 
 TARGETS:
   prod               AWS        dreamseed.online

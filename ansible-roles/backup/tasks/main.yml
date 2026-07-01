@@ -105,7 +105,7 @@
     minute: "0"
     job: "{{ scripts_dir_remote }}/smart_backup.sh"
     user: ubuntu
-    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
 - name: Setup hourly GDrive upload cron
@@ -114,7 +114,7 @@
     minute: "5"
     job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
     user: ubuntu
-    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
 - name: Setup daily report cron
@@ -124,7 +124,7 @@
     hour: "15"
     job: "{{ scripts_dir_remote }}/send_report.sh daily"
     user: ubuntu
-    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
 - name: Setup weekly report cron
@@ -135,7 +135,7 @@
     weekday: "0"
     job: "{{ scripts_dir_remote }}/send_report.sh weekly"
     user: ubuntu
-    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
 - name: Setup session cleanup cron (daily, 7-day retention) — disabled with Redis
@@ -158,7 +158,7 @@
     hour: "4"
     job: "{{ scripts_dir_remote }}/verify_backups.sh"
     user: ubuntu
-    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
 - name: Check MODX system_settings table

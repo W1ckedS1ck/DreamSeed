@@ -77,8 +77,8 @@ if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
     if timeout 1800 sudo tar -czf "$PROJECT_BACKUP" \
-        --exclude="html/core/cache" \
-        --exclude="html/core/backup" \
+        --exclude="$(basename "$PROJECT_DIR")/core/cache" \
+        --exclude="$(basename "$PROJECT_DIR")/core/backup" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
        timeout 300 sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
@@ -101,7 +101,7 @@ DB_STATUS=""
 TMP_DB_BACKUP="${DB_BACKUP}.tmp"
 set +o pipefail
 timeout 1800 mysqldump --single-transaction --routines --events --triggers \
-    --ignore-table="${DB_NAME}.${DB_PREFIX:-modx_}session" \
+    --ignore-table="${DB_NAME}.${MODX_TABLE_PREFIX:-modx_}session" \
     "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail

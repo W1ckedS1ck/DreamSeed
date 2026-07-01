@@ -54,14 +54,6 @@ jobs:
       - name: Set up credentials
         run: |
           case "${{ matrix.target }}" in
-            prod-aws)
-              echo "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_aws_region=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_environment=prod" >> "$GITHUB_ENV"
-              echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
-              ;;
             dev-aws)
               echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
               echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
@@ -82,7 +74,7 @@ jobs:
 
       - name: Create dummy SSH key for plan
         if: contains(matrix.target, 'aws')
-        run: ssh-keygen -t rsa -b 4096 -f /tmp/ssh -N "" -C "drift-test" && mv /tmp/ssh.pub /tmp/ssh.pub || true
+        run: ssh-keygen -t rsa -b 4096 -f /tmp/ssh -N "" -C "drift-test" || true
 
       - name: Terraform Init
         working-directory: ${{ matrix.tf_dir }}

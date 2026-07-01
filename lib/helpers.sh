@@ -46,7 +46,7 @@ step_fail() {
 }
 
 cleanup() {
-    [[ -n "${DEPLOY_VARS_TMP:-}" && -f "${DEPLOY_VARS_TMP:-}" ]] && rm -f "$DEPLOY_VARS_TMP"
+    [[ -n "${DEPLOY_VARS_TMP:-}" && -d "${DEPLOY_VARS_TMP:-}" ]] && rm -rf "$DEPLOY_VARS_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
     [[ -n "${LOCK_FILE:-}" && "$LOCK_ACQUIRED" == "true" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
@@ -112,6 +112,14 @@ if zones:
     local count
     count=$(echo "$existing" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('result',[])))" 2>/dev/null || echo 0)
 
+    local dns_body
+    dns_body=$(python3 -c "
+import json,sys
+t,n,c=sys.argv[1:4]
+print(json.dumps({'type':t,'name':n,'content':c,'ttl':120,'proxied':True}))
+" "$type" "$domain" "$ip" 2>/dev/null) || dns_body=""
+    [[ -z "$dns_body" ]] && { log "Cloudflare DNS: skip (failed to build request)"; return 0; }
+
     if [[ "$count" -gt 0 ]]; then
         local record_id old_ip
         record_id=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['id'])")
@@ -120,13 +128,13 @@ if zones:
         curl -s -X PUT "$base/$record_id" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"type\":\"$type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":true}" >/dev/null 2>&1
+            -d "$dns_body" >/dev/null 2>&1
         log "Cloudflare DNS: $domain $old_ip → $ip"
     else
         curl -s -X POST "$base" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"type\":\"$type\",\"name\":\"$domain\",\"content\":\"$ip\",\"ttl\":120,\"proxied\":true}" >/dev/null 2>&1
+            -d "$dns_body" >/dev/null 2>&1
         log "Cloudflare DNS: $domain → $ip (created)"
     fi
     echo "  ✓ Cloudflare DNS: $domain → $ip"

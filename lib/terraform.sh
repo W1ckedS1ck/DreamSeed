@@ -16,7 +16,8 @@ terraform_select_workspace() {
 
 terraform_ensure_workspace() {
     [[ -z "${TF_API_TOKEN:-}" || -z "${TF_WORKSPACE:-}" ]] && return 0
-    local org="DreamSeed" prefix="dreamseed-"
+    local org="DreamSeed" prefix="${TF_PROVIDER:+dreamseed-${TF_PROVIDER}-}"
+    prefix="${prefix:-dreamseed-}"
     local ws_name="${prefix}${TF_WORKSPACE}"
     local auth="Authorization: Bearer $TF_API_TOKEN"
     local url="https://app.terraform.io/api/v2/organizations/$org/workspaces/$ws_name"

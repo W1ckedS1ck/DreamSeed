@@ -112,10 +112,8 @@ def _rclone_lsf(path):
             ['rclone', 'lsf', path, '--files-only', '--format', 'tps'],
             text=True, timeout=30
         ).strip()
-        return sorted(
-            [line.split(';', 2) for line in out.split('\n') if line],
-            key=lambda x: x[0], reverse=True
-        )
+        lines = [line.split(';', 2) for line in out.split('\n') if line]
+        return sorted(lines, key=lambda x: x[1], reverse=True) if lines else []
     except Exception as e:
         log.warning("rclone lsf %s failed: %s", path, e)
         return []

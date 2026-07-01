@@ -129,10 +129,10 @@ else
     exit 1
 fi
 
-_bs_key=""
+    _bs_key=""
 if [[ "$REPORT_TYPE" == "daily" ]]; then
     _bs_key="${BETTERUPTIME_REPORT_DAILY_KEY:-}"
 elif [[ "$REPORT_TYPE" == "weekly" ]]; then
     _bs_key="${BETTERUPTIME_REPORT_WEEKLY_KEY:-}"
 fi
-ping_heartbeat "$_bs_key"
+ping_heartbeat "$_bs_key" || true
