@@ -10,7 +10,7 @@
     mode: "0644"
   notify: Restart sshd
 
-- name: Remove EC2 Instance Connect from cloud-init config
+- name: Remove EC2 Instance Connect and weak defaults from cloud-init config
   become: true
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config.d/50-cloud-init.conf
@@ -20,6 +20,7 @@
   loop:
     - AuthorizedKeysCommand
     - AuthorizedKeysCommandUser
+    - X11Forwarding
   notify: Restart sshd
 
 - name: Validate sshd configuration
