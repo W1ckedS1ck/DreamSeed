@@ -197,6 +197,16 @@ jobs:
 
           ./deploy.sh "${DEPLOY_ARGS[@]}"
 
+          # Capture server IP from terraform output for job summary
+          if [[ -z "$SERVER_IP" ]]; then
+            case "$ENV" in
+              prod|dev-aws) TF_DIR="terraform/aws" ;;
+              prod-hetz|dev-hetz) TF_DIR="terraform/hetzner" ;;
+            esac
+            ip=$(cd "$TF_DIR" && terraform output -raw server_ipv4 2>/dev/null || true)
+            [[ -n "$ip" ]] && echo "server_ip=$ip" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Destroy
         if: inputs.action == 'destroy'
         env:
@@ -249,8 +259,10 @@ jobs:
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
+          IP="${{ steps.deploy.outputs.server_ip }}"
+          IP="${IP:-${{ inputs.server_ip }}}"
           MSG="✅ *Deploy complete* — ${{ inputs.environment }}
-          Server: ${{ inputs.server_ip || 'new' }}
+          Server: ${IP:-new}
           🖥 ${{ inputs.web_server }}
           📅 $(date '+%Y-%m-%d %H:%M')"
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
@@ -265,7 +277,8 @@ jobs:
           ACTION="${{ inputs.action }}"
           ENV="${{ inputs.environment }}"
           WEB="${{ inputs.web_server }}"
-          SERVER_IP="${{ inputs.server_ip }}"
+          SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
+          SERVER_IP="${SERVER_IP:-${{ inputs.server_ip }}}"
           SKIP_DNS="${{ inputs.skip_dns }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
