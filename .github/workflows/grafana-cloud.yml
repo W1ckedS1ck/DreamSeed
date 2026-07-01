@@ -29,6 +29,19 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
+      - name: Display Deployment Info
+        run: |
+          if [[ "${{ inputs.workspace }}" == "prod" ]]; then
+            echo "🔴 PRODUCTION DEPLOYMENT"
+            echo "========================"
+          else
+            echo "🟢 DEV DEPLOYMENT"
+            echo "================="
+          fi
+          echo "Workspace: ${{ inputs.workspace }}"
+          echo "Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+
       - uses: ./.github/actions/setup-terraform
         with:
           cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
@@ -118,7 +131,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
-          echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- [\(.key | ascii_upcase)](https://grafana.com/grafana/dashboards/d/\(.value)) — `\(.value)`"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)" >> "$GITHUB_STEP_SUMMARY"
+          echo "$OUTPUT" | jq -r '.dashboard_urls.value | to_entries[] | "- [\(.key | ascii_upcase)](\(.value))"' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(none)" >> "$GITHUB_STEP_SUMMARY"
 
           {
             echo ""
