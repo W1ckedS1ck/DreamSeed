@@ -67,7 +67,7 @@ jobs:
 
       - name: Init dashboards cache
         working-directory: terraform/grafana
-        run: bash init-dashboards.sh
+        run: bash ./init-dashboards.sh
 
       - name: Terraform Init
         working-directory: terraform/grafana

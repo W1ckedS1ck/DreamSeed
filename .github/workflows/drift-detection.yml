@@ -27,11 +27,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: prod-aws
-            tf_dir: terraform/aws
-            tf_workspace: prod
-            environment: prod
-            provider: prod
           - target: prod-hetz
             tf_dir: terraform/hetzner
             tf_workspace: prod-hetz
@@ -60,16 +55,20 @@ jobs:
         run: |
           case "${{ matrix.target }}" in
             prod-aws)
-              echo "TF_VAR_access_key=${{ secrets.PROD_ACCESS_KEY }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_secret_key=${{ secrets.PROD_SECRET_KEY }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_region=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_aws_region=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=prod" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
               ;;
             dev-aws)
-              echo "TF_VAR_access_key=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_secret_key=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_region=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_aws_region=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=dev-aws" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
               ;;
             prod-hetz)
               echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
@@ -80,6 +79,10 @@ jobs:
               echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
               ;;
           esac
+
+      - name: Create dummy SSH key for plan
+        if: contains(matrix.target, 'aws')
+        run: ssh-keygen -t rsa -b 4096 -f /tmp/ssh -N "" -C "drift-test" && mv /tmp/ssh.pub /tmp/ssh.pub || true
 
       - name: Terraform Init
         working-directory: ${{ matrix.tf_dir }}

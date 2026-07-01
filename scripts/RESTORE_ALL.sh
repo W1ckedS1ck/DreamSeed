@@ -565,7 +565,7 @@ echo ""
 # ================================================
 REDIS_STATUS="⏭️ Skipped"
 
-if [[ "$RESTORE_SCOPE" == "all" || "$RESTORE_SCOPE" == "redis" ]] && [[ -f "$SELECTED_REDIS" ]]; then
+if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]] && [[ -f "$SELECTED_REDIS" ]]; then
     if [ "$MODE" = "interactive" ]; then
         echo -e "${YELLOW}[4] Restoring Redis sessions...${NC}"
     else
