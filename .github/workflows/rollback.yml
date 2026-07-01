@@ -88,6 +88,14 @@ jobs:
                 IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
                      --query 'Addresses[0].PublicIp' --output text)
               fi
+              if [ -z "$IP" ]; then
+                export TF_TOKEN_app_terraform_io="$TF_TOKEN"
+                export TF_WORKSPACE="$ENV"
+                cd terraform/aws
+                terraform init -upgrade=false > /dev/null
+                IP=$(terraform output -raw server_ipv4 2>/dev/null || echo "")
+                cd ../..
+              fi
               ;;
             dev-hetz|prod-hetz)
               export TF_TOKEN_app_terraform_io="$TF_TOKEN"
