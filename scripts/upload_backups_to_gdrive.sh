@@ -23,6 +23,7 @@ START_TIME=$(date +%s)
 LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 PROJECT_DIR="$LOCAL_BACKUP_DIR/project"
 DB_DIR="$LOCAL_BACKUP_DIR/db"
+REDIS_DIR="$LOCAL_BACKUP_DIR/redis"
 
 RCLONE_REMOTE="gdrive"
 
@@ -38,6 +39,7 @@ REMOTE_BASE="DreamSeed/backups"
 
 MAX_PROJECT_BACKUPS="${CLOUD_PROJECT_KEEP:-10}"
 MAX_DB_BACKUPS="${CLOUD_DB_KEEP:-100}"
+MAX_REDIS_BACKUPS="${CLOUD_REDIS_KEEP:-10}"
 
 
 HAS_ERROR=0
@@ -71,7 +73,19 @@ else
     HAS_ERROR=1
 fi
 
-# ====== 3. Clean old backups in cloud ======
+# ====== 3. Upload Redis ======
+if [[ -d "$REDIS_DIR" ]]; then
+    LAST_REDIS=$(find "$REDIS_DIR" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    if [ -n "$LAST_REDIS" ]; then
+        if ! timeout 600 rclone copy "$LAST_REDIS" "$RCLONE_REMOTE:$REMOTE_BASE/redis${ENV_SUFFIX}/" --no-check-dest; then
+            UPLOAD_MSG+="❌ Redis upload error
+"
+            HAS_ERROR=1
+        fi
+    fi
+fi
+
+# ====== 4. Clean old backups in cloud ======
 
 prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || {
     UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
@@ -80,6 +94,11 @@ prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || {
 }
 prune_cloud_backups "db" "$MAX_DB_BACKUPS" || {
     UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
+"
+    HAS_ERROR=1
+}
+prune_cloud_backups "redis" "$MAX_REDIS_BACKUPS" || {
+    UPLOAD_MSG+="⚠️ Redis listing failed, cleanup skipped
 "
     HAS_ERROR=1
 }

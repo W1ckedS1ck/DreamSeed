@@ -253,6 +253,7 @@ if [ "$MODE" != "--auto-latest" ]; then
 
     SELECTED_PROJECT=""
     SELECTED_DB=""
+    SELECTED_REDIS=""
 
     case "$MENU_CHOICE" in
         1) RESTORE_PROJECT=1; RESTORE_DB=0 ;;
@@ -281,6 +282,15 @@ if [ "$MODE" != "--auto-latest" ]; then
         fi
     fi
 
+    # Try to select Redis backup if "all" was chosen (optional — doesn't fail if not found)
+    if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]]; then
+        if [ "$SOURCE" = "cloud" ]; then
+            SELECTED_REDIS=$(select_backup_cloud "redis${ENV_SUFFIX}" "redis_dump_" 2>/dev/null) || SELECTED_REDIS=""
+        else
+            SELECTED_REDIS=$(select_backup "$BACKUP_DIR/redis" "*.rdb" 2>/dev/null) || SELECTED_REDIS=""
+        fi
+    fi
+
     echo ""
 
     # Nothing to restore
@@ -296,6 +306,7 @@ if [ "$MODE" != "--auto-latest" ]; then
     echo -e "${RED}⚠️  WARNING! The following will be performed:${NC}"
     [ -n "$SELECTED_PROJECT" ] && echo -e "  - Replace project files: ${CYAN}$(basename "$SELECTED_PROJECT")${NC}"
     [ -n "$SELECTED_DB" ]      && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
+    [ -n "$SELECTED_REDIS" ]   && echo -e "  - Restore Redis sessions: ${CYAN}$(basename "$SELECTED_REDIS")${NC}"
     echo -e "  - Stop $WEB_SERVICE and PHP-FPM"
     echo -e "  - Clear MODX cache"
     echo ""
@@ -315,6 +326,7 @@ else
 
     SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    SELECTED_REDIS=$(find "$BACKUP_DIR/redis" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
         echo "Local backups not found, trying Google Drive..."
@@ -328,9 +340,12 @@ else
             --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
             --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3
+        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
+            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3
 
         SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
         SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        SELECTED_REDIS=$(find "$BACKUP_DIR/redis" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     fi
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
@@ -343,6 +358,7 @@ else
     echo "Restoring from latest backups..."
     echo "Project: $(basename "$SELECTED_PROJECT")"
     echo "DB: $(basename "$SELECTED_DB")"
+    [ -n "$SELECTED_REDIS" ] && echo "Redis: $(basename "$SELECTED_REDIS")"
     echo ""
 fi
 
@@ -545,10 +561,34 @@ fi
 echo ""
 
 # ================================================
+# STEP 7: Restore Redis (if available)
+# ================================================
+REDIS_STATUS="⏭️ Skipped"
+
+if [[ "$RESTORE_SCOPE" == "all" || "$RESTORE_SCOPE" == "redis" ]] && [[ -f "$SELECTED_REDIS" ]]; then
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[4] Restoring Redis sessions...${NC}"
+    else
+        echo "Restoring Redis..."
+    fi
+
+    if sudo cp "$SELECTED_REDIS" /var/lib/redis/dump.rdb 2>/dev/null && \
+       sudo chown redis:redis /var/lib/redis/dump.rdb 2>/dev/null && \
+       sudo systemctl restart redis-server 2>/dev/null; then
+        REDIS_STATUS="✅ $(basename "$SELECTED_REDIS")"
+        echo -e "${GREEN}✓ Redis restored${NC}"
+    else
+        REDIS_STATUS="❌ Error"
+        echo -e "${RED}✗ Redis restore failed!${NC}"
+    fi
+fi
+echo ""
+
+# ================================================
 # STEP 8: Clear cache and permissions
 # ================================================
 if [ "$MODE" = "interactive" ]; then
-    echo -e "${YELLOW}[4] Clearing cache and setting permissions...${NC}"
+    echo -e "${YELLOW}[5] Clearing cache and setting permissions...${NC}"
 else
     echo "Clearing cache..."
 fi
@@ -564,7 +604,7 @@ echo ""
 # STEP 9: Start services
 # ================================================
 if [ "$MODE" = "interactive" ]; then
-    echo -e "${YELLOW}[5] Starting services...${NC}"
+    echo -e "${YELLOW}[6] Starting services...${NC}"
 else
     echo "Starting services..."
 fi
@@ -602,6 +642,7 @@ if [ "$MODE" = "interactive" ]; then
     print_header "Restore complete (${ELAPSED}s)"
     echo -e "  Project: $PROJECT_STATUS"
     echo -e "  DB:      $DB_STATUS"
+    echo -e "  Redis:   $REDIS_STATUS"
     echo -e "  Site:    $SITE_STATUS"
     echo ""
 fi
@@ -609,6 +650,7 @@ fi
 echo ""
 echo "Project: $PROJECT_STATUS"
 echo "DB: $DB_STATUS"
+echo "Redis: $REDIS_STATUS"
 echo "Site: $SITE_STATUS"
 echo "Time: ${ELAPSED}s"
 

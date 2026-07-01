@@ -116,8 +116,29 @@ else
 fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
 
+# ====== Redis backup (if available) ======
+REDIS_STATUS=""
+REDIS_KEEP="${BACKUP_REDIS_KEEP:-${REDIS_KEEP:-5}}"
+
+if [[ -f "/var/lib/redis/dump.rdb" ]]; then
+    mkdir -p "$BACKUP_DIR/redis"
+    REDIS_BACKUP="$BACKUP_DIR/redis/redis_dump_$DATE.rdb"
+    if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null && \
+       sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >> "$LOG_FILE"
+        REDIS_STATUS="✅ Redis backed up"
+        rotate_files "$BACKUP_DIR/redis/redis_dump_*.rdb" "$REDIS_KEEP"
+    else
+        REDIS_STATUS="❌ Redis backup failed"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+    fi
+else
+    REDIS_STATUS="ℹ️ Redis not available"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+fi
+
 # ====== Telegram notification only on failure ======
-if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* ]]; then
+if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
     MSG="====== ALERT ======
 🔴 <b>BACKUP FAILED</b> — $ENV_DISPLAY_ESCAPED
 "
@@ -125,13 +146,15 @@ if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* ]]; then
 "
     [[ "$DB_STATUS" == "❌"* ]] && MSG+="
 $DB_STATUS"
+    [[ "$REDIS_STATUS" == "❌"* ]] && MSG+="
+$REDIS_STATUS"
     MSG+="
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
     send_tg "$MSG"
 fi
 
-if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
+if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* && "$REDIS_STATUS" != "❌"* ]]; then
     echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
     # Ping external watchdog on success
