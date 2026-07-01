@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_DIR="$SCRIPT_DIR/.dashboards"
 mkdir -p "$CACHE_DIR"
 
-DASHBOARDS="1860:node_exporter 7362:mysql 17452:nginx 10229:victoria_metrics"
+DASHBOARDS="1860:node_exporter 7362:mysql 17452:nginx 763:redis 10229:victoria_metrics"
 
 for pair in $DASHBOARDS; do
     gid="${pair%%:*}"
