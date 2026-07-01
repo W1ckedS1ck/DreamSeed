@@ -113,7 +113,7 @@ jobs:
           echo "| | |" >> "$M"
           echo "|---|---|" >> "$M"
           echo "| **Target** | \`$TARGET\` |" >> "$M"
-          echo "| **Grafana** | [$GRAFANA_URL]($GRAFANA_URL) |" >> "$M"
+          echo "| **Grafana** | \`$GRAFANA_URL\` |" >> "$M"
           echo "" >> "$M"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
