@@ -270,19 +270,6 @@ jobs:
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
 
-          # Get actual server IP from terraform output if deploy succeeded
-          if [[ "$ACTION" == "deploy" && "${{ job.status }}" == "success" ]]; then
-            case "$ENV" in
-              prod|dev-aws)
-                ACTUAL_IP=$(cd terraform/aws && terraform output -raw server_ipv4 2>&1 | grep -v "^Error" || echo "")
-                ;;
-              prod-hetz|dev-hetz)
-                ACTUAL_IP=$(cd terraform/hetzner && terraform output -raw server_ipv4 2>&1 | grep -v "^Error" || echo "")
-                ;;
-            esac
-            SERVER_IP="${ACTUAL_IP:-${SERVER_IP:-new}}"
-          fi
-
           M="$GITHUB_STEP_SUMMARY"
           echo "## ${ACTION^} ${RESULT}" >> "$M"
           echo "" >> "$M"
