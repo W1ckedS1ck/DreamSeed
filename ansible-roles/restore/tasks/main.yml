@@ -1,4 +1,14 @@
 ---
+- name: Check if rclone config exists locally
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/rclone.conf"
+  register: rclone_config_stat
+  delegate_to: localhost
+  delegate_facts: true
+  when:
+    - secrets_dir is defined
+    - secrets_dir | length > 0
+
 - name: Ensure rclone config directory exists
   ansible.builtin.file:
     path: /home/ubuntu/.config/rclone
@@ -6,9 +16,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0700"
-  when:
-    - secrets_dir is defined
-    - secrets_dir | length > 0
+  when: rclone_config_stat.stat.exists | default(false)
 
 - name: Upload rclone config if not on server yet
   ansible.builtin.copy:
@@ -18,9 +26,7 @@
     group: ubuntu
     mode: "0600"
   no_log: true
-  when:
-    - secrets_dir is defined
-    - secrets_dir | length > 0
+  when: rclone_config_stat.stat.exists | default(false)
 
 - name: Check if rclone config exists on server
   ansible.builtin.stat:
