@@ -140,7 +140,7 @@ Use cloud console to restart:
 
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
-| 1 | G1–G22 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx, MySQL, PHP-FPM, Site, Site slow, MODX, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent | ❌ No |
+| 1 | G1–G24 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent | ❌ No |
 | 2 | B1–B7 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (4 heartbeats) | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
@@ -579,7 +579,43 @@ ls /var/www/html/ | head -20
 
 ---
 
-### G9. 🔴 VictoriaMetrics Down
+### G9. 🔴 MODX Cache Not Writable
+
+**Metric:** `modx_cache_ok` = 0 (`core/cache/` directory not writable)
+**Severity:** Warning — site performance will degrade, cached data cannot be written
+**Possible causes:** Wrong permissions after deploy/restore, filesystem full, SELinux
+
+**Diagnose:**
+
+```bash
+# Check cache directory permissions
+ls -la /var/www/html/core/ | grep cache
+
+# Test write
+sudo -u www-data touch /var/www/html/core/cache/test_write && \
+  rm /var/www/html/core/cache/test_write && \
+  echo "WRITABLE" || echo "NOT WRITABLE"
+
+# Check disk space
+df -h /
+```
+
+**Fix:**
+
+```bash
+# Fix ownership
+sudo chown -R www-data:www-data /var/www/html/core/cache/
+
+# Fix permissions
+sudo chmod -R 755 /var/www/html/core/cache/
+
+# If using SELinux (check with getenforce), restore context:
+# sudo restorecon -Rv /var/www/html/core/cache/
+```
+
+---
+
+### G10. 🔴 VictoriaMetrics Down
 
 **Metric:** `victoria_up` = 0 (VictoriaMetrics health check failed)
 **Severity:** High — no metrics collected, all Grafana alerts may stop working
@@ -615,7 +651,7 @@ sudo dmesg | grep -i "oom\|victoria" | tail -5
 
 ---
 
-### G10. 🔴 Backup Cron Not Running
+### G11. 🔴 Backup Cron Not Running
 
 **Metric:** `cron_last_run_backup` timestamp > 120 minutes old
 **Severity:** Warning — backups may have stopped
@@ -655,7 +691,7 @@ tail -5 /home/ubuntu/backups/logs/backup_$(date +%Y-%m-%d).log
 
 ---
 
-### G11. 🔴 Site Health Check Not Running
+### G12. 🔴 Site Health Check Not Running
 
 **Metric:** `check_site_last_run` > 180 seconds old
 **Severity:** Warning — `check_site.sh` timer may have stopped
@@ -696,7 +732,7 @@ curl -s http://127.0.0.1:8428/health
 
 ---
 
-### G12. 🔴 SSL Cert Expiring Soon
+### G13. 🔴 SSL Cert Expiring Soon
 
 **Metric:** `ssl_days_remaining` < 7 days
 **Severity:** Warning — certificate about to expire
@@ -727,7 +763,7 @@ sudo certbot renew --preferred-challenges dns-01
 
 ---
 
-### G13. 🔴 Admin Login Failed
+### G14. 🔴 Admin Login Failed
 
 **Metric:** `admin_login_ok` = 0 (hourly probe to `/manager/` returned no MODX login page)
 **Severity:** High — admin panel may be down
@@ -761,7 +797,7 @@ sudo systemctl restart php*-fpm
 
 ---
 
-### G14. 🔴 MiniShop2 Write Failed
+### G15. 🔴 MiniShop2 Write Failed
 
 **Metric:** `db_write_ok` = 0 (hourly INSERT+DELETE probe into `modx_ms2_orders` failed)
 **Severity:** High — database write path may be broken
@@ -789,7 +825,7 @@ df -h
 
 ---
 
-### G15. 📊 Overall Health Check Failed (metric, not a Grafana alert)
+### G16. 📊 Overall Health Check Failed (metric, not a Grafana alert)
 
 **Metric:** `dreamseed_health_overall` = 0 (composite check from `check_services.sh`)
 **Severity:** High — one or more services or checks are failing
@@ -809,7 +845,7 @@ curl -sf http://127.0.0.1:8428/api/v1/query?query=dreamseed_health_overall
 
 ---
 
-### G16. 📊 Site HTTP Status Critical (metric, not a Grafana alert)
+### G17. 📊 Site HTTP Status Critical (metric, not a Grafana alert)
 
 **Metric:** `site_http_status` != 1 (site returned non-200/301 HTTP code)
 **Severity:** High — site not serving correctly
@@ -829,7 +865,7 @@ sudo tail -30 /var/log/nginx/error.log
 
 ---
 
-### G17. 🔴 Database Tables Below Threshold
+### G18. 🔴 Database Tables Below Threshold
 
 **Metric:** `database_tables` < 50 tables in `modx_db`
 **Severity:** CRITICAL — DB may be empty or not restored
@@ -857,7 +893,7 @@ sudo bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest
 
 ---
 
-### G18. 🔴 Backup Verification Failed
+### G19. 🔴 Backup Verification Failed
 
 **Metric:** `backup_verification_ok` = 0 (local or cloud backup verification failed)
 **Severity:** Warning — disaster recovery may be compromised
@@ -885,7 +921,7 @@ rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1
 
 ---
 
-### G19. 🔴 Swap Thrashing Detected
+### G20. 🔴 Swap Thrashing Detected
 
 **Metric:** `rate(node_vmstat_pswpin[5m])` > 100 pages/s
 **Severity:** Warning — server under memory pressure
@@ -914,7 +950,7 @@ sudo dmesg | grep -i "oom\|killed" | tail -10
 
 ---
 
-### G20. 🔴 Redis Down
+### G21. 🔴 Redis Down
 
 **Metric:** `redis_up` = 0 (redis_exporter cannot reach Redis)
 **Severity:** CRITICAL — MODX sessions will be lost, site may error
@@ -948,7 +984,7 @@ sudo redis-server /etc/redis/redis.conf --test-config
 
 ---
 
-### G21. 🔴 Site Response Time > 5s
+### G22. 🔴 Site Response Time > 5s
 
 **Metric:** `site_response_time_seconds` > 5s
 **Severity:** Warning — site is slow for users
@@ -975,7 +1011,7 @@ sudo mysql -e "SHOW GLOBAL STATUS LIKE '%Slow_queries%';"
 
 ---
 
-### G22. 🔴 Service Check Not Running
+### G23. 🔴 Service Check Not Running
 
 **Metric:** `check_services_last_run` stale for >10 min
 **Severity:** Warning — health check system may be degraded
@@ -1003,7 +1039,7 @@ sudo systemctl restart check-services.timer
 
 ---
 
-### G23. 🔴 VMAgent Remote Write Failing
+### G24. 🔴 VMAgent Remote Write Failing
 
 **Metric:** `vmagent_remote_write_ok` = 0 (vmagent cannot push to Grafana Cloud)
 **Severity:** CRITICAL — hosted metrics will be stale
@@ -1246,6 +1282,45 @@ ssh prod "bash /home/ubuntu/Scripts/send_report.sh daily 2>&1"
 
 ---
 
+### B8. 🔴 Synthetic Monitoring Failure (Grafana Cloud)
+
+**What triggered:** Grafana Cloud Synthetic Monitoring HTTP checks from 4 global regions (us-east, eu-west, ap-southeast, sa-east) detected downtime, slow response, or SSL issues
+**Severity:** CRITICAL — external visibility across global regions is degraded
+**Causes:**
+
+1. Server is down in one or more regions (regional routing issue, cloud provider problem)
+2. Cloudflare edge issue
+3. SSL certificate expired at Cloudflare edge
+4. Latency spike or packet loss to specific regions
+
+**Diagnose:**
+
+```bash
+# 1. Check if the server responds from localhost (bypasses Cloudflare)
+ssh prod "curl -sS -o /dev/null -w '%{http_code}' https://localhost/"
+
+# 2. If localhost is fine → check Cloudflare dashboard for edge errors
+#    Cloudflare Dashboard → Analytics → Edge Status Codes
+
+# 3. Check the SM check details in Grafana Cloud:
+#    https://vitalikuts.grafana.net → Synthetic Monitoring → Checks
+
+# 4. Check if only specific regions fail → cloud provider regional issue
+open https://health.aws.amazon.com
+# or https://status.hetzner.com
+```
+
+**Fix:**
+
+- If only 1-2 regions fail → likely cloud provider regional issue. Wait, check status page.
+- If all regions fail but localhost works → Cloudflare issue (DDoS protection, edge cert, routing)
+- If localhost also fails → server is down (see Layer 1 alerts)
+- If SSL check fails → check Cloudflare SSL/TLS settings (should be Full, not Flexible)
+
+**Note:** SM alerts go to Telegram via Grafana Cloud notification policy, **not** through the on-server Grafana. If you receive this alert but the on-server Grafana is healthy, the issue is network-level, not server-level.
+
+---
+
 ## ━━━━━━ LAYER 3: SCRIPT DIRECT ALERTS ━━━━━━
 
 ---
@@ -1328,6 +1403,67 @@ ssh prod "rclone delete gdrive:DreamSeed/backups/old_file --dry-run 2>&1"
 
 ---
 
+## ━━━━━━ LAYER 4: CI/CD & INFRASTRUCTURE ALERTS ━━━━━━
+
+---
+
+### D1. 🔴 Drift Detection Alert
+
+**What triggered:** `drift-detection.yml` (GitHub Actions, runs daily 07:05 UTC) detected that Terraform plan against the live infrastructure differs from the committed state
+**Severity:** Warning — infrastructure drifted from code
+**Causes:**
+
+1. Manual change made through cloud console (AWS Console / Hetzner Cloud UI)
+2. Terraform state file is out of sync (someone ran `terraform apply` outside deploy.sh)
+3. Resource was modified by an automated process (e.g., AWS auto-recovery replaced an instance)
+4. Provider API change caused a resource attribute to differ
+
+**Diagnose:**
+
+```bash
+# 1. Open the failed workflow run:
+#    https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/drift-detection.yml
+#    → Click latest failed run → expand "Terraform plan" step
+
+# 2. Read the plan output — it shows what changed:
+#    ~ resource "aws_instance" "dreamseed" {
+#        ~ ami                                   = "ami-xxx" -> "ami-yyy"
+#      }
+```
+
+**Common drift scenarios and fixes:**
+
+| Drift detected in | Likely cause | Fix |
+|---|---|---|
+| `ami` ID | AWS auto-recovery replaced instance with newer AMI | Update `data.aws_ami.ubuntu` filter in `terraform/aws/main.tf`, or accept the drift |
+| Security Group rules | Manual SG change in AWS Console | Revert in console, or apply Terraform to overwrite |
+| Instance type (e.g., `t3.small` → `t3.medium`) | Manual resize in cloud console | Revert in console, or update `main.tf` and re-apply |
+| Hetzner Firewall rules | Manual firewall edit in Hetzner Console | Revert, or accept if intentional |
+| `user_data` / cloud-init script | Server re-provisioned outside deploy.sh | Redeploy with `-i <IP> --no-dns` |
+
+**Fix steps:**
+
+```bash
+# 1. If the drift is UNINTENTIONAL — restore from Terraform:
+#    Run Terraform Apply workflow:
+#    https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/terraform-apply.yml
+#    → Select provider, workspace, mode: "apply"
+#    This will revert the drifted resource to match the code.
+
+# 2. If the drift is INTENTIONAL (e.g., you manually changed something and want to keep it):
+#    Update the Terraform code to match, commit, and apply:
+#    git add terraform/ && git commit -m "Accept drift: <description>"
+#    Then run deploy.yml or terraform-apply.yml
+
+# 3. If drift is caused by Terraform Cloud state issues:
+#    terraform init && terraform plan
+#    Check if state file is corrupted or locked
+```
+
+**Note:** Non-prod environments (dev-aws, dev-hetz) also run drift detection but only notify in Telegram. Prod drift also escalates to email if not resolved within 24h.
+
+---
+
 ## Quick Reference — What to do first
 
 | You see | Step 1 | Step 2 |
@@ -1339,6 +1475,9 @@ ssh prod "rclone delete gdrive:DreamSeed/backups/old_file --dry-run 2>&1"
 | Backup Verification Failed | `cat /home/ubuntu/backups/logs/verify_$(date +%Y-%m-%d).log` | Check rclone, GDrive, smart_backup logs |
 | Better Stack monitor alert | Try `ssh prod` — if fails → cloud console | If SSH works → web server check |
 | Better Stack heartbeat missed | Check backup logs | Run script manually |
+| Synthetic Monitoring failure | `curl -sk https://localhost/` → if 200, check Cloudflare | If localhost fails → server down |
+| Drift Detection alert | Open workflow run, read plan output | Revert drift or accept + update code |
+| Better Stack itself is down | Check <https://status.betterstack.com> (if accessible) | Otherwise rely on Grafana alerts (Layer 1) + Grafana Cloud SM (Layer 2) |
 | Backup failed (direct) | Check disk space | Check MySQL and project dir |
 
 ## Emergency contacts
@@ -1369,6 +1508,9 @@ ssh prod "rclone delete gdrive:DreamSeed/backups/old_file --dry-run 2>&1"
 - **SSL check:** <https://www.ssllabs.com/ssltest/>
 - **Uptime history:** <https://go-dreams.betterstackstatus.com>
 - **Grafana (on-server):** <https://dreamseed.online/grafana>
+- **Grafana Cloud (hosted):** <https://vitalikuts.grafana.net>
+
+> **If Better Stack is completely unavailable:** fall back to Layer 1 (Grafana on-server via dreamseed.online/grafana) and Grafana Cloud Synthetic Monitoring (via vitalikuts.grafana.net). Better Stack is an external layer — its absence does not indicate server issues.
 
 ---
 

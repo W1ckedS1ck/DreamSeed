@@ -135,6 +135,10 @@ groups:
         annotations:
           summary: MODX core files (config.core.php / modx.class.php) missing
 
+{{ alert_body('modx-cache', 'MODX Cache Not Writable', 'modx_cache_ok', 300, 1, 'lt', '5m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: MODX cache directory (core/cache/) is not writable
+
 {{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'Alerting', 'Alerting', 'critical') }}
         annotations:
           summary: VictoriaMetrics health check failed

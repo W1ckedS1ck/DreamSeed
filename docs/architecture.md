@@ -146,7 +146,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                  │   Grafana    │           │  Grafana Cloud   │
                                  │  :3000       │           │  (hosted metrics)│
                                  │  5 dashboards│           │  4 community     │
-                                                                   │  22 alerts   │           │  dashboards      │
+                                                                   │  23 alerts   │           │  dashboards      │
                                  │              │           │  (gnet 1860/7362/│
                                  │              │           │   17452/10229)   │
                                  └──────┬───────┘           └──────────────────┘
@@ -170,7 +170,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 22 rules)
+### Alert Rules (Grafana — 23 rules)
 
 | Alert | Severity | Condition | Interval / for |
 |-------|----------|-----------|----------------|
@@ -184,6 +184,8 @@ Better Stack (cloud)
 | Site Down | critical | site_up != 1 | pushed 1m, for: 2m |
 | Site Response Time > 5s | warning | site_response > 5s | pushed 1m, for: 5m |
 | MODX Core Missing | critical | modx_core_ok == 0 | pushed 1m, for: 5m |
+| Site Content Mismatch | critical | site_content_ok == 0 | pushed 1m, for: 2m |
+| MODX Cache Not Writable | warning | modx_cache_ok == 0 | pushed 1m, for: 5m |
 | VictoriaMetrics Down | critical | victoria_up == 0 | scraped 15s, for: 1m |
 | Redis Down | critical | redis_up == 0 | scraped 15s, for: 2m |
 | Backup Cron Not Running | warning | >70 min since last run | heartbeat 1h, for: 10m |
@@ -257,7 +259,7 @@ Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
                                           → DAST scan (nuclei)
                                           → Lynis audit
                                           → check_services (timers, fail2ban, exporters)
-                                           → Grafana alert rules check (≥22)
+                                           → Grafana alert rules check (≥23)
                                            → GDrive backup check
                                           → Destroy → Telegram report (P/F/W summary)
 
