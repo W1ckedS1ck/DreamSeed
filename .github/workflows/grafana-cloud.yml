@@ -102,18 +102,18 @@ jobs:
 
           if [[ "${{ inputs.workspace }}" == "prod" ]]; then
             TARGET="PROD"
-            GRAFANA_URL="https://dreamseed.grafana.net"
+            echo "| **Target** | \`$TARGET\` |" >> "$M"
+            echo "| **Grafana** | \`https://dreamseed.grafana.net\` |" >> "$M"
           else
             TARGET="DEV"
-            GRAFANA_URL="https://vitalikuts.grafana.net"
+            echo "| **Target** | \`$TARGET\` |" >> "$M"
+            echo "| **Grafana** | \`https://vitalikuts.grafana.net\` |" >> "$M"
           fi
 
           echo "## Grafana Cloud Deployment" >> "$M"
           echo "" >> "$M"
           echo "| | |" >> "$M"
           echo "|---|---|" >> "$M"
-          echo "| **Target** | \`$TARGET\` |" >> "$M"
-          echo "| **Grafana** | \`$GRAFANA_URL\` |" >> "$M"
           echo "" >> "$M"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
