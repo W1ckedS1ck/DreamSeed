@@ -140,7 +140,7 @@ Use cloud console to restart:
 
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
-| 1 | G1–G16 | Grafana (on-server) | CPU, RAM, Disk, Nginx, MySQL, PHP-FPM, Site, MODX, VictoriaMetrics, Backup cron | ❌ No |
+| 1 | G1–G22 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx, MySQL, PHP-FPM, Site, Site slow, MODX, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent | ❌ No |
 | 2 | B1–B7 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (4 heartbeats) | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
@@ -789,11 +789,11 @@ df -h
 
 ---
 
-### G15. 🔴 Overall Health Check Failed
+### G15. 📊 Overall Health Check Failed (metric, not a Grafana alert)
 
 **Metric:** `dreamseed_health_overall` = 0 (composite check from `check_services.sh`)
 **Severity:** High — one or more services or checks are failing
-**Note:** This is a meta-alert — check which specific alert(s) fired alongside it. Review the latest `check_services.sh` output.
+**Note:** This is not a Grafana alert rule — it's a metric pushed by `check_services.sh`. Review the latest script output to see which specific service failed.
 
 **Diagnose:**
 
@@ -809,7 +809,7 @@ curl -sf http://127.0.0.1:8428/api/v1/query?query=dreamseed_health_overall
 
 ---
 
-### G16. 🔴 Site HTTP Status Critical
+### G16. 📊 Site HTTP Status Critical (metric, not a Grafana alert)
 
 **Metric:** `site_http_status` != 1 (site returned non-200/301 HTTP code)
 **Severity:** High — site not serving correctly
@@ -882,6 +882,157 @@ rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1
 - If local backup invalid → check smart_backup.sh logs
 - If cloud backup missing → check rclone config and GDrive quota
 - If rclone auth expired → update secrets/rclone.conf and redeploy
+
+---
+
+### G19. 🔴 Swap Thrashing Detected
+
+**Metric:** `rate(node_vmstat_pswpin[5m])` > 100 pages/s
+**Severity:** Warning — server under memory pressure
+**Possible causes:** RAM exhausted, memory leak, too many concurrent PHP processes
+
+**Diagnose:**
+
+```bash
+# Check swap usage
+swapon --show
+free -h
+
+# Top memory consumers
+ps aux --sort=-%mem | head -10
+
+# Check for OOM kills
+sudo dmesg | grep -i "oom\|killed" | tail -10
+```
+
+**Fix:**
+
+- If swap is active → RAM is exhausted. Check for memory leaks in PHP or MySQL.
+- If OOM killer fired → a process was killed. Check which one in `dmesg`.
+- Temporary relief: restart PHP-FPM or MySQL.
+- Permanent fix: investigate memory leak or upgrade server.
+
+---
+
+### G20. 🔴 Redis Down
+
+**Metric:** `redis_up` = 0 (redis_exporter cannot reach Redis)
+**Severity:** CRITICAL — MODX sessions will be lost, site may error
+**Possible causes:** Redis crashed, out of memory, port blocked, config error
+
+**Diagnose:**
+
+```bash
+# Is Redis running?
+sudo systemctl status redis-server
+
+# Try connecting
+redis-cli ping
+
+# Check logs
+sudo journalctl -u redis-server --no-pager -n 30
+
+# Check if port is listening
+ss -tlnp | grep 6379
+```
+
+**Fix:**
+
+```bash
+# Restart Redis
+sudo systemctl restart redis-server
+
+# If it fails to start → check config
+sudo redis-server /etc/redis/redis.conf --test-config
+```
+
+---
+
+### G21. 🔴 Site Response Time > 5s
+
+**Metric:** `site_response_time_seconds` > 5s
+**Severity:** Warning — site is slow for users
+**Possible causes:** High load, slow DB queries, PHP-FPM pool exhausted, network issue
+
+**Diagnose:**
+
+```bash
+# Check current response time
+curl -sS -o /dev/null -w "Time: %{time_total}s\nHTTP: %{http_code}\n" https://localhost/
+
+# Check PHP-FPM pool status
+sudo cat /etc/php/*/fpm/pool.d/www.conf | grep -E 'pm\.(max_children|start_servers|min_spare|max_spare)'
+
+# Check MySQL slow queries
+sudo mysql -e "SHOW GLOBAL STATUS LIKE '%Slow_queries%';"
+```
+
+**Fix:**
+
+- If PHP-FPM pool is saturated → increase `pm.max_children` in www.conf
+- If MySQL slow queries → check `mysqltuner` or enable slow query log
+- If CPU/RAM high → see those alerts
+
+---
+
+### G22. 🔴 Service Check Not Running
+
+**Metric:** `check_services_last_run` stale for >10 min
+**Severity:** Warning — health check system may be degraded
+**Possible causes:** check-services.timer not running, script crashed, systemd issue
+
+**Diagnose:**
+
+```bash
+# Is the timer active?
+sudo systemctl status check-services.timer
+
+# Run the check manually
+bash /home/ubuntu/Scripts/check_services.sh
+
+# Check journal for errors
+sudo journalctl -u check-services.service --no-pager -n 20
+```
+
+**Fix:**
+
+```bash
+# Restart timer
+sudo systemctl restart check-services.timer
+```
+
+---
+
+### G23. 🔴 VMAgent Remote Write Failing
+
+**Metric:** `vmagent_remote_write_ok` = 0 (vmagent cannot push to Grafana Cloud)
+**Severity:** CRITICAL — hosted metrics will be stale
+**Possible causes:** Grafana Cloud credentials wrong, network issue, vmagent crash, token expired
+
+**Diagnose:**
+
+```bash
+# Is vmagent running?
+sudo systemctl status vmagent
+
+# Check vmagent logs
+sudo journalctl -u vmagent --no-pager -n 50
+
+# Test connectivity to Grafana Cloud
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer $GRAFANA_CLOUD_TOKEN" \
+  "$GRAFANA_CLOUD_URL"
+```
+
+**Fix:**
+
+- Check Grafana Cloud credentials in secrets/.env and GitHub Secrets
+- If token expired → generate new Cloud Access Policy token in Grafana Cloud
+- Restart vmagent after fixing credentials:
+
+  ```bash
+  sudo systemctl restart vmagent
+  ```
 
 ---
 

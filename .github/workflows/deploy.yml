@@ -195,17 +195,19 @@ jobs:
           [[ "${{ inputs.skip_dns }}" == "true" ]] && DEPLOY_ARGS+=("--no-dns")
           DEPLOY_ARGS+=("-p")
 
-          ./deploy.sh "${DEPLOY_ARGS[@]}"
+          set +e
+          ./deploy.sh "${DEPLOY_ARGS[@]}" > /tmp/deploy.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/deploy.log
 
-          # Capture server IP from terraform output for job summary
+          # Capture server IP from deploy output for job summary
           if [[ -z "$SERVER_IP" ]]; then
-            case "$ENV" in
-              prod|dev-aws) TF_DIR="terraform/aws" ;;
-              prod-hetz|dev-hetz) TF_DIR="terraform/hetzner" ;;
-            esac
-            ip=$(cd "$TF_DIR" && terraform output -raw server_ipv4 2>/dev/null || true)
+            ip=$(grep -oP '^  Server\s+\K\d+\.\d+\.\d+\.\d+' /tmp/deploy.log 2>/dev/null || true)
             [[ -n "$ip" ]] && echo "server_ip=$ip" >> "$GITHUB_OUTPUT"
           fi
+
+          exit $rc
 
       - name: Destroy
         if: inputs.action == 'destroy'
