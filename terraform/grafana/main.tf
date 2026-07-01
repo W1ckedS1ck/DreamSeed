@@ -47,8 +47,6 @@ locals {
       jsonencode(merge(local.raw["redis"], {
         id = null
         templating = merge(local.raw["redis"].templating, {
-          list = [for v in local.raw["redis"].templating.list : v if v.name != "namespace"]
-          # Make instance query namespace-independent
           list = try([for v in local.raw["redis"].templating.list : merge(v, {
             query = v.name == "instance" ? "label_values(redis_up, instance)" : v.query
           }) if v.name != "namespace"], [])

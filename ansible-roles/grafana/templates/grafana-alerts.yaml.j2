@@ -139,6 +139,10 @@ groups:
         annotations:
           summary: VictoriaMetrics health check failed
 
+{{ alert_body('redis-down', 'Redis Down', 'redis_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
+        annotations:
+          summary: Redis service is not running (sessions will be lost)
+
 {{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-

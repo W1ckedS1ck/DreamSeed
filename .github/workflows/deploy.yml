@@ -274,10 +274,10 @@ jobs:
           if [[ "$ACTION" == "deploy" && "${{ job.status }}" == "success" ]]; then
             case "$ENV" in
               prod|dev-aws)
-                ACTUAL_IP=$(cd terraform/aws && terraform output -raw server_ipv4 2>/dev/null || echo "")
+                ACTUAL_IP=$(cd terraform/aws && terraform output -raw server_ipv4 2>&1 | grep -v "^Error" || echo "")
                 ;;
               prod-hetz|dev-hetz)
-                ACTUAL_IP=$(cd terraform/hetzner && terraform output -raw server_ipv4 2>/dev/null || echo "")
+                ACTUAL_IP=$(cd terraform/hetzner && terraform output -raw server_ipv4 2>&1 | grep -v "^Error" || echo "")
                 ;;
             esac
             SERVER_IP="${ACTUAL_IP:-${SERVER_IP:-new}}"

@@ -162,6 +162,16 @@ main() {
     parse_args "$@"
     resolve_target
 
+    # Set Grafana Cloud URL based on target
+    local grafana_url_var="${TARGET_PREFIX}_GRAFANA_CLOUD_URL"
+    local grafana_user_var="${TARGET_PREFIX}_GRAFANA_CLOUD_USERNAME"
+    local grafana_token_var="${TARGET_PREFIX}_GRAFANA_CLOUD_TOKEN"
+
+    # Export env vars for Ansible to pick up
+    export GRAFANA_CLOUD_URL="${!grafana_url_var:-}"
+    export GRAFANA_CLOUD_USERNAME="${!grafana_user_var:-}"
+    export GRAFANA_CLOUD_TOKEN="${!grafana_token_var:-}"
+
     LOCK_ACQUIRED=false
     if command -v flock &>/dev/null; then
         LOCK_DIR="${HOME:-/tmp}/.locks"

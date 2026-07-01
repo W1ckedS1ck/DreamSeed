@@ -42,7 +42,7 @@
 
 - name: Clear MODX system settings cache
   become: true
-  ansible.builtin.shell:
+  ansible.builtin.command:
     cmd: rm -f /var/www/html/core/cache/system_settings/config.cache.php
   changed_when: false
 
