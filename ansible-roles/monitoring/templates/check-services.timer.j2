@@ -2,7 +2,10 @@
 Description=DreamSeed services health check timer (every 5 minutes)
 
 [Timer]
-OnBootSec=60
+# 15min from boot lets a fresh deploy finish (~7min) before the first fire.
+# On redeploys uptime is already past 15min so first fire lands right after enable —
+# stack is already up in that case, no false-fail.
+OnBootSec=15min
 OnUnitActiveSec=5min
 AccuracySec=5s
 
