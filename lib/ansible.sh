@@ -7,7 +7,7 @@ _ansible_cmd() {
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
     ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_TMP}" \
+    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_FILE}" \
         "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
     local rc=${PIPESTATUS[0]}
     set -e

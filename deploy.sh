@@ -425,7 +425,8 @@ all:
       server_ip: "${SERVER_IP}"
 INVEOF
 
-    DEPLOY_VARS_TMP=$(mktemp); chmod 600 "$DEPLOY_VARS_TMP"
+    DEPLOY_VARS_TMP=$(mktemp -d); chmod 700 "$DEPLOY_VARS_TMP"
+    DEPLOY_VARS_FILE="$DEPLOY_VARS_TMP/vars.json"
     python3 -c "
 import json, os, sys
 
@@ -466,7 +467,7 @@ if additional_keys.strip():
 
 with open(dst, 'w') as f:
     json.dump(data, f, indent=2)
-" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_TMP"
+" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ ! "$TARGET" =~ ^prod ]] && while IFS='=' read -r v _; do unset "$v"; done < <(env | grep '^BETTERUPTIME_')
