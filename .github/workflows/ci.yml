@@ -183,8 +183,8 @@ jobs:
           pip install j2lint --quiet
 
           # tflint (v0.63.1 — matching CI env)
-          curl -sL "https://github.com/terraform-linters/tflint/releases/download/v0.63.1/tflint_linux_amd64.zip" | \
-            sudo tar -xz -C /usr/local/bin tflint
+          curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.63.1/tflint_linux_amd64.zip"
+          sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
           tflint --init --config .tflint.hcl 2>/dev/null || true
 
           # ansible-lint
