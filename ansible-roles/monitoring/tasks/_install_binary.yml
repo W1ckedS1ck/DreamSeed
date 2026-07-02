@@ -31,12 +31,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          if [ -f "/tmp/{{ monitor_bin_name }}.tar.gz" ] && [ -f "/tmp/{{ monitor_bin_name }}.done" ]; then
-            tar xzf "/tmp/{{ monitor_bin_name }}.tar.gz" -C /tmp/
-          else
-            curl -sL "{{ monitor_download_url }}" | tar xz -C /tmp/
-          fi
-          rm -f "/tmp/{{ monitor_bin_name }}.done"
+          curl -sL "{{ monitor_download_url }}" | tar xz -C /tmp/
       args:
         executable: /bin/bash
       changed_when: true

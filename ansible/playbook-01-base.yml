@@ -22,16 +22,3 @@
       when: web_server == "apache"
     - role: packages_nginx
       when: web_server == "nginx"
-
-  tasks:
-    - name: Pre-cache monitoring binaries (async)
-      ansible.builtin.shell:
-        cmd: "curl -sLo '/tmp/{{ item.name }}.tar.gz' '{{ item.url }}' && touch '/tmp/{{ item.name }}.done'"
-      async: 120
-      poll: 0
-      loop:
-        - name: victoria-metrics
-          url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/victoria-metrics-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
-        - name: vmagent
-          url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}.tar.gz"
-      when: monitoring_vm_version is defined and monitoring_vmagent_version is defined
