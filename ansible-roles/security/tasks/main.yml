@@ -198,6 +198,19 @@
     mode: "0640"
   when: modx_config_file.stat.exists
 
+- name: Create dreamseed config directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/dreamseed
+    state: directory
+    mode: "0755"
+
+- name: Check if MODX permissions already secured
+  become: true
+  ansible.builtin.stat:
+    path: /etc/dreamseed/.modx_secured
+  register: modx_secured_marker
+
 - name: Secure MODX core directories (recursive — static files)
   become: true
   ansible.builtin.file:
@@ -209,7 +222,15 @@
   loop:
     - {path: "{{ web_root }}/core/model", owner: root, mode: "u=rwX,g=rwX,o="}
     - {path: "{{ web_root }}/core/components", owner: root, mode: "u=rwX,g=rwX,o="}
-  when: modx_config_file.stat.exists
+  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
+
+- name: Create MODX secured marker
+  become: true
+  ansible.builtin.file:
+    path: /etc/dreamseed/.modx_secured
+    state: touch
+    mode: "0644"
+  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
 
 - name: Secure MODX cache/logs directories (no recurse — FPM manages files)
   become: true
