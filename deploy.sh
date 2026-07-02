@@ -133,6 +133,7 @@ resolve_target() {
                    SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
         prod-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="dreamseed.online";      TF_WORKSPACE="prod-hetz"; TARGET_PREFIX="PROD_HETZ"
                    SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
+        *) echo "Error: unknown target '$TARGET'. Valid: prod, dev-aws, dev-hetz, prod-hetz"; exit 1 ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
@@ -224,7 +225,7 @@ main() {
         fi
         for entry in "${playbooks[@]}"; do
             local pb="${entry%%:*}" label="${entry##*:}"
-            if ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
+            if "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
                 echo "  ✓ $label"
             else
                 echo "  ✗ $label syntax error"
@@ -350,6 +351,10 @@ main() {
         step_ok
     fi
 
+    # ----- Clear stale host key (prevents mismatch on IP reuse) -----
+    ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
+    ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+
     # ----- Wait for SSH -----
     step_start "Wait for SSH ($SERVER_IP)"
     local ssh_err="" attempt=0
@@ -448,12 +453,6 @@ with open(dst, 'w') as f:
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
-
-    # ----- Verify SSH host key (new server only) -----
-    if [[ "$SKIP_TERRAFORM" == "false" ]]; then
-        ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
-        ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
-    fi
 
     # ----- Ansible playbooks -----
     if [[ "$PARALLEL_MODE" == "true" ]]; then

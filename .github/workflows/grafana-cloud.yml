@@ -44,11 +44,14 @@ jobs:
         working-directory: terraform/grafana
         env:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
+          PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
         run: |
           if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
+            TOKEN="${PROD_SA_TOKEN:-$PROD_TOKEN}"
             jq -n \
               --arg url "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" \
-              --arg token "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" \
+              --arg token "$TOKEN" \
               --arg sm_token "${{ secrets.PROD_SM_ACCESS_TOKEN }}" \
               --arg domain "dreamseed.online" \
               --arg sm_url "https://synthetic-monitoring-api-us-east-0.grafana.net" \

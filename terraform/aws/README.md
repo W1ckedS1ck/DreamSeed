@@ -31,7 +31,7 @@ No modules.
 | ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_additional_ssh_keys"></a> [additional\_ssh\_keys](#input\_additional\_ssh\_keys) | Additional SSH public keys to inject via cloud-init (in addition to the deploy key) | `list(string)` | `[]` | no |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region | `string` | `"us-west-1"` | no |
-| <a name="input_elastic_ip_allocation_id"></a> [elastic\_ip\_allocation\_id](#input\_elastic\_ip\_allocation\_id) | Allocation ID of an existing Elastic IP to associate. Leave empty to skip EIP association. | `string` | `""` | no |
+| <a name="input_disable_auto_public_ip"></a> [disable\_auto\_public\_ip](#input\_disable\_auto\_public\_ip) | Set to true to prevent AWS from auto-assigning a public IP (use when attaching an EIP via aws\_eip\_association outside this module, or managing it manually). Default false. | `bool` | `false` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts | `string` | n/a | yes |
 | <a name="input_instance_type"></a> [instance\_type](#input\_instance\_type) | EC2 instance type | `string` | `"t3.small"` | no |
 | <a name="input_root_volume_size"></a> [root\_volume\_size](#input\_root\_volume\_size) | Root EBS volume size in GB | `number` | `30` | no |

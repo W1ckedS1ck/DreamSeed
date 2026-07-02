@@ -90,7 +90,7 @@ export_tf_env() {
         export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
         export AWS_DEFAULT_REGION="$AWS_REGION"
         [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
-        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
+        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_disable_auto_public_ip="true"
         # Build list of additional SSH keys from ADDITIONAL_SSH_KEYS env var
         # (CI deploy key is handled separately via aws_key_pair.deploy)
         export TF_VAR_additional_ssh_keys="$(python3 -c "

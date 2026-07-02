@@ -9,16 +9,14 @@ locals {
     victoria_metrics = { gid = 10229 }
   }
 
-  # Read dashboard JSONs from local cache, fallback to minimal stub
   raw = {
     for k, v in local.dashboards :
     k => try(
-      jsondecode(file("${path.module}/.dashboards/${k}.json")),
+      jsondecode(data.http.dashboard[k].body),
       { id = null, title = k, gnetId = v.gid, templating = { list = [] } }
     )
   }
 
-  # Apply per-dashboard transformations
   config = {
     node_exporter = replace(
       jsonencode(merge(local.raw["node_exporter"], {
@@ -67,6 +65,11 @@ locals {
       "$ds", local.cloud_prom
     )
   }
+}
+
+data "http" "dashboard" {
+  for_each = local.dashboards
+  url      = "https://grafana.com/api/dashboards/${each.value.gid}/revisions/latest/download"
 }
 
 resource "grafana_folder" "dreamseed" {
