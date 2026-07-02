@@ -45,7 +45,7 @@ load_env() {
 # net only; they are never consumed by any restore flow.
 detect_env() {
     if [[ -f "$SCRIPT_DIR/.env" ]]; then
-        grep -qE '^ENV\s*=\s*"?prod"?' "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
+        grep -qE '^(export\s+)?ENV\s*=\s*"?prod"?$' "$SCRIPT_DIR/.env" 2>/dev/null && echo "" || echo "-dev"
     else
         local h
         h=$(hostname)

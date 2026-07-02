@@ -3,7 +3,7 @@
 # Sourced by deploy.sh — do not execute directly.
 
 validate_env_file() {
-    local f="$1" n=0 required=("DB_PASS" "GRAFANA_PASS" "TG_TOKEN" "TG_CHAT_ID") in_quote=0
+    local f="$1" n=0
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
         exit 1
@@ -17,23 +17,10 @@ validate_env_file() {
                 echo "Error: code injection detected in $f:$n: $line" >&2
                 exit 1
             fi
-            [[ "$val" =~ ^\" && ! "$val" =~ \"$ ]] && in_quote=1 || in_quote=0
-        elif [[ "$in_quote" -eq 1 ]]; then
-            if [[ "$line" == *'$('* || "$line" == *'`'* ]]; then
-                echo "Error: code injection detected in $f:$n: $line" >&2
-                exit 1
-            fi
-            [[ "$line" =~ \"$ ]] && in_quote=0
-            continue
         else
             echo "Invalid env format at $f:$n: $line" >&2; exit 1
         fi
     done < "$f"
-    source "$f" 2>/dev/null || true
-    for req in "${required[@]}"; do
-        local val="${!req:-}"
-        [[ -z "$val" ]] && { echo "Error: required var $req is empty or undefined in $f" >&2; exit 1; }
-    done
     return 0
 }
 

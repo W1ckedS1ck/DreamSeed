@@ -56,6 +56,18 @@
     - Reload systemd
     - Restart Grafana
 
+- name: Deploy Grafana memory limit override
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/grafana-server.service.d/memory.conf
+    content: |
+      [Service]
+      Environment=GOMEMLIMIT=800MiB
+    mode: "0644"
+  become: true
+  notify:
+    - Reload systemd
+    - Restart Grafana
+
 - name: Set Grafana admin password via systemd EnvironmentFile
   ansible.builtin.copy:
     dest: /etc/systemd/system/grafana-server.service.d/password.conf

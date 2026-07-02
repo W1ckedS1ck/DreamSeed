@@ -70,87 +70,17 @@
       APT::Periodic::Download-Upgradeable-Packages "1";
     mode: "0644"
 
-- name: Check if swap file exists
-  become: true
-  ansible.builtin.stat:
-    path: /swapfile
-  register: swapfile_stat
-
-- name: Check if swap is already active
+- name: Ensure 2G swap file
   become: true
   ansible.builtin.shell: |
     set -o pipefail
-    swapon --show | wc -l
-  args:
-    executable: /bin/bash
-  register: swap_active_check
-  changed_when: false
-
-- name: Set swap_is_active fact
-  ansible.builtin.set_fact:
-    swap_is_active: "{{ swap_active_check.stdout | int > 0 }}"
-
-- name: Create swap file (2 GB)
-  become: true
-  ansible.builtin.shell: fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
-  args:
-    executable: /bin/bash
-  when: not swapfile_stat.stat.exists
-  changed_when: true
+    if ! swapon --show | grep -q /swapfile; then
+      if [ ! -f /swapfile ]; then
+        fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+        chmod 600 /swapfile
+      fi
+      mkswap /swapfile && swapon /swapfile
+      grep -q /swapfile /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
   timeout: 120
-
-- name: Set swap file permissions
-  become: true
-  ansible.builtin.file:
-    path: /swapfile
-    mode: "0600"
-  when: not swap_is_active
-
-- name: Re-stat swap file after creation
-  become: true
-  ansible.builtin.stat:
-    path: /swapfile
-  register: swapfile_stat
-
-- name: Check if swap file is formatted
-  become: true
-  ansible.builtin.command: file -s /swapfile
-  register: swapfile_type
   changed_when: false
-  failed_when: false
-  when:
-    - swapfile_stat.stat.exists
-    - not swap_is_active
-
-- name: Format swap file
-  become: true
-  ansible.builtin.command: mkswap /swapfile
-  when:
-    - swapfile_stat.stat.exists
-    - not swap_is_active
-    - swapfile_type.rc != 0 or 'swap file' not in swapfile_type.stdout
-  changed_when: true
-
-- name: Enable swap
-  become: true
-  ansible.builtin.command: swapon /swapfile
-  when: not swap_is_active
-  changed_when: true
-  register: swap_enable_result
-  failed_when: false
-
-- name: Warn if swap enable failed
-  ansible.builtin.debug:
-    msg: "WARNING: swapon /swapfile failed — system has no swap. Under memory pressure OOM killer may kill PHP/DB. Fix: check filesystem or kernel params."
-  when:
-    - not swap_is_active
-    - swap_enable_result.rc is defined
-    - swap_enable_result.rc != 0
-
-- name: Add swap to fstab
-  become: true
-  ansible.builtin.lineinfile:
-    path: /etc/fstab
-    line: "/swapfile none swap sw 0 0"
-    state: present
-  when: swapfile_stat.stat.exists

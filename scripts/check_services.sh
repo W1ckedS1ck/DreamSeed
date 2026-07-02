@@ -147,20 +147,22 @@ if systemctl is-active vmagent &>/dev/null; then
     _raw=$(curl -sf --max-time 5 "http://127.0.0.1:8429/metrics" 2>/dev/null || echo "")
     _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {print $2}'); _blocks=${_blocks:-0}
     _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {print $2}'); _errors=${_errors:-0}
-    if [[ "$_blocks" -gt 0 && "$_errors" -eq 0 ]]; then
-        export_metric 'vmagent_remote_write_ok 1'
-        echo "  ✓ vmagent: remote write OK"
-    elif [[ "$_blocks" -gt 0 && "$_errors" -gt 0 ]]; then
-        export_metric 'vmagent_remote_write_ok 0'
-        echo "  ⚠ vmagent: remote write errors (errors=$_errors)"
+
+    _errfile="/var/tmp/.vmagent_errors_last"
+    _prev=0
+    [[ -f "$_errfile" ]] && _prev=$(cat "$_errfile")
+    echo "$_errors" > "$_errfile"
+    (( _errors < _prev )) && _new=0 || _new=$(( _errors - _prev ))
+
+    if [[ "$_blocks" -gt 0 && "$_new" -eq 0 ]]; then
+        export_metric 'vmagent_remote_write_ok 1'; echo "  ✓ vmagent: remote write OK"
+    elif [[ "$_blocks" -gt 0 && "$_new" -gt 0 ]]; then
+        export_metric 'vmagent_remote_write_ok 0'; echo "  ⚠ vmagent: +$_new errors (total $_errors)"
     else
-        export_metric 'vmagent_remote_write_ok 0'
-        echo "  ⚠ vmagent: running but no remote write data"
+        export_metric 'vmagent_remote_write_ok 0'; echo "  ⚠ vmagent: running, no data yet"
     fi
 else
-    export_metric 'vmagent_remote_write_ok 0'
-    echo "  ✗ vmagent: not running"
-    fail=1
+    export_metric 'vmagent_remote_write_ok 0'; echo "  ✗ vmagent: not running"; fail=1
 fi
 
 # --- Heartbeat ---

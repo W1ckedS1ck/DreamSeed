@@ -37,14 +37,6 @@ DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
 > "$LOG"; chmod 600 "$LOG"
 > "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
 
-# Rotate deploy_history.log if over 50MB
-if [[ -f "$DEPLOY_HISTORY" ]] && [[ $(stat -f%z "$DEPLOY_HISTORY" 2>/dev/null || stat -c%s "$DEPLOY_HISTORY" 2>/dev/null || echo 0) -gt 52428800 ]]; then
-    for i in {9..1}; do
-        [[ -f "$DEPLOY_HISTORY.$i" ]] && mv "$DEPLOY_HISTORY.$i" "$DEPLOY_HISTORY.$((i+1))"
-    done
-    mv "$DEPLOY_HISTORY" "$DEPLOY_HISTORY.1"
-fi
-
 # Load modules
 source "$SCRIPT_DIR/lib/helpers.sh"
 source "$SCRIPT_DIR/lib/env.sh"
@@ -161,23 +153,6 @@ run_lint() {
 main() {
     parse_args "$@"
     resolve_target
-
-    # Set Grafana Cloud URL based on environment (dev or prod)
-    # Only 2 workspaces: DEV (for dev-aws + dev-hetz) and PROD (for prod-aws + prod-hetz)
-    if [[ "$TARGET" == prod* ]]; then
-        grafana_url_var="PROD_GRAFANA_CLOUD_URL"
-        grafana_user_var="PROD_GRAFANA_CLOUD_USERNAME"
-        grafana_token_var="PROD_GRAFANA_CLOUD_TOKEN"
-    else
-        grafana_url_var="DEV_GRAFANA_CLOUD_URL"
-        grafana_user_var="DEV_GRAFANA_CLOUD_USERNAME"
-        grafana_token_var="DEV_GRAFANA_CLOUD_TOKEN"
-    fi
-
-    # Export env vars for Ansible to pick up
-    export GRAFANA_CLOUD_URL="${!grafana_url_var:-}"
-    export GRAFANA_CLOUD_USERNAME="${!grafana_user_var:-}"
-    export GRAFANA_CLOUD_TOKEN="${!grafana_token_var:-}"
 
     LOCK_ACQUIRED=false
     if command -v flock &>/dev/null; then

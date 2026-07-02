@@ -92,7 +92,7 @@ terraform_destroy() {
 
     echo "  ━━━ Destroying resources ($TARGET)"
 
-    TF_TMP_OUT=$(mktemp "${HOME:?}/.tmp_tf_XXXXXX")
+    TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
     set +e
     _tf destroy -auto-approve -no-color "${var_arg[@]}" 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}

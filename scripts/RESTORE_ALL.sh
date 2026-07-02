@@ -29,6 +29,10 @@ fi
 
 # ====== Validate required env vars ======
 : "${DB_NAME:?ERROR: DB_NAME not set in .env or environment}"
+if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "ERROR: DB_NAME contains invalid characters: '$DB_NAME'"
+    exit 1
+fi
 : "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
 
 # Setup restore log
