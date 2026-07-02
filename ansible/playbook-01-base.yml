@@ -27,7 +27,6 @@
     - name: Pre-cache monitoring binaries (async)
       ansible.builtin.shell:
         cmd: "curl -sLo '/tmp/{{ item.name }}.tar.gz' '{{ item.url }}' && touch '/tmp/{{ item.name }}.done'"
-        warn: false
       async: 120
       poll: 0
       loop:

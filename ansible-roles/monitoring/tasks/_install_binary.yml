@@ -37,7 +37,6 @@
             curl -sL "{{ monitor_download_url }}" | tar xz -C /tmp/
           fi
           rm -f "/tmp/{{ monitor_bin_name }}.done"
-        warn: false
       args:
         executable: /bin/bash
       changed_when: true
