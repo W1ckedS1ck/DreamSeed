@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Validate required commands
-for cmd in find rclone du cut date grep printf; do
+for cmd in find rclone du cut date grep; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
 done
 
@@ -129,7 +129,6 @@ else
     exit 1
 fi
 
-    _bs_key=""
 if [[ "$REPORT_TYPE" == "daily" ]]; then
     _bs_key="${BETTERUPTIME_REPORT_DAILY_KEY:-}"
 elif [[ "$REPORT_TYPE" == "weekly" ]]; then

@@ -26,7 +26,12 @@
 - name: Set fallback php_version
   ansible.builtin.set_fact:
     php_version: "{{ php_fallback.stdout }}"
-  when: php_avail.stdout == "missing"
+  when: php_avail.stdout == "missing" and php_fallback.stdout | length > 0
+
+- name: Fail if no PHP version found
+  ansible.builtin.fail:
+    msg: "Could not auto-detect PHP version (apt-cache search returned nothing). Check apt sources."
+  when: php_avail.stdout == "missing" and php_fallback.stdout | length == 0
 
 - name: Install common packages
   become: true

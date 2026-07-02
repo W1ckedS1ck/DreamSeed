@@ -49,6 +49,7 @@ cleanup() {
     [[ -n "${DEPLOY_VARS_TMP:-}" && -d "${DEPLOY_VARS_TMP:-}" ]] && rm -rf "$DEPLOY_VARS_TMP"
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
+    [[ -n "${TF_STATE_BACKUP_TMP:-}" && -f "${TF_STATE_BACKUP_TMP:-}" ]] && rm -f "$TF_STATE_BACKUP_TMP"
     [[ -n "${LOCK_FILE:-}" && "$LOCK_ACQUIRED" == "true" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
 }
 
@@ -109,35 +110,47 @@ if zones:
     local existing
     existing=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$base?type=$type&name=$domain" 2>/dev/null)
-    local count
-    count=$(echo "$existing" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('result',[])))" 2>/dev/null || echo 0)
+
+    # Single Python pass: parse existing records → count, id, old_ip
+    IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+results = d.get('result', [])
+c = len(results)
+if c:
+    print(f'{c}|{results[0][\"id\"]}|{results[0][\"content\"]}')
+else:
+    print('0||')
+" 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
     local dns_body
-    dns_body=$(python3 -c "
-import json,sys
-t,n,c=sys.argv[1:4]
-print(json.dumps({'type':t,'name':n,'content':c,'ttl':120,'proxied':True}))
-" "$type" "$domain" "$ip" 2>/dev/null) || dns_body=""
-    [[ -z "$dns_body" ]] && { log "Cloudflare DNS: skip (failed to build request)"; return 0; }
+    dns_body=$(printf '{"type":"%s","name":"%s","content":"%s","ttl":120,"proxied":true}' \
+        "$type" "$domain" "$ip") || dns_body=""
 
     if [[ "$count" -gt 0 ]]; then
-        local record_id old_ip
-        record_id=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['id'])")
-        old_ip=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['content'])")
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
-        curl -s -X PUT "$base/$record_id" \
+        if curl -s -X PUT "$base/$record_id" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$dns_body" >/dev/null 2>&1
-        log "Cloudflare DNS: $domain $old_ip → $ip"
+            -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+            log "Cloudflare DNS: $domain $old_ip → $ip"
+            echo "  ✓ Cloudflare DNS: $domain → $ip"
+        else
+            log "Cloudflare DNS: UPDATE FAILED for $domain"
+            echo "  ✗ Cloudflare DNS: update failed (check token/permissions)"
+        fi
     else
-        curl -s -X POST "$base" \
+        if curl -s -X POST "$base" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$dns_body" >/dev/null 2>&1
-        log "Cloudflare DNS: $domain → $ip (created)"
+            -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+            log "Cloudflare DNS: $domain → $ip (created)"
+            echo "  ✓ Cloudflare DNS: $domain → $ip"
+        else
+            log "Cloudflare DNS: CREATE FAILED for $domain"
+            echo "  ✗ Cloudflare DNS: create failed (check token/permissions)"
+        fi
     fi
-    echo "  ✓ Cloudflare DNS: $domain → $ip"
 }
 
 print_summary() {

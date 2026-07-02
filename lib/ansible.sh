@@ -59,14 +59,14 @@ PYEOF
     fi
 
     local output rc
-    echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
+    [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
     set +e
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "bash '${scripts_dir_remote}/check_services.sh'" 2>&1)
     rc=$?
     set -e
-    echo "    [DEBUG] SSH exit code: $rc"
+    [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH exit code: $rc"
 
     echo "$output"
 

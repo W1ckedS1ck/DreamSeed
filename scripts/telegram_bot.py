@@ -82,11 +82,9 @@ def get_size(filepath_or_bytes):
 def get_env():
     env = os.environ.get('ENV', '')
     if env:
-        return env
+        return "prod" if env == "prod" else "dev"
     hostname = subprocess.check_output(['hostname'], text=True).strip()
-    if 'prod' in hostname:
-        return "prod"
-    return "dev"
+    return "prod" if 'prod' in hostname else "dev"
 
 def format_backup_name(filename, prefix='DreamSeed_'):
     name = filename.replace(prefix, '').replace('.tar.gz', '').replace('.sql.gz', '')

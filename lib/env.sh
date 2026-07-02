@@ -3,7 +3,7 @@
 # Sourced by deploy.sh — do not execute directly.
 
 validate_env_file() {
-    local f="$1" n=0
+    local f="$1" n=0 quote=
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
         exit 1
@@ -11,8 +11,21 @@ validate_env_file() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((n++)) || true
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+        # Inside multi-line quoted value — skip until closing quote
+        if [[ -n "$quote" ]]; then
+            [[ "$line" == *"$quote" ]] && quote=
+            continue
+        fi
+
         if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
             local val="${line#*=}"
+            # Detect opening quote without matching closing quote → multi-line value
+            if [[ "$val" =~ ^\"(.*)$ ]] && [[ ! "$val" =~ ^\"(.*)\"$ ]]; then
+                quote='"'
+            elif [[ "$val" =~ ^\'(.*)$ ]] && [[ ! "$val" =~ ^\'(.*)\'$ ]]; then
+                quote="'"
+            fi
             if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
                 echo "Error: code injection detected in $f:$n: $line" >&2
                 exit 1

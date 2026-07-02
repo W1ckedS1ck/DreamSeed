@@ -81,4 +81,4 @@
     enabled: false
   become: true
   failed_when: false
-  when: not _vmagent_enabled and _vmagent_binary.stat.exists
+  when: not _vmagent_enabled and _vmagent_binary is defined and _vmagent_binary.stat.exists

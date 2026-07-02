@@ -327,12 +327,14 @@ main() {
         export SERVER_IP
 
         # Post-apply state backup (timestamped, rotate 5)
-        local tmp_bk; tmp_bk=$(mktemp)
-        if _tf state pull > "$tmp_bk" 2>/dev/null && [[ -s "$tmp_bk" ]]; then
-            mv "$tmp_bk" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+        TF_STATE_BACKUP_TMP=$(mktemp)
+        if _tf state pull > "$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
+            mv "$TF_STATE_BACKUP_TMP" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+            TF_STATE_BACKUP_TMP=
             ls -1t "$bk/${TF_WORKSPACE}"_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
         else
-            rm -f "$tmp_bk"
+            rm -f "$TF_STATE_BACKUP_TMP"
+            TF_STATE_BACKUP_TMP=
             echo "  ⚠ Post-apply state backup failed (empty or error)" | tee -a "$LOG"
         fi
         if [[ "$SKIP_DNS" == "false" ]]; then
@@ -445,7 +447,7 @@ with open(dst, 'w') as f:
 " "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ ! "$TARGET" =~ ^prod ]] && while IFS='=' read -r v _; do unset "$v"; done < <(env | grep '^BETTERUPTIME_')
+    [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
 
     # ----- Verify SSH host key (new server only) -----
     if [[ "$SKIP_TERRAFORM" == "false" ]]; then

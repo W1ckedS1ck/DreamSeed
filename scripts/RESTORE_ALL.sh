@@ -642,21 +642,17 @@ echo ""
 # ================================================
 ELAPSED=$(( $(date +%s) - START_TIME ))
 
-if [ "$MODE" = "interactive" ]; then
-    print_header "Restore complete (${ELAPSED}s)"
-    echo -e "  Project: $PROJECT_STATUS"
-    echo -e "  DB:      $DB_STATUS"
-    echo -e "  Redis:   $REDIS_STATUS"
-    echo -e "  Site:    $SITE_STATUS"
-    echo ""
-fi
-
+ELAPSED_DISPLAY="Time: ${ELAPSED}s"
 echo ""
 echo "Project: $PROJECT_STATUS"
 echo "DB: $DB_STATUS"
 echo "Redis: $REDIS_STATUS"
 echo "Site: $SITE_STATUS"
-echo "Time: ${ELAPSED}s"
+echo "$ELAPSED_DISPLAY"
+
+if [ "$MODE" = "interactive" ]; then
+    print_header "Restore complete (${ELAPSED}s)"
+fi
 
 if [ "${RESTORE_RESULT:-0}" -eq 1 ]; then
     MSG="❌ <b>[$ENV_DISPLAY] DreamSeed Restore FAILED</b>"

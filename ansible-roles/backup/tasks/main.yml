@@ -138,7 +138,7 @@
     state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
-- name: Setup session cleanup cron (daily, 7-day retention) — disabled with Redis
+- name: Remove legacy session cleanup cron (disabled — Redis handles sessions)
   ansible.builtin.cron:
     name: "DreamSeed session cleanup"
     minute: "42"

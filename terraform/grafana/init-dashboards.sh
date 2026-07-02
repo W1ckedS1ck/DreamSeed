@@ -13,11 +13,7 @@ for pair in $DASHBOARDS; do
     gid="${pair%%:*}"
     name="${pair##*:}"
     out="$CACHE_DIR/$name.json"
-    if [ -f "$out" ] && [ -s "$out" ]; then
-        echo "  ✓ $name (cached)"
-    else
-        echo "  ↓ $name (downloading revision $gid)..."
-        curl -sf "https://grafana.com/api/dashboards/$gid/revisions/latest/download" -o "$out"
-        echo "  ✓ $name (downloaded)"
-    fi
+    echo "  ↓ $name (revision $gid)..."
+    curl -sf "https://grafana.com/api/dashboards/$gid/revisions/latest/download" -o "$out"
+    echo "  ✓ $name"
 done

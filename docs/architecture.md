@@ -274,7 +274,6 @@ Bot events         Renovate              Dependency updates (auto PRs)
 ```
 DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
-├── audit-secrets.sh       # Pre-push secret leakage check
 ├── .github/
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
 │   └── workflows/         # 8 workflows + Renovate

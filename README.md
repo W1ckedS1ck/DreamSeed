@@ -143,7 +143,6 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 ```
 DreamSeed/
 ├── deploy.sh                 # Main orchestrator (500 lines + 5 modular lib files)
-├── audit-secrets.sh          # Pre-push secret leakage scanner
 ├── .github/actions/          # Composite actions: setup-terraform, setup-ansible
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group

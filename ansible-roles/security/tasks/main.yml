@@ -225,11 +225,7 @@
   when: modx_config_file.stat.exists
 
 # --- Unattended Upgrades ---
-- name: Install unattended-upgrades
-  become: true
-  ansible.builtin.apt:
-    name: unattended-upgrades
-    state: present
+# Package installed in packages_common (playbook-01)
 
 - name: Configure automatic security updates
   become: true

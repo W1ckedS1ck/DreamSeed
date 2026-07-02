@@ -20,16 +20,39 @@ load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
     local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|BASH_FUNC_.*)$'
+    local key="" value="" quote=""
     while IFS= read -r line; do
+        if [[ -n "$key" ]]; then
+            # Continuation of multi-line quoted value
+            local stripped="${line#export }"
+            if [[ -n "$quote" && "$stripped" == *"$quote" ]]; then
+                value+=$'\n'"${stripped%$quote}"
+                export "$key"="$value"
+                key=""; value=""; quote=""
+            else
+                value+=$'\n'"$stripped"
+            fi
+            continue
+        fi
+
         line="${line#export }"
         [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
-        local key="${line%%=*}" value="${line#*=}"
-        [[ "$key" =~ $blocked_vars ]] && continue
-        # Strip matching outer quotes (single or double)
-        if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
-            value="${BASH_REMATCH[1]}"
+        local k="${line%%=*}" v="${line#*=}"
+        [[ "$k" =~ $blocked_vars ]] && continue
+
+        if [[ "$v" =~ ^\"(.*)\"$ ]] || [[ "$v" =~ ^\'(.*)\'$ ]]; then
+            # Single-line quoted value
+            v="${BASH_REMATCH[1]}"
+            export "$k"="$v"
+        elif [[ "$v" =~ ^\"(.*)$ ]]; then
+            # Opening double-quote without closing — multi-line start
+            key="$k"; value="${BASH_REMATCH[1]}"; quote='"'
+        elif [[ "$v" =~ ^\'(.*)$ ]]; then
+            # Opening single-quote without closing — multi-line start
+            key="$k"; value="${BASH_REMATCH[1]}"; quote="'"
+        else
+            export "$k"="$v"
         fi
-        export "$key"="$value"
     done < "$env_file"
     OWNER="${OWNER:-}"
 }

@@ -42,15 +42,9 @@ cloud_db_keep: 100
 cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 
 # ========================
-#  SSL
-# ========================
-# Let's Encrypt via Cloudflare DNS-01. Falls back to self-signed on rate limit.
-# Manual cert: place in secrets/ssl/letsencrypt/live/<domain>/.
-
-# ========================
 #  Monitoring (Grafana + VictoriaMetrics)
 # ========================
-grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.0.2', true) }}"
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('12.4.5', true) }}"
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.11.1', true) }}"
