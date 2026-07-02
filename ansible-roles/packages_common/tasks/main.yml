@@ -87,5 +87,7 @@
       mkswap /swapfile && swapon /swapfile
       grep -q /swapfile /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
     fi
+  args:
+    executable: /bin/bash
   timeout: 120
   changed_when: false
