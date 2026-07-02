@@ -454,6 +454,8 @@ with open(dst, 'w') as f:
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
 
+    mkdir -p ~/.ansible/facts_cache
+
     # ----- Ansible playbooks -----
     if [[ "$PARALLEL_MODE" == "true" ]]; then
         # Phase 1: Base (sequential — prerequisite)
