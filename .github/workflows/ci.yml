@@ -182,6 +182,10 @@ jobs:
           # j2lint
           pip install j2lint --quiet
 
+          # Terraform (v1.15.5 — matching CI env)
+          curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_amd64.zip"
+          sudo unzip -o /tmp/terraform.zip -d /usr/local/bin > /dev/null 2>&1
+
           # tflint (v0.63.1 — matching CI env)
           curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.63.1/tflint_linux_amd64.zip"
           sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
