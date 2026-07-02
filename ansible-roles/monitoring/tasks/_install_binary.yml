@@ -27,19 +27,20 @@
     not _monitor_bin.stat.exists or
     monitor_version not in (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')).split()
   block:
-    - name: "Download {{ monitor_bin_name }}"
-      ansible.builtin.get_url:
-        url: "{{ monitor_download_url }}"
-        dest: "/tmp/{{ monitor_bin_name }}.tar.gz"
-        mode: "0644"
-        timeout: 90
-        checksum: "{{ monitor_checksum | default(omit) }}"
-
-    - name: "Extract {{ monitor_bin_name }}"
-      ansible.builtin.unarchive:
-        src: "/tmp/{{ monitor_bin_name }}.tar.gz"
-        dest: /tmp/
-        remote_src: true
+    - name: "Download and extract {{ monitor_bin_name }}"
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          if [ -f "/tmp/{{ monitor_bin_name }}.tar.gz" ] && [ -f "/tmp/{{ monitor_bin_name }}.done" ]; then
+            tar xzf "/tmp/{{ monitor_bin_name }}.tar.gz" -C /tmp/
+          else
+            curl -sL "{{ monitor_download_url }}" | tar xz -C /tmp/
+          fi
+          rm -f "/tmp/{{ monitor_bin_name }}.done"
+        warn: false
+      args:
+        executable: /bin/bash
+      changed_when: true
 
     - name: "Install binary: {{ monitor_bin_name }}"
       ansible.builtin.copy:
