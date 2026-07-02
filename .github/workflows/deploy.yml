@@ -283,6 +283,8 @@ jobs:
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
 
+          M="${GITHUB_STEP_SUMMARY:-}"
+          [[ -z "$M" ]] && exit 0
           echo "## ${ACTION^} ${RESULT}" >> "$M"
           echo "" >> "$M"
           echo "| | |" >> "$M"
