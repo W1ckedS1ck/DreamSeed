@@ -196,10 +196,9 @@ jobs:
           DEPLOY_ARGS+=("-p")
 
           set +e
-          ./deploy.sh "${DEPLOY_ARGS[@]}" > /tmp/deploy.log 2>&1
-          rc=$?
+          ./deploy.sh "${DEPLOY_ARGS[@]}" 2>&1 | tee /tmp/deploy.log
+          rc=${PIPESTATUS[0]}
           set -e
-          cat /tmp/deploy.log
 
           # Capture server IP from deploy output for job summary
           if [[ -z "$SERVER_IP" ]]; then
@@ -207,7 +206,7 @@ jobs:
             [[ -n "$ip" ]] && echo "server_ip=$ip" >> "$GITHUB_OUTPUT"
           fi
 
-          exit $rc
+          exit "$rc"
 
       - name: Destroy
         if: inputs.action == 'destroy'
@@ -284,16 +283,17 @@ jobs:
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
 
-          M="$GITHUB_STEP_SUMMARY"
-          echo "## ${ACTION^} ${RESULT}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Environment** | ${ENV} |" >> "$M"
-          echo "| **Web server** | ${WEB} |" >> "$M"
-          echo "| **Action** | ${ACTION} |" >> "$M"
-          echo "| **Server IP** | ${SERVER_IP:-new} |" >> "$M"
-          echo "| **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
-          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+          {
+          echo "## ${ACTION^} ${RESULT}"
+          echo ""
+          echo "| | |"
+          echo "|---|---|"
+          echo "| **Environment** | ${ENV} |"
+          echo "| **Web server** | ${WEB} |"
+          echo "| **Action** | ${ACTION} |"
+          echo "| **Server IP** | ${SERVER_IP:-new} |"
+          echo "| **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
+          echo "| **Commit** | ${{ github.sha }} |"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+          } >> "$M"
