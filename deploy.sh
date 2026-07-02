@@ -473,14 +473,16 @@ with open(dst, 'w') as f:
         run_ansible "playbook-07-security.yml" "Security hardening" || step_fail "Security hardening failed"
         step_ok
 
-        # Phase 3: Monitoring + Backup + Grafana
-        # Grafana has no hard dependency on VM — datasource provisioning is
-        # file-based; Grafana connects to VM asynchronously when it's ready.
-        step_start "Phase 3: Monitoring/Backup/Grafana"
-        run_parallel "Monitoring/Backup/Grafana" \
+        # Phase 3: Monitoring + Backup
+        step_start "Phase 3: Monitoring/Backup"
+        run_parallel "Monitoring/Backup" \
             "playbook-04-monitor.yml:Monitoring" \
-            "playbook-05-backup.yml:Backup & Telegram bot" \
-            "playbook-06-grafana.yml:Grafana" || step_fail "Phase 3 failed"
+            "playbook-05-backup.yml:Backup & Telegram bot" || step_fail "Phase 3 failed"
+        step_ok
+
+        # Phase 4: Grafana (separate — parallel with 3 playbooks overwhelms t2.micro SSH)
+        step_start "Grafana"
+        run_ansible "playbook-06-grafana.yml" "Grafana" || step_fail "Grafana failed"
         step_ok
     else
         for entry in "${playbooks[@]}"; do
