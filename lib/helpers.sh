@@ -153,6 +153,60 @@ else:
     fi
 }
 
+delete_cloudflare_dns() {
+    local domain="$1"
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && {
+        log "Cloudflare DNS cleanup: skip (CLOUDFLARE_API_TOKEN not set)"
+        return 0
+    }
+
+    local zone_id api_base zone_lookup
+    api_base="https://api.cloudflare.com/client/v4"
+    local dot_count="${domain//[^.]}"
+    if [[ ${#dot_count} -ge 2 ]]; then
+        zone_lookup="${domain#*.}"
+    else
+        zone_lookup="$domain"
+    fi
+    zone_id=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "$api_base/zones?name=$zone_lookup" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+zones=d.get('result',[])
+if zones:
+    print(zones[0]['id'])
+" 2>/dev/null || echo "")
+
+    [[ -z "$zone_id" ]] && { log "Cloudflare DNS cleanup: skip (no zone found for $domain)"; return 0; }
+
+    local base="$api_base/zones/$zone_id/dns_records"
+
+    local existing
+    existing=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "$base?type=A&name=$domain" 2>/dev/null)
+
+    local record_id
+    record_id=$(echo "$existing" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+results = d.get('result', [])
+if results:
+    print(results[0]['id'])
+" 2>/dev/null) || record_id=""
+
+    [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; return 0; }
+
+    if curl -s -X DELETE "$base/$record_id" \
+        -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        -H "Content-Type: application/json" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+        log "Cloudflare DNS: deleted A record for $domain"
+        echo "  ✓ Cloudflare DNS: deleted $domain"
+    else
+        log "Cloudflare DNS: DELETE FAILED for $domain"
+        echo "  ✗ Cloudflare DNS: delete failed (check token/permissions)"
+    fi
+}
+
 print_summary() {
     echo ""
     echo "  ──────────────────────────────────────────────────────"

@@ -68,6 +68,8 @@ terraform_destroy() {
 
     # Check server reachability
     local ip; ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
+    # Validate IP — TFC may return error text on empty state instead of empty string
+    [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || ip=""
     [[ -n "$ip" && -n "${SSH_KEY:-}" ]] && \
         ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
             && echo "  ✓ Server $ip reachable" \
@@ -101,6 +103,9 @@ terraform_destroy() {
         grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (exit $tf_exit, check $DEPLOY_TF_LOG)"
     fi
     cat "$TF_TMP_OUT" >> "$DEPLOY_TF_LOG" && rm -f "$TF_TMP_OUT"
+
+    # Clean up Cloudflare DNS record
+    delete_cloudflare_dns "$DEPLOY_DOMAIN"
 
     rm -f "$SCRIPT_DIR/secrets/tfstate-backup/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
 
