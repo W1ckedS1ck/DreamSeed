@@ -65,43 +65,72 @@
         msg: "Refusing to extract to '{{ web_root }}': path is empty, root, or /var/www"
       when: web_root == '' or web_root == '/' or web_root == '/var/www' or web_root == '/var/www/'
 
-    - name: Stream and extract project backup (try each until one works)
+    - name: Set backup cache directory (EBS, not tmpfs)
+      ansible.builtin.set_fact:
+        restore_cache: "{{ backup_dir }}/.restore_cache"
+
+    - name: Ensure backup cache directory exists
+      ansible.builtin.file:
+        path: "{{ backup_dir }}/.restore_cache"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0700"
+
+    - name: Download and restore project (try each until one works)
       become: true
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
           _web="{{ web_root }}"
-          _backup_dir="gdrive:DreamSeed/backups/project"
-
-          # Backup existing site
-          [ -d "$_web" ] && mv "$_web" "${_web}.bak.$$" || true
-          mkdir -p "$_web"
+          _remote="gdrive:DreamSeed/backups/project"
+          _cache="{{ backup_dir }}/.restore_cache"
 
           for _archive in {% for f in restore_project_list.stdout_lines if f | trim | length > 0 %}{{ f | trim }} {% endfor %}; do
-            if rclone cat "$_backup_dir/$_archive" 2>/dev/null | tar -xzf - -C "$(dirname "$_web")" 2>/dev/null; then
+            _local="$_cache/$_archive"
+            rm -f "$_local"
+
+            # Download with retries (rclone copy retries 3x by default) to EBS, not tmpfs
+            if ! timeout 600 rclone copy "$_remote/$_archive" "$_cache/" --no-check-dest 2>/dev/null; then
+              echo "  ✗ $_archive — download failed, trying next" >&2
+              continue
+            fi
+
+            # Verify integrity before extraction
+            if ! tar -tzf "$_local" > /dev/null 2>&1; then
+              echo "  ✗ $_archive — corrupted download, trying next" >&2
+              rm -f "$_local"
+              continue
+            fi
+
+            # Backup existing site
+            [ -d "$_web" ] && mv "$_web" "${_web}.bak.$$" || true
+            mkdir -p "$_web"
+
+            # Extract
+            if tar -xzf "$_local" -C "$(dirname "$_web")" 2>/dev/null; then
               echo "SUCCESS: $_archive"
-              rm -rf "${_web}.bak.$$" 2>/dev/null || true
+              rm -rf "${_web}.bak.$$" "$_cache" 2>/dev/null || true
               chown -R www-data:www-data "$_web"
               exit 0
             else
-              echo "  ✗ $_archive — corrupted, trying next" >&2
+              echo "  ✗ $_archive — extraction failed, trying next" >&2
               rm -rf "$_web" 2>/dev/null || true
-              mkdir -p "$_web"
+              [ -d "${_web}.bak.$$" ] && mv "${_web}.bak.$$" "$_web" || true
+              rm -f "$_local"
             fi
           done
 
           # All backups failed — create placeholder so deploy continues
           echo "WARN: all project backups failed — deploying placeholder" >&2
-          rm -rf "$_web" 2>/dev/null || true
-          [ -d "${_web}.bak.$$" ] && mv "${_web}.bak.$$" "$_web" || true
-          if [ ! -f "$_web/index.php" ]; then
+          rm -rf "$_cache" 2>/dev/null || true
+          [ ! -f "$_web/index.php" ] && {
             mkdir -p "$_web"
-            ( echo '<?php'
-              echo 'header("HTTP/1.0 503 Service Unavailable");'
+            ( echo '<?php'; echo 'header("HTTP/1.0 503 Service Unavailable");'
               echo 'echo "<html><body><h1>Site temporarily unavailable</h1>";'
               echo 'echo "<p>Restore from backup failed.</p></body></html>";' ) > "$_web/index.php"
             chown -R www-data:www-data "$_web"
-          fi
+          }
           exit 0
         executable: /bin/bash
       changed_when: false
