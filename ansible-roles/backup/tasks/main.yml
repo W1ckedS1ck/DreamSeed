@@ -189,11 +189,19 @@
     login_user: root
     query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
   become: true
-  ignore_errors: true
+  register: truncate_result
+  failed_when: false
   when:
     - clear_sessions | default(true)
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Session table truncate result
+  ansible.builtin.debug:
+    msg: "Session table truncate: {{ 'skipped' if truncate_result.failed else 'ok' }} (table may not exist if using Redis sessions)"
+  when:
+    - clear_sessions | default(true)
+    - modx_check.query_result is defined
 
 - name: Set MODX database query caching (cache_db)
   ansible.mysql.mysql_query:
