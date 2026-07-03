@@ -17,7 +17,7 @@
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
-> Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~15 minutes.
+> Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~10 minutes.
 
 ---
 
@@ -33,7 +33,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Deploy time | ~8-15 min (zero to live, either cloud) |
+| Deploy time | ~8-10 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
 | Uptime coverage | 23 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
