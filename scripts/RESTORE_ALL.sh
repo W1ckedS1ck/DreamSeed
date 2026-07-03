@@ -506,8 +506,7 @@ if [ -n "$SELECTED_DB" ]; then
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || true)
 
-    TEMP_SQL=$(mktemp "${HOME:?}/.tmp_restore_XXXXXX") && TEMP_SQL="${TEMP_SQL}.sql"
-    chmod 600 "$TEMP_SQL"
+    TEMP_SQL=$(mktemp "${HOME:?}/.tmp_restore_XXXXXX.sql")
     if ! timeout 300 gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"
