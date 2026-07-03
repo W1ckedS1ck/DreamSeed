@@ -11,6 +11,7 @@ load_env "$SCRIPT_DIR/.env"
 
 # ====== Start time ======
 START_TIME=$(date +%s)
+DOMAIN="${DOMAIN:-$(hostname -f 2>/dev/null || echo "unknown")}"
 
 # NOTE: Dev environments upload to DreamSeed/backups/{project,db}-dev/ (via
 # ENV suffix from detect_env()), but ALL restore paths (deploy's restore role,
@@ -105,8 +106,10 @@ prune_cloud_backups "redis" "$MAX_REDIS_BACKUPS" || {
 
 timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null
 
-if [[ "$HAS_ERROR" -eq 0 ]] && [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]]; then
-    ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"
+if [[ "$HAS_ERROR" -eq 0 ]]; then
+    echo "upload_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
+        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+    [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]] && ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"
 fi
 
 # ====== Suppress alert on fresh servers (<1h uptime — backup cron races with manual steps) ======

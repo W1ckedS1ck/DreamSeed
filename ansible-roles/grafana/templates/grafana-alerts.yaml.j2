@@ -5,7 +5,7 @@
         title: {{ title }}
         condition: B
         labels:
-          env: {{ domain }}
+          env: {{ deploy_env }}
           severity: {{ severity }}
         data:
           - refId: A
@@ -59,7 +59,7 @@ contactPoints:
           message_thread_id: "{{ grafana_telegram_thread_id }}"
 {% endif %}
           bottoken: "{{ grafana_telegram_token }}"
-          message: "{% raw %}{{ if .Alerts.Firing }}🔴 {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
+          message: "{% raw %}{{ if .Alerts.Firing }}🔴 [{{ .GroupLabels.env }}] {{ (index .Alerts.Firing 0).Labels.alertname }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Labels.severity }}: {{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ [{{ .GroupLabels.env }}] {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved{{ end }}{% endraw %}"
         disableResolveMessage: false
 
 policies:
@@ -151,6 +151,11 @@ groups:
         annotations:
           summary: >-
             {% raw %}Backup cron hasn't run for 70 min on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
+
+{{ alert_body('upload-failed', 'Cloud Upload Failed', '(time() - upload_last_success_timestamp) / 3600', 86400, 2, 'gt', '1h', 'Alerting', 'Error', 'warning') }}
+        annotations:
+          summary: >-
+            {% raw %}No successful cloud upload in >2h (last: {{ $labels.instance }}) — check rclone/GDrive{% endraw %}
 
 {{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '1m', 'OK', 'Error', 'warning') }}
         annotations:
