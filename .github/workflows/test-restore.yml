@@ -13,6 +13,11 @@ on:
           - hetzner
           - aws
         default: hetzner
+      keep_server:
+        description: Keep server alive after test (for debugging)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -805,9 +810,15 @@ jobs:
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
 
+      - name: Keep server for debugging
+        if: always() && inputs.keep_server == 'true' && steps.terraform.outputs.server_ipv4 != ''
+        run: |
+          echo "::notice::Server kept alive: ${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
+
       - name: Terraform Destroy
         id: destroy
-        if: always() && steps.terraform.outputs.server_ipv4 != ''
+        if: always() && steps.terraform.outputs.server_ipv4 != '' && inputs.keep_server != 'true'
         working-directory: terraform/${{ inputs.provider || 'hetzner' }}
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
