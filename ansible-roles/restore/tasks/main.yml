@@ -10,10 +10,10 @@
 # ========================
 #  Restore Project
 # ========================
-- name: Check if site already restored
+- name: Check if MODX already installed (real site, not placeholder)
   become: true
   ansible.builtin.stat:
-    path: "{{ web_root }}/index.php"
+    path: "{{ web_root }}/core/config/config.inc.php"
   register: restore_site_exists
 
 - name: Warn if site missing and no restore source
