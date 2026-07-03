@@ -506,18 +506,14 @@ if [ -n "$SELECTED_DB" ]; then
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || true)
 
-    echo "DEBUG: Starting DB restore at $(date +%H:%M:%S)"
-    echo "DEBUG: SELECTED_DB=[${SELECTED_DB:-EMPTY}]"
     TEMP_SQL=$(mktemp "${HOME:?}/.tmp_restore_XXXXXX")
-    echo "DEBUG: TEMP_SQL=[${TEMP_SQL:-EMPTY}]"
     if ! timeout 300 gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
-        echo "DEBUG: gunzip FAILED"
         rm -f "$TEMP_SQL"
         DB_STATUS="❌ Decompression error"
         echo -e "${RED}✗ Failed to decompress archive!${NC}"
     else
         if timeout 1800 mysql "$DB_NAME" < "$TEMP_SQL"; then
-            mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null
+            mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null || true
 
             COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
             LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null)
