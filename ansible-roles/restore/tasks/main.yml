@@ -74,7 +74,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rclone copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
         executable: /bin/bash
       changed_when: false
       when: restore_latest_project.stdout | trim != ""
@@ -191,10 +191,11 @@
         - not (restore_latest_db.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
     - name: Download DB backup to EBS cache
+      become: true
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rclone copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
         executable: /bin/bash
       changed_when: false
       when: restore_latest_db.stdout | trim != ""
