@@ -140,7 +140,7 @@ Use cloud console to restart:
 
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
-| 1 | G1–G24 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent | ❌ No |
+| 1 | G1–G25 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent, Cloud Upload | ❌ No |
 | 2 | B1–B7 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (4 heartbeats) | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
@@ -1069,6 +1069,38 @@ curl -s -o /dev/null -w "%{http_code}" \
   ```bash
   sudo systemctl restart vmagent
   ```
+
+---
+
+### G25. 🔴 Cloud Upload Failed
+
+**Metric:** `upload_last_success_timestamp` stale for >2h
+**Severity:** Warning — rclone backups not reaching cloud storage
+**Possible causes:** rclone config expired, GDrive full, network issue, cron not running
+
+**Diagnose:**
+
+```bash
+# Was upload scheduled? Check cron
+crontab -l | grep upload
+
+# Run upload manually to see errors
+bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh
+
+# Check rclone config
+rclone lsf gdrive:DreamSeed/backups/project-dev/ --files-only | head -3
+
+# Check if VictoriaMetrics received the metric
+curl -s "http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp" | \
+  python3 -c "import json,sys; r=json.load(sys.stdin)['data']['result']; print(r[0]['value'][1] if r else 'NO DATA')"
+```
+
+**Fix:**
+
+- Run manually to see error
+- If rclone auth expired → re-deploy or update `secrets/rclone.conf`
+- If GDrive full → free up space or increase quota
+- If cron not working → check `systemctl status telegram-bot`, check systemd timers
 
 ---
 

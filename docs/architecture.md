@@ -146,7 +146,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                  │   Grafana    │           │  Grafana Cloud   │
                                  │  :3000       │           │  (hosted metrics)│
                                  │  5 dashboards│           │  4 community     │
-                                                                   │  23 alerts   │           │  dashboards      │
+                                                                   │  24 alerts   │           │  dashboards      │
                                  │              │           │  (gnet 1860/7362/│
                                  │              │           │   17452/10229)   │
                                  └──────┬───────┘           └──────────────────┘
@@ -170,7 +170,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 23 rules)
+### Alert Rules (Grafana — 24 rules)
 
 | Alert | Severity | Condition | Interval / for |
 |-------|----------|-----------|----------------|
@@ -197,6 +197,7 @@ Better Stack (cloud)
 | Backup Verification Failed | warning | backup_verification_ok == 0 | cron 24h, for: 5m |
 | Service Check Not Running | warning | stale >10 min | heartbeat 1m, for: 1m |
 | VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | scraped 15s, for: 2m |
+| Cloud Upload Failed | warning | upload_last_success_timestamp >2h | pushed 1h, for: 1h |
 
 ### External Monitoring (Better Stack — cloud)
 
