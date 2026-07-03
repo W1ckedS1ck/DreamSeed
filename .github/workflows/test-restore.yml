@@ -710,7 +710,7 @@ jobs:
           set -o pipefail
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
-            | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
+            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
 
       - name: Run disk check
         id: disk
@@ -858,6 +858,7 @@ jobs:
           ok() { if [ "$1" = "success" ]; then echo "✅"; else echo "❌"; fi; }
           ok_destroy() { if [ "$1" = "success" ]; then echo "✅"; elif [ "$1" = "skipped" ]; then echo "⏭️"; fi; }
           ok_yn() { if [ "$1" = "yes" ]; then echo "✅"; else echo "❌"; fi; }
+          exp_status() { if [ "$1" -ge 1 ]; then echo "✅"; else echo "❌"; fi; }
 
           RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
           RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
@@ -870,7 +871,7 @@ jobs:
           HTTP_CODE="${{ steps.verify_content.outputs.restore_http_code }}"
           SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
           FAILS="${{ steps.service_tests.outputs.test_fails }}"
-          BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+${{ steps.verify_backup.outputs.db_count }}"
+          BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+1+${{ steps.verify_backup.outputs.db_count }}"
 
           GDRIVE_STATUS="${{ steps.gdrive_upload.outputs.gdrive_status }}"
           GDRIVE_ICON="☁️"; [ "$GDRIVE_STATUS" = "ok" ] && GDRIVE_ICON="☁️ " || GDRIVE_ICON="☁️❌"
@@ -896,23 +897,45 @@ jobs:
           DISK_USAGE="${{ steps.disk.outputs.disk_usage }}"
           DISK_ICON="✅"; [ -n "$DISK_USAGE" ] && [ "$DISK_USAGE" -ge 80 ] && DISK_ICON="⚠️"
 
+          MEM_PCT="${{ steps.service_tests.outputs.memory_pct }}"
+          RESP_TIME="${{ steps.service_tests.outputs.response_time_ms }}"
+          MODX_MANAGER="${{ steps.service_tests.outputs.modx_manager_code }}"
+          CRON_JOBS="${{ steps.service_tests.outputs.cron_jobs }}"
+          EXP_NODE="${{ steps.service_tests.outputs.exporter_node }}"
+          EXP_MYSQL="${{ steps.service_tests.outputs.exporter_mysql }}"
+          EXP_REDIS="${{ steps.service_tests.outputs.exporter_redis }}"
+          EXP_WEB="${{ steps.service_tests.outputs.exporter_web }}"
+          EXP_VM="${{ steps.service_tests.outputs.exporter_vm }}"
+          CLOUD_PROJ="${{ steps.service_tests.outputs.cloud_project }}"
+          CLOUD_DB="${{ steps.service_tests.outputs.cloud_db }}"
+          CLOUD_REDIS="${{ steps.service_tests.outputs.cloud_redis }}"
+
           COMMIT_SHA="${{ github.sha }}"
           COMMIT_SHORT="${COMMIT_SHA:0:7}"
           BRANCH="$HEAD_REF"
 
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 *Restore Test* $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`" \
             "" \
-            "Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
-            "Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?})" \
+            "🔄 Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?}s)" \
             "  Source: ${RESTORE_SRC}" \
-            "Hash       ${PROJ_ICON} project ${DB_ICON} DB" \
-            "Tests      $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
-            "SSL        ${SSL_ICON} ${SSL_STATUS:-?}" \
-            "Disk       ${DISK_ICON} ${DISK_USAGE:-?}%" \
+            "📁 Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
+            "  ☁️ Cloud: ${CLOUD_PROJ:-0} project / ${CLOUD_DB:-0} db / ${CLOUD_REDIS:-0} redis" \
+            "  Hash: ${PROJ_ICON} project ${DB_ICON} DB" \
+            "" \
+            "🌐 Web       HTTP ${HTTP_CODE:-?} (${RESP_TIME:-?}ms)" \
+            "  MODX mgr: ${MODX_MANAGER:-?}" \
+            "" \
+            "💾 Memory    ${MEM_PCT:-?}%" \
+            "🖴 Disk      ${DISK_ICON} ${DISK_USAGE:-?}%" \
+            "" \
+            "📊 Services  $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
+            "  Cron: ${CRON_JOBS:-?} jobs" \
+            "  Exporters: $(exp_status "$EXP_NODE") node $(exp_status "$EXP_MYSQL") mysql $(exp_status "$EXP_REDIS") redis $(exp_status "$EXP_WEB") web $(exp_status "$EXP_VM") vm" \
+            "🔒 SSL       ${SSL_ICON} ${SSL_STATUS:-?}" \
             "Destroy    $(ok_destroy $DESTROY)")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
