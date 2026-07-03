@@ -176,6 +176,22 @@ jobs:
 
           [[ -n "$RCLONE_CONF_BASE64" ]] && echo "$RCLONE_CONF_BASE64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
+      - name: Debug Hetzner SSH keys
+        if: inputs.action == 'deploy' && inputs.environment == 'dev-hetz'
+        run: |
+          source secrets/.env
+          echo "=== Checking Hetzner SSH keys ==="
+          curl -sf -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys?per_page=50" | python3 -c "
+          import json, sys; data = json.load(sys.stdin)
+          for k in data.get('ssh_keys', []):
+              print(f\"ID:{k['id']} NAME:'{k['name']}' FP:{k['fingerprint']}\")
+          print(f\"Total: {len(data.get('ssh_keys', []))} keys\")
+          "
+          echo ""
+          echo "=== Deploy key fingerprint ==="
+          ssh-keygen -lf ~/.ssh/deploy_key.pub 2>/dev/null || echo "No deploy key pub"
+
       - name: Deploy
         if: inputs.action == 'deploy'
         id: deploy
