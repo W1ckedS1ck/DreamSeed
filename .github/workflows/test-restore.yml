@@ -454,6 +454,8 @@ jobs:
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          # Force fresh backup by removing marker file (hash-skip would skip otherwise)
+          ssh ubuntu@"$SERVER_IP" "rm -f /home/ubuntu/backups/.project_marker" 2>/dev/null || true
           echo "=== Running smart_backup.sh ==="
           set +e
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1
