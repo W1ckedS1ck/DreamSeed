@@ -811,14 +811,14 @@ jobs:
             --data-urlencode "text=$MSG" > /dev/null || true
 
       - name: Keep server for debugging
-        if: always() && inputs.keep_server == 'true' && steps.terraform.outputs.server_ipv4 != ''
+        if: always() && inputs.keep_server && steps.terraform.outputs.server_ipv4 != ''
         run: |
           echo "::notice::Server kept alive: ${{ steps.terraform.outputs.server_ipv4 }}"
           echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
 
       - name: Terraform Destroy
         id: destroy
-        if: always() && steps.terraform.outputs.server_ipv4 != '' && inputs.keep_server != 'true'
+        if: always() && steps.terraform.outputs.server_ipv4 != '' && !inputs.keep_server
         working-directory: terraform/${{ inputs.provider || 'hetzner' }}
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
