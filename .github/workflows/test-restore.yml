@@ -554,10 +554,15 @@ jobs:
             "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
           echo "Project hash: $PROJ_HASH"
+          # Exclude modx_session — sessions are in Redis, not DB
           DB_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
+            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
           echo "DB hash: $DB_HASH"
+          # Record Redis session count for comparison
+          REDIS_SESSIONS=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null | awk '{print \$2}'" || echo "0")
+          echo "redis_sessions_before=$REDIS_SESSIONS" >> "$GITHUB_OUTPUT"
+          echo "Redis sessions before destroy: $REDIS_SESSIONS"
 
       - name: Destroy data — simulate disaster
         run: |
@@ -679,7 +684,7 @@ jobs:
           fi
 
           NEW_DB=$(ssh ubuntu@"$SERVER_IP" \
-            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
+            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
           OLD_DB="${{ steps.artifact_hash.outputs.db_hash }}"
           echo "DB hash before: $OLD_DB"
           echo "DB hash after:  $NEW_DB"
@@ -689,6 +694,21 @@ jobs:
           else
             echo "[FAIL] Database hash mismatch"
             echo "db_hash_match=no" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Verify Redis sessions — should have sessions when DB modx_session is empty
+          REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" 'redis-cli DBSIZE 2>/dev/null | awk "{print \$2}"' || echo "0")
+          DB_SESSION_COUNT=$(ssh ubuntu@"$SERVER_IP" 'mysql modx_db -N -e "SELECT COUNT(*) FROM modx_session" 2>/dev/null' || echo "-1")
+          echo "Redis sessions after restore: $REDIS_AFTER"
+          echo "DB modx_session rows: $DB_SESSION_COUNT"
+          echo "redis_sessions_after=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
+          echo "db_session_count=$DB_SESSION_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$DB_SESSION_COUNT" = "0" ] && [ "${REDIS_AFTER:-0}" -gt 0 ]; then
+            echo "[PASS] Redis sessions active (DB sessions empty) — Redis session handler working"
+          elif [ "$DB_SESSION_COUNT" = "-1" ]; then
+            echo "[WARN] modx_session table not found"
+          else
+            echo "[INFO] DB sessions: $DB_SESSION_COUNT, Redis: $REDIS_AFTER"
           fi
 
           echo "=== PHP error log (last 20 lines) ==="
