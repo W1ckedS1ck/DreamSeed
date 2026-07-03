@@ -14,7 +14,7 @@ if [[ -f /root/.ssh/authorized_keys ]]; then
 fi
 %{if length(additional_ssh_keys) > 0~}
 %{for key in additional_ssh_keys~}
-echo '${base64encode(key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
+echo '${base64encode(key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys && echo '' >> /home/ubuntu/.ssh/authorized_keys
 %{endfor~}
 %{endif~}
 chmod 600 /home/ubuntu/.ssh/authorized_keys
