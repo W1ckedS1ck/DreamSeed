@@ -129,7 +129,7 @@ else:
 
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
-        if curl -s -X PUT "$base/$record_id" \
+        if curl -s --retry 3 --retry-delay 5 -X PUT "$base/$record_id" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
@@ -140,7 +140,7 @@ else:
             echo "  ✗ Cloudflare DNS: update failed (check token/permissions)"
         fi
     else
-        if curl -s -X POST "$base" \
+        if curl -s --retry 3 --retry-delay 5 -X POST "$base" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
@@ -196,7 +196,7 @@ if results:
 
     [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; return 0; }
 
-    if curl -s -X DELETE "$base/$record_id" \
+    if curl -s --retry 3 --retry-delay 5 -X DELETE "$base/$record_id" \
         -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         -H "Content-Type: application/json" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
         log "Cloudflare DNS: deleted A record for $domain"

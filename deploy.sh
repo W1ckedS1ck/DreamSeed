@@ -409,47 +409,7 @@ INVEOF
 
     DEPLOY_VARS_TMP=$(mktemp -d); chmod 700 "$DEPLOY_VARS_TMP"
     DEPLOY_VARS_FILE="$DEPLOY_VARS_TMP/vars.json"
-    python3 -c "
-import json, os, sys
-
-target = sys.argv[1]
-script_dir = sys.argv[2]
-dst = sys.argv[3]
-
-data = {
-    'db_pass': os.environ.get('DB_PASS', ''),
-    'server_ip': os.environ.get('SERVER_IP', ''),
-    'web_server': os.environ.get('WEB_SERVER', ''),
-    'domain': os.environ.get('DEPLOY_DOMAIN', ''),
-    'domain_www': target.startswith('prod'),
-    'cloudflare_enabled': target.startswith('prod'),
-
-    'secrets_dir': f'{script_dir}/secrets',
-    'configs_dir': f'{script_dir}/configs',
-    'scripts_dir': f'{script_dir}/scripts',
-    'deploy_env': target,
-}
-
-optional_map = {
-    'CLOUDFLARE_API_TOKEN': 'cloudflare_api_token',
-    'GRAFANA_PASS': 'grafana_admin_password',
-    'SSH_PUBLIC_KEY_PATH': 'ssh_public_key_path',
-    'GRAFANA_CLOUD_URL': 'grafana_cloud_url',
-    'GRAFANA_CLOUD_USERNAME': 'grafana_cloud_username',
-    'GRAFANA_CLOUD_TOKEN': 'grafana_cloud_token',
-}
-for env_var, key in optional_map.items():
-    val = os.environ.get(env_var)
-    if val:
-        data[key] = val
-
-additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
-if additional_keys.strip():
-    data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
-
-with open(dst, 'w') as f:
-    json.dump(data, f, indent=2)
-" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE"
+    python3 "$SCRIPT_DIR/lib/gen_vars.py" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done

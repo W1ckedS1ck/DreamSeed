@@ -1,32 +1,6 @@
 ---
-- name: Check if rclone config exists locally
-  ansible.builtin.stat:
-    path: "{{ secrets_dir }}/rclone.conf"
-  register: rclone_config_stat
-  delegate_to: localhost
-  delegate_facts: true
-  when:
-    - secrets_dir is defined
-    - secrets_dir | length > 0
-
-- name: Ensure rclone config directory exists
-  ansible.builtin.file:
-    path: /home/ubuntu/.config/rclone
-    state: directory
-    owner: ubuntu
-    group: ubuntu
-    mode: "0700"
-  when: rclone_config_stat.stat.exists | default(false)
-
-- name: Upload rclone config if not on server yet
-  ansible.builtin.copy:
-    src: "{{ secrets_dir }}/rclone.conf"
-    dest: /home/ubuntu/.config/rclone/rclone.conf
-    owner: ubuntu
-    group: ubuntu
-    mode: "0600"
-  no_log: true
-  when: rclone_config_stat.stat.exists | default(false)
+- name: Upload rclone config
+  ansible.builtin.include_tasks: rclone_config.yml
 
 - name: Check if rclone config exists on server
   ansible.builtin.stat:
@@ -87,49 +61,36 @@
         - restore_latest_project.stdout | trim != ""
         - not (restore_latest_project.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
-    - name: Download project backup
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          rclone copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /tmp/
-        executable: /bin/bash
-      changed_when: false
-      when: restore_latest_project.stdout | trim != ""
-
-    - name: Verify project archive integrity
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          tar -tzf "/tmp/{{ restore_latest_project.stdout | trim }}" > /dev/null 2>&1
-        executable: /bin/bash
-      register: restore_archive_check
-      changed_when: false
-      failed_when: restore_archive_check.rc != 0
-      when: restore_latest_project.stdout | trim != ""
-
     - name: Validate web_root before destructive operation
       ansible.builtin.fail:
-        msg: "Refusing to rm -rf '{{ web_root }}': path is empty, root, or /var/www"
+        msg: "Refusing to extract to '{{ web_root }}': path is empty, root, or /var/www"
       when: >
         restore_latest_project.stdout | trim != "" and
         (web_root == '' or web_root == '/' or
         web_root == '/var/www' or web_root == '/var/www/')
 
-    - name: Extract project
+    - name: Stream and extract project backup
       become: true
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          _archive="/tmp/{{ restore_latest_project.stdout | trim }}"
+          _archive="{{ restore_latest_project.stdout | trim }}"
           _web="{{ web_root }}"
-          tar -tzf "$_archive" > /dev/null 2>&1 || { echo "Corrupt archive: $_archive"; exit 1; }
-          mv "$_web" "${_web}.bak.$$" 2>/dev/null || true
+
+          # Backup existing site
+          if [ -d "$_web" ]; then
+            mv "$_web" "${_web}.bak.$$"
+          fi
           mkdir -p "$_web"
-          if ! tar -xzf "$_archive" -C "$(dirname "$_web")"; then
-            mv "${_web}.bak.$$"/* "$_web" 2>/dev/null || true
-            rm -rf "${_web}.bak.$$" 2>/dev/null || true
+
+          # Stream directly from GDrive — no tmpfs
+          if ! rclone cat "gdrive:DreamSeed/backups/project/$_archive" 2>/dev/null | tar -xzf - -C "$(dirname "$_web")"; then
+            echo "ERROR: streaming extraction failed for $_archive"
+            rm -rf "$_web"
+            [ -d "${_web}.bak.$$" ] && mv "${_web}.bak.$$" "$_web" || true
             exit 1
           fi
+
           rm -rf "${_web}.bak.$$" 2>/dev/null || true
           chown -R www-data:www-data "$_web"
         executable: /bin/bash
@@ -142,12 +103,6 @@
         path: "{{ web_root }}/index.php"
       register: restore_index_check
       failed_when: restore_index_check.stat is not defined or not restore_index_check.stat.exists or restore_index_check.stat.size == 0
-      when: restore_latest_project.stdout | trim != ""
-
-    - name: Cleanup project archive
-      ansible.builtin.file:
-        path: "/tmp/{{ restore_latest_project.stdout | trim }}"
-        state: absent
       when: restore_latest_project.stdout | trim != ""
 
     - name: Show restored project
@@ -207,20 +162,11 @@
         - restore_latest_db.stdout | trim != ""
         - not (restore_latest_db.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
-    - name: Download DB backup
+    - name: Restore database via streaming
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rclone copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /tmp/
-        executable: /bin/bash
-      changed_when: false
-      when: restore_latest_db.stdout | trim != ""
-
-    - name: Restore database
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          gunzip -c "/tmp/{{ restore_latest_db.stdout | trim }}" | mysql "{{ db_name }}"
+          rclone cat "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" 2>/dev/null | gunzip | mysql "{{ db_name }}"
         executable: /bin/bash
       register: restore_db_result
       changed_when: false
@@ -236,12 +182,6 @@
       register: restore_db_table_count
       changed_when: false
       failed_when: (restore_db_table_count.stdout | int) < db_min_tables
-      when: restore_latest_db.stdout | trim != ""
-
-    - name: Cleanup DB archive
-      ansible.builtin.file:
-        path: "/tmp/{{ restore_latest_db.stdout | trim }}"
-        state: absent
       when: restore_latest_db.stdout | trim != ""
 
     - name: Show restored DB

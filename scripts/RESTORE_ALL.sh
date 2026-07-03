@@ -454,33 +454,35 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo "Restoring project..."
     fi
 
-    TEMP_EXTRACT=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
-    if timeout 1800 sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
-        [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
-        extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
-        if [[ ! -d "$extracted_dir" ]]; then
-            echo -e "${RED}✗ Archive structure mismatch: expected '$extracted_dir' not found${NC}"
-            sudo rm -rf "$TEMP_EXTRACT"
+    [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
+
+    # Backup current project
+    if [ -d "$PROJECT_DIR" ]; then
+        sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$"
+    fi
+    sudo mkdir -p "$PROJECT_DIR"
+
+    # Stream from source (local file or cloud cache), no tmpfs
+    if timeout 1800 gunzip -c "$SELECTED_PROJECT" | sudo tar -xf - -C "$(dirname "$PROJECT_DIR")" 2>/dev/null; then
+        # Verify structure
+        if [ ! -f "$PROJECT_DIR/index.php" ]; then
+            echo -e "${RED}✗ Restored project missing index.php — archive may be invalid${NC}"
+            sudo rm -rf "$PROJECT_DIR"
+            [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
             PROJECT_STATUS="❌ Archive structure error"
             echo -e "${RED}✗ Project restore failed!${NC}"
         else
-            sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
-            sudo mv "$extracted_dir" "$PROJECT_DIR" || {
-                sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" 2>/dev/null || true
-                sudo rm -rf "$TEMP_EXTRACT"
-                PROJECT_STATUS="❌ Move failed"
-                echo "ERROR: Failed to move restored project"
-                exit 1
-            }
             sudo rm -rf "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
-            sudo rm -rf "$TEMP_EXTRACT"
             sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
             sudo chown -R www-data:www-data "$PROJECT_DIR"
+            sudo chmod g+s "$PROJECT_DIR"
             PROJECT_STATUS="✅ $(basename "$SELECTED_PROJECT")"
             echo -e "${GREEN}✓ Project restored${NC}"
         fi
     else
-        sudo rm -rf "$TEMP_EXTRACT"
+        # Rollback on failure
+        sudo rm -rf "$PROJECT_DIR"
+        [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
         PROJECT_STATUS="❌ Error"
         echo -e "${RED}✗ Project restore failed!${NC}"
     fi
@@ -506,55 +508,47 @@ if [ -n "$SELECTED_DB" ]; then
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || true)
 
-    TEMP_SQL=$(mktemp "${HOME:?}/.tmp_restore_XXXXXX")
-    if ! timeout 300 gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
-        rm -f "$TEMP_SQL"
-        DB_STATUS="❌ Decompression error"
-        echo -e "${RED}✗ Failed to decompress archive!${NC}"
-    else
-        if timeout 1800 mysql "$DB_NAME" < "$TEMP_SQL"; then
-            mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null || true
+    # Stream DB restore directly — no temp file
+    if timeout 1800 gunzip -c "$SELECTED_DB" | mysql "$DB_NAME" 2>/dev/null; then
+        mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null || true
 
-            COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
-            LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null)
+        COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
+        LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null)
 
-            DIFF=$((COUNT_AFTER - COUNT_BEFORE))
-            DIFF_STR=""
-            [ $DIFF -gt 0 ] && DIFF_STR=" (+$DIFF)"
-            [ $DIFF -lt 0 ] && DIFF_STR=" ($DIFF)"
+        DIFF=$((COUNT_AFTER - COUNT_BEFORE))
+        DIFF_STR=""
+        [ $DIFF -gt 0 ] && DIFF_STR=" (+$DIFF)"
+        [ $DIFF -lt 0 ] && DIFF_STR=" ($DIFF)"
 
-            ROLLBACK_STR=""
-            if [ -n "$LAST_EDIT_BEFORE" ] && [ "$LAST_EDIT_BEFORE" != "NULL" ] && \
-               [ -n "$LAST_EDIT_AFTER" ] && [ "$LAST_EDIT_AFTER" != "NULL" ]; then
-                TIMESTAMP_BEFORE=$(date -d "$LAST_EDIT_BEFORE" +%s 2>/dev/null)
-                TIMESTAMP_AFTER=$(date -d "$LAST_EDIT_AFTER" +%s 2>/dev/null)
-                if [ -n "$TIMESTAMP_BEFORE" ] && [ -n "$TIMESTAMP_AFTER" ]; then
-                    TIME_DIFF=$((TIMESTAMP_BEFORE - TIMESTAMP_AFTER))
-                    if [ $TIME_DIFF -gt 0 ]; then
-                        DAYS=$((TIME_DIFF / 86400))
-                        HOURS=$(((TIME_DIFF % 86400) / 3600))
-                        if [ $DAYS -gt 0 ]; then
-                            ROLLBACK_STR=" ⚠️ Rollback ${DAYS}d ${HOURS}h"
-                        elif [ $HOURS -gt 0 ]; then
-                            ROLLBACK_STR=" ⚠️ Rollback ${HOURS}h"
-                        else
-                            ROLLBACK_STR=" ⚠️ Rollback"
-                        fi
-                        if [ "$MODE" = "interactive" ]; then
-                            echo -e "${YELLOW}⚠️  Warning: restored data is older than current!${NC}"
-                        fi
+        ROLLBACK_STR=""
+        if [ -n "$LAST_EDIT_BEFORE" ] && [ "$LAST_EDIT_BEFORE" != "NULL" ] && \
+           [ -n "$LAST_EDIT_AFTER" ] && [ "$LAST_EDIT_AFTER" != "NULL" ]; then
+            TIMESTAMP_BEFORE=$(date -d "$LAST_EDIT_BEFORE" +%s 2>/dev/null)
+            TIMESTAMP_AFTER=$(date -d "$LAST_EDIT_AFTER" +%s 2>/dev/null)
+            if [ -n "$TIMESTAMP_BEFORE" ] && [ -n "$TIMESTAMP_AFTER" ]; then
+                TIME_DIFF=$((TIMESTAMP_BEFORE - TIMESTAMP_AFTER))
+                if [ $TIME_DIFF -gt 0 ]; then
+                    DAYS=$((TIME_DIFF / 86400))
+                    HOURS=$(((TIME_DIFF % 86400) / 3600))
+                    if [ $DAYS -gt 0 ]; then
+                        ROLLBACK_STR=" ⚠️ Rollback ${DAYS}d ${HOURS}h"
+                    elif [ $HOURS -gt 0 ]; then
+                        ROLLBACK_STR=" ⚠️ Rollback ${HOURS}h"
+                    else
+                        ROLLBACK_STR=" ⚠️ Rollback"
+                    fi
+                    if [ "$MODE" = "interactive" ]; then
+                        echo -e "${YELLOW}⚠️  Warning: restored data is older than current!${NC}"
                     fi
                 fi
             fi
-
-            DB_STATUS="✅ $(basename "$SELECTED_DB")$DIFF_STR$ROLLBACK_STR"
-            echo -e "${GREEN}✓ Database restored, sessions cleared${NC}"
-        else
-            DB_STATUS="❌ Error"
-            echo -e "${RED}✗ Database restore failed!${NC}"
         fi
 
-        rm -f "$TEMP_SQL"
+        DB_STATUS="✅ $(basename "$SELECTED_DB")$DIFF_STR$ROLLBACK_STR"
+        echo -e "${GREEN}✓ Database restored, sessions cleared${NC}"
+    else
+        DB_STATUS="❌ Import error"
+        echo -e "${RED}✗ Database restore failed!${NC}"
     fi
 else
     if [ "$MODE" = "interactive" ]; then

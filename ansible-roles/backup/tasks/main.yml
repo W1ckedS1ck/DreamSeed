@@ -1,29 +1,6 @@
 ---
-- name: Check if rclone config exists locally
-  ansible.builtin.stat:
-    path: "{{ secrets_dir }}/rclone.conf"
-  register: rclone_config_stat
-  delegate_to: localhost
-  delegate_facts: true
-
-- name: Create rclone config directory
-  ansible.builtin.file:
-    path: "/home/ubuntu/.config/rclone"
-    state: directory
-    owner: ubuntu
-    group: ubuntu
-    mode: "0700"
-  when: rclone_config_stat.stat.exists
-
 - name: Upload rclone config
-  ansible.builtin.copy:
-    src: "{{ secrets_dir }}/rclone.conf"
-    dest: "/home/ubuntu/.config/rclone/rclone.conf"
-    owner: ubuntu
-    group: ubuntu
-    mode: "0600"
-  when: rclone_config_stat.stat.exists
-  no_log: true
+  ansible.builtin.include_tasks: ../restore/tasks/rclone_config.yml
 
 - name: Create root MySQL config for cron jobs
   ansible.builtin.copy:
