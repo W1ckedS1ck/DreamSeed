@@ -131,7 +131,7 @@ prune_cloud_backups() {
     local all
     all=$(timeout 60 rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/" --files-only 2>/dev/null | sort -r) || return 0
     local count
-    count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]')
+    count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]' || true)
     if [ "$count" -gt "$max" ]; then
         printf '%s\n' "$all" | tail -n +$((max + 1)) | while read -r file; do
             [ -n "$file" ] && timeout 60 rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/$file"
