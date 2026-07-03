@@ -158,10 +158,9 @@ jobs:
             echo "PROD_EIP=$PROD_EIP"
 
             # Hetzner SSH key, server type, and Primary IP (per-target)
-            echo "DEV_HETZ_SSH_KEY_NAME=Vitali.pub"
+            # ssh_key_name empty → TF creates CI key from deploy_key.pub automatically
             echo "DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1"
             echo "PROD_HETZ_SERVER_TYPE=cx43"
-            echo "PROD_HETZ_SSH_KEY_NAME=Vitali.pub"
             echo "PROD_HETZ_PRIMARY_IP_NAME="
             echo "PROD_HETZ_ENABLE_PRIMARY_IP=true"
           } > secrets/.env
