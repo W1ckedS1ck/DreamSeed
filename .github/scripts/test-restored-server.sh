@@ -101,6 +101,19 @@ ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" && pass "Telegram bot
 ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban modx-admin jail" || fail "fail2ban modx-admin: MISSING"
 ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban grafana jail" || fail "fail2ban grafana: MISSING"
 
+# Redis — server and exporter
+ssh ubuntu@"$SERVER_IP" "systemctl is-active redis-server" && pass "Redis server running" || fail "Redis server"
+REDIS_EXP=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active redis_exporter 2>/dev/null || echo inactive")
+[ "$REDIS_EXP" = "active" ] && pass "Redis exporter running" || warn "Redis exporter: $REDIS_EXP"
+
+# Redis — backup exists
+REDIS_BACKUP=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/redis/redis_dump_*.rdb 2>/dev/null | head -1 || echo ''")
+if [ -n "$REDIS_BACKUP" ]; then
+    pass "Redis backup exists: $(basename "$REDIS_BACKUP")"
+else
+    fail "Redis backup: not found"
+fi
+
 # Grafana admin password flag
 ssh ubuntu@"$SERVER_IP" "test -f /etc/grafana/.admin_password_set" && pass "Grafana admin password set" || warn "Grafana password: MISSING"
 

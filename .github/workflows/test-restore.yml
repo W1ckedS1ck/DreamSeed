@@ -878,8 +878,8 @@ jobs:
 
           PROJ_HASH_OK="${{ steps.validate_hash.outputs.project_hash_match }}"
           DB_HASH_OK="${{ steps.validate_hash.outputs.db_hash_match }}"
-          HASH_ICON="✅"; [ "$PROJ_HASH_OK" != "yes" ] || [ "$DB_HASH_OK" != "yes" ] && HASH_ICON="❌"
-          HASH_DETAIL=""; [ "$PROJ_HASH_OK" = "yes" ] && HASH_DETAIL="project " || HASH_DETAIL="project ❌ "; [ "$DB_HASH_OK" = "yes" ] && HASH_DETAIL="${HASH_DETAIL}DB" || HASH_DETAIL="${HASH_DETAIL}DB ❌"
+          [ "$PROJ_HASH_OK" = "yes" ] && PROJ_ICON="✅" || PROJ_ICON="❌"
+          [ "$DB_HASH_OK" = "yes" ] && DB_ICON="✅" || DB_ICON="❌"
 
           [ "${{ job.status }}" = "success" ] && STATUS="✅" || STATUS="❌"
           ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
@@ -909,7 +909,7 @@ jobs:
             "Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
             "Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?})" \
             "  Source: ${RESTORE_SRC}" \
-            "Hash       ${HASH_ICON} ${HASH_DETAIL}" \
+            "Hash       ${PROJ_ICON} project ${DB_ICON} DB" \
             "Tests      $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
             "SSL        ${SSL_ICON} ${SSL_STATUS:-?}" \
             "Disk       ${DISK_ICON} ${DISK_USAGE:-?}%" \
