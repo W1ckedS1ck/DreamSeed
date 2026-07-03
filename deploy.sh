@@ -362,10 +362,17 @@ main() {
         ssh_err=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
             -o BatchMode=yes -o PasswordAuthentication=no \
             -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>&1) && break
-        if [[ $((attempt % 10)) -eq 1 ]]; then
+        if [[ $((attempt % 10)) -eq 1 ]] || [[ "$ssh_err" == *"Permission denied"* && $attempt -eq 1 ]]; then
             local err_line
             err_line=$(echo "$ssh_err" | grep -iE '(Permission denied|Connection refused|Connection timed out|Could not resolve|Host key verification)' | head -1)
-            [[ -n "$err_line" ]] && echo -e "\n  ⚠ $err_line"
+            if [[ -n "$err_line" ]]; then
+                echo -e "\n  ⚠ $err_line"
+                [[ "$err_line" == *"Permission denied"* ]] && {
+                    echo "  🛠 Key: $(ssh-keygen -lf "$SSH_KEY" 2>/dev/null | awk '{print $2}')"
+                    echo "  🛠 User: ubuntu@$SERVER_IP"
+                    echo "  🛠 Check: server's authorized_keys for ubuntu user"
+                }
+            fi
         fi
         printf "."; sleep "$SSH_INTERVAL"
     done

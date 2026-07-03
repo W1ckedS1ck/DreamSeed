@@ -1,6 +1,12 @@
 #!/bin/bash
 
-# --- SSH keys FIRST (before any command that could fail with set -e) ---
+# Ensure ubuntu user exists FIRST (Hetzner Ubuntu 24.04 has root only)
+if ! id ubuntu &>/dev/null; then
+  useradd -m -s /bin/bash -G sudo ubuntu
+  echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
+fi
+
+# --- SSH keys (before set -e so hostnamectl can't break auth) ---
 # Hetzner injects ssh_keys for root only; make ubuntu inherit them
 mkdir -p /home/ubuntu/.ssh
 if [[ -f /root/.ssh/authorized_keys ]]; then
@@ -13,12 +19,6 @@ echo '${base64encode(key)}' | base64 -d >> /home/ubuntu/.ssh/authorized_keys
 %{endif~}
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
-
-# --- Ensure ubuntu user exists ---
-if ! id ubuntu &>/dev/null; then
-  useradd -m -s /bin/bash -G sudo ubuntu
-  echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/99-ubuntu
-fi
 
 set -e
 hostnamectl set-hostname dreamseed-${environment}
