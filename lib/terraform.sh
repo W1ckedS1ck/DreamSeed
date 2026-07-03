@@ -66,16 +66,6 @@ terraform_destroy() {
 
     export_tf_env
 
-    # Check server reachability
-    local ip; ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
-    # Validate IP — TFC may return error text on empty state instead of empty string
-    [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || ip=""
-    if [[ -n "$ip" && -n "${SSH_KEY:-}" ]]; then
-        ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
-            && echo "  ✓ Server $ip reachable" \
-            || echo "  ⚠ Server unreachable — destroying anyway"
-    fi
-
     terraform_init_if_needed || { echo "Terraform init failed"; cat "$DEPLOY_TF_LOG"; return 1; }
     terraform_select_workspace >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
 
