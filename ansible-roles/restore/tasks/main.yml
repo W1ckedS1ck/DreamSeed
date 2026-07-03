@@ -34,106 +34,108 @@
 # If you change these paths, make sure dev still gets prod data, not
 # dev-specific backups.
 
+- name: Ensure restore cache directory exists (EBS, not tmpfs)
+  ansible.builtin.file:
+    path: /home/ubuntu/backups/.restore_cache
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0700"
+
 - name: Restore project from Google Drive
   when:
     - not restore_site_exists.stat.exists
     - rclone_config_remote.stat.exists
   block:
-    - name: List all project backups (newest first)
+    - name: Find latest project backup
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 | sort -r || true
+          rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 | sort -r | head -1
         executable: /bin/bash
-      register: restore_project_list
+      register: restore_latest_project
       changed_when: false
       failed_when: false
 
-    - name: Fail if no project backups found
+    - name: Fail if no project backup found
       ansible.builtin.fail:
-        msg: "No project backups found on Google Drive"
-      when: restore_project_list.stdout | trim == ""
+        msg: "No project backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_project.stdout | trim == ""
 
-    - name: Validate project backup filenames
+    - name: Validate project backup filename
       ansible.builtin.fail:
-        msg: "Unsafe backup filename: '{{ item }}'"
-      loop: "{{ restore_project_list.stdout_lines }}"
-      when: not (item | trim | regex_search('^[A-Za-z0-9._-]+$'))
+        msg: "Unsafe project backup filename from rclone: '{{ restore_latest_project.stdout | trim }}'"
+      when:
+        - restore_latest_project.stdout | trim != ""
+        - not (restore_latest_project.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
-    - name: Validate web_root before destructive operation
-      ansible.builtin.fail:
-        msg: "Refusing to extract to '{{ web_root }}': path is empty, root, or /var/www"
-      when: web_root == '' or web_root == '/' or web_root == '/var/www' or web_root == '/var/www/'
-
-    - name: Ensure restore cache directory exists (EBS, not tmpfs)
-      become: true
-      ansible.builtin.file:
-        path: /home/ubuntu/backups/.restore_cache
-        state: directory
-        owner: ubuntu
-        group: ubuntu
-        mode: "0700"
-
-    - name: Download and restore project (try each until one works)
+    - name: Download project backup to EBS cache
       become: true
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          _web="{{ web_root }}"
-          _remote="gdrive:DreamSeed/backups/project"
-          _cache="/home/ubuntu/backups/.restore_cache"
-
-          for _archive in {% for f in restore_project_list.stdout_lines if f | trim | length > 0 %}{{ f | trim }} {% endfor %}; do
-            _local="$_cache/$_archive"
-            rm -f "$_local"
-
-            echo "  → trying $_archive ..." >&2
-
-            # Download with retries (rclone copy retries 3x by default) to EBS, not tmpfs
-            if ! timeout 600 rclone copy "$_remote/$_archive" "$_cache/" --no-check-dest; then
-              echo "  ✗ $_archive — download failed" >&2
-              rm -f "$_local"
-              continue
-            fi
-
-            # Verify integrity before extraction
-            if ! tar -tzf "$_local" > /dev/null 2>&1; then
-              echo "  ✗ $_archive — corrupted download" >&2
-              rm -f "$_local"
-              continue
-            fi
-
-            # Backup existing site
-            [ -d "$_web" ] && mv "$_web" "${_web}.bak.$$" || true
-            mkdir -p "$_web"
-
-            # Extract
-            if tar -xzf "$_local" -C "$(dirname "$_web")" 2>/dev/null; then
-              echo "SUCCESS: $_archive"
-              rm -rf "${_web}.bak.$$" 2>/dev/null || true
-              chown -R www-data:www-data "$_web"
-              exit 0
-            else
-              echo "  ✗ $_archive — extraction failed" >&2
-              rm -rf "$_web" 2>/dev/null || true
-              [ -d "${_web}.bak.$$" ] && mv "${_web}.bak.$$" "$_web" || true
-              rm -f "$_local"
-            fi
-          done
-
-          # All backups failed — create placeholder so deploy continues
-          echo "WARN: all project backups failed — deploying placeholder" >&2
-          rm -rf "$_cache" 2>/dev/null || true
-          [ ! -f "$_web/index.php" ] && {
-            mkdir -p "$_web"
-            ( echo '<?php'; echo 'header("HTTP/1.0 503 Service Unavailable");'
-              echo 'echo "<html><body><h1>Site temporarily unavailable</h1>";'
-              echo 'echo "<p>Restore from backup failed.</p></body></html>";' ) > "$_web/index.php"
-            chown -R www-data:www-data "$_web"
-          }
-          exit 0
+          rclone copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
         executable: /bin/bash
       changed_when: false
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Verify project archive integrity
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          tar -tzf "/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}" > /dev/null 2>&1
+        executable: /bin/bash
+      register: restore_archive_check
+      changed_when: false
+      failed_when: restore_archive_check.rc != 0
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Validate web_root before destructive operation
+      ansible.builtin.fail:
+        msg: "Refusing to rm -rf '{{ web_root }}': path is empty, root, or /var/www"
+      when: >
+        restore_latest_project.stdout | trim != "" and
+        (web_root == '' or web_root == '/' or
+        web_root == '/var/www' or web_root == '/var/www/')
+
+    - name: Extract project
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          _archive="/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}"
+          _web="{{ web_root }}"
+          tar -tzf "$_archive" > /dev/null 2>&1 || { echo "Corrupt archive: $_archive"; exit 1; }
+          mv "$_web" "${_web}.bak.$$" 2>/dev/null || true
+          mkdir -p "$_web"
+          if ! tar -xzf "$_archive" -C "$(dirname "$_web")"; then
+            mv "${_web}.bak.$$"/* "$_web" 2>/dev/null || true
+            rm -rf "${_web}.bak.$$" 2>/dev/null || true
+            exit 1
+          fi
+          rm -rf "${_web}.bak.$$" 2>/dev/null || true
+          chown -R www-data:www-data "$_web"
+        executable: /bin/bash
+      changed_when: false
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Verify project extraction
+      become: true
+      ansible.builtin.stat:
+        path: "{{ web_root }}/index.php"
+      register: restore_index_check
+      failed_when: restore_index_check.stat is not defined or not restore_index_check.stat.exists or restore_index_check.stat.size == 0
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Show restored project
+      ansible.builtin.debug:
+        msg: "✓ Restored project: {{ restore_latest_project.stdout | trim }}"
+
+    - name: Cleanup project archive
+      ansible.builtin.file:
+        path: "/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}"
+        state: absent
+      when: restore_latest_project.stdout | trim != ""
 
 - name: Skip restore (already exists)
   ansible.builtin.debug:
@@ -166,53 +168,47 @@
     - restore_db_needs_restore
     - rclone_config_remote.stat.exists
   block:
-    - name: List all DB backups (newest first)
+    - name: Find latest DB backup
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1 | sort -r || true
+          rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1 | sort -r | head -1
         executable: /bin/bash
-      register: restore_db_list
+      register: restore_latest_db
       changed_when: false
       failed_when: false
 
-    - name: Fail if no DB backups found
+    - name: Fail if no DB backup found
       ansible.builtin.fail:
-        msg: "No DB backups found on Google Drive"
-      when: restore_db_list.stdout | trim == ""
+        msg: "No DB backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_db.stdout | trim == ""
 
-    - name: Validate DB backup filenames
+    - name: Validate DB backup filename
       ansible.builtin.fail:
-        msg: "Unsafe DB backup filename: '{{ item }}'"
-      loop: "{{ restore_db_list.stdout_lines }}"
-      when: not (item | trim | regex_search('^[A-Za-z0-9._-]+$'))
+        msg: "Unsafe DB backup filename from rclone: '{{ restore_latest_db.stdout | trim }}'"
+      when:
+        - restore_latest_db.stdout | trim != ""
+        - not (restore_latest_db.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
 
-    - name: Restore database via streaming (try each until one works)
-      become: true
+    - name: Download DB backup to EBS cache
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          _backup_dir="gdrive:DreamSeed/backups/db"
-          _db_name="{{ db_name }}"
+          rclone copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
+        executable: /bin/bash
+      changed_when: false
+      when: restore_latest_db.stdout | trim != ""
 
-          for _archive in {% for f in restore_db_list.stdout_lines if f | trim | length > 0 %}{{ f | trim }} {% endfor %}; do
-            if rclone cat "$_backup_dir/$_archive" 2>/dev/null | gunzip | mysql "$_db_name" 2>/dev/null; then
-              echo "SUCCESS: $_archive"
-              exit 0
-            else
-              echo "  ✗ $_archive — corrupted, trying next" >&2
-            fi
-          done
-
-          echo "WARN: all DB backups failed — continuing without DB restore" >&2
-          exit 0
+    - name: Restore database
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          gunzip -c "/home/ubuntu/backups/.restore_cache/{{ restore_latest_db.stdout | trim }}" | mysql "{{ db_name }}"
         executable: /bin/bash
       register: restore_db_result
       changed_when: false
-
-    - name: Extract restored DB filename
-      ansible.builtin.set_fact:
-        restore_db_name: "{{ restore_db_result.stdout_lines | select('match', '^SUCCESS:') | first | default('') | regex_replace('^SUCCESS: ', '') }}"
+      failed_when: restore_db_result.rc != 0
+      when: restore_latest_db.stdout | trim != ""
 
     - name: Verify database restore (expect 50+ tables)
       ansible.builtin.shell:
@@ -222,19 +218,18 @@
         executable: /bin/bash
       register: restore_db_table_count
       changed_when: false
-      failed_when: false
+      failed_when: (restore_db_table_count.stdout | int) < db_min_tables
+      when: restore_latest_db.stdout | trim != ""
+
+    - name: Cleanup DB archive
+      ansible.builtin.file:
+        path: "/home/ubuntu/backups/.restore_cache/{{ restore_latest_db.stdout | trim }}"
+        state: absent
+      when: restore_latest_db.stdout | trim != ""
 
     - name: Show restored DB
       ansible.builtin.debug:
-        msg: "✓ Restored DB: {{ restore_db_name }} ({{ restore_db_table_count.stdout | default('0') }} tables)"
-      when: restore_db_name | length > 0
-
-    - name: Warn if DB has too few tables
-      ansible.builtin.debug:
-        msg: "⚠ DB has only {{ restore_db_table_count.stdout | default('0') }} tables (expected >= {{ db_min_tables }})"
-      when:
-        - restore_db_name | length > 0
-        - (restore_db_table_count.stdout | default(0) | int) < db_min_tables
+        msg: "✓ Restored DB: {{ restore_latest_db.stdout | trim }} ({{ restore_db_table_count.stdout | default('?') }} tables)"
 
     - name: Configure Redis as session handler in MODX
       ansible.builtin.shell:
@@ -243,7 +238,7 @@
           mysql "{{ db_name }}" -e "UPDATE {{ db_prefix | default('modx_') }}system_settings SET value='' WHERE key='session_handler_class'" 2>/dev/null || true
         executable: /bin/bash
       changed_when: false
-      when: restore_db_name | length > 0
+      when: restore_latest_db.stdout | trim != ""
 
 - name: Skip DB restore (already has data)
   ansible.builtin.debug:
