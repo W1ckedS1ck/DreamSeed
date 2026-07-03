@@ -79,6 +79,9 @@ terraform_destroy() {
     terraform_init_if_needed || { echo "Terraform init failed"; cat "$DEPLOY_TF_LOG"; return 1; }
     terraform_select_workspace >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
 
+    # Clean up Cloudflare DNS record regardless of state
+    delete_cloudflare_dns "$DEPLOY_DOMAIN"
+
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
     local var_arg=()
@@ -104,9 +107,6 @@ terraform_destroy() {
         grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (exit $tf_exit, check $DEPLOY_TF_LOG)"
     fi
     cat "$TF_TMP_OUT" >> "$DEPLOY_TF_LOG" && rm -f "$TF_TMP_OUT"
-
-    # Clean up Cloudflare DNS record
-    delete_cloudflare_dns "$DEPLOY_DOMAIN"
 
     rm -f "$SCRIPT_DIR/secrets/tfstate-backup/${TF_WORKSPACE}"_*.tfstate 2>/dev/null
 
