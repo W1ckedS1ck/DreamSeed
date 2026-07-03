@@ -1,7 +1,7 @@
 ---
-- name: Restart PHP-FPM
+- name: Reload systemd and restart nginx
   become: true
   ansible.builtin.systemd:
-    name: "php{{ php_version }}-fpm"
+    name: nginx
     state: restarted
     daemon_reload: true
