@@ -189,6 +189,7 @@
     login_user: root
     query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
   become: true
+  ignore_errors: true
   when:
     - clear_sessions | default(true)
     - modx_check.query_result is defined
