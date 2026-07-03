@@ -147,12 +147,12 @@ groups:
         annotations:
           summary: Redis service is not running (sessions will be lost)
 
-{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '70m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Backup cron hasn't run for 70 min on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
 
-{{ alert_body('upload-failed', 'Cloud Upload Failed', '(time() - upload_last_success_timestamp) / 3600', 86400, 2, 'gt', '1h', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('upload-failed', 'Cloud Upload Failed', '(time() - upload_last_success_timestamp) / 3600', 86400, 2, 'gt', '75m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}No successful cloud upload in >2h (last: {{ $labels.instance }}) — check rclone/GDrive{% endraw %}
@@ -185,7 +185,7 @@ groups:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
 
-{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 600, 'gt', '1m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
