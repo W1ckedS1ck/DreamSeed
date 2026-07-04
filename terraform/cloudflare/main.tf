@@ -47,7 +47,7 @@ resource "cloudflare_ruleset" "cache" {
         default = var.edge_ttl
       }
     }
-    expression  = "(http.host eq \"${each.key}\")"
+    expression  = "true"
     description = "Cache: all other requests with Edge TTL ${var.edge_ttl}s"
     enabled     = true
   }

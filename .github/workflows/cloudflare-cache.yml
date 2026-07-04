@@ -3,14 +3,14 @@ name: Cloudflare Cache Rules
 on:
   workflow_dispatch:
     inputs:
-      zone:
-        description: 'Cloudflare zone (domain)'
+      target:
+        description: 'Target domain to configure caching for'
         required: true
         type: choice
         options:
           - aws.vitalikuts.online
-          - dreamseed.online
           - hetz.vitalikuts.online
+          - dreamseed.online
       action:
         description: 'Plan (safe — no changes), Apply, or Destroy'
         required: true
@@ -22,7 +22,7 @@ on:
         default: plan
 
 concurrency:
-  group: cloudflare-cache-${{ inputs.zone }}
+  group: cloudflare-cache-${{ inputs.target }}
   cancel-in-progress: false
 
 env:
@@ -30,7 +30,7 @@ env:
 
 jobs:
   cache-rules:
-    name: Cloudflare Cache — ${{ inputs.zone }} (${{ inputs.action }})
+    name: Cloudflare Cache — ${{ inputs.target }} (${{ inputs.action }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -42,12 +42,25 @@ jobs:
         with:
           terraform_version: "1.11.3"
 
+      - name: Resolve Cloudflare zone
+        id: resolve
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [[ "$TARGET" == "dreamseed.online" ]]; then
+            echo "zone_name=dreamseed.online" >> "$GITHUB_OUTPUT"
+          else
+            echo "zone_name=vitalikuts.online" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Write terraform.tfvars.json
         working-directory: terraform/cloudflare
+        env:
+          CF_ZONE: ${{ steps.resolve.outputs.zone_name }}
         run: |
           jq -n \
             --arg token "${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            --arg zone "${{ inputs.zone }}" \
+            --arg zone "$CF_ZONE" \
             '{cloudflare_api_token: $token, zone_name: $zone}' \
             > terraform.tfvars.json
 
@@ -67,7 +80,7 @@ jobs:
         if: inputs.action == 'plan'
         run: |
           {
-            echo "## ☁️ Cloudflare Cache Rules — Plan for ${{ inputs.zone }}"
+            echo "## ☁️ Cloudflare Cache Rules — Plan for ${{ inputs.target }}"
             echo ""
             echo "**Action:** Plan only — no changes made"
             echo ""
@@ -85,7 +98,7 @@ jobs:
         if: inputs.action == 'apply'
         run: |
           {
-            echo "## ☁️ Cloudflare Cache Rules — Applied for ${{ inputs.zone }}"
+            echo "## ☁️ Cloudflare Cache Rules — Applied for ${{ inputs.target }}"
             echo ""
             echo "| Rule | Effect |"
             echo "|------|--------|"
@@ -98,8 +111,7 @@ jobs:
             echo '```'
             echo ""
             echo "### ✅ How to revert"
-            echo "Run this workflow again with **destroy** action, or delete rules manually:"
-            echo "Cloudflare Dashboard → Rules → Cache Rules"
+            echo "Run this workflow again with **destroy** action."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Terraform Plan (destroy)
@@ -116,7 +128,7 @@ jobs:
         if: inputs.action == 'destroy'
         run: |
           {
-            echo "## ☁️ Cloudflare Cache Rules — Destroyed for ${{ inputs.zone }}"
+            echo "## ☁️ Cloudflare Cache Rules — Destroyed for ${{ inputs.target }}"
             echo ""
             echo "All cache rules have been removed. Back to default Cloudflare behavior."
             echo ""
