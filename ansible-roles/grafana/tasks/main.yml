@@ -16,24 +16,13 @@
     state: present
   become: true
 
-- name: Install Grafana (pinned version)
+- name: Install Grafana
   ansible.builtin.apt:
     name: grafana={{ grafana_version }}
     state: present
   become: true
   environment:
     DEBIAN_FRONTEND: noninteractive
-  register: grafana_install_result
-  failed_when: false
-
-- name: Install Grafana (fallback — latest if pinned version unavailable)
-  ansible.builtin.apt:
-    name: grafana
-    state: present
-  become: true
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-  when: grafana_install_result is failed
 
 - name: Configure Grafana
   ansible.builtin.template:
@@ -63,18 +52,6 @@
     mode: "0600"
   become: true
   no_log: true
-  notify:
-    - Reload systemd
-    - Restart Grafana
-
-- name: Deploy Grafana memory limit override
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/grafana-server.service.d/memory.conf
-    content: |
-      [Service]
-      Environment=GOMEMLIMIT=800MiB
-    mode: "0644"
-  become: true
   notify:
     - Reload systemd
     - Restart Grafana
@@ -135,7 +112,6 @@
   loop:
     - mysql-database.json
     - node-exporter-full.json
-    - redis.json
     - victoria-metrics-single-node.json
 
 - name: Set web server dashboard lists
@@ -200,8 +176,8 @@
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 10
-  delay: 5
+  retries: 15
+  delay: 7
   changed_when: false
 
 - name: Reset Grafana admin password via CLI

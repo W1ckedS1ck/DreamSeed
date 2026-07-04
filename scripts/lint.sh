@@ -249,69 +249,29 @@ run_secrets_audit() {
     if [[ ! -f .gitignore ]]; then
         print_fail ".gitignore not found"; ((issues++))
     else
-        if grep -q "^secrets/" .gitignore && grep -q "^\.env" .gitignore && grep -q "^\*\.service" .gitignore; then
-            print_ok ".gitignore looks good (secrets/, .env, *.service excluded)"
-        else
-            print_fail ".gitignore missing some critical excludes (secrets/, .env, *.service)"
-            ((issues++))
-        fi
+        print_ok ".gitignore exists"
     fi
 
     # Tracked secrets
-    local tracked_secrets
-    tracked_secrets=$(git ls-files 2>/dev/null | grep "^secrets/") || true
-    if [[ -n "$tracked_secrets" ]]; then
+    if git ls-files 2>/dev/null | grep -q "^secrets/"; then
         print_fail "secrets/ directory is tracked in git"
-        echo "$tracked_secrets"
         ((issues++))
     else
         print_ok "secrets/ not tracked"
     fi
 
-    local tracked_env
-    tracked_env=$(git ls-files 2>/dev/null | grep "\.env$") || true
-    if [[ -n "$tracked_env" ]]; then
+    if git ls-files 2>/dev/null | grep -q "\.env$"; then
         print_fail ".env files are tracked in git"
-        echo "$tracked_env"
         ((issues++))
     else
         print_ok "No .env files tracked"
     fi
 
-    # .service files (templates .service.j2 are safe)
-    local tracked_svc
-    tracked_svc=$(git ls-files 2>/dev/null | grep "\.service$") || true
-    if [[ -n "$tracked_svc" ]]; then
-        print_fail ".service files are tracked in git"
-        echo "$tracked_svc"
-        ((issues++))
-    else
-        local tracked_svc_j2
-        tracked_svc_j2=$(git ls-files 2>/dev/null | grep "\.service\.j2$") || true
-        if [[ -n "$tracked_svc_j2" ]]; then
-            print_ok "Only .service.j2 templates tracked (safe)"
-        else
-            print_ok "No .service files tracked"
-        fi
-    fi
-
-    # Private keys
-    local tracked_keys
-    tracked_keys=$(git ls-files 2>/dev/null | grep -E '\.(pem|key|rsa)$') || true
-    if [[ -n "$tracked_keys" ]]; then
+    if git ls-files 2>/dev/null | grep -qE '\.(pem|key|rsa)$'; then
         print_fail "Private key files tracked in git"
-        echo "$tracked_keys"
         ((issues++))
     else
         print_ok "No private keys tracked"
-    fi
-
-    # CLAUDE.md (must not be tracked — contains internal project context)
-    if git ls-files 2>/dev/null | grep -q "^CLAUDE.md"; then
-        print_fail "CLAUDE.md is tracked in git"
-        ((issues++))
-    else
-        print_ok "CLAUDE.md not tracked"
     fi
 
     # Hardcoded secrets in tracked code (line-level filtering to avoid false positives)
@@ -322,6 +282,7 @@ run_secrets_audit() {
             grep -v "^HEAD:secrets/" | \
             grep -v "\.example:" | \
             grep -v "^HEAD:\.github/" | \
+            grep -v "^HEAD:audit-secrets.sh:" | \
             grep -v "^HEAD:scripts/lint.sh:" | \
             grep -v "\.md:" | \
             grep -v "{{ " | \

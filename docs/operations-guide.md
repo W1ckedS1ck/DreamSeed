@@ -114,7 +114,7 @@ SSH → sudo journalctl -u vmagent --no-pager -n 20
 
 ### Where alerts are defined
 
-All 24 alert rules live in one file:
+All 16 alert rules live in one file:
 
 ```
 ansible-roles/grafana/templates/grafana-alerts.yaml.j2
@@ -148,7 +148,7 @@ Key fields:
 
 - **`noDataState: Alerting`** — only for critical services with always-on metrics (MySQL, Nginx, PHP-FPM, Site, VM, Backup Cron)
 - **`noDataState: OK`** — for push/probe metrics (admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify)
-- **`for:`** — scraped 15s → 2m, pushed 1m → 10m, probes 15m → 6m, backup-verify 24h → 5m
+- **`for:`** — scraped 15s → 2m, pushed 1m → 2m, probes 15m → 6m, backup-verify 24h → 5m
 - **`repeat_interval`** — critical: 1h, warning/info: 4h
 
 ### How to add a new alert

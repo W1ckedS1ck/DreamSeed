@@ -31,12 +31,6 @@ scrape_configs:
           instance: "{{ domain }}"
 {% endif %}
 
-  - job_name: redis
-    static_configs:
-      - targets: ["localhost:9121"]
-        labels:
-          instance: "{{ domain }}"
-
   - job_name: victoria-metrics
     static_configs:
       - targets: ["localhost:8428"]

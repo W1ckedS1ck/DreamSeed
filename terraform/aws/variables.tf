@@ -15,10 +15,10 @@ variable "ssh_public_key_path" {
   type        = string
 }
 
-variable "disable_auto_public_ip" {
-  description = "Set to true to prevent AWS from auto-assigning a public IP (use when attaching an EIP via aws_eip_association outside this module, or managing it manually). Default false."
-  type        = bool
-  default     = false
+variable "elastic_ip_allocation_id" {
+  description = "Allocation ID of an existing Elastic IP to associate. Leave empty to skip EIP association."
+  type        = string
+  default     = ""
 }
 
 variable "root_volume_size" {

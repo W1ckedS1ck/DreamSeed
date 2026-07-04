@@ -10,6 +10,7 @@ data "aws_ami" "ubuntu" {
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"] # 24.04 LTS
+
   }
 
   filter {
@@ -102,7 +103,7 @@ resource "aws_instance" "web" {
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.deploy.key_name
   vpc_security_group_ids      = [aws_security_group.web.id]
-  associate_public_ip_address = !var.disable_auto_public_ip
+  associate_public_ip_address = var.elastic_ip_allocation_id == ""
 
   root_block_device {
     volume_size = var.root_volume_size

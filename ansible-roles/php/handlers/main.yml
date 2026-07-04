@@ -4,4 +4,3 @@
   ansible.builtin.systemd:
     name: "php{{ php_version }}-fpm"
     state: restarted
-    daemon_reload: true

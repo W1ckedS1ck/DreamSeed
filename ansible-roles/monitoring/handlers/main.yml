@@ -39,9 +39,3 @@
   ansible.builtin.systemd:
     name: vmagent
     state: restarted
-
-- name: Restart Redis Exporter
-  become: true
-  ansible.builtin.systemd:
-    name: redis_exporter
-    state: restarted

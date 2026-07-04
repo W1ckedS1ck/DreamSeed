@@ -3,7 +3,7 @@
   become: true
   ansible.builtin.command: "a2enmod status ssl http2 brotli deflate headers expires proxy proxy_fcgi proxy_http proxy_wstunnel rewrite evasive"
   register: apache_http_enmod_result
-  changed_when: true
+  changed_when: "'Enabling' in apache_http_enmod_result.stdout"
   failed_when: apache_http_enmod_result.rc != 0
   notify: Restart Apache HTTP
 

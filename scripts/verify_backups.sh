@@ -65,10 +65,10 @@ fi
 export_metric "backup_verification_ok{type=\"local\",instance=\"$DOMAIN\"} $(( LOCAL_PROJ_OK && LOCAL_DB_OK ))"
 
 # ====== Verify cloud backups (if rclone configured) ======
-if [[ -f ~/.config/rclone/rclone.conf ]]; then
+if [[ -f "$SCRIPT_DIR/rclone.conf" ]] || [[ -f ~/.config/rclone/rclone.conf ]]; then
     ENV=$(detect_env)
-    PROJ_CLOUD_PATH="${RCLONE_REMOTE:-gdrive}:DreamSeed/backups/project${ENV}"
-    DB_CLOUD_PATH="${RCLONE_REMOTE:-gdrive}:DreamSeed/backups/db${ENV}"
+    PROJ_CLOUD_PATH="gdrive:DreamSeed/backups/project${ENV}"
+    DB_CLOUD_PATH="gdrive:DreamSeed/backups/db${ENV}"
 
     PROJ_CLOUD_COUNT=$(rclone lsf "$PROJ_CLOUD_PATH" 2>/dev/null | wc -l || echo "0")
     DB_CLOUD_COUNT=$(rclone lsf "$DB_CLOUD_PATH" 2>/dev/null | wc -l || echo "0")

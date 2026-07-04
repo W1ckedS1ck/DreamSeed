@@ -7,15 +7,6 @@
     mode: "0644"
   notify: Restart MariaDB
 
-- name: Create MySQL log directory
-  become: true
-  ansible.builtin.file:
-    path: /var/log/mysql
-    owner: mysql
-    group: mysql
-    mode: "0750"
-    state: directory
-
 - name: Ensure MariaDB is running
   become: true
   ansible.builtin.systemd:

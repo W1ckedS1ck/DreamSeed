@@ -3,7 +3,7 @@
 # Sourced by deploy.sh — do not execute directly.
 
 validate_env_file() {
-    local f="$1" n=0 quote=
+    local f="$1" n=0 required=("DB_PASS" "GRAFANA_PASS" "TG_TOKEN" "TG_CHAT_ID") in_quote=0
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
         exit 1
@@ -11,29 +11,29 @@ validate_env_file() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((n++)) || true
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-
-        # Inside multi-line quoted value — skip until closing quote
-        if [[ -n "$quote" ]]; then
-            [[ "$line" == *"$quote" ]] && quote=
-            continue
-        fi
-
         if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
             local val="${line#*=}"
-            # Detect opening quote without matching closing quote → multi-line value
-            if [[ "$val" =~ ^\"(.*)$ ]] && [[ ! "$val" =~ ^\"(.*)\"$ ]]; then
-                quote='"'
-            elif [[ "$val" =~ ^\'(.*)$ ]] && [[ ! "$val" =~ ^\'(.*)\'$ ]]; then
-                quote="'"
-            fi
             if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
                 echo "Error: code injection detected in $f:$n: $line" >&2
                 exit 1
             fi
+            [[ "$val" =~ ^\" && ! "$val" =~ \"$ ]] && in_quote=1 || in_quote=0
+        elif [[ "$in_quote" -eq 1 ]]; then
+            if [[ "$line" == *'$('* || "$line" == *'`'* ]]; then
+                echo "Error: code injection detected in $f:$n: $line" >&2
+                exit 1
+            fi
+            [[ "$line" =~ \"$ ]] && in_quote=0
+            continue
         else
             echo "Invalid env format at $f:$n: $line" >&2; exit 1
         fi
     done < "$f"
+    source "$f" 2>/dev/null || true
+    for req in "${required[@]}"; do
+        local val="${!req:-}"
+        [[ -z "$val" ]] && { echo "Error: required var $req is empty or undefined in $f" >&2; exit 1; }
+    done
     return 0
 }
 
@@ -90,7 +90,7 @@ export_tf_env() {
         export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
         export AWS_DEFAULT_REGION="$AWS_REGION"
         [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
-        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_disable_auto_public_ip="true"
+        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_elastic_ip_allocation_id="$AWS_EIP_ALLOCATION_ID"
         # Build list of additional SSH keys from ADDITIONAL_SSH_KEYS env var
         # (CI deploy key is handled separately via aws_key_pair.deploy)
         export TF_VAR_additional_ssh_keys="$(python3 -c "

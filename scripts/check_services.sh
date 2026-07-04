@@ -30,7 +30,7 @@ done
 fail=0
 
 # --- Services ---
-for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_exporter" "victoria-metrics" "grafana-server" "telegram-bot"; do
+for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "mysqld_exporter" "victoria-metrics" "grafana-server" "telegram-bot"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"
@@ -82,7 +82,7 @@ if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     fail=1
     tables=0
 else
-    tables=$(mysql --defaults-group-suffix=monitoring -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME//\'/''}';" 2>/dev/null || echo "0")
+    tables=$(mysql --defaults-group-suffix=monitoring -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" 2>/dev/null || echo "0")
     export_metric "database_tables{database=\"$DB_NAME\"} $tables"
 fi
 if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
@@ -130,7 +130,6 @@ fi
 if [[ "$WEB_SVC" == "apache2" ]]; then
     _check_ep 9117 apache_ apache_exporter || fail=1
 fi
-_check_ep 9121 redis_ redis_exporter || fail=1
 # --- Backup cron ---
 if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
   echo "  ✓ cron: backup"
@@ -138,7 +137,7 @@ if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
 else echo "  ✗ cron: backup not set"; fail=1; fi
 
 # --- fail2ban ---
-jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
+jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:  *//' || echo "")
 if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
 else echo "  ⚠ fail2ban: no jails ($jails)"; fi
 
@@ -147,22 +146,20 @@ if systemctl is-active vmagent &>/dev/null; then
     _raw=$(curl -sf --max-time 5 "http://127.0.0.1:8429/metrics" 2>/dev/null || echo "")
     _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {print $2}'); _blocks=${_blocks:-0}
     _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {print $2}'); _errors=${_errors:-0}
-
-    _errfile="/var/tmp/.vmagent_errors_last"
-    _prev=0
-    [[ -f "$_errfile" ]] && _prev=$(cat "$_errfile")
-    echo "$_errors" > "$_errfile"
-    (( _errors < _prev )) && _new=0 || _new=$(( _errors - _prev ))
-
-    if [[ "$_blocks" -gt 0 && "$_new" -eq 0 ]]; then
-        export_metric 'vmagent_remote_write_ok 1'; echo "  ✓ vmagent: remote write OK"
-    elif [[ "$_blocks" -gt 0 && "$_new" -gt 0 ]]; then
-        export_metric 'vmagent_remote_write_ok 0'; echo "  ⚠ vmagent: +$_new errors (total $_errors)"
+    if [[ "$_blocks" -gt 0 && "$_errors" -eq 0 ]]; then
+        export_metric 'vmagent_remote_write_ok 1'
+        echo "  ✓ vmagent: remote write OK"
+    elif [[ "$_blocks" -gt 0 && "$_errors" -gt 0 ]]; then
+        export_metric 'vmagent_remote_write_ok 0'
+        echo "  ⚠ vmagent: remote write errors (errors=$_errors)"
     else
-        export_metric 'vmagent_remote_write_ok 0'; echo "  ⚠ vmagent: running, no data yet"
+        export_metric 'vmagent_remote_write_ok 0'
+        echo "  ⚠ vmagent: running but no remote write data"
     fi
 else
-    export_metric 'vmagent_remote_write_ok 0'; echo "  ✗ vmagent: not running"; fail=1
+    export_metric 'vmagent_remote_write_ok 0'
+    echo "  ✗ vmagent: not running"
+    fail=1
 fi
 
 # --- Heartbeat ---

@@ -1,6 +1,29 @@
 ---
+- name: Check if rclone config exists locally
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/rclone.conf"
+  register: rclone_config_stat
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Create rclone config directory
+  ansible.builtin.file:
+    path: "/home/ubuntu/.config/rclone"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0700"
+  when: rclone_config_stat.stat.exists
+
 - name: Upload rclone config
-  ansible.builtin.include_tasks: ../restore/tasks/rclone_config.yml
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/rclone.conf"
+    dest: "/home/ubuntu/.config/rclone/rclone.conf"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  when: rclone_config_stat.stat.exists
+  no_log: true
 
 - name: Create root MySQL config for cron jobs
   ansible.builtin.copy:
@@ -82,7 +105,7 @@
     minute: "0"
     job: "{{ scripts_dir_remote }}/smart_backup.sh"
     user: ubuntu
-    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
 - name: Setup hourly GDrive upload cron
@@ -91,7 +114,7 @@
     minute: "5"
     job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
     user: ubuntu
-    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
 - name: Setup daily report cron
@@ -101,7 +124,7 @@
     hour: "15"
     job: "{{ scripts_dir_remote }}/send_report.sh daily"
     user: ubuntu
-    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
 - name: Setup weekly report cron
@@ -112,10 +135,10 @@
     weekday: "0"
     job: "{{ scripts_dir_remote }}/send_report.sh weekly"
     user: ubuntu
-    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
-- name: Remove legacy session cleanup cron (disabled — Redis handles sessions)
+- name: Setup session cleanup cron (daily, 7-day retention)
   ansible.builtin.cron:
     name: "DreamSeed session cleanup"
     minute: "42"
@@ -126,7 +149,7 @@
       WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
       2>&1 | logger -t session-cleanup
     user: root
-    state: absent
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
 
 - name: Setup backup verification cron (daily at 4:30 AM)
   ansible.builtin.cron:
@@ -135,7 +158,7 @@
     hour: "4"
     job: "{{ scripts_dir_remote }}/verify_backups.sh"
     user: ubuntu
-    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+    state: "{{ backup_cron_enabled | ternary('present', 'absent') }}"
   become: true
 
 - name: Check MODX system_settings table
@@ -166,19 +189,10 @@
     login_user: root
     query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
   become: true
-  register: truncate_result
-  failed_when: false
   when:
     - clear_sessions | default(true)
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
-
-- name: Session table truncate result
-  ansible.builtin.debug:
-    msg: "Session table truncate: {{ 'skipped' if truncate_result.failed else 'ok' }} (table may not exist if using Redis sessions)"
-  when:
-    - clear_sessions | default(true)
-    - modx_check.query_result is defined
 
 - name: Set MODX database query caching (cache_db)
   ansible.mysql.mysql_query:

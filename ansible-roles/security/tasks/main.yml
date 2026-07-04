@@ -10,6 +10,18 @@
     mode: "0644"
   notify: Restart sshd
 
+- name: Remove EC2 Instance Connect from cloud-init config
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    regexp: '^{{ item }}'
+    state: absent
+  failed_when: false
+  loop:
+    - AuthorizedKeysCommand
+    - AuthorizedKeysCommandUser
+  notify: Restart sshd
+
 - name: Validate sshd configuration
   become: true
   ansible.builtin.command: sshd -t
@@ -80,6 +92,16 @@
     mode: "0644"
   notify: Restart Fail2ban
 
+- name: Deploy Grafana auth filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-grafana.filter
+    dest: /etc/fail2ban/filter.d/grafana.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
 - name: Deploy custom Fail2ban jails
   become: true
   ansible.builtin.template:
@@ -117,6 +139,9 @@
     group: root
     mode: "0644"
   notify: Reload sysctl
+
+- name: Apply sysctl hardening
+  ansible.builtin.meta: flush_handlers
 
 # --- Core Dumps ---
 - name: Disable core dumps (limits)
@@ -175,30 +200,20 @@
     mode: "0640"
   when: modx_config_file.stat.exists
 
-- name: Create dreamseed config directory
+- name: Secure MODX core directories (recursive — static files)
   become: true
   ansible.builtin.file:
-    path: /etc/dreamseed
-    state: directory
-    mode: "0755"
-
-- name: Check if MODX permissions already secured
-  become: true
-  ansible.builtin.stat:
-    path: /etc/dreamseed/.modx_secured
-  register: modx_secured_marker
-
-- name: Lock core/ to root:www-data (one-time recursive)
-  become: true
-  ansible.builtin.file:
-    path: "{{ web_root }}/core"
-    owner: root
+    path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
     group: www-data
-    mode: "u=rwX,g=rwX,o="
+    mode: "{{ item.mode }}"
     recurse: true
-  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
+  loop:
+    - {path: "{{ web_root }}/core/model", owner: root, mode: "u=rwX,g=rwX,o="}
+    - {path: "{{ web_root }}/core/components", owner: root, mode: "u=rwX,g=rwX,o="}
+  when: modx_config_file.stat.exists
 
-- name: Ensure cache/logs stay writable by www-data
+- name: Secure MODX cache/logs directories (no recurse — FPM manages files)
   become: true
   ansible.builtin.file:
     path: "{{ item }}"
@@ -211,16 +226,12 @@
     - "{{ web_root }}/core/logs"
   when: modx_config_file.stat.exists
 
-- name: Create MODX secured marker
-  become: true
-  ansible.builtin.file:
-    path: /etc/dreamseed/.modx_secured
-    state: touch
-    mode: "0644"
-  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
-
 # --- Unattended Upgrades ---
-# Package installed in packages_common (playbook-01)
+- name: Install unattended-upgrades
+  become: true
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
 
 - name: Configure automatic security updates
   become: true

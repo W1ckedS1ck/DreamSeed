@@ -51,25 +51,6 @@ preflight_checks() {
     GRAFANA_CLOUD_TOKEN="${!gc_token:-}"
     export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
 
-    # Sanity checks — remote_write to Grafana Cloud has 3 easy ways to fail silently.
-    # Cheap format hints so a bad value doesn't ship a 401-loop to the server.
-    if [[ -n "$GRAFANA_CLOUD_URL" ]]; then
-        if [[ "$GRAFANA_CLOUD_URL" != *"prometheus-"* ]]; then
-            echo "⚠ Warning: ${gc_url}=${GRAFANA_CLOUD_URL}"
-            echo "  Expected regional Prometheus URL (https://prometheus-prod-NN-<region>.grafana.net)."
-            echo "  Vanity URL <stack>.grafana.net does NOT accept remote_write — will 401."
-        fi
-        if [[ "$GRAFANA_CLOUD_URL" == */api/prom/push ]]; then
-            echo "⚠ Warning: ${gc_url} ends with /api/prom/push — template will append it again."
-            echo "  Strip the suffix; the vmagent role adds it."
-        fi
-    fi
-    if [[ -n "$GRAFANA_CLOUD_TOKEN" && "$GRAFANA_CLOUD_TOKEN" == glsa_* ]]; then
-        echo "⚠ Warning: ${gc_token} starts with glsa_ (Service Account token)."
-        echo "  vmagent needs a Cloud Access Policy token (glc_*, scope=metrics:write)."
-        echo "  glsa_* tokens are for Terraform provider — belongs in ${gc_pfx}_GRAFANA_CLOUD_SA_TOKEN."
-    fi
-
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
     SSH_KEY="${SSH_KEY/#\~/$HOME}"
     if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi

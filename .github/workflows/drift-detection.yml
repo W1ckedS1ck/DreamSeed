@@ -2,13 +2,13 @@ name: Drift Detection
 
 on:
   push:
-    branches: [main, dev/**]
+    branches: [main]
   schedule:
     - cron: '5 7 * * *'  # 07:05 UTC daily
   workflow_dispatch:
 
 concurrency:
-  group: drift-detection-${{ github.ref }}
+  group: drift-detection
   cancel-in-progress: false
 
 permissions:
@@ -18,112 +18,57 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  detect-drift:
-    name: Detect drift — ${{ matrix.target }}
+  drift-prod-hetz:
+    name: Detect drift — Hetzner prod
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: ${{ matrix.provider == 'dev' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: prod-hetz
-            tf_dir: terraform/hetzner
-            tf_workspace: prod-hetz
-            environment: prod-hetz
-            provider: prod
-          - target: dev-aws
-            tf_dir: terraform/aws
-            tf_workspace: dev-aws
-            environment: dev-aws
-            provider: dev
-          - target: dev-hetz
-            tf_dir: terraform/hetzner
-            tf_workspace: dev-hetz
-            environment: dev-hetz
-            provider: dev
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-      TF_WORKSPACE: ${{ matrix.tf_workspace }}
+      TF_WORKSPACE: prod-hetz
+      TF_VAR_hcloud_token: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+      TF_VAR_environment: prod-hetz
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: ./.github/actions/setup-terraform
 
-      - name: Set up credentials
-        run: |
-          case "${{ matrix.target }}" in
-            dev-aws)
-              echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_aws_region=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_environment=dev-aws" >> "$GITHUB_ENV"
-              echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
-              ;;
-            prod-hetz)
-              echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_environment=prod-hetz" >> "$GITHUB_ENV"
-              ;;
-            dev-hetz)
-              echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
-              ;;
-          esac
-
-      - name: Create dummy SSH key for plan
-        if: contains(matrix.target, 'aws')
-        run: ssh-keygen -t rsa -b 4096 -f /tmp/ssh -N "" -C "drift-test" || true
-
       - name: Terraform Init
-        working-directory: ${{ matrix.tf_dir }}
+        working-directory: terraform/hetzner
         run: terraform init
 
       - name: Detect Drift
         id: plan
-        working-directory: ${{ matrix.tf_dir }}
+        working-directory: terraform/hetzner
         run: |
-          PLAN_FILE="/tmp/${{ matrix.target }}.tfplan"
           terraform plan -detailed-exitcode -no-color \
             -var="ssh_key_name=Vitali.pub" \
-            ${{ contains(matrix.target, 'hetz') && '-var="enable_primary_ip=true"' || '' }} \
-            -out="$PLAN_FILE" 2>&1 | tee /tmp/plan.log
+            -var="enable_primary_ip=true" \
+            -out=/tmp/prod-hetz.tfplan 2>&1 | tee /tmp/plan.log
           rc=${PIPESTATUS[0]}
-
           if [ "$rc" -eq 1 ]; then
-            echo "::error::Terraform plan failed for ${{ matrix.target }} — check credentials, state, or provider."
+            echo "::error::Terraform plan failed for Hetzner prod — check credentials, state, or provider."
             exit 1
           fi
-
-          CHANGES=$(terraform show -json "$PLAN_FILE" | jq '[.resource_changes[] | select(.change.actions != ["no-op"])] | length' 2>/dev/null || echo "0")
-
-          if [ "$CHANGES" -gt 0 ]; then
-            echo "has_drift=true" >> "$GITHUB_OUTPUT"
-            echo "changes=$CHANGES" >> "$GITHUB_OUTPUT"
+          # Detect drift from plan output (exit code unreliable with TFC remote execution — always 0)
+          # Only flag drift when resources change (>0 change/destroy), not just adds (empty workspace)
+          if grep -qE '^Plan: [0-9]+ to add, [0-9]+ to change, [1-9][0-9]* to destroy[.]?$' /tmp/plan.log ||
+             grep -qE '^Plan: [0-9]+ to add, [1-9][0-9]* to change' /tmp/plan.log; then
+            echo "exit_code=2" >> "$GITHUB_OUTPUT"
           else
-            echo "has_drift=false" >> "$GITHUB_OUTPUT"
-            echo "changes=0" >> "$GITHUB_OUTPUT"
+            echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Show plan details
-        if: steps.plan.outputs.has_drift == 'true'
-        working-directory: ${{ matrix.tf_dir }}
-        run: |
-          echo "## Drift Details for ${{ matrix.target }}"
-          terraform show -json "/tmp/${{ matrix.target }}.tfplan" | jq '.resource_changes[] | select(.change.actions != ["no-op"]) | {address: .address, actions: .change.actions}' 2>/dev/null || true
-
-      - name: Report and notify drift (prod only)
-        if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'prod'
+      - name: Report and notify drift
+        if: steps.plan.outputs.exit_code == '2'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          echo "::error::Infrastructure drift detected on ${{ matrix.target }}! Review the plan output above."
-          MSG="🔴 *Drift detected* — ${{ matrix.target }}
-          Changes: ${{ steps.plan.outputs.changes }}
+          echo "::error::Infrastructure drift detected on Hetzner prod! Review the plan output above."
+          MSG="🔴 *Drift detected* — Hetzner prod
           🔗 $RUN_URL
           📅 $(date '+%Y-%m-%d %H:%M')"
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
@@ -132,26 +77,3 @@ jobs:
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
           exit 1
-
-      - name: Log drift (dev — no fail)
-        if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'dev'
-        run: |
-          echo "::notice::Drift detected on ${{ matrix.target }} (dev) — ${{ steps.plan.outputs.changes }} changes. Not failing CI."
-
-      - name: Write job summary
-        if: always()
-        run: |
-          DRIFT="${{ steps.plan.outputs.has_drift }}"
-          CHANGES="${{ steps.plan.outputs.changes }}"
-          STATUS="${DRIFT:+⚠️ Drift ($CHANGES changes)}"
-          STATUS="${STATUS:-✅ No drift}"
-
-          M="$GITHUB_STEP_SUMMARY"
-          echo "## Drift Detection — ${{ matrix.target }}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Status** | ${STATUS} |" >> "$M"
-          echo "| **Provider** | ${{ matrix.provider }} |" >> "$M"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"

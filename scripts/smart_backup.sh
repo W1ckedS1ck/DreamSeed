@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+# Validate required commands
 for cmd in curl tar gzip find mysqldump; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
 done
@@ -49,7 +50,7 @@ echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
     curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 
 # ====== Pre-flight: disk space check ======
-AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{printf "%.0f", $4/1024}')
+AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{print $4}')
 if [ "$AVAILABLE_MB" -lt 500 ]; then
     MSG="🔴 <b>BACKUP BLOCKED</b> — $ENV_DISPLAY_ESCAPED
 Disk space critical: ${AVAILABLE_MB}MB available (need ≥500MB)
@@ -77,8 +78,8 @@ if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
     if timeout 1800 sudo tar -czf "$PROJECT_BACKUP" \
-        --exclude="$(basename "$PROJECT_DIR")/core/cache" \
-        --exclude="$(basename "$PROJECT_DIR")/core/backup" \
+        --exclude="html/core/cache" \
+        --exclude="html/core/backup" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
        timeout 300 sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
@@ -100,9 +101,7 @@ DB_STATUS=""
 
 TMP_DB_BACKUP="${DB_BACKUP}.tmp"
 set +o pipefail
-timeout 1800 mysqldump --single-transaction --routines --events --triggers \
-    --ignore-table="${DB_NAME}.${MODX_TABLE_PREFIX:-modx_}session" \
-    "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
+timeout 1800 mysqldump --single-transaction --routines --events --triggers "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
 
@@ -116,29 +115,8 @@ else
 fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
 
-# ====== Redis backup (if available) ======
-REDIS_STATUS=""
-REDIS_KEEP="${BACKUP_REDIS_KEEP:-${REDIS_KEEP:-5}}"
-
-if [[ -f "/var/lib/redis/dump.rdb" ]]; then
-    mkdir -p "$BACKUP_DIR/redis"
-    REDIS_BACKUP="$BACKUP_DIR/redis/redis_dump_$DATE.rdb"
-    if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null && \
-       sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >> "$LOG_FILE"
-        REDIS_STATUS="✅ Redis backed up"
-        rotate_files "$BACKUP_DIR/redis/redis_dump_*.rdb" "$REDIS_KEEP"
-    else
-        REDIS_STATUS="❌ Redis backup failed"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
-    fi
-else
-    REDIS_STATUS="ℹ️ Redis not available"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
-fi
-
 # ====== Telegram notification only on failure ======
-if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
+if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* ]]; then
     MSG="====== ALERT ======
 🔴 <b>BACKUP FAILED</b> — $ENV_DISPLAY_ESCAPED
 "
@@ -146,15 +124,13 @@ if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" =
 "
     [[ "$DB_STATUS" == "❌"* ]] && MSG+="
 $DB_STATUS"
-    [[ "$REDIS_STATUS" == "❌"* ]] && MSG+="
-$REDIS_STATUS"
     MSG+="
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
     send_tg "$MSG"
 fi
 
-if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* && "$REDIS_STATUS" != "❌"* ]]; then
+if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* ]]; then
     echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
     # Ping external watchdog on success

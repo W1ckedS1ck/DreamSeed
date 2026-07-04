@@ -4,18 +4,11 @@ import os
 import sys
 
 
-import re
-
-BLOCKED_VARS = re.compile(
-    r'^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|BASH_FUNC_.*)$'
-)
-
-
 def load_env(env_path: str = "") -> None:
     """Parse KEY=VALUE from a .env file, exporting to os.environ.
 
-    Skips empty lines, comments, and blocked security-sensitive vars.
-    Values are stripped of surrounding single or double quotes.
+    Skips empty lines and comments. Values are stripped of
+    surrounding single or double quotes.
     """
     if not env_path:
         env_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -35,10 +28,7 @@ def load_env(env_path: str = "") -> None:
             if line.startswith("export "):
                 line = line[7:]
             key, _, value = line.partition("=")
-            key = key.strip()
-            if BLOCKED_VARS.match(key):
-                continue
             value = value.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
                 value = value[1:-1]
-            os.environ[key] = value
+            os.environ[key.strip()] = value

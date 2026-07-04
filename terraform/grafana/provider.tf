@@ -5,10 +5,6 @@ terraform {
       source  = "grafana/grafana"
       version = "~> 2.0"
     }
-    http = {
-      source  = "hashicorp/http"
-      version = "~> 3.0"
-    }
   }
   backend "remote" {
     organization = "DreamSeed"
@@ -27,6 +23,6 @@ provider "grafana" {
   alias           = "sm"
   url             = var.grafana_cloud_url
   auth            = var.grafana_cloud_token
-  sm_access_token = var.sm_access_token != "" ? var.sm_access_token : var.grafana_cloud_token
+  sm_access_token = var.sm_access_token
   sm_url          = var.sm_url
 }

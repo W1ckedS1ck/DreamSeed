@@ -33,10 +33,9 @@
 
 - name: Secure private keys in archive and live (files only)
   become: true
-  ansible.builtin.shell: >
-    find {{ item }} -type f ! -perm 0640 -exec chmod 0640 {} \; -print
-  register: _ssl_perm
-  changed_when: _ssl_perm.stdout_lines | length > 0
+  ansible.builtin.command: >
+    find {{ item }} -type f -exec chmod 0640 {} \;
+  changed_when: true
   loop:
     - /etc/letsencrypt/archive
     - /etc/letsencrypt/live
@@ -115,10 +114,14 @@
   ansible.builtin.debug:
     msg: >-
       {%- if ssl_restored | default(false) -%}
-      ✓ SSL: Restored from local backup{%- elif ssl_has_cert -%}
-      ✓ SSL: Let's Encrypt certificate ready{%- elif not cloudflare_enabled | default(true) | bool -%}
-      ⊘ SSL: self-signed (Cloudflare disabled for this environment){%- else -%}
-      ⊘ SSL: certbot failed — self-signed fallback. Fix DNS and re-run.{%- endif -%}
+      ✓ SSL: Restored from local backup
+      {%- elif ssl_has_cert -%}
+      ✓ SSL: Let's Encrypt certificate ready
+      {%- elif not cloudflare_enabled | default(true) | bool -%}
+      ⊘ SSL: self-signed (Cloudflare disabled for this environment)
+      {%- else -%}
+      ⊘ SSL: certbot failed — self-signed fallback. Fix DNS and re-run.
+      {%- endif -%}
 
 # --- Certbot timer + deploy-hook ---
 - name: Enable certbot auto-renewal timer

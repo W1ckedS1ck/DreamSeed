@@ -49,8 +49,6 @@ jobs:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: read
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -64,6 +62,11 @@ jobs:
       - name: Record start time
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Mask secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets_json: '${{ toJSON(secrets) }}'
 
       - name: Setup secrets
         env:
@@ -97,19 +100,6 @@ jobs:
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
         run: |
-          # Mask secrets before writing — prevents leak to logs
-          for v in TG_TOKEN DB_PASS CLOUDFLARE_API_TOKEN HCLOUD_TOKEN \
-                   PROD_HETZ_HCLOUD_TOKEN GRAFANA_PASS SSH_PRIVATE_KEY \
-                   VAULT_PASSWORD RCLONE_CONF_BASE64 \
-                   BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY \
-                   BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY \
-                   BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY \
-                   DEV_GRAFANA_CLOUD_TOKEN PROD_GRAFANA_CLOUD_TOKEN \
-                   DEV_AWS_SECRET_KEY PROD_SECRET_KEY; do
-            val="${!v}"
-            [[ -n "$val" ]] && echo "::add-mask::$val" || true
-          done
-
           mkdir -p secrets ~/.ssh
 
           {
@@ -152,7 +142,6 @@ jobs:
             # Hetzner SSH key, server type, and Primary IP (per-target)
             echo "DEV_HETZ_SSH_KEY_NAME=Vitali.pub"
             echo "DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1"
-            echo "DEV_HETZ_SERVER_TYPE=cx23"
             echo "PROD_HETZ_SERVER_TYPE=cx43"
             echo "PROD_HETZ_SSH_KEY_NAME=Vitali.pub"
             echo "PROD_HETZ_PRIMARY_IP_NAME="
@@ -188,24 +177,14 @@ jobs:
           [[ "${{ inputs.skip_dns }}" == "true" ]] && DEPLOY_ARGS+=("--no-dns")
           DEPLOY_ARGS+=("-p")
 
-          set +e
-          ./deploy.sh "${DEPLOY_ARGS[@]}" 2>&1 | tee /tmp/deploy.log
-          rc=${PIPESTATUS[0]}
-          set -e
-
-          # Capture server IP from deploy output for job summary
-          if [[ -z "$SERVER_IP" ]]; then
-            ip=$(grep -oP '^  Server\s+\K\d+\.\d+\.\d+\.\d+' /tmp/deploy.log 2>/dev/null || true)
-            [[ -n "$ip" ]] && echo "server_ip=$ip" >> "$GITHUB_OUTPUT"
-          fi
-
-          exit "$rc"
+          ./deploy.sh "${DEPLOY_ARGS[@]}"
 
       - name: Destroy
         if: inputs.action == 'destroy'
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
           DESTROY_CONFIRM: ${{ inputs.confirm }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
           export SSH_PUBLIC_KEY_PATH=~/.ssh/deploy_key.pub
@@ -252,10 +231,8 @@ jobs:
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
-          IP="${{ steps.deploy.outputs.server_ip }}"
-          IP="${IP:-${{ inputs.server_ip }}}"
           MSG="✅ *Deploy complete* — ${{ inputs.environment }}
-          Server: ${IP:-new}
+          Server: ${{ inputs.server_ip || 'new' }}
           🖥 ${{ inputs.web_server }}
           📅 $(date '+%Y-%m-%d %H:%M')"
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
@@ -270,14 +247,12 @@ jobs:
           ACTION="${{ inputs.action }}"
           ENV="${{ inputs.environment }}"
           WEB="${{ inputs.web_server }}"
-          SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
-          SERVER_IP="${SERVER_IP:-${{ inputs.server_ip }}}"
+          SERVER_IP="${{ inputs.server_ip }}"
           SKIP_DNS="${{ inputs.skip_dns }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
 
-          M="${GITHUB_STEP_SUMMARY:-}"
-          [[ -z "$M" ]] && exit 0
+          M="$GITHUB_STEP_SUMMARY"
           echo "## ${ACTION^} ${RESULT}" >> "$M"
           echo "" >> "$M"
           echo "| | |" >> "$M"
@@ -288,12 +263,3 @@ jobs:
           echo "| **Server IP** | ${SERVER_IP:-new} |" >> "$M"
           echo "| **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
           echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
-
-      - name: Cleanup secrets
-        if: always()
-        run: |
-          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
-          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
-          rm -f ~/.ssh/deploy_key.pub
