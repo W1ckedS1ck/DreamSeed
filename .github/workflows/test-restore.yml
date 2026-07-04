@@ -13,6 +13,11 @@ on:
           - hetzner
           - aws
         default: hetzner
+      keep_server:
+        description: Keep server alive after test (for debugging)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,11 +44,6 @@ jobs:
       - name: Record start time
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
         id: start_time
-
-      - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets_json: '${{ toJSON(secrets) }}'
 
       - name: Setup secrets
         env:
@@ -137,18 +137,22 @@ jobs:
       - name: Load secrets and export TF vars
         run: |
           source secrets/.env
-          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
-          echo "::add-mask::$DB_PASS"
-          echo "::add-mask::$TG_TOKEN"
-          echo "::add-mask::$GRAFANA_PASS"
-          [[ -n "$HCLOUD_TOKEN" ]] && echo "::add-mask::$HCLOUD_TOKEN"
-          [[ -n "$PROD_HETZ_HCLOUD_TOKEN" ]] && echo "::add-mask::$PROD_HETZ_HCLOUD_TOKEN"
-          [[ -n "$DEV_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$DEV_GRAFANA_CLOUD_TOKEN"
-          [[ -n "$PROD_GRAFANA_CLOUD_TOKEN" ]] && echo "::add-mask::$PROD_GRAFANA_CLOUD_TOKEN"
-          [[ -n "$DEV_AWS_ACCESS_KEY" ]] && echo "::add-mask::$DEV_AWS_ACCESS_KEY"
-          [[ -n "$DEV_AWS_SECRET_KEY" ]] && echo "::add-mask::$DEV_AWS_SECRET_KEY"
-          [[ -n "$PROD_ACCESS_KEY" ]] && echo "::add-mask::$PROD_ACCESS_KEY"
-          [[ -n "$PROD_SECRET_KEY" ]] && echo "::add-mask::$PROD_SECRET_KEY"
+          python3 << 'PYEOF'
+          import json, os, re
+          SKIP_KEYS = {
+              "DEV_GRAFANA_CLOUD_USERNAME", "PROD_GRAFANA_CLOUD_USERNAME",
+              "DEV_AWS_REGION", "PROD_REGION", "HETZNER_LOCATION",
+          }
+          for k, v in os.environ.items():
+              if k in SKIP_KEYS or not v:
+                  continue
+              if re.match(r"^(PROD_|DEV_|DEV_AWS_|DEV_HETZ_|PROD_HETZ_|PROD_GRAFANA_|DEV_GRAFANA_)", k):
+                  print(f"::add-mask::{v}")
+              if k in ("CLOUDFLARE_API_TOKEN", "DB_PASS", "TG_TOKEN", "GRAFANA_PASS",
+                       "HCLOUD_TOKEN", "BETTERUPTIME_API_TOKEN",
+                       "VAULT_PASSWORD", "RCLONE_CONF_BASE64"):
+                  print(f"::add-mask::{v}")
+          PYEOF
 
           if [ "$PROVIDER" = "aws" ]; then
             {
@@ -241,6 +245,7 @@ jobs:
       - name: Capture server SSH host key
         run: |
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          ssh-keygen -R "$SERVER_IP" 2>/dev/null || true
           for _ in $(seq 1 15); do
             ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
             sleep 2
@@ -262,12 +267,12 @@ jobs:
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
             RECORD_ID=$(echo "$CF_RESP" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
             if [ -n "$RECORD_ID" ]; then
-              CF_RESP=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
+              CF_RESP=$(curl -s --retry 3 --retry-delay 5 -X PUT "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
                 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
                 -H "Content-Type: application/json" \
                 -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
             else
-              CF_RESP=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
+              CF_RESP=$(curl -s --retry 3 --retry-delay 5 -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
                 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
                 -H "Content-Type: application/json" \
                 -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$SERVER_IP\",\"proxied\":false}")
@@ -449,6 +454,8 @@ jobs:
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          # Force fresh backup by removing marker file (hash-skip would skip otherwise)
+          ssh ubuntu@"$SERVER_IP" "rm -f /home/ubuntu/backups/.project_marker" 2>/dev/null || true
           echo "=== Running smart_backup.sh ==="
           set +e
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1
@@ -549,10 +556,15 @@ jobs:
             "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
           echo "Project hash: $PROJ_HASH"
+          # Exclude modx_session — sessions are in Redis, not DB
           DB_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
+            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
           echo "DB hash: $DB_HASH"
+          # Record Redis session count for comparison
+          REDIS_SESSIONS=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null | awk '{print \$2}'" || echo "0")
+          echo "redis_sessions_before=$REDIS_SESSIONS" >> "$GITHUB_OUTPUT"
+          echo "Redis sessions before destroy: $REDIS_SESSIONS"
 
       - name: Destroy data — simulate disaster
         run: |
@@ -674,7 +686,7 @@ jobs:
           fi
 
           NEW_DB=$(ssh ubuntu@"$SERVER_IP" \
-            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
+            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
           OLD_DB="${{ steps.artifact_hash.outputs.db_hash }}"
           echo "DB hash before: $OLD_DB"
           echo "DB hash after:  $NEW_DB"
@@ -684,6 +696,21 @@ jobs:
           else
             echo "[FAIL] Database hash mismatch"
             echo "db_hash_match=no" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Verify Redis sessions — should have sessions when DB modx_session is empty
+          REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" 'redis-cli DBSIZE 2>/dev/null | awk "{print \$2}"' || echo "0")
+          DB_SESSION_COUNT=$(ssh ubuntu@"$SERVER_IP" 'mysql modx_db -N -e "SELECT COUNT(*) FROM modx_session" 2>/dev/null' || echo "-1")
+          echo "Redis sessions after restore: $REDIS_AFTER"
+          echo "DB modx_session rows: $DB_SESSION_COUNT"
+          echo "redis_sessions_after=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
+          echo "db_session_count=$DB_SESSION_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$DB_SESSION_COUNT" = "0" ] && [ "${REDIS_AFTER:-0}" -gt 0 ]; then
+            echo "[PASS] Redis sessions active (DB sessions empty) — Redis session handler working"
+          elif [ "$DB_SESSION_COUNT" = "-1" ]; then
+            echo "[WARN] modx_session table not found"
+          else
+            echo "[INFO] DB sessions: $DB_SESSION_COUNT, Redis: $REDIS_AFTER"
           fi
 
           echo "=== PHP error log (last 20 lines) ==="
@@ -705,7 +732,7 @@ jobs:
           set -o pipefail
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
-            | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
+            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
 
       - name: Run disk check
         id: disk
@@ -743,6 +770,9 @@ jobs:
           set -a
           source secrets/.env
           set +a
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          rm -f ~/.ssh/deploy_key.pub ~/.ssh/config
           rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
           echo "Temp files cleaned"
 
@@ -750,7 +780,7 @@ jobs:
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
           if [ -n "$RECORD_ID" ]; then
-            DEL_RESP=$(curl -s -X DELETE \
+            DEL_RESP=$(curl -s --retry 3 --retry-delay 5 -X DELETE \
               "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
             if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
@@ -805,9 +835,15 @@ jobs:
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
 
+      - name: Keep server for debugging
+        if: always() && inputs.keep_server && steps.terraform.outputs.server_ipv4 != ''
+        run: |
+          echo "::notice::Server kept alive: ${{ steps.terraform.outputs.server_ipv4 }}"
+          echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@${{ steps.terraform.outputs.server_ipv4 }}"
+
       - name: Terraform Destroy
         id: destroy
-        if: always() && steps.terraform.outputs.server_ipv4 != ''
+        if: always() && steps.terraform.outputs.server_ipv4 != '' && !inputs.keep_server
         working-directory: terraform/${{ inputs.provider || 'hetzner' }}
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
@@ -835,27 +871,6 @@ jobs:
             echo "Destroy OK"
           fi
 
-      - name: Cleanup DNS
-        if: always() && steps.terraform.outputs.server_ipv4 != ''
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          source secrets/.env
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ZONE_ID" ]; then
-            echo "[WARN] CF token/zone not set, skipping DNS cleanup"
-            exit 0
-          fi
-          RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-            python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')" 2>/dev/null || echo "")
-          if [ -n "$RECORD_ID" ]; then
-            curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-              python3 -c "import sys,json; d=json.load(sys.stdin); print('[OK] DNS deleted' if d.get('success') else '[WARN] DNS delete failed')"
-          else
-            echo "[OK] No DNS record to clean up"
-          fi
-
       - name: Send Telegram report
         if: always()
         env:
@@ -868,6 +883,7 @@ jobs:
           ok() { if [ "$1" = "success" ]; then echo "✅"; else echo "❌"; fi; }
           ok_destroy() { if [ "$1" = "success" ]; then echo "✅"; elif [ "$1" = "skipped" ]; then echo "⏭️"; fi; }
           ok_yn() { if [ "$1" = "yes" ]; then echo "✅"; else echo "❌"; fi; }
+          exp_status() { if [ "$1" -ge 1 ]; then echo "✅"; else echo "❌"; fi; }
 
           RESTORE_EXIT="${{ steps.restore.outputs.restore_exit_code }}"
           RESTORE_OK="❌"; [ "$RESTORE_EXIT" = "0" ] && RESTORE_OK="✅"
@@ -880,7 +896,7 @@ jobs:
           HTTP_CODE="${{ steps.verify_content.outputs.restore_http_code }}"
           SUMMARY="${{ steps.service_tests.outputs.test_summary }}"
           FAILS="${{ steps.service_tests.outputs.test_fails }}"
-          BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+${{ steps.verify_backup.outputs.db_count }}"
+          BACKUP_FILES="${{ steps.verify_backup.outputs.project_count }}+1+${{ steps.verify_backup.outputs.db_count }}"
 
           GDRIVE_STATUS="${{ steps.gdrive_upload.outputs.gdrive_status }}"
           GDRIVE_ICON="☁️"; [ "$GDRIVE_STATUS" = "ok" ] && GDRIVE_ICON="☁️ " || GDRIVE_ICON="☁️❌"
@@ -888,8 +904,8 @@ jobs:
 
           PROJ_HASH_OK="${{ steps.validate_hash.outputs.project_hash_match }}"
           DB_HASH_OK="${{ steps.validate_hash.outputs.db_hash_match }}"
-          HASH_ICON="✅"; [ "$PROJ_HASH_OK" != "yes" ] || [ "$DB_HASH_OK" != "yes" ] && HASH_ICON="❌"
-          HASH_DETAIL=""; [ "$PROJ_HASH_OK" = "yes" ] && HASH_DETAIL="project " || HASH_DETAIL="project ❌ "; [ "$DB_HASH_OK" = "yes" ] && HASH_DETAIL="${HASH_DETAIL}DB" || HASH_DETAIL="${HASH_DETAIL}DB ❌"
+          [ "$PROJ_HASH_OK" = "yes" ] && PROJ_ICON="✅" || PROJ_ICON="❌"
+          [ "$DB_HASH_OK" = "yes" ] && DB_ICON="✅" || DB_ICON="❌"
 
           [ "${{ job.status }}" = "success" ] && STATUS="✅" || STATUS="❌"
           ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
@@ -906,23 +922,45 @@ jobs:
           DISK_USAGE="${{ steps.disk.outputs.disk_usage }}"
           DISK_ICON="✅"; [ -n "$DISK_USAGE" ] && [ "$DISK_USAGE" -ge 80 ] && DISK_ICON="⚠️"
 
+          MEM_PCT="${{ steps.service_tests.outputs.memory_pct }}"
+          RESP_TIME="${{ steps.service_tests.outputs.response_time_ms }}"
+          MODX_MANAGER="${{ steps.service_tests.outputs.modx_manager_code }}"
+          CRON_JOBS="${{ steps.service_tests.outputs.cron_jobs }}"
+          EXP_NODE="${{ steps.service_tests.outputs.exporter_node }}"
+          EXP_MYSQL="${{ steps.service_tests.outputs.exporter_mysql }}"
+          EXP_REDIS="${{ steps.service_tests.outputs.exporter_redis }}"
+          EXP_WEB="${{ steps.service_tests.outputs.exporter_web }}"
+          EXP_VM="${{ steps.service_tests.outputs.exporter_vm }}"
+          CLOUD_PROJ="${{ steps.service_tests.outputs.cloud_project }}"
+          CLOUD_DB="${{ steps.service_tests.outputs.cloud_db }}"
+          CLOUD_REDIS="${{ steps.service_tests.outputs.cloud_redis }}"
+
           COMMIT_SHA="${{ github.sha }}"
           COMMIT_SHORT="${COMMIT_SHA:0:7}"
           BRANCH="$HEAD_REF"
 
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 *Restore Test* $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`" \
             "" \
-            "Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
-            "Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?})" \
+            "🔄 Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?}s)" \
             "  Source: ${RESTORE_SRC}" \
-            "Hash       ${HASH_ICON} ${HASH_DETAIL}" \
-            "Tests      $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
-            "SSL        ${SSL_ICON} ${SSL_STATUS:-?}" \
-            "Disk       ${DISK_ICON} ${DISK_USAGE:-?}%" \
+            "📁 Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
+            "  ☁️ Cloud: ${CLOUD_PROJ:-0} project / ${CLOUD_DB:-0} db / ${CLOUD_REDIS:-0} redis" \
+            "  Hash: ${PROJ_ICON} project ${DB_ICON} DB" \
+            "" \
+            "🌐 Web       HTTP ${HTTP_CODE:-?} (${RESP_TIME:-?}ms)" \
+            "  MODX mgr: ${MODX_MANAGER:-?}" \
+            "" \
+            "💾 Memory    ${MEM_PCT:-?}%" \
+            "🖴 Disk      ${DISK_ICON} ${DISK_USAGE:-?}%" \
+            "" \
+            "📊 Services  $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
+            "  Cron: ${CRON_JOBS:-?} jobs" \
+            "  Exporters: $(exp_status "$EXP_NODE") node $(exp_status "$EXP_MYSQL") mysql $(exp_status "$EXP_REDIS") redis $(exp_status "$EXP_WEB") web $(exp_status "$EXP_VM") vm" \
+            "🔒 SSL       ${SSL_ICON} ${SSL_STATUS:-?}" \
             "Destroy    $(ok_destroy $DESTROY)")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \

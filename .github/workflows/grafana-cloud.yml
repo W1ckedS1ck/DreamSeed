@@ -22,6 +22,7 @@ env:
 
 jobs:
   plan-and-apply:
+    name: Grafana Cloud — ${{ inputs.workspace == 'prod' && '🔴 PRODUCTION' || '🟢 DEV' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -43,11 +44,14 @@ jobs:
         working-directory: terraform/grafana
         env:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
+          PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
         run: |
           if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
+            TOKEN="${PROD_SA_TOKEN:-$PROD_TOKEN}"
             jq -n \
               --arg url "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" \
-              --arg token "${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}" \
+              --arg token "$TOKEN" \
               --arg sm_token "${{ secrets.PROD_SM_ACCESS_TOKEN }}" \
               --arg domain "dreamseed.online" \
               --arg sm_url "https://synthetic-monitoring-api-us-east-0.grafana.net" \
@@ -66,7 +70,7 @@ jobs:
 
       - name: Init dashboards cache
         working-directory: terraform/grafana
-        run: bash init-dashboards.sh
+        run: bash ./init-dashboards.sh
 
       - name: Terraform Init
         working-directory: terraform/grafana
@@ -92,3 +96,43 @@ jobs:
       - name: Terraform State Output
         working-directory: terraform/grafana
         run: terraform output -json || echo "No outputs"
+
+      - name: Generate Summary
+        working-directory: terraform/grafana
+        if: always()
+        run: |
+          M="$GITHUB_STEP_SUMMARY"
+
+          if [[ "${{ inputs.workspace }}" == "prod" ]]; then
+            TARGET="PROD"
+            GRAFANA_URL="dreamseed.grafana.net"
+          else
+            TARGET="DEV"
+            GRAFANA_URL="vitalikuts.grafana.net"
+          fi
+
+          STATUS="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          echo "## Grafana Cloud Deployment ${STATUS}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Target** | \`${TARGET}\` |" >> "$M"
+          echo "| **Grafana** | ${GRAFANA_URL} |" >> "$M"
+
+          OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
+
+          echo "### 📊 Dashboards" >> "$M"
+          echo "" >> "$M"
+          echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- **\(.key | ascii_upcase)** — UID: `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
+          echo "" >> "$M"
+
+          echo "### 🔍 Synthetic Monitoring" >> "$M"
+          echo "" >> "$M"
+          echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
+          echo "" >> "$M"
+
+          echo "### 📁 Folder UID" >> "$M"
+          echo "" >> "$M"
+          FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
+          echo "\`$FOLDER\`" >> "$M"

@@ -14,4 +14,5 @@
       when: web_server == "nginx"
     - role: apache_ssl
       when: web_server == "apache"
+    - redis
     - php

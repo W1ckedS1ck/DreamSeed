@@ -101,6 +101,67 @@ ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" && pass "Telegram bot
 ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban modx-admin jail" || fail "fail2ban modx-admin: MISSING"
 ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban grafana jail" || fail "fail2ban grafana: MISSING"
 
+# Redis — server and exporter
+ssh ubuntu@"$SERVER_IP" "systemctl is-active redis-server" && pass "Redis server running" || fail "Redis server"
+REDIS_EXP=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active redis_exporter 2>/dev/null || echo inactive")
+[ "$REDIS_EXP" = "active" ] && pass "Redis exporter running" || warn "Redis exporter: $REDIS_EXP"
+
+# Redis — backup exists
+REDIS_BACKUP=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/redis/redis_dump_*.rdb 2>/dev/null | head -1 || echo ''")
+if [ -n "$REDIS_BACKUP" ]; then
+    pass "Redis backup exists: $(basename "$REDIS_BACKUP")"
+    REDIS_BACKUP_NAME=$(basename "$REDIS_BACKUP")
+else
+    fail "Redis backup: not found"
+    REDIS_BACKUP_NAME="none"
+fi
+
+# Redis — cloud backups count
+REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
+echo "redis_cloud_backups=$REDIS_CLOUD"
+
+# MODX — manager accessible
+MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/manager/ 2>/dev/null || echo '000'")
+[ "$MANAGER_CODE" = "200" ] && pass "MODX manager: HTTP 200" || warn "MODX manager: HTTP $MANAGER_CODE"
+echo "modx_manager_code=$MANAGER_CODE"
+
+# MODX — response time (ms)
+RESP_TIME=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{time_total}' https://localhost/ 2>/dev/null || echo '0'" | tr ',' '.')
+RESP_MS=$(printf "%.0f" "$RESP_TIME" 2>/dev/null || echo "0")
+echo "response_time_ms=$RESP_MS"
+[ "${RESP_MS:-999}" -lt 2000 ] && pass "Response time: ${RESP_MS}ms" || warn "Response time: ${RESP_MS}ms (slow)"
+
+# Memory usage
+MEM_TOTAL=$(ssh ubuntu@"$SERVER_IP" "free -m | awk 'NR==2 {print \$2}'" 2>/dev/null || echo "0")
+MEM_USED=$(ssh ubuntu@"$SERVER_IP" "free -m | awk 'NR==2 {print \$3}'" 2>/dev/null || echo "0")
+MEM_PCT=$(ssh ubuntu@"$SERVER_IP" "free -m | awk 'NR==2 {printf \"%.0f\", \$3/\$2*100}'" 2>/dev/null || echo "0")
+echo "memory_usage=${MEM_USED}MB/${MEM_TOTAL}MB (${MEM_PCT}%)"
+echo "memory_pct=$MEM_PCT"
+
+# Cloud backups count
+PROJ_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
+DB_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
+echo "cloud_project=$PROJ_CLOUD"
+echo "cloud_db=$DB_CLOUD"
+echo "cloud_redis=$REDIS_CLOUD"
+
+# Exporter health — all endpoints
+EXP_NODE=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9100/metrics 2>/dev/null | grep -c 'node_cpu' || echo 0")
+EXP_MYSQL=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9104/metrics 2>/dev/null | grep -c 'mysql_up' || echo 0")
+EXP_REDIS=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9121/metrics 2>/dev/null | grep -c 'redis_up' || echo 0")
+EXP_NGINX=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9113/metrics 2>/dev/null | grep -c 'nginx_connections_active' || curl -sf http://127.0.0.1:9117/metrics 2>/dev/null | grep -c 'apache_up' || echo 0")
+EXP_VM=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8428/health 2>/dev/null | grep -c 'OK' || echo 0")
+echo "exporter_node=$EXP_NODE"
+echo "exporter_mysql=$EXP_MYSQL"
+echo "exporter_redis=$EXP_REDIS"
+echo "exporter_web=$EXP_NGINX"
+echo "exporter_vm=$EXP_VM"
+
+# Cron jobs count
+CRON_COUNT=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$' | wc -l" || echo 0)
+echo "cron_jobs=$CRON_COUNT"
+[ "${CRON_COUNT:-0}" -ge 5 ] && pass "Cron jobs: $CRON_COUNT" || warn "Cron jobs: ${CRON_COUNT:-0} (expected 5+)"
+
 # Grafana admin password flag
 ssh ubuntu@"$SERVER_IP" "test -f /etc/grafana/.admin_password_set" && pass "Grafana admin password set" || warn "Grafana password: MISSING"
 

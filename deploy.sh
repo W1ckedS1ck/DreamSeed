@@ -9,7 +9,6 @@ LOG_DIR="${LOG_DIR:-$SCRIPT_DIR/logs}"
 export LC_ALL=C.UTF-8
 PHP_VERSION="${PHP_VERSION:-8.3}"
 
-# Executable paths
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
 TERRAFORM="${TERRAFORM:-}"
 if [[ -z "$TERRAFORM" ]]; then
@@ -19,15 +18,12 @@ if [[ -z "$TERRAFORM" ]]; then
     fi
 fi
 
-# Colors (stripped in non-TTY)
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; NC=$'\033[0m'
 [[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; NC=''; }
 TTY=$([[ -t 1 ]] && echo true || echo false)
 
-# Timeouts
 CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
 
-# State
 TARGET="" WEB_SERVER="" TF_PROVIDER="" TF_WORKSPACE="" TARGET_PREFIX=""
 DEPLOY_DOMAIN="" ENV_FILE="" TF_DIR="" SERVER_IP=""
 SKIP_TERRAFORM=false EXISTING_IP="" DESTROY_MODE=false PARALLEL_MODE=false DRY_RUN=false CHECK_MODE=false SKIP_DNS=false
@@ -40,14 +36,6 @@ DEPLOY_TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
 > "$LOG"; chmod 600 "$LOG"
 > "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
-
-# Rotate deploy_history.log if over 50MB
-if [[ -f "$DEPLOY_HISTORY" ]] && [[ $(stat -f%z "$DEPLOY_HISTORY" 2>/dev/null || stat -c%s "$DEPLOY_HISTORY" 2>/dev/null || echo 0) -gt 52428800 ]]; then
-    for i in {9..1}; do
-        [[ -f "$DEPLOY_HISTORY.$i" ]] && mv "$DEPLOY_HISTORY.$i" "$DEPLOY_HISTORY.$((i+1))"
-    done
-    mv "$DEPLOY_HISTORY" "$DEPLOY_HISTORY.1"
-fi
 
 # Load modules
 source "$SCRIPT_DIR/lib/helpers.sh"
@@ -64,7 +52,7 @@ usage() {
     cat << 'EOF'
 DreamSeed Deploy Script  v2.0.0
 
-Usage: $0 TARGET -n|-a [OPTIONS]
+Usage: deploy.sh TARGET -n|-a [OPTIONS]
 
 TARGETS:
   prod               AWS        dreamseed.online
@@ -145,6 +133,7 @@ resolve_target() {
                    SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
         prod-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="dreamseed.online";      TF_WORKSPACE="prod-hetz"; TARGET_PREFIX="PROD_HETZ"
                    SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
+        *) echo "Error: unknown target '$TARGET'. Valid: prod, dev-aws, dev-hetz, prod-hetz"; exit 1 ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
@@ -236,7 +225,7 @@ main() {
         fi
         for entry in "${playbooks[@]}"; do
             local pb="${entry%%:*}" label="${entry##*:}"
-            if ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
+            if "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
                 echo "  ✓ $label"
             else
                 echo "  ✗ $label syntax error"
@@ -339,12 +328,14 @@ main() {
         export SERVER_IP
 
         # Post-apply state backup (timestamped, rotate 5)
-        local tmp_bk; tmp_bk=$(mktemp)
-        if _tf state pull > "$tmp_bk" 2>/dev/null && [[ -s "$tmp_bk" ]]; then
-            mv "$tmp_bk" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+        TF_STATE_BACKUP_TMP=$(mktemp); chmod 600 "$TF_STATE_BACKUP_TMP"
+        if _tf state pull > "$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
+            mv "$TF_STATE_BACKUP_TMP" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
+            TF_STATE_BACKUP_TMP=
             ls -1t "$bk/${TF_WORKSPACE}"_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
         else
-            rm -f "$tmp_bk"
+            rm -f "$TF_STATE_BACKUP_TMP"
+            TF_STATE_BACKUP_TMP=
             echo "  ⚠ Post-apply state backup failed (empty or error)" | tee -a "$LOG"
         fi
         if [[ "$SKIP_DNS" == "false" ]]; then
@@ -360,6 +351,10 @@ main() {
         step_ok
     fi
 
+    # ----- Clear stale host key (prevents mismatch on IP reuse) -----
+    ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
+    ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+
     # ----- Wait for SSH -----
     step_start "Wait for SSH ($SERVER_IP)"
     local ssh_err="" attempt=0
@@ -367,10 +362,17 @@ main() {
         ssh_err=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
             -o BatchMode=yes -o PasswordAuthentication=no \
             -i "$SSH_KEY" "ubuntu@$SERVER_IP" 'true' 2>&1) && break
-        if [[ $((attempt % 10)) -eq 1 ]]; then
+        if [[ $((attempt % 10)) -eq 1 ]] || [[ "$ssh_err" == *"Permission denied"* && $attempt -eq 1 ]]; then
             local err_line
             err_line=$(echo "$ssh_err" | grep -iE '(Permission denied|Connection refused|Connection timed out|Could not resolve|Host key verification)' | head -1)
-            [[ -n "$err_line" ]] && echo -e "\n  ⚠ $err_line"
+            if [[ -n "$err_line" ]]; then
+                echo -e "\n  ⚠ $err_line"
+                [[ "$err_line" == *"Permission denied"* ]] && {
+                    echo "  🛠 Key: $(ssh-keygen -lf "$SSH_KEY" 2>/dev/null | awk '{print $2}')"
+                    echo "  🛠 User: ubuntu@$SERVER_IP"
+                    echo "  🛠 Check: server's authorized_keys for ubuntu user"
+                }
+            fi
         fi
         printf "."; sleep "$SSH_INTERVAL"
     done
@@ -411,58 +413,16 @@ all:
       ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
       server_ip: "${SERVER_IP}"
 INVEOF
+    chmod 600 "$INVENTORY_FILE"
 
-    DEPLOY_VARS_TMP=$(mktemp); chmod 600 "$DEPLOY_VARS_TMP"
-    python3 -c "
-import json, os, sys
-
-target = sys.argv[1]
-script_dir = sys.argv[2]
-dst = sys.argv[3]
-
-data = {
-    'db_pass': os.environ.get('DB_PASS', ''),
-    'server_ip': os.environ.get('SERVER_IP', ''),
-    'web_server': os.environ.get('WEB_SERVER', ''),
-    'domain': os.environ.get('DEPLOY_DOMAIN', ''),
-    'domain_www': target.startswith('prod'),
-    'cloudflare_enabled': target.startswith('prod'),
-
-    'secrets_dir': f'{script_dir}/secrets',
-    'configs_dir': f'{script_dir}/configs',
-    'scripts_dir': f'{script_dir}/scripts',
-    'deploy_env': target,
-}
-
-optional_map = {
-    'CLOUDFLARE_API_TOKEN': 'cloudflare_api_token',
-    'GRAFANA_PASS': 'grafana_admin_password',
-    'SSH_PUBLIC_KEY_PATH': 'ssh_public_key_path',
-    'GRAFANA_CLOUD_URL': 'grafana_cloud_url',
-    'GRAFANA_CLOUD_USERNAME': 'grafana_cloud_username',
-    'GRAFANA_CLOUD_TOKEN': 'grafana_cloud_token',
-}
-for env_var, key in optional_map.items():
-    val = os.environ.get(env_var)
-    if val:
-        data[key] = val
-
-additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
-if additional_keys.strip():
-    data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
-
-with open(dst, 'w') as f:
-    json.dump(data, f, indent=2)
-" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_TMP"
+    DEPLOY_VARS_TMP=$(mktemp -d); chmod 700 "$DEPLOY_VARS_TMP"
+    DEPLOY_VARS_FILE="$DEPLOY_VARS_TMP/vars.json"
+    python3 "$SCRIPT_DIR/lib/gen_vars.py" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ ! "$TARGET" =~ ^prod ]] && while IFS='=' read -r v _; do unset "$v"; done < <(env | grep '^BETTERUPTIME_')
+    [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
 
-    # ----- Verify SSH host key (new server only) -----
-    if [[ "$SKIP_TERRAFORM" == "false" ]]; then
-        ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
-        ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
-    fi
+    mkdir -p ~/.ansible/facts_cache
 
     # ----- Ansible playbooks -----
     if [[ "$PARALLEL_MODE" == "true" ]]; then
@@ -483,17 +443,12 @@ with open(dst, 'w') as f:
         run_ansible "playbook-07-security.yml" "Security hardening" || step_fail "Security hardening failed"
         step_ok
 
-        # Phase 3: Monitoring + Backup
-        step_start "Phase 3: Monitoring/Backup"
-        run_parallel "Monitoring/Backup" \
+        # Phase 3: Monitoring + Backup + Grafana
+        step_start "Phase 3: Monitoring/Backup/Grafana"
+        run_parallel "Monitoring/Backup/Grafana" \
             "playbook-04-monitor.yml:Monitoring" \
-            "playbook-05-backup.yml:Backup & Telegram bot" || step_fail "Phase 3 failed"
-        step_ok
-
-        # Phase 4: Grafana (no hard dependency on VM — datasource provisioning is
-        # file-based; Grafana connects to VM asynchronously when it's ready.)
-        step_start "Grafana"
-        run_ansible "playbook-06-grafana.yml" "Grafana" || step_fail "Grafana failed"
+            "playbook-05-backup.yml:Backup & Telegram bot" \
+            "playbook-06-grafana.yml:Grafana" || step_fail "Phase 3 failed"
         step_ok
     else
         for entry in "${playbooks[@]}"; do

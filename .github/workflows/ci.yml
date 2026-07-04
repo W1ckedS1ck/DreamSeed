@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: ./.github/actions/setup-terraform
-      - uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6
+      - uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
           cache: true
@@ -87,7 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Run Checkov
-        uses: bridgecrewio/checkov-action@fa9edf8f0a491c59a924ea6accd5bdcf07752cff # v12.3107.0
+        uses: bridgecrewio/checkov-action@a7683e7b72a04503521247973281ec8142e1ac1f # v12.3112.0
         with:
           directory: terraform
           framework: terraform
@@ -101,10 +101,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/trivy
-          key: trivy-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: trivy-${{ runner.os }}-${{ hashFiles('terraform/**/*.tf', 'terraform/**/*.hcl', 'terraform/**/*.tftpl') }}
           restore-keys: trivy-${{ runner.os }}-
       - name: Run Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -156,12 +156,12 @@ jobs:
           python-version: '3.x'
           cache: pip
           cache-dependency-path: ansible/requirements-deploy.txt
-      - uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.npm
           key: npm-renovate-${{ runner.os }}-${{ hashFiles('renovate.json') }}
           restore-keys: npm-renovate-${{ runner.os }}-
-      - uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/pre-commit
           key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -173,6 +173,26 @@ jobs:
           sudo apt-get install -y gitleaks -qq 2>/dev/null || \
             (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
              sudo tar -xz -C /usr/local/bin gitleaks)
+      - name: Install pre-commit system deps
+        run: |
+          # actionlint
+          curl -sL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | \
+            sudo tar -xz -C /usr/local/bin actionlint
+
+          # j2lint
+          pip install j2lint --quiet
+
+          # Terraform (v1.15.5 — matching CI env)
+          curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_amd64.zip"
+          sudo unzip -o /tmp/terraform.zip -d /usr/local/bin > /dev/null 2>&1
+
+          # tflint (v0.63.1 — matching CI env)
+          curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.63.1/tflint_linux_amd64.zip"
+          sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
+          tflint --init --config .tflint.hcl 2>/dev/null || true
+
+          # ansible-lint
+          pip install ansible-core ansible-lint --quiet
       - name: Run pre-commit hooks (changed files only)
         run: |
           pip install pre-commit

@@ -38,6 +38,9 @@
   ansible.builtin.include_tasks: mysql_exporter.yml
   when: db_pass | default('') | length > 0
 
+- name: Redis Exporter
+  ansible.builtin.include_tasks: redis_exporter.yml
+
 - name: VictoriaMetrics
   ansible.builtin.include_tasks: victoria.yml
 
@@ -50,7 +53,7 @@
 - name: Build monitoring services list
   ansible.builtin.set_fact:
     _monitoring_services: >-
-      {{ ['node_exporter', 'victoria-metrics']
+      {{ ['node_exporter', 'victoria-metrics', 'redis_exporter']
          + (['nginx_exporter'] if web_server == 'nginx' else [])
          + (['apache_exporter'] if web_server == 'apache' else [])
          + (['mysqld_exporter'] if (db_pass | default('') | length > 0) else [])

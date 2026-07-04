@@ -1,6 +1,8 @@
 # DreamSeed SSH Hardening
+# Overrides cloud-init defaults (50-cloud-init.conf, EC2 Instance Connect, etc.)
 PasswordAuthentication no
 PermitRootLogin no
+AuthorizedKeysCommand none
 X11Forwarding no
 AllowTcpForwarding no
 AllowAgentForwarding no

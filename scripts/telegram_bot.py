@@ -82,11 +82,9 @@ def get_size(filepath_or_bytes):
 def get_env():
     env = os.environ.get('ENV', '')
     if env:
-        return env
+        return "prod" if env == "prod" else "dev"
     hostname = subprocess.check_output(['hostname'], text=True).strip()
-    if 'prod' in hostname:
-        return "prod"
-    return "dev"
+    return "prod" if 'prod' in hostname else "dev"
 
 def format_backup_name(filename, prefix='DreamSeed_'):
     name = filename.replace(prefix, '').replace('.tar.gz', '').replace('.sql.gz', '')
@@ -112,10 +110,8 @@ def _rclone_lsf(path):
             ['rclone', 'lsf', path, '--files-only', '--format', 'tps'],
             text=True, timeout=30
         ).strip()
-        return sorted(
-            [line.split(';', 2) for line in out.split('\n') if line],
-            key=lambda x: x[0], reverse=True
-        )
+        lines = [line.split(';', 2) for line in out.split('\n') if line]
+        return sorted(lines, key=lambda x: x[1], reverse=True) if lines else []
     except Exception as e:
         log.warning("rclone lsf %s failed: %s", path, e)
         return []
@@ -190,6 +186,7 @@ def main():
         '/backup': cmd_backups,
     }
 
+    session = requests.Session()
     retry_count = 0
 
     while True:
@@ -198,8 +195,8 @@ def main():
             if last_update is not None:
                 params['offset'] = last_update
 
-            updates = requests.get(f'https://api.telegram.org/bot{TG_TOKEN}/getUpdates',
-                               params=params, timeout=35).json()
+            updates = session.get(f'https://api.telegram.org/bot{TG_TOKEN}/getUpdates',
+                               params=params, timeout=(10, 35)).json()
 
             if updates.get('ok') and updates.get('result'):
                 for up in updates.get('result', []):
@@ -241,14 +238,14 @@ def main():
                         if TG_THREAD_ID:
                             send_kwargs['message_thread_id'] = TG_THREAD_ID
 
-                        resp = requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
-                                  json=send_kwargs, timeout=10)
+                        resp = session.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
+                                  json=send_kwargs, timeout=(5, 10))
                         if resp.status_code == 429:
                             retry_after = resp.json().get('parameters', {}).get('retry_after', 5)
                             log.warning("Telegram 429 rate limit, retrying after %ds", retry_after)
                             time.sleep(retry_after)
-                            resp = requests.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
-                                      json=send_kwargs, timeout=10)
+                            resp = session.post(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage',
+                                       json=send_kwargs, timeout=(5, 10))
                         if not resp.json().get('ok'):
                             log.warning("Telegram API error: %s", resp.text)
 

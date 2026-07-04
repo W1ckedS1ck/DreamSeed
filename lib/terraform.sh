@@ -16,7 +16,8 @@ terraform_select_workspace() {
 
 terraform_ensure_workspace() {
     [[ -z "${TF_API_TOKEN:-}" || -z "${TF_WORKSPACE:-}" ]] && return 0
-    local org="DreamSeed" prefix="dreamseed-"
+    local org="DreamSeed" prefix="${TF_PROVIDER:+dreamseed-${TF_PROVIDER}-}"
+    prefix="${prefix:-dreamseed-}"
     local ws_name="${prefix}${TF_WORKSPACE}"
     local auth="Authorization: Bearer $TF_API_TOKEN"
     local url="https://app.terraform.io/api/v2/organizations/$org/workspaces/$ws_name"
@@ -65,15 +66,11 @@ terraform_destroy() {
 
     export_tf_env
 
-    # Check server reachability
-    local ip; ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
-    [[ -n "$ip" && -n "${SSH_KEY:-}" ]] && \
-        ssh -o ConnectTimeout=5 -o BatchMode=yes -i "$SSH_KEY" "ubuntu@$ip" 'true' 2>/dev/null \
-            && echo "  ✓ Server $ip reachable" \
-            || echo "  ⚠ Server $ip unreachable — destroying anyway"
-
     terraform_init_if_needed || { echo "Terraform init failed"; cat "$DEPLOY_TF_LOG"; return 1; }
     terraform_select_workspace >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Failed to select Terraform workspace: $TF_WORKSPACE"
+
+    # Clean up Cloudflare DNS record regardless of state
+    delete_cloudflare_dns "$DEPLOY_DOMAIN"
 
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
@@ -91,7 +88,7 @@ terraform_destroy() {
 
     echo "  ━━━ Destroying resources ($TARGET)"
 
-    TF_TMP_OUT=$(mktemp "${HOME:?}/.tmp_tf_XXXXXX")
+    TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
     set +e
     _tf destroy -auto-approve -no-color "${var_arg[@]}" 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
