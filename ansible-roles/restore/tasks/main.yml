@@ -241,6 +241,34 @@
       changed_when: false
       when: restore_latest_db.stdout | trim != ""
 
+    - name: Clear MODX system settings cache and restart FPM to apply Redis session handler
+      become: true
+      block:
+        - name: Remove system settings cache
+          ansible.builtin.file:
+            path: "{{ web_root }}/core/cache/system_settings/"
+            state: absent
+
+        - name: Remove all MODX cache
+          ansible.builtin.file:
+            path: "{{ web_root }}/core/cache/"
+            state: absent
+
+        - name: Recreate cache directory
+          ansible.builtin.file:
+            path: "{{ web_root }}/core/cache/"
+            state: directory
+            owner: "{{ web_user | default('www-data') }}"
+            group: "{{ web_group | default('www-data') }}"
+            mode: "0777"
+
+        - name: Restart PHP-FPM to clear OPcache
+          ansible.builtin.systemd:
+            name: php{{ php_version | default('8.3') }}-fpm
+            state: restarted
+            daemon_reload: true
+      when: restore_latest_db.stdout | trim != ""
+
 - name: Skip DB restore (already has data)
   ansible.builtin.debug:
     msg: "⊘ Database already has {{ restore_db_tables.stdout | trim }} tables, skipping restore"
