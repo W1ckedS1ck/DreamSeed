@@ -21,9 +21,9 @@ logpath  = /var/log/nginx/{{ domain }}_access.log /var/log/nginx/{{ domain }}-ss
 {% else %}
 logpath  = /var/log/apache2/{{ domain }}_access.log /var/log/apache2/{{ domain }}-ssl-access.log
 {% endif %}
-maxretry = 5
-findtime = 900
-bantime  = 1800
+maxretry = 30
+findtime = 600
+bantime  = 3600
 
 # ============================================================
 # Grafana
