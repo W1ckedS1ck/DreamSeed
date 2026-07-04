@@ -200,8 +200,8 @@
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     return_content: false
     status_code: 200
-  retries: 15
-  delay: 7
+  retries: 10
+  delay: 5
   changed_when: false
 
 - name: Reset Grafana admin password via CLI

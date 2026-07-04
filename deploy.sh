@@ -443,12 +443,16 @@ INVEOF
         run_ansible "playbook-07-security.yml" "Security hardening" || step_fail "Security hardening failed"
         step_ok
 
-        # Phase 3: Monitoring + Backup + Grafana
-        step_start "Phase 3: Monitoring/Backup/Grafana"
-        run_parallel "Monitoring/Backup/Grafana" \
+        # Phase 3a: Monitoring + Backup (parallel)
+        step_start "Phase 3a: Monitoring/Backup"
+        run_parallel "Monitoring/Backup" \
             "playbook-04-monitor.yml:Monitoring" \
-            "playbook-05-backup.yml:Backup & Telegram bot" \
-            "playbook-06-grafana.yml:Grafana" || step_fail "Phase 3 failed"
+            "playbook-05-backup.yml:Backup & Telegram bot" || step_fail "Phase 3a failed"
+        step_ok
+
+        # Phase 3b: Grafana (sequential — heavy, don't block monitoring/backup)
+        step_start "Phase 3b: Grafana"
+        run_ansible "playbook-06-grafana.yml" "Grafana" || step_fail "Phase 3b failed"
         step_ok
     else
         for entry in "${playbooks[@]}"; do
