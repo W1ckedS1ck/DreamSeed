@@ -1,5 +1,4 @@
 locals {
-  # Expand to support multiple zones later
   zones = {
     (var.zone_name) = var.zone_name
   }
@@ -10,45 +9,28 @@ data "cloudflare_zone" "this" {
   name     = each.value
 }
 
-resource "cloudflare_ruleset" "cache" {
-  for_each    = data.cloudflare_zone.this
-  zone_id     = each.value.id
-  name        = "MODX Cache Rules — ${each.key}"
-  description = "Cache HTML, bypass admin and logged-in users"
-  kind        = "zone"
-  phase       = "http_request_cache_settings"
+resource "cloudflare_page_rule" "manager_bypass" {
+  for_each = data.cloudflare_zone.this
+  zone_id  = each.value.id
+  target   = "*${each.key}/manager/*"
+  priority = 1
+  status   = "active"
 
-  rules {
-    action = "set_cache_settings"
-    action_parameters {
-      cache = false
-    }
-    expression  = "(starts_with(http.request.uri.path, \"/manager/\"))"
-    description = "Bypass: MODX manager admin area"
-    enabled     = true
+  actions {
+    cache_level = "bypass"
   }
+}
 
-  rules {
-    action = "set_cache_settings"
-    action_parameters {
-      cache = false
-    }
-    expression  = "(http.cookie contains \"PHPSESSID\")"
-    description = "Bypass: logged-in users with session cookie"
-    enabled     = true
-  }
+resource "cloudflare_page_rule" "cache_all" {
+  for_each = data.cloudflare_zone.this
+  zone_id  = each.value.id
+  target   = "*${each.key}/*"
+  priority = 2
+  status   = "active"
 
-  rules {
-    action = "set_cache_settings"
-    action_parameters {
-      cache = true
-      edge_ttl {
-        mode    = "override_origin"
-        default = var.edge_ttl
-      }
-    }
-    expression  = "true"
-    description = "Cache: all other requests with Edge TTL ${var.edge_ttl}s"
-    enabled     = true
+  actions {
+    cache_level         = "cache_everything"
+    edge_cache_ttl      = var.edge_ttl
+    bypass_cache_on_cookie = "PHPSESSID"
   }
 }
