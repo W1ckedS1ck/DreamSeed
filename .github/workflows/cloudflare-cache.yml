@@ -44,20 +44,10 @@ jobs:
 
       - name: Write terraform.tfvars.json
         working-directory: terraform/cloudflare
-        env:
-          ZONE: ${{ inputs.zone }}
         run: |
-          if [[ "$ZONE" == "aws.vitalikuts.online" || "$ZONE" == "hetz.vitalikuts.online" ]]; then
-            TOKEN="${{ secrets.DEV_CLOUDFLARE_API_TOKEN }}"
-          elif [[ "$ZONE" == "dreamseed.online" ]]; then
-            TOKEN="${{ secrets.PROD_CLOUDFLARE_API_TOKEN }}"
-          else
-            echo "Unknown zone: $ZONE"
-            exit 1
-          fi
           jq -n \
-            --arg token "$TOKEN" \
-            --arg zone "$ZONE" \
+            --arg token "${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            --arg zone "${{ inputs.zone }}" \
             '{cloudflare_api_token: $token, zone_name: $zone}' \
             > terraform.tfvars.json
 
