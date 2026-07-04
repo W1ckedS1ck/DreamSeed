@@ -29,8 +29,8 @@ resource "cloudflare_page_rule" "cache_all" {
   status   = "active"
 
   actions {
-    cache_level         = "cache_everything"
-    edge_cache_ttl      = var.edge_ttl
+    cache_level            = "cache_everything"
+    edge_cache_ttl         = var.edge_ttl
     bypass_cache_on_cookie = "PHPSESSID"
   }
 }
