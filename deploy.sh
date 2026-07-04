@@ -328,7 +328,7 @@ main() {
         export SERVER_IP
 
         # Post-apply state backup (timestamped, rotate 5)
-        TF_STATE_BACKUP_TMP=$(mktemp)
+        TF_STATE_BACKUP_TMP=$(mktemp); chmod 600 "$TF_STATE_BACKUP_TMP"
         if _tf state pull > "$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
             mv "$TF_STATE_BACKUP_TMP" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
             TF_STATE_BACKUP_TMP=
@@ -413,6 +413,7 @@ all:
       ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
       server_ip: "${SERVER_IP}"
 INVEOF
+    chmod 600 "$INVENTORY_FILE"
 
     DEPLOY_VARS_TMP=$(mktemp -d); chmod 700 "$DEPLOY_VARS_TMP"
     DEPLOY_VARS_FILE="$DEPLOY_VARS_TMP/vars.json"

@@ -45,7 +45,8 @@ def main():
     if additional_keys.strip():
         data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
 
-    with open(dst, 'w') as f:
+    fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
         json.dump(data, f, indent=2)
 
 

@@ -246,3 +246,9 @@ jobs:
             echo "$REBOOT_LIST" >> "$M"
             echo '```' >> "$M"
           fi
+
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          rm -f ~/.ssh/deploy_key.pub

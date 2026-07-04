@@ -49,6 +49,8 @@ jobs:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -62,29 +64,6 @@ jobs:
       - name: Record start time
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
-
-      - name: Mask secrets
-        run: |
-          python3 -c '
-          import json, os
-
-          SKIP_KEYS = {
-              "DEV_GRAFANA_CLOUD_USERNAME",
-              "PROD_GRAFANA_CLOUD_USERNAME",
-              "DEV_AWS_REGION",
-              "PROD_REGION",
-          }
-
-          # Build secrets dict from environment variables
-          data = {
-              k: v for k, v in os.environ.items()
-              if any(x in k for x in ["TOKEN", "KEY", "PASS", "GRAFANA", "AWS", "PROD", "TG"])
-          }
-
-          for k, v in data.items():
-              if k not in SKIP_KEYS and v:
-                  print("::add-mask::" + v)
-          '
 
       - name: Setup secrets
         env:
@@ -118,6 +97,19 @@ jobs:
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
         run: |
+          # Mask secrets before writing — prevents leak to logs
+          for v in TG_TOKEN DB_PASS CLOUDFLARE_API_TOKEN HCLOUD_TOKEN \
+                   PROD_HETZ_HCLOUD_TOKEN GRAFANA_PASS SSH_PRIVATE_KEY \
+                   VAULT_PASSWORD RCLONE_CONF_BASE64 \
+                   BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY \
+                   BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY \
+                   BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY \
+                   DEV_GRAFANA_CLOUD_TOKEN PROD_GRAFANA_CLOUD_TOKEN \
+                   DEV_AWS_SECRET_KEY PROD_SECRET_KEY; do
+            val="${!v}"
+            [[ -n "$val" ]] && echo "::add-mask::$val" || true
+          done
+
           mkdir -p secrets ~/.ssh
 
           {
@@ -298,3 +290,10 @@ jobs:
           echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
           echo "| **Commit** | ${{ github.sha }} |" >> "$M"
           echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          rm -f ~/.ssh/deploy_key.pub

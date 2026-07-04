@@ -253,3 +253,10 @@ jobs:
           echo "| DB | ${{ steps.restore.outputs.db }} |" >> "$M"
           echo "| Site | ${{ steps.restore.outputs.site }} |" >> "$M"
           echo "| Duration | ${{ steps.restore.outputs.time }} |" >> "$M"
+
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          rm -f ~/.ssh/deploy_key.pub
