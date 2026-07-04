@@ -80,16 +80,6 @@
     mode: "0644"
   notify: Restart Fail2ban
 
-- name: Deploy Grafana auth filter
-  become: true
-  ansible.builtin.copy:
-    src: fail2ban-grafana.filter
-    dest: /etc/fail2ban/filter.d/grafana.conf
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Restart Fail2ban
-
 - name: Deploy custom Fail2ban jails
   become: true
   ansible.builtin.template:

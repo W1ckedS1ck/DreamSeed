@@ -13,29 +13,18 @@ bantime  = 1h
 # MODX Admin Panel
 # ============================================================
 [modx-admin]
-enabled  = true
-port     = http,https
-filter   = modx-admin
+enabled     = true
+port        = http,https
+filter      = modx-admin
+backend     = pyinotify
 {% if web_server == "nginx" %}
-logpath  = /var/log/nginx/{{ domain }}_access.log /var/log/nginx/{{ domain }}-ssl-access.log
+logpath  = /var/log/nginx/{{ domain }}-ssl-access.log
 {% else %}
-logpath  = /var/log/apache2/{{ domain }}_access.log /var/log/apache2/{{ domain }}-ssl-access.log
+logpath  = /var/log/apache2/{{ domain }}-ssl-access.log
 {% endif %}
 maxretry = 30
 findtime = 600
 bantime  = 3600
-
-# ============================================================
-# Grafana
-# ============================================================
-[grafana]
-enabled  = true
-port     = http,https
-filter   = grafana
-logpath  = /var/log/grafana/grafana.log
-maxretry = 5
-findtime = 10m
-bantime  = 1h
 
 # ============================================================
 # Web server jails
