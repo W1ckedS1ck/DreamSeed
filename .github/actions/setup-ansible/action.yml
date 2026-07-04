@@ -20,18 +20,11 @@ runs:
         key: pip-${{ runner.os }}-${{ hashFiles(inputs.requirements-file) }}
         restore-keys: pip-${{ runner.os }}-
 
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-      with:
-        path: ~/.ansible/collections
-        key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
-        restore-keys: ansible-collections-${{ runner.os }}-
-
     - run: pip install -r ${{ inputs.requirements-file }} --quiet
       shell: bash
 
     # Note: ansible.mysql and ansible.posix ship bundled with the `ansible`
     # community pip package — this is effectively a no-op. Kept as safety net
-    # in case a future ansible release drops one of them. No cache step
-    # because galaxy installs nothing (cache would be empty).
+    # in case a future ansible release drops one of them.
     - run: ansible-galaxy collection install ${{ inputs.collections }}
       shell: bash
