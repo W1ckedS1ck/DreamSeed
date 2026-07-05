@@ -147,6 +147,7 @@ DreamSeed/
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group
 │   ├── hetzner/              # Cloud server + firewall + primary IP
+│   ├── cloudflare/            # WAF Managed Ruleset + Cache rules (Cloudflare provider)
 │   └── grafana/              # Grafana Cloud dashboard provisioning via Terraform
 ├── ansible/
 │   ├── playbook-01-base.yml      # OS packages
@@ -186,8 +187,9 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 ### 🔐 Secure by Default
 
 - SSH: no passwords, no root, no agent forwarding, MaxAuthTries 3, LogLevel VERBOSE
-- Fail2ban with **custom MODX admin login filter** — bans brute-force on `/manager/`
-- Fail2ban with **custom Grafana login filter** — catches failed auth attempts
+- Fail2ban with **custom MODX admin login filter** — bans brute-force on `/connectors/index.php`
+- Fail2ban with **custom vulnerability scanner filter** (dreamseed-botsearch) — 2 hits → 12h ban
+- Fail2ban with **custom bad-request filter** (dreamseed-bad-request) — HTTP 400 → 6 hits → 1h ban
 - Secrets encrypted with Ansible Vault at rest; `gitleaks` scans every push
 - Cloud-native firewalls (AWS SG / Hetzner Firewall) — only ports 22, 80, 443 open
 - Full sysctl hardening (ICMP redirects, martian logging, core dumps disabled)
