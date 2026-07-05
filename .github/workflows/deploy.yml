@@ -255,18 +255,20 @@ jobs:
             dev-aws) DOMAIN="aws.vitalikuts.online" ;;
             dev-hetz) DOMAIN="hetz.vitalikuts.online" ;;
           esac
-          PURGE_DOMAIN="$DOMAIN"
-          ZONE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=${DOMAIN}&status=active" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-          [ -z "$ZONE" ] && ZONE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=${DOMAIN#*.}&status=active" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-          [ -n "$ZONE" ] && curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"files":["https://'"$PURGE_DOMAIN"'/adminer-4.8.1-mysql.php"]}' \
-            | grep -q '"success":true' && echo "CF cache purged" || echo "CF cache purge skipped"
+          for d in "$DOMAIN" "${DOMAIN#*.}"; do
+            ZONE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=${d}&status=active" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq -r '.result[0].id // empty' 2>/dev/null)
+            [ -n "$ZONE" ] && break
+          done
+          if [ -n "$ZONE" ]; then
+            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"files":["https://'"$DOMAIN"'/adminer-4.8.1-mysql.php"]}' | jq -r '.success'
+            echo "CF cache purged"
+          else
+            echo "CF cache purge skipped (zone not found)"
+          fi
 
       - name: Notify success
         if: success() && inputs.action == 'deploy'
