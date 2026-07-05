@@ -70,3 +70,56 @@
     name: "php{{ php_version }}-fpm"
     state: started
     enabled: true
+
+- name: Ensure cache directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}/core/cache"
+    state: directory
+    mode: "0755"
+    owner: www-data
+    group: www-data
+
+- name: Check cache filesystem type
+  become: true
+  ansible.builtin.shell: df -T "{{ web_root }}/core/cache" | awk 'NR==2 {print $2}'
+  register: _cache_fs
+  changed_when: false
+
+- name: Backup existing cache to temp
+  become: true
+  ansible.builtin.copy:
+    src: "{{ web_root }}/core/cache/"
+    dest: /tmp/modx-cache-backup/
+    remote_src: true
+    owner: www-data
+    group: www-data
+    mode: preserve
+  when: _cache_fs.stdout | trim != "tmpfs"
+
+- name: Mount tmpfs for MODX cache
+  become: true
+  ansible.builtin.mount:
+    path: "{{ web_root }}/core/cache"
+    src: tmpfs
+    fstype: tmpfs
+    opts: "size=64M,mode=0755,uid=33,gid=33"
+    state: mounted
+
+- name: Restore cache from backup onto tmpfs
+  become: true
+  ansible.builtin.copy:
+    src: /tmp/modx-cache-backup/
+    dest: "{{ web_root }}/core/cache/"
+    remote_src: true
+    owner: www-data
+    group: www-data
+    mode: preserve
+  when: _cache_fs.stdout | trim != "tmpfs"
+
+- name: Cleanup cache backup
+  become: true
+  ansible.builtin.file:
+    path: /tmp/modx-cache-backup
+    state: absent
+  when: _cache_fs.stdout | trim != "tmpfs"
