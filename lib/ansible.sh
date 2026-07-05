@@ -6,8 +6,8 @@ _ansible_cmd() {
     set +e
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
-    ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_TMP}" \
+    ANSIBLE_NOCOLOR=1 \
+    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_FILE}" \
         "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
     local rc=${PIPESTATUS[0]}
     set -e
@@ -59,14 +59,15 @@ PYEOF
     fi
 
     local output rc
-    echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
+    [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
     set +e
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+        -o LogLevel=ERROR \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "bash '${scripts_dir_remote}/check_services.sh'" 2>&1)
     rc=$?
     set -e
-    echo "    [DEBUG] SSH exit code: $rc"
+    [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH exit code: $rc"
 
     echo "$output"
 

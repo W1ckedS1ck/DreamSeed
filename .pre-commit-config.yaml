@@ -62,3 +62,40 @@ repos:
         entry: gitleaks detect --source . --no-git -v
         language: system
         pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: Terraform fmt
+        entry: bash -c 'for d in terraform/aws terraform/hetzner terraform/grafana; do (cd "$d" && terraform fmt -check -recursive .); done'
+        language: system
+        files: ^terraform/.*\.tf$
+        pass_filenames: false
+
+      - id: tflint
+        name: TFLint (Terraform)
+        entry: bash -c 'for d in terraform/aws terraform/hetzner terraform/grafana; do (cd "$d" && tflint --format=compact); done'
+        language: system
+        files: ^terraform/.*\.tf$
+        pass_filenames: false
+
+      - id: ansible-lint
+        name: Ansible lint
+        entry: bash -c 'cd ansible && ansible-lint .'
+        language: system
+        files: ^ansible/
+        pass_filenames: false
+
+      - id: j2lint
+        name: Jinja2 lint (templates)
+        entry: bash -c 'j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "$@" || true' --
+        language: system
+        types: [jinja]
+        pass_filenames: true
+
+      - id: actionlint
+        name: Actionlint (GitHub Actions)
+        entry: actionlint -ignore SC2129 -ignore SC2001 -ignore SC2034 -ignore SC2181 -ignore SC2015
+        language: system
+        files: ^\.github/workflows/
+        pass_filenames: false

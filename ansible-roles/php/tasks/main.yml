@@ -23,8 +23,46 @@
     mode: "0644"
   notify: Restart PHP-FPM
 
+- name: Configure Redis session handler in php.ini (overrides defaults)
+  become: true
+  ansible.builtin.blockinfile:
+    path: "/etc/php/{{ php_version }}/fpm/php.ini"
+    marker: "; {mark} ANSIBLE MANAGED BLOCK - Redis Session Handler"
+    insertbefore: "^;ffi.preload"
+    block: |
+      session.save_handler = redis
+      session.save_path = "tcp://127.0.0.1:6379{% if redis_password | length > 0 %}?auth={{ redis_password }}{% endif %}"
+      session.gc_maxlifetime = 604800
+      session.gc_probability = 0
+      session.gc_divisor = 1000
+  notify: Restart PHP-FPM
+
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
+
+- name: Clear MODX system settings cache
+  become: true
+  ansible.builtin.command:
+    cmd: rm -f /var/www/html/core/cache/system_settings/config.cache.php
+  changed_when: false
+
+- name: Ensure PHP-FPM systemd override directory exists
+  become: true
+  ansible.builtin.file:
+    path: "/etc/systemd/system/php{{ php_version }}-fpm.service.d"
+    state: directory
+    mode: "0755"
+
+- name: Harden PHP-FPM systemd unit — auto-restart on crash
+  become: true
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/php{{ php_version }}-fpm.service.d/override.conf"
+    content: |
+      [Service]
+      Restart=always
+      RestartSec=5s
+    mode: "0644"
+  notify: Restart PHP-FPM
 
 - name: Ensure PHP-FPM is running
   become: true
@@ -32,3 +70,58 @@
     name: "php{{ php_version }}-fpm"
     state: started
     enabled: true
+
+- name: Ensure cache directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}/core/cache"
+    state: directory
+    mode: "0755"
+    owner: www-data
+    group: www-data
+
+- name: Check cache filesystem type
+  become: true
+  ansible.builtin.shell:
+    cmd: set -o pipefail && df -T "{{ web_root }}/core/cache" | awk 'NR==2 {print $2}'
+    executable: /bin/bash
+  register: _cache_fs
+  changed_when: false
+
+- name: Backup existing cache to temp
+  become: true
+  ansible.builtin.copy:
+    src: "{{ web_root }}/core/cache/"
+    dest: /tmp/modx-cache-backup/
+    remote_src: true
+    owner: www-data
+    group: www-data
+    mode: preserve
+  when: _cache_fs.stdout | trim != "tmpfs"
+
+- name: Mount tmpfs for MODX cache
+  become: true
+  ansible.posix.mount:
+    path: "{{ web_root }}/core/cache"
+    src: tmpfs
+    fstype: tmpfs
+    opts: "size=128M,mode=0755,uid=33,gid=33"
+    state: mounted
+
+- name: Restore cache from backup onto tmpfs
+  become: true
+  ansible.builtin.copy:
+    src: /tmp/modx-cache-backup/
+    dest: "{{ web_root }}/core/cache/"
+    remote_src: true
+    owner: www-data
+    group: www-data
+    mode: preserve
+  when: _cache_fs.stdout | trim != "tmpfs"
+
+- name: Cleanup cache backup
+  become: true
+  ansible.builtin.file:
+    path: /tmp/modx-cache-backup
+    state: absent
+  when: _cache_fs.stdout | trim != "tmpfs"

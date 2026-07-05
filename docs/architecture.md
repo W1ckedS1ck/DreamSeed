@@ -146,7 +146,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                  │   Grafana    │           │  Grafana Cloud   │
                                  │  :3000       │           │  (hosted metrics)│
                                  │  5 dashboards│           │  4 community     │
-                                 │  16 alerts   │           │  dashboards      │
+                                                                   │  24 alerts   │           │  dashboards      │
                                  │              │           │  (gnet 1860/7362/│
                                  │              │           │   17452/10229)   │
                                  └──────┬───────┘           └──────────────────┘
@@ -170,26 +170,34 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 16 rules)
+### Alert Rules (Grafana — 24 rules)
 
-| Alert | Severity | Condition | Interval / noData |
-|-------|----------|-----------|-------------------|
-| High CPU | warning | >85% 5m | 15s scrape, for: 5m |
-| High RAM | warning | >90% 5m | 15s scrape, for: 5m |
-| Low Disk Space | warning | <10% free | 15s scrape, for: 5m |
-| MySQL Down | critical | mysql_up == 0 | 15s scrape, for: 2m |
-| Nginx/Apache Down | critical | nginx_up == 0 | 15s scrape, for: 2m |
-| PHP-FPM Down | critical | php_fpm_up == 0 | 1m push, for: 2m |
-| Site Down | critical | site_up != 1 | 1m push, for: 2m |
-| MODX Core Missing | critical | modx_core_ok == 0 | 1m push, for: 5m |
-| VictoriaMetrics Down | critical | victoria_up == 0 | 15s scrape, for: 1m |
-| Backup Cron Stale | warning | >70 min since last run | 1h heartbeat, for: 10m |
-| Site Check Stale | warning | >3 min since last run | 1m heartbeat, for: 1m |
-| SSL Cert Expiring | info | <7 days remaining | 1m push, for: 1h |
-| Admin Login Failed | warning | admin_login_ok == 0 | 15m probe, for: 6m |
-| MiniShop2 Write Failed | warning | db_write_ok == 0 | 15m probe, for: 6m |
-| Database Tables Low | info | <50 tables in modx_db | 15m push, for: 6m |
-| Backup Verification Failed | warning | backup_verification_ok == 0 | 24h cron, for: 5m |
+| Alert | Severity | Condition | Interval / for |
+|-------|----------|-----------|----------------|
+| High CPU | warning | >85% 5m | scraped 15s, for: 5m |
+| High RAM | warning | >90% 5m | scraped 15s, for: 5m |
+| Low Disk Space | warning | <10% free | scraped 15s, for: 5m |
+| Swap Thrashing | warning | page-in rate >100/s | scraped 15s, for: 5m |
+| MySQL Down | critical | mysql_up == 0 | scraped 15s, for: 2m |
+| Nginx/Apache Down | critical | nginx/apache_up == 0 | scraped 15s, for: 2m |
+| PHP-FPM Down | critical | php_fpm_up == 0 | pushed 1m, for: 2m |
+| Site Down | critical | site_up != 1 | pushed 1m, for: 2m |
+| Site Response Time > 5s | warning | site_response > 5s | pushed 1m, for: 5m |
+| MODX Core Missing | critical | modx_core_ok == 0 | pushed 1m, for: 5m |
+| Site Content Mismatch | critical | site_content_ok == 0 | pushed 1m, for: 2m |
+| MODX Cache Not Writable | warning | modx_cache_ok == 0 | pushed 1m, for: 5m |
+| VictoriaMetrics Down | critical | victoria_up == 0 | scraped 15s, for: 1m |
+| Redis Down | critical | redis_up == 0 | scraped 15s, for: 2m |
+| Backup Cron Not Running | warning | >70 min since last run | heartbeat 1h, for: 10m |
+| Site Health Check Not Running | warning | >3 min since last run | heartbeat 1m, for: 1m |
+| SSL Cert Expiring | info | <7 days remaining | pushed 1m, for: 1h |
+| Admin Login Failed | warning | admin_login_ok == 0 | probe 15m, for: 6m |
+| MiniShop2 Write Failed | warning | db_write_ok == 0 | probe 15m, for: 6m |
+| Database Tables Below Threshold | info | <50 tables in modx_db | pushed 15m, for: 6m |
+| Backup Verification Failed | warning | backup_verification_ok == 0 | cron 24h, for: 5m |
+| Service Check Not Running | warning | stale >10 min | heartbeat 1m, for: 1m |
+| VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | scraped 15s, for: 2m |
+| Cloud Upload Failed | warning | upload_last_success_timestamp >2h | pushed 1h, for: 1h |
 
 ### External Monitoring (Better Stack — cloud)
 
@@ -252,7 +260,7 @@ Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
                                           → DAST scan (nuclei)
                                           → Lynis audit
                                           → check_services (timers, fail2ban, exporters)
-                                           → Grafana alert rules check (≥16)
+                                           → Grafana alert rules check (≥23)
                                            → GDrive backup check
                                           → Destroy → Telegram report (P/F/W summary)
 
@@ -267,10 +275,9 @@ Bot events         Renovate              Dependency updates (auto PRs)
 ```
 DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
-├── audit-secrets.sh       # Pre-push secret leakage check
 ├── .github/
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 7 workflows + Renovate
+│   └── workflows/         # 8 workflows + Renovate
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP
@@ -278,7 +285,7 @@ DreamSeed/
 ├── ansible/
 │   ├── playbook-01-base.yml ... playbook-07-security.yml
 │   └── group_vars/all.yml
-├── ansible-roles/         # 15 custom roles
+├── ansible-roles/         # 16 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks
 ├── .tflint.hcl            # Terraform linter config (root, drives all providers)
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/

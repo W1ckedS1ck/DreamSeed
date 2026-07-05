@@ -1,4 +1,4 @@
-name: Terraform Apply (no Ansible)
+name: "TF: Infra + Cloudflare"
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ on:
         description: 'Cloud provider'
         required: true
         type: choice
-        options: [aws, hetzner]
+        options: [aws, hetzner, cloudflare]
       workspace:
         description: 'Terraform workspace'
         required: true
         type: choice
-        options: [dev-aws, prod, dev-hetz, prod-hetz]
+        options: [dev-aws, prod, dev-hetz, prod-hetz, cloudflare, cloudflare-prod]
       mode:
         description: 'Apply mode'
         required: true
@@ -20,22 +20,31 @@ on:
         options: [apply, refresh-only]
         default: apply
 
+concurrency:
+  group: tf-${{ inputs.workspace }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
 
 jobs:
   apply:
     name: TF ${{ inputs.mode }} ${{ inputs.workspace }} (${{ inputs.provider }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: ./.github/actions/setup-terraform
+
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Set provider env vars
         run: |
@@ -62,6 +71,13 @@ jobs:
               echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" >> "$GITHUB_ENV"
             fi
             echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          fi
+          if [ "${{ inputs.provider }}" = "cloudflare" ]; then
+            echo "CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+            case "${{ inputs.workspace }}" in
+              cloudflare-prod) echo "TF_VAR_domain=dreamseed.online" >> "$GITHUB_ENV" ;;
+              *)              echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV" ;;
+            esac
           fi
           if [ "${{ inputs.provider }}" = "hetzner" ]; then
             if [ "$IS_PROD" = "true" ]; then
@@ -102,9 +118,30 @@ jobs:
             terraform apply -auto-approve -input=false $MODE_FLAG \
               -var="ssh_public_key_path=/tmp/key.pub" \
               -var="environment=${{ inputs.workspace }}"
+          elif [ "${{ inputs.provider }}" = "cloudflare" ]; then
+            terraform apply -auto-approve -input=false $MODE_FLAG
           else
             terraform apply -auto-approve -input=false $MODE_FLAG \
               -var="ssh_key_name=" \
               -var="ssh_public_key=" \
               -var="environment=${{ inputs.workspace }}"
           fi
+
+      - name: Write job summary
+        if: always()
+        run: |
+          MODE="${{ inputs.mode }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Terraform ${MODE} ${RESULT}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Provider** | ${{ inputs.provider }} |" >> "$M"
+          echo "| **Workspace** | ${{ inputs.workspace }} |" >> "$M"
+          echo "| **Mode** | ${MODE} |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"

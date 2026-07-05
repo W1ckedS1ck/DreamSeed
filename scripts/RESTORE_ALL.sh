@@ -29,6 +29,10 @@ fi
 
 # ====== Validate required env vars ======
 : "${DB_NAME:?ERROR: DB_NAME not set in .env or environment}"
+if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "ERROR: DB_NAME contains invalid characters: '$DB_NAME'"
+    exit 1
+fi
 : "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
 
 # Setup restore log
@@ -253,6 +257,7 @@ if [ "$MODE" != "--auto-latest" ]; then
 
     SELECTED_PROJECT=""
     SELECTED_DB=""
+    SELECTED_REDIS=""
 
     case "$MENU_CHOICE" in
         1) RESTORE_PROJECT=1; RESTORE_DB=0 ;;
@@ -281,6 +286,15 @@ if [ "$MODE" != "--auto-latest" ]; then
         fi
     fi
 
+    # Try to select Redis backup if "all" was chosen (optional — doesn't fail if not found)
+    if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]]; then
+        if [ "$SOURCE" = "cloud" ]; then
+            SELECTED_REDIS=$(select_backup_cloud "redis${ENV_SUFFIX}" "redis_dump_" 2>/dev/null) || SELECTED_REDIS=""
+        else
+            SELECTED_REDIS=$(select_backup "$BACKUP_DIR/redis" "*.rdb" 2>/dev/null) || SELECTED_REDIS=""
+        fi
+    fi
+
     echo ""
 
     # Nothing to restore
@@ -296,6 +310,7 @@ if [ "$MODE" != "--auto-latest" ]; then
     echo -e "${RED}⚠️  WARNING! The following will be performed:${NC}"
     [ -n "$SELECTED_PROJECT" ] && echo -e "  - Replace project files: ${CYAN}$(basename "$SELECTED_PROJECT")${NC}"
     [ -n "$SELECTED_DB" ]      && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
+    [ -n "$SELECTED_REDIS" ]   && echo -e "  - Restore Redis sessions: ${CYAN}$(basename "$SELECTED_REDIS")${NC}"
     echo -e "  - Stop $WEB_SERVICE and PHP-FPM"
     echo -e "  - Clear MODX cache"
     echo ""
@@ -315,6 +330,7 @@ else
 
     SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    SELECTED_REDIS=$(find "$BACKUP_DIR/redis" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
         echo "Local backups not found, trying Google Drive..."
@@ -328,9 +344,12 @@ else
             --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
             --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3
+        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
+            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3
 
         SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
         SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        SELECTED_REDIS=$(find "$BACKUP_DIR/redis" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     fi
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
@@ -343,6 +362,7 @@ else
     echo "Restoring from latest backups..."
     echo "Project: $(basename "$SELECTED_PROJECT")"
     echo "DB: $(basename "$SELECTED_DB")"
+    [ -n "$SELECTED_REDIS" ] && echo "Redis: $(basename "$SELECTED_REDIS")"
     echo ""
 fi
 
@@ -434,33 +454,35 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo "Restoring project..."
     fi
 
-    TEMP_EXTRACT=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
-    if timeout 1800 sudo tar -xzf "$SELECTED_PROJECT" -C "$TEMP_EXTRACT"; then
-        [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
-        extracted_dir="$TEMP_EXTRACT/$(basename "$PROJECT_DIR")"
-        if [[ ! -d "$extracted_dir" ]]; then
-            echo -e "${RED}✗ Archive structure mismatch: expected '$extracted_dir' not found${NC}"
-            sudo rm -rf "$TEMP_EXTRACT"
+    [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
+
+    # Backup current project
+    if [ -d "$PROJECT_DIR" ]; then
+        sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$"
+    fi
+    sudo mkdir -p "$PROJECT_DIR"
+
+    # Stream from source (local file or cloud cache), no tmpfs
+    if timeout 1800 gunzip -c "$SELECTED_PROJECT" | sudo tar -xf - -C "$(dirname "$PROJECT_DIR")" 2>/dev/null; then
+        # Verify structure
+        if [ ! -f "$PROJECT_DIR/index.php" ]; then
+            echo -e "${RED}✗ Restored project missing index.php — archive may be invalid${NC}"
+            sudo rm -rf "$PROJECT_DIR"
+            [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
             PROJECT_STATUS="❌ Archive structure error"
             echo -e "${RED}✗ Project restore failed!${NC}"
         else
-            sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
-            sudo mv "$extracted_dir" "$PROJECT_DIR" || {
-                sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" 2>/dev/null || true
-                sudo rm -rf "$TEMP_EXTRACT"
-                PROJECT_STATUS="❌ Move failed"
-                echo "ERROR: Failed to move restored project"
-                exit 1
-            }
             sudo rm -rf "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
-            sudo rm -rf "$TEMP_EXTRACT"
             sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
             sudo chown -R www-data:www-data "$PROJECT_DIR"
+            sudo chmod g+s "$PROJECT_DIR"
             PROJECT_STATUS="✅ $(basename "$SELECTED_PROJECT")"
             echo -e "${GREEN}✓ Project restored${NC}"
         fi
     else
-        sudo rm -rf "$TEMP_EXTRACT"
+        # Rollback on failure
+        sudo rm -rf "$PROJECT_DIR"
+        [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
         PROJECT_STATUS="❌ Error"
         echo -e "${RED}✗ Project restore failed!${NC}"
     fi
@@ -486,56 +508,47 @@ if [ -n "$SELECTED_DB" ]; then
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || true)
 
-    TEMP_SQL=$(mktemp "${HOME:?}/.tmp_restore_XXXXXX.sql")
-    chmod 600 "$TEMP_SQL"
-    if ! timeout 300 gunzip -c "$SELECTED_DB" > "$TEMP_SQL"; then
-        rm -f "$TEMP_SQL"
-        DB_STATUS="❌ Decompression error"
-        echo -e "${RED}✗ Failed to decompress archive!${NC}"
-    else
-        if timeout 1800 mysql "$DB_NAME" < "$TEMP_SQL"; then
-            mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null
+    # Stream DB restore directly — no temp file
+    if timeout 1800 gunzip -c "$SELECTED_DB" | mysql "$DB_NAME" 2>/dev/null; then
+        mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null || true
 
-            COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
-            LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null)
+        COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
+        LAST_EDIT_AFTER=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null)
 
-            DIFF=$((COUNT_AFTER - COUNT_BEFORE))
-            DIFF_STR=""
-            [ $DIFF -gt 0 ] && DIFF_STR=" (+$DIFF)"
-            [ $DIFF -lt 0 ] && DIFF_STR=" ($DIFF)"
+        DIFF=$((COUNT_AFTER - COUNT_BEFORE))
+        DIFF_STR=""
+        [ $DIFF -gt 0 ] && DIFF_STR=" (+$DIFF)"
+        [ $DIFF -lt 0 ] && DIFF_STR=" ($DIFF)"
 
-            ROLLBACK_STR=""
-            if [ -n "$LAST_EDIT_BEFORE" ] && [ "$LAST_EDIT_BEFORE" != "NULL" ] && \
-               [ -n "$LAST_EDIT_AFTER" ] && [ "$LAST_EDIT_AFTER" != "NULL" ]; then
-                TIMESTAMP_BEFORE=$(date -d "$LAST_EDIT_BEFORE" +%s 2>/dev/null)
-                TIMESTAMP_AFTER=$(date -d "$LAST_EDIT_AFTER" +%s 2>/dev/null)
-                if [ -n "$TIMESTAMP_BEFORE" ] && [ -n "$TIMESTAMP_AFTER" ]; then
-                    TIME_DIFF=$((TIMESTAMP_BEFORE - TIMESTAMP_AFTER))
-                    if [ $TIME_DIFF -gt 0 ]; then
-                        DAYS=$((TIME_DIFF / 86400))
-                        HOURS=$(((TIME_DIFF % 86400) / 3600))
-                        if [ $DAYS -gt 0 ]; then
-                            ROLLBACK_STR=" ⚠️ Rollback ${DAYS}d ${HOURS}h"
-                        elif [ $HOURS -gt 0 ]; then
-                            ROLLBACK_STR=" ⚠️ Rollback ${HOURS}h"
-                        else
-                            ROLLBACK_STR=" ⚠️ Rollback"
-                        fi
-                        if [ "$MODE" = "interactive" ]; then
-                            echo -e "${YELLOW}⚠️  Warning: restored data is older than current!${NC}"
-                        fi
+        ROLLBACK_STR=""
+        if [ -n "$LAST_EDIT_BEFORE" ] && [ "$LAST_EDIT_BEFORE" != "NULL" ] && \
+           [ -n "$LAST_EDIT_AFTER" ] && [ "$LAST_EDIT_AFTER" != "NULL" ]; then
+            TIMESTAMP_BEFORE=$(date -d "$LAST_EDIT_BEFORE" +%s 2>/dev/null)
+            TIMESTAMP_AFTER=$(date -d "$LAST_EDIT_AFTER" +%s 2>/dev/null)
+            if [ -n "$TIMESTAMP_BEFORE" ] && [ -n "$TIMESTAMP_AFTER" ]; then
+                TIME_DIFF=$((TIMESTAMP_BEFORE - TIMESTAMP_AFTER))
+                if [ $TIME_DIFF -gt 0 ]; then
+                    DAYS=$((TIME_DIFF / 86400))
+                    HOURS=$(((TIME_DIFF % 86400) / 3600))
+                    if [ $DAYS -gt 0 ]; then
+                        ROLLBACK_STR=" ⚠️ Rollback ${DAYS}d ${HOURS}h"
+                    elif [ $HOURS -gt 0 ]; then
+                        ROLLBACK_STR=" ⚠️ Rollback ${HOURS}h"
+                    else
+                        ROLLBACK_STR=" ⚠️ Rollback"
+                    fi
+                    if [ "$MODE" = "interactive" ]; then
+                        echo -e "${YELLOW}⚠️  Warning: restored data is older than current!${NC}"
                     fi
                 fi
             fi
-
-            DB_STATUS="✅ $(basename "$SELECTED_DB")$DIFF_STR$ROLLBACK_STR"
-            echo -e "${GREEN}✓ Database restored, sessions cleared${NC}"
-        else
-            DB_STATUS="❌ Error"
-            echo -e "${RED}✗ Database restore failed!${NC}"
         fi
 
-        rm -f "$TEMP_SQL"
+        DB_STATUS="✅ $(basename "$SELECTED_DB")$DIFF_STR$ROLLBACK_STR"
+        echo -e "${GREEN}✓ Database restored, sessions cleared${NC}"
+    else
+        DB_STATUS="❌ Import error"
+        echo -e "${RED}✗ Database restore failed!${NC}"
     fi
 else
     if [ "$MODE" = "interactive" ]; then
@@ -545,10 +558,34 @@ fi
 echo ""
 
 # ================================================
+# STEP 7: Restore Redis (if available)
+# ================================================
+REDIS_STATUS="⏭️ Skipped"
+
+if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]] && [[ -f "$SELECTED_REDIS" ]]; then
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[4] Restoring Redis sessions...${NC}"
+    else
+        echo "Restoring Redis..."
+    fi
+
+    if sudo cp "$SELECTED_REDIS" /var/lib/redis/dump.rdb 2>/dev/null && \
+       sudo chown redis:redis /var/lib/redis/dump.rdb 2>/dev/null && \
+       sudo systemctl restart redis-server 2>/dev/null; then
+        REDIS_STATUS="✅ $(basename "$SELECTED_REDIS")"
+        echo -e "${GREEN}✓ Redis restored${NC}"
+    else
+        REDIS_STATUS="❌ Error"
+        echo -e "${RED}✗ Redis restore failed!${NC}"
+    fi
+fi
+echo ""
+
+# ================================================
 # STEP 8: Clear cache and permissions
 # ================================================
 if [ "$MODE" = "interactive" ]; then
-    echo -e "${YELLOW}[4] Clearing cache and setting permissions...${NC}"
+    echo -e "${YELLOW}[5] Clearing cache and setting permissions...${NC}"
 else
     echo "Clearing cache..."
 fi
@@ -564,7 +601,7 @@ echo ""
 # STEP 9: Start services
 # ================================================
 if [ "$MODE" = "interactive" ]; then
-    echo -e "${YELLOW}[5] Starting services...${NC}"
+    echo -e "${YELLOW}[6] Starting services...${NC}"
 else
     echo "Starting services..."
 fi
@@ -598,19 +635,17 @@ echo ""
 # ================================================
 ELAPSED=$(( $(date +%s) - START_TIME ))
 
-if [ "$MODE" = "interactive" ]; then
-    print_header "Restore complete (${ELAPSED}s)"
-    echo -e "  Project: $PROJECT_STATUS"
-    echo -e "  DB:      $DB_STATUS"
-    echo -e "  Site:    $SITE_STATUS"
-    echo ""
-fi
-
+ELAPSED_DISPLAY="Time: ${ELAPSED}s"
 echo ""
 echo "Project: $PROJECT_STATUS"
 echo "DB: $DB_STATUS"
+echo "Redis: $REDIS_STATUS"
 echo "Site: $SITE_STATUS"
-echo "Time: ${ELAPSED}s"
+echo "$ELAPSED_DISPLAY"
+
+if [ "$MODE" = "interactive" ]; then
+    print_header "Restore complete (${ELAPSED}s)"
+fi
 
 if [ "${RESTORE_RESULT:-0}" -eq 1 ]; then
     MSG="❌ <b>[$ENV_DISPLAY] DreamSeed Restore FAILED</b>"

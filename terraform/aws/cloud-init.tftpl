@@ -16,4 +16,4 @@ if [[ ! -f /etc/.dreamseed-bootstrapped ]]; then
     touch /etc/.dreamseed-bootstrapped
 fi
 sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-systemctl restart ssh
+systemctl reload ssh || true

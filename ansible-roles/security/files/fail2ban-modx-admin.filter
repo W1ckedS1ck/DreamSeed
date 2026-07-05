@@ -1,8 +1,7 @@
 # Fail2ban filter for MODX admin panel brute-force attempts
-# Detects POST requests to /manager with 401/403 responses or excessive attempts
+# MODX returns HTTP 200 even on failed login (error in JSON body).
+# Tracks repeated POST requests to the login connector.
 
 [Definition]
-failregex = ^<HOST> .* "POST /manager/index.php.*" (401|403) .*$
-            ^<HOST> .* "POST /manager[ /?]" (401|403) .*$
-            ^<HOST> .* "POST /modx/manager/.*" (401|403) .*$
+failregex = ^<HOST> .* "POST /connectors/index.php.*"$
 ignoreregex =

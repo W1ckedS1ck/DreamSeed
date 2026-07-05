@@ -4,6 +4,12 @@ server {
     server_name {{ domain }}
     {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
 
+    # Block direct IP access (bypasses Cloudflare WAF)
+    # localhost is allowed for local monitoring
+    if ($host !~* ^({{ domain }}{% if domain_www | default(true) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost)$) {
+        return 444;
+    }
+
     root {{ web_root }};
     index index.php index.html index.htm;
 
@@ -42,7 +48,7 @@ server {
     }
 
     location ^~ /manager {
-        limit_req zone=modx_login burst=3 nodelay;
+        limit_req zone=modx_admin burst=5 nodelay;
         add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
@@ -52,6 +58,23 @@ server {
         try_files $uri $uri/ @modx;
 
         {% include 'php_fastcgi.conf.j2' %}
+    }
+
+    location ^~ /connectors {
+        limit_req zone=modx_login burst=50 nodelay;
+        try_files $uri $uri/ @modx;
+
+        {% include 'php_fastcgi.conf.j2' %}
+    }
+
+    location ~* adminer {
+        deny all;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    }
+
+    location ~* \.sql\.zip|\.sql\.gz|backup {
+        deny all;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     }
 
     {% include 'php_fastcgi.conf.j2' %}

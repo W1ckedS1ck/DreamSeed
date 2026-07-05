@@ -5,19 +5,18 @@ locals {
     node_exporter    = { gid = 1860 }
     mysql            = { gid = 7362 }
     nginx            = { gid = 17452 }
+    redis            = { gid = 763 }
     victoria_metrics = { gid = 10229 }
   }
 
-  # Read dashboard JSONs from local cache, fallback to minimal stub
   raw = {
     for k, v in local.dashboards :
     k => try(
-      jsondecode(file("${path.module}/.dashboards/${k}.json")),
+      jsondecode(data.http.dashboard[k].body),
       { id = null, title = k, gnetId = v.gid, templating = { list = [] } }
     )
   }
 
-  # Apply per-dashboard transformations
   config = {
     node_exporter = replace(
       jsonencode(merge(local.raw["node_exporter"], {
@@ -42,6 +41,17 @@ locals {
       })),
       "$${DS_PROMETHEUS}", local.cloud_prom
     )
+    redis = replace(
+      jsonencode(merge(local.raw["redis"], {
+        id = null
+        templating = merge(local.raw["redis"].templating, {
+          list = try([for v in local.raw["redis"].templating.list : merge(v, {
+            query = v.name == "instance" ? "label_values(redis_up, instance)" : v.query
+          }) if v.name != "namespace"], [])
+        })
+      })),
+      "$${DS_PROM}", local.cloud_prom
+    )
     victoria_metrics = replace(
       replace(
         jsonencode(merge(local.raw["victoria_metrics"], {
@@ -57,14 +67,9 @@ locals {
   }
 }
 
-resource "terraform_data" "dashboard_download" {
+data "http" "dashboard" {
   for_each = local.dashboards
-
-  triggers_replace = each.value.gid
-
-  provisioner "local-exec" {
-    command = "mkdir -p ${path.module}/.dashboards && curl -sf 'https://grafana.com/api/dashboards/${each.value.gid}/revisions/latest/download' -o '${path.module}/.dashboards/${each.key}.json'"
-  }
+  url      = "https://grafana.com/api/dashboards/${each.value.gid}/revisions/latest/download"
 }
 
 resource "grafana_folder" "dreamseed" {
@@ -72,7 +77,6 @@ resource "grafana_folder" "dreamseed" {
 }
 
 resource "grafana_dashboard" "this" {
-  depends_on  = [terraform_data.dashboard_download]
   for_each    = local.dashboards
   config_json = local.config[each.key]
   folder      = grafana_folder.dreamseed.id

@@ -24,6 +24,26 @@ server {
         rewrite ^/(.*)$ /index.php?q=$1 last;
     }
 
+    location ^~ /manager {
+        limit_req zone=modx_admin burst=5 nodelay;
+        try_files $uri $uri/ @modx;
+    }
+
+    location ^~ /connectors {
+        limit_req zone=modx_login burst=50 nodelay;
+        try_files $uri $uri/ @modx;
+    }
+
+    location ~* adminer {
+        deny all;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    }
+
+    location ~* \.sql\.zip|\.sql\.gz|backup {
+        deny all;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    }
+
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;

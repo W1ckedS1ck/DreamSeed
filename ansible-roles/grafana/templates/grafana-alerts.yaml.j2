@@ -5,7 +5,7 @@
         title: {{ title }}
         condition: B
         labels:
-          env: {{ domain }}
+          env: {{ deploy_env }}
           severity: {{ severity }}
         data:
           - refId: A
@@ -59,7 +59,7 @@ contactPoints:
           message_thread_id: "{{ grafana_telegram_thread_id }}"
 {% endif %}
           bottoken: "{{ grafana_telegram_token }}"
-          message: "{% raw %}{{ if .Alerts.Firing }}🔴 {{ (index .Alerts.Firing 0).Labels.alertname }}\n[{{ (index .Alerts.Firing 0).Labels.severity }}] {{ .GroupLabels.env }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved\n[{{ (index .Alerts.Resolved 0).Labels.severity }}] {{ .GroupLabels.env }}{{ end }}{% endraw %}"
+          message: "{% raw %}{{ if .Alerts.Firing }}🔴 [{{ .GroupLabels.env }}] {{ (index .Alerts.Firing 0).Labels.alertname }}{{ if (index .Alerts.Firing 0).Annotations.summary }}\n{{ (index .Alerts.Firing 0).Labels.severity }}: {{ (index .Alerts.Firing 0).Annotations.summary }}{{ end }}{{ end }}{{ if .Alerts.Resolved }}✅ [{{ .GroupLabels.env }}] {{ (index .Alerts.Resolved 0).Labels.alertname }} — resolved{{ end }}{% endraw %}"
         disableResolveMessage: false
 
 policies:
@@ -81,7 +81,7 @@ groups:
   - orgId: 1
     name: DreamSeed
     folder: Alerts
-    interval: 1m
+    interval: 2m
     rules:
 
 {{ alert_body('high-cpu', 'High CPU', '100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)', 300, 85, 'gt', '5m', 'OK', 'Error', 'warning') }}
@@ -135,14 +135,27 @@ groups:
         annotations:
           summary: MODX core files (config.core.php / modx.class.php) missing
 
+{{ alert_body('modx-cache', 'MODX Cache Not Writable', 'modx_cache_ok', 300, 1, 'lt', '5m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: MODX cache directory (core/cache/) is not writable
+
 {{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'Alerting', 'Alerting', 'critical') }}
         annotations:
           summary: VictoriaMetrics health check failed
 
-{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('redis-down', 'Redis Down', 'redis_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
+        annotations:
+          summary: Redis service is not running (sessions will be lost)
+
+{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 70, 'gt', '70m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Backup cron hasn't run for 70 min on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
+
+{{ alert_body('upload-failed', 'Cloud Upload Failed', '(time() - upload_last_success_timestamp) / 3600', 86400, 2, 'gt', '75m', 'Alerting', 'Error', 'warning') }}
+        annotations:
+          summary: >-
+            {% raw %}No successful cloud upload in >2h (last: {{ $labels.instance }}) — check rclone/GDrive{% endraw %}
 
 {{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '1m', 'OK', 'Error', 'warning') }}
         annotations:
@@ -172,13 +185,13 @@ groups:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
 
-{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 600, 'gt', '1m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
 
 {% if grafana_cloud_url is defined and grafana_cloud_url | length > 0 %}
-{{ alert_body('vmagent-remote-write', 'VMAgent Remote Write Failing', 'vmagent_remote_write_ok', 300, 1, 'lt', '2m', 'OK', 'Error', 'critical') }}
+{{ alert_body('vmagent-remote-write', 'VMAgent Remote Write Failing', 'vmagent_remote_write_ok', 300, 1, 'lt', '10m', 'OK', 'Error', 'critical') }}
         annotations:
-          summary: VMAgent is not pushing metrics to Grafana Cloud (process down or remote write failing)
+          summary: VMAgent is not pushing metrics to Grafana Cloud (process down or remote write failing for >10 min)
 {% endif %}

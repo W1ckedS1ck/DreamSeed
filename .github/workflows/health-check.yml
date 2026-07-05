@@ -12,6 +12,10 @@ on:
         options: [prod, prod-hetz, dev-hetz, dev-aws]
         default: prod
 
+concurrency:
+  group: health-check-${{ github.event_name == 'schedule' && 'prod-hetz' || inputs.target }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -29,17 +33,12 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: ./.github/actions/setup-terraform
 
       - name: Record start time
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
-
-      - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets_json: '${{ toJSON(secrets) }}'
 
       - name: Setup secrets
         env:
@@ -178,6 +177,19 @@ jobs:
             echo "EOF" >> "$GITHUB_ENV"
           fi
 
+      - name: Update Cloudflare real IP ranges
+        run: |
+          IP="${{ steps.server-ip.outputs.ip }}"
+          SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
+          RESULT=$($SSH "sudo /usr/local/bin/update_cloudflare_ips.sh" 2>&1 || true)
+          echo "$RESULT"
+          if echo "$RESULT" | grep -q "updated"; then
+            echo "cloudflare_ips=updated" >> "$GITHUB_OUTPUT"
+          else
+            echo "cloudflare_ips=unchanged" >> "$GITHUB_OUTPUT"
+          fi
+        id: cfips
+
       - name: Notify
         if: always()
         env:
@@ -230,11 +242,14 @@ jobs:
           echo "|---|---|" >> "$M"
           echo "| **Domain** | ${DOMAIN} |" >> "$M"
           echo "| **Server** | ${IP} |" >> "$M"
-          echo "| **Duration** | ${ELAPSED}s |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
           echo "| **Status** | ${STATUS} |" >> "$M"
           echo "| **Updated** | ${{ steps.update.outputs.updated }} packages |" >> "$M"
+          echo "| **Security** | ${SECURITY:-?} |" >> "$M"
           echo "| **Remaining** | ${AFTER:-?} |" >> "$M"
           echo "| **Reboot** | ${{ steps.update.outputs.reboot }} |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
           echo "" >> "$M"
           if [ -n "$UPDATED_LIST" ]; then
             echo "### Updated packages" >> "$M"
@@ -248,3 +263,9 @@ jobs:
             echo "$REBOOT_LIST" >> "$M"
             echo '```' >> "$M"
           fi
+
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          rm -f ~/.ssh/deploy_key.pub
