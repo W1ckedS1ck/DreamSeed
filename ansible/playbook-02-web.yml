@@ -16,4 +16,3 @@
       when: web_server == "apache"
     - redis
     - php
-    - cloudflare_cache
