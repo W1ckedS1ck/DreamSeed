@@ -62,6 +62,7 @@ PYEOF
     [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
     set +e
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+        -o LogLevel=ERROR \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "bash '${scripts_dir_remote}/check_services.sh'" 2>&1)
     rc=$?
