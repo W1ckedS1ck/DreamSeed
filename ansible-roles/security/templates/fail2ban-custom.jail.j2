@@ -8,8 +8,11 @@
 [sshd]
 enabled  = true
 port     = ssh
+backend  = pyinotify
+logpath  = /var/log/auth.log
 maxretry = 5
 bantime  = 1h
+filter = sshd[publickey=any]
 
 # ============================================================
 # MODX Admin Panel — disabled (behind Cloudflare)
