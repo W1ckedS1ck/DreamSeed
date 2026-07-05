@@ -80,16 +80,6 @@
     mode: "0644"
   notify: Restart Fail2ban
 
-- name: Deploy Cloudflare API action (ban at edge, no nginx reload)
-  become: true
-  ansible.builtin.copy:
-    src: cloudflare-apiv4-action.conf
-    dest: /etc/fail2ban/action.d/cloudflare-apiv4.conf
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Restart Fail2ban
-
 - name: Deploy custom Fail2ban jails
   become: true
   ansible.builtin.template:
