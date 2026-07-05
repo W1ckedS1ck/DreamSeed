@@ -12,7 +12,7 @@ on:
         description: 'Terraform workspace'
         required: true
         type: choice
-        options: [dev-aws, prod, dev-hetz, prod-hetz, cloudflare]
+        options: [dev-aws, prod, dev-hetz, prod-hetz, cloudflare, cloudflare-prod]
       mode:
         description: 'Apply mode'
         required: true
@@ -74,7 +74,10 @@ jobs:
           fi
           if [ "${{ inputs.provider }}" = "cloudflare" ]; then
             echo "CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
-            echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV"
+            case "${{ inputs.workspace }}" in
+              cloudflare-prod) echo "TF_VAR_domain=dreamseed.online" >> "$GITHUB_ENV" ;;
+              *)              echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV" ;;
+            esac
           fi
           if [ "${{ inputs.provider }}" = "hetzner" ]; then
             if [ "$IS_PROD" = "true" ]; then
