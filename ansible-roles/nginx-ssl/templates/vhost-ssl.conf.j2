@@ -5,7 +5,7 @@ server {
     {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
 
     # Block direct IP access (bypasses Cloudflare WAF)
-    if ($host !~* ^({{ domain }}{% if domain_www | default(true) %}|www\.{{ domain }}{% endif %})$) {
+    if ($host !~* ^({{ domain }}{% if domain_www | default(true) %}{{ "|www\\." }}{{ domain }}{% endif %})$) {
         return 444;
     }
 
