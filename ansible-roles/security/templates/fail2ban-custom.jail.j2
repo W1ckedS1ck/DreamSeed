@@ -1,7 +1,9 @@
 # Custom Fail2ban jails for DreamSeed
+# Web jails disabled — behind Cloudflare, iptables bans are useless.
+# Protect web layer via Cloudflare WAF/Rate Limiting instead.
 
 # ============================================================
-# SSH
+# SSH (works behind iptables, not behind Cloudflare)
 # ============================================================
 [sshd]
 enabled  = true
@@ -10,82 +12,73 @@ maxretry = 5
 bantime  = 1h
 
 # ============================================================
-# MODX Admin Panel
+# MODX Admin Panel — disabled (behind Cloudflare)
 # ============================================================
 [modx-admin]
-enabled     = true
+enabled     = false
 port        = http,https
 filter      = modx-admin
 backend     = pyinotify
 {% if web_server == "nginx" %}
-logpath  = /var/log/nginx/{{ domain }}_access.log
-          /var/log/nginx/{{ domain }}-ssl-access.log
+logpath  = /var/log/nginx/{{ domain }}-ssl-access.log
 {% else %}
-logpath  = /var/log/apache2/{{ domain }}_access.log
-          /var/log/apache2/{{ domain }}-ssl-access.log
+logpath  = /var/log/apache2/{{ domain }}-ssl-access.log
 {% endif %}
 maxretry = 100
 findtime = 600
 bantime  = 3600
 
 # ============================================================
-# Web server jails
+# Web server jails — disabled (behind Cloudflare)
 # ============================================================
 {% if web_server == "nginx" %}
 [nginx-http-auth]
-enabled  = true
-backend  = pyinotify
+enabled  = false
 port     = http,https
 logpath  = /var/log/nginx/error.log
 maxretry = 5
 bantime  = 1h
 
 [nginx-botsearch]
-enabled  = true
-backend  = pyinotify
+enabled  = false
 port     = http,https
-logpath  = /var/log/nginx/{{ domain }}_access.log
-          /var/log/nginx/{{ domain }}-ssl-access.log
 maxretry = 2
 bantime  = 12h
 
 [nginx-bad-request]
-enabled  = true
-backend  = pyinotify
+enabled  = false
 port     = http,https
-logpath  = /var/log/nginx/{{ domain }}_access.log
-          /var/log/nginx/{{ domain }}-ssl-access.log
 maxretry = 6
 bantime  = 1h
 
 {% else %}
 [apache-auth]
-enabled  = true
+enabled  = false
 port     = http,https
 maxretry = 5
 bantime  = 1h
 
 [apache-shellshock]
-enabled  = true
+enabled  = false
 port     = http,https
 maxretry = 1
 bantime  = 1d
 
 [apache-badbots]
-enabled  = true
+enabled  = false
 port     = http,https
 maxretry = 2
 bantime  = 12h
 
 [apache-noscript]
-enabled  = true
+enabled  = false
 port     = http,https
 maxretry = 6
 bantime  = 1h
 {% endif %}
 
 # ============================================================
-# Recidive — persistent offenders get 1 week ban
+# Recidive — extends bans for repeat offenders (SSH only)
 # ============================================================
 [recidive]
 enabled  = true
