@@ -1,4 +1,4 @@
-name: Terraform Apply (no Ansible)
+name: "TF: Infra + Cloudflare"
 
 on:
   workflow_dispatch:
