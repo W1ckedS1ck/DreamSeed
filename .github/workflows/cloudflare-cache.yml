@@ -28,6 +28,7 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+  TF_WORKSPACE: cloudflare
 
 jobs:
   cache-rules:
@@ -53,11 +54,6 @@ jobs:
       - name: Terraform Init
         working-directory: terraform/cloudflare
         run: terraform init
-
-      - name: Select Terraform workspace
-        working-directory: terraform/cloudflare
-        run: |
-          terraform workspace select cloudflare 2>/dev/null || terraform workspace new cloudflare
 
       - name: Terraform Plan (apply)
         if: inputs.action == 'plan' || inputs.action == 'apply'

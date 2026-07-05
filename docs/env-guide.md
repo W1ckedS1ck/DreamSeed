@@ -16,7 +16,7 @@ CLOUDFLARE_API_TOKEN  →  Authorization: Bearer <token>
 
 Where to get: https://dash.cloudflare.com/profile/api-tokens → Create Token
 
-Required permissions: `DNS:Edit`, `Cache Settings Read/Write`, `Zone:Read`, `Zone Rulesets Read/Write`.
+Required permissions: `DNS:Edit`, `Cache Settings Read/Write`, `Zone:Read`, `Account Rulesets Read`.
 
 Used by: `deploy.sh`, Ansible role `ssl`, Terraform.
 
