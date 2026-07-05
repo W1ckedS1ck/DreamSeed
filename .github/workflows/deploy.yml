@@ -261,11 +261,13 @@ jobs:
             [ -n "$ZONE" ] && break
           done
           if [ -n "$ZONE" ]; then
-            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
+            RESULT=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
-              -d '{"files":["https://'"$DOMAIN"'/adminer-4.8.1-mysql.php"]}' | jq -r '.success'
-            echo "CF cache purged"
+              -d '{"files":["https://'"$DOMAIN"'/adminer-4.8.1-mysql.php"]}')
+            echo "$RESULT" | jq -r '.success' | grep -q true && echo "CF cache purged" || {
+              echo "CF cache purge failed: $(echo "$RESULT" | jq -r '.errors[0].message // "unknown"')"
+            }
           else
             echo "CF cache purge skipped (zone not found)"
           fi
