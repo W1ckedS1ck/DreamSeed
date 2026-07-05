@@ -1,5 +1,13 @@
 terraform {
   required_version = ">= 1.5"
+
+  backend "remote" {
+    organization = "DreamSeed"
+    workspaces {
+      prefix = "dreamseed-"
+    }
+  }
+
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
