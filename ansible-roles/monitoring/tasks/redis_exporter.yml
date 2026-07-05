@@ -27,7 +27,7 @@
       [Service]
       Type=simple
       User=redis_exporter
-      ExecStart=/usr/local/bin/redis_exporter -redis.addr 127.0.0.1:6379 -web.listen-address 127.0.0.1:9121
+      ExecStart=/usr/local/bin/redis_exporter -redis.addr 127.0.0.1:6379{% if redis_password | length > 0 %} -redis.password {{ redis_password }}{% endif %} -web.listen-address 127.0.0.1:9121
       Restart=always
       RestartSec=5s
 

@@ -44,7 +44,7 @@ source "$SCRIPT_DIR/lib/preflight.sh"
 source "$SCRIPT_DIR/lib/terraform.sh"
 source "$SCRIPT_DIR/lib/ansible.sh"
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP
 
 # ----- arg parsing -----
 

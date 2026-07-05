@@ -71,5 +71,19 @@
   ansible.builtin.command: nginx -t
   changed_when: false
 
+- name: Deploy Cloudflare IP updater script
+  become: true
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/update_cloudflare_ips.sh"
+    dest: /usr/local/bin/update_cloudflare_ips.sh
+    mode: "0755"
+
+- name: Run Cloudflare IP updater immediately on fresh deploy
+  become: true
+  ansible.builtin.command:
+    cmd: /usr/local/bin/update_cloudflare_ips.sh
+  changed_when: false
+  failed_when: false
+
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers

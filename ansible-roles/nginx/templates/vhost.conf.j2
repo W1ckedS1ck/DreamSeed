@@ -25,12 +25,12 @@ server {
     }
 
     location ^~ /manager {
-        limit_req zone=modx_login burst=100 nodelay;
+        limit_req zone=modx_admin burst=5 nodelay;
         try_files $uri $uri/ @modx;
     }
 
     location ^~ /connectors {
-        limit_req zone=modx_login burst=100 nodelay;
+        limit_req zone=modx_login burst=50 nodelay;
         try_files $uri $uri/ @modx;
     }
 

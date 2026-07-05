@@ -20,7 +20,12 @@ db_min_tables: 100
 # ========================
 #  PHP
 # ========================
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}"  # fallback to highest available if missing in apt
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}"
+
+# ========================
+#  Redis
+# ========================
+redis_password: "{{ lookup('env', 'REDIS_PASSWORD') | default('', true) }}"  # fallback to highest available if missing in apt
 
 # ========================
 #  Backup

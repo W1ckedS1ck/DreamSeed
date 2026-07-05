@@ -346,6 +346,33 @@ run_secrets_audit() {
     group_end
 }
 
+run_cloudflare_ips() {
+    group_start "Cloudflare Real IP Ranges"
+    local file="$SCRIPT_DIR/ansible-roles/nginx/files/cloudflare-realip.conf"
+    if [[ ! -f "$file" ]]; then print_skip "cloudflare-realip.conf not found"; group_end; return 0; fi
+
+    local cf_ipv4 cf_ipv6 local_ips
+    cf_ipv4=$(curl -sL --max-time 10 https://www.cloudflare.com/ips-v4 2>/dev/null || echo "")
+    cf_ipv6=$(curl -sL --max-time 10 https://www.cloudflare.com/ips-v6 2>/dev/null || echo "")
+    if [[ -z "$cf_ipv4" ]]; then print_skip "Cannot fetch Cloudflare IPs (offline?)"; group_end; return 0; fi
+
+    local_ips=$(grep 'set_real_ip_from' "$file" | awk '{print $2}' | sed 's/;//' | sort)
+    local online_ips; online_ips=$(printf '%s\n%s\n' "$cf_ipv4" "$cf_ipv6" | sort)
+
+    if [[ "$local_ips" != "$online_ips" ]]; then
+        print_fail "Cloudflare IP ranges differ from official list"
+        local missing; missing=$(diff <(echo "$local_ips") <(echo "$online_ips") 2>/dev/null | grep '>' | sed 's/^> //')
+        local extra; extra=$(diff <(echo "$local_ips") <(echo "$online_ips") 2>/dev/null | grep '<' | sed 's/^< //')
+        [[ -n "$missing" ]] && echo "    Missing: $(echo "$missing" | tr '\n' ' ')"
+        [[ -n "$extra" ]] && echo "    Extra (remove): $(echo "$extra" | tr '\n' ' ')"
+        ci_annotation "Cloudflare IPs" "fail"
+    else
+        print_ok "Cloudflare IP ranges are up-to-date"
+        ci_annotation "Cloudflare IPs" "pass"
+    fi
+    group_end
+}
+
 # ----- Summary -----
 
 print_summary() {
@@ -410,6 +437,7 @@ OPTIONS:
   --trivy             Run only trivy
   --markdownlint      Run only markdownlint (docs/)
   --secrets           Run only secrets audit
+  --cloudflare-ips    Run only Cloudflare real IP range check
 
   --list              Show available tools and their status
   -h, --help          Show this help
@@ -429,6 +457,7 @@ run_fast() {
     run_actionlint
     run_renovate_validate
     run_markdownlint
+    run_cloudflare_ips
 }
 
 run_full() {
@@ -462,6 +491,7 @@ while [[ $# -gt 0 ]]; do
         --trivy)             MODE="trivy"; shift ;;
         --markdownlint)      MODE="markdownlint"; shift ;;
         --secrets)           MODE="secrets"; shift ;;
+        --cloudflare-ips)    MODE="cloudflare-ips"; shift ;;
         --list)              MODE="list"; shift ;;
         -h|--help)           usage; exit 0 ;;
         *) echo "Unknown option: $1"; usage; exit 1 ;;
@@ -484,6 +514,7 @@ case "$MODE" in
     trivy)               run_trivy ;;
     markdownlint)        run_markdownlint ;;
     secrets)             run_secrets_audit ;;
+    cloudflare-ips)      run_cloudflare_ips ;;
     list)                list_tools ;;
     *)                   echo "Unknown mode"; usage; exit 1 ;;
 esac

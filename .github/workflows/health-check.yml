@@ -177,6 +177,19 @@ jobs:
             echo "EOF" >> "$GITHUB_ENV"
           fi
 
+      - name: Update Cloudflare real IP ranges
+        run: |
+          IP="${{ steps.server-ip.outputs.ip }}"
+          SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
+          RESULT=$($SSH "sudo /usr/local/bin/update_cloudflare_ips.sh" 2>&1 || true)
+          echo "$RESULT"
+          if echo "$RESULT" | grep -q "updated"; then
+            echo "cloudflare_ips=updated" >> "$GITHUB_OUTPUT"
+          else
+            echo "cloudflare_ips=unchanged" >> "$GITHUB_OUTPUT"
+          fi
+        id: cfips
+
       - name: Notify
         if: always()
         env:

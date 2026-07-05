@@ -75,6 +75,8 @@ rotate_logs() {
     fi
 }
 
+_cfcurl() { curl -s --connect-timeout 5 --max-time 15 "$@"; }
+
 update_cloudflare_dns() {
     local domain="$1" ip="$2"
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && {
@@ -93,7 +95,7 @@ update_cloudflare_dns() {
     else
         zone_lookup="$domain"
     fi
-    zone_id=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$api_base/zones?name=$zone_lookup" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -108,7 +110,7 @@ if zones:
     local type="A"
 
     local existing
-    existing=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$base?type=$type&name=$domain" 2>/dev/null)
 
     # Single Python pass: parse existing records → count, id, old_ip
@@ -129,7 +131,7 @@ else:
 
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
-        if curl -s --retry 3 --retry-delay 5 -X PUT "$base/$record_id" \
+        if _cfcurl --retry 1 --retry-delay 3 -X PUT "$base/$record_id" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
@@ -140,7 +142,7 @@ else:
             echo "  ✗ Cloudflare DNS: update failed (check token/permissions)"
         fi
     else
-        if curl -s --retry 3 --retry-delay 5 -X POST "$base" \
+        if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
@@ -168,7 +170,7 @@ delete_cloudflare_dns() {
     else
         zone_lookup="$domain"
     fi
-    zone_id=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$api_base/zones?name=$zone_lookup" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -182,7 +184,7 @@ if zones:
     local base="$api_base/zones/$zone_id/dns_records"
 
     local existing
-    existing=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$base?type=A&name=$domain" 2>/dev/null)
 
     local record_id
@@ -196,7 +198,7 @@ if results:
 
     [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; return 0; }
 
-    if curl -s --retry 3 --retry-delay 5 -X DELETE "$base/$record_id" \
+    if _cfcurl --retry 1 --retry-delay 3 -X DELETE "$base/$record_id" \
         -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         -H "Content-Type: application/json" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
         log "Cloudflare DNS: deleted A record for $domain"

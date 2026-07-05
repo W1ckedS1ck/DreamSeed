@@ -7,7 +7,19 @@ Reads environment variables and writes a JSON file for --extra-vars.
 """
 import json
 import os
+import re
 import sys
+
+JINJA_RE = re.compile(r'\{\{.*?\}\}')
+
+
+def _warn_jinja(key, val):
+    if isinstance(val, str) and JINJA_RE.search(val):
+        print(f"⚠ Warning: extra var '{key}' contains Jinja2 delimiters ({{{{...}}}})", file=sys.stderr)
+        print("  This will be evaluated as template code when used in Ansible 'content:' / 'template:' blocks.", file=sys.stderr)
+    elif isinstance(val, list):
+        for i, item in enumerate(val):
+            _warn_jinja(f"{key}[{i}]", item)
 
 
 def main():
@@ -44,6 +56,9 @@ def main():
     additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
     if additional_keys.strip():
         data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
+
+    for key, val in data.items():
+        _warn_jinja(key, val)
 
     fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, 'w') as f:

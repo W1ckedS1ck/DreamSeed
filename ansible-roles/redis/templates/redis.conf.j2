@@ -28,3 +28,7 @@ rename-command CONFIG ""
 rename-command SHUTDOWN ""
 rename-command DEBUG ""
 rename-command SCRIPT ""
+
+{% if redis_password | length > 0 %}
+requirepass {{ redis_password }}
+{% endif %}
