@@ -90,13 +90,16 @@
 
 - name: Backup existing cache to temp
   become: true
-  ansible.builtin.copy:
-    src: "{{ web_root }}/core/cache/"
-    dest: /tmp/modx-cache-backup/
-    remote_src: true
-    owner: www-data
-    group: www-data
-    mode: preserve
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      mkdir -p /tmp/modx-cache-backup
+      if [ -d "{{ web_root }}/core/cache" ] && [ "$(ls -A "{{ web_root }}/core/cache" 2>/dev/null)" ]; then
+        cp -a "{{ web_root }}/core/cache/." /tmp/modx-cache-backup/
+        chown -R www-data:www-data /tmp/modx-cache-backup/
+      fi
+    executable: /bin/bash
+  changed_when: false
   when: _cache_fs.stdout | trim != "tmpfs"
 
 - name: Mount tmpfs for MODX cache
