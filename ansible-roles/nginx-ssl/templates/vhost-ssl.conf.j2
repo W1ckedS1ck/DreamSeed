@@ -54,6 +54,13 @@ server {
         {% include 'php_fastcgi.conf.j2' %}
     }
 
+    location ^~ /connectors {
+        limit_req zone=modx_login burst=100 nodelay;
+        try_files $uri $uri/ @modx;
+
+        {% include 'php_fastcgi.conf.j2' %}
+    }
+
     {% include 'php_fastcgi.conf.j2' %}
 
     location ~* \.(jpg|jpeg|gif|png|ico|css|js|svg|woff|woff2|ttf|eot|otf|webp)$ {
