@@ -1,17 +1,19 @@
-output "zone_ids" {
-  description = "Map of zone names to IDs"
-  value = {
-    for k, z in data.cloudflare_zone.this : k => z.id
-  }
+output "zone" {
+  description = "Resolved zone name"
+  value = local.zone_name
 }
 
-output "page_rules" {
-  description = "Map of page rule targets to IDs"
-  value = {
-    for k, r in cloudflare_page_rule.cache_all : k => {
-      id     = r.id
-      target = r.target
-      status = r.status
-    }
-  }
+output "url_pattern" {
+  description = "Page rule URL pattern"
+  value = local.url_pattern
+}
+
+output "cache_rule_id" {
+  description = "Cache-all page rule ID"
+  value = cloudflare_page_rule.cache_all.id
+}
+
+output "manager_bypass_id" {
+  description = "Manager bypass page rule ID"
+  value = cloudflare_page_rule.manager_bypass.id
 }

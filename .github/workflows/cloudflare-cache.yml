@@ -42,26 +42,13 @@ jobs:
         with:
           terraform_version: "1.11.3"
 
-      - name: Resolve Cloudflare zone
-        id: resolve
-        env:
-          TARGET: ${{ inputs.target }}
-        run: |
-          if [[ "$TARGET" == "dreamseed.online" ]]; then
-            echo "zone_name=dreamseed.online" >> "$GITHUB_OUTPUT"
-          else
-            echo "zone_name=vitalikuts.online" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Write terraform.tfvars.json
         working-directory: terraform/cloudflare
-        env:
-          CF_ZONE: ${{ steps.resolve.outputs.zone_name }}
         run: |
           jq -n \
             --arg token "${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            --arg zone "$CF_ZONE" \
-            '{cloudflare_api_token: $token, zone_name: $zone}' \
+            --arg domain "${{ inputs.target }}" \
+            '{cloudflare_api_token: $token, domain: $domain}' \
             > terraform.tfvars.json
 
       - name: Terraform Init
@@ -105,6 +92,9 @@ jobs:
             echo "| \`/manager/*\` | Bypass cache (admin area) |"
             echo "| Cookie \`PHPSESSID\` | Bypass cache (logged-in users) |"
             echo "| Everything else | Cache with Edge TTL 1h |"
+            echo ""
+            echo "**Zone:** \`$(terraform -chdir=terraform/cloudflare output -raw zone)\`"
+            echo "**Pattern:** \`$(terraform -chdir=terraform/cloudflare output -raw url_pattern)\`"
             echo ""
             echo '```'
             terraform -chdir=terraform/cloudflare output -json

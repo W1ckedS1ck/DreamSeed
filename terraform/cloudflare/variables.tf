@@ -1,11 +1,11 @@
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token with Zone:Cache Rules permission"
+  description = "Cloudflare API token"
   type        = string
   sensitive   = true
 }
 
-variable "zone_name" {
-  description = "Cloudflare zone name (domain)"
+variable "domain" {
+  description = "Full domain (e.g., aws.vitalikuts.online or vitalikuts.online)"
   type        = string
 }
 
