@@ -625,6 +625,15 @@ jobs:
             echo "[FAIL] Site returned HTTP $HTTP_CODE"
           fi
 
+          ADMINER_CODE=$(ssh ubuntu@"$SERVER_IP" \
+            "curl -sk -o /dev/null -w '%{http_code}' --max-time 5 https://localhost/adminer-4.8.1-mysql.php" 2>/dev/null || echo "000")
+          echo "adminer_http=$ADMINER_CODE"
+          if [ "$ADMINER_CODE" = "403" ]; then
+            echo "[PASS] Adminer blocked (HTTP 403)"
+          else
+            echo "[FAIL] Adminer returned HTTP $ADMINER_CODE (expected 403)"
+          fi
+
           if ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/index.php" 2>/dev/null; then
             echo "[PASS] index.php exists"
           else
