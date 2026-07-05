@@ -81,6 +81,14 @@ server {
         deny all;
     }
 
+    location ~* adminer {
+        deny all;
+    }
+
+    location ~* \.sql\.zip|\.sql\.gz|backup {
+        deny all;
+    }
+
     location = /favicon.ico {
         log_not_found off;
         access_log off;

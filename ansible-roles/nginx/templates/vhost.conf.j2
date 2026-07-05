@@ -24,6 +24,16 @@ server {
         rewrite ^/(.*)$ /index.php?q=$1 last;
     }
 
+    location ^~ /manager {
+        limit_req zone=modx_login burst=100 nodelay;
+        try_files $uri $uri/ @modx;
+    }
+
+    location ^~ /connectors {
+        limit_req zone=modx_login burst=100 nodelay;
+        try_files $uri $uri/ @modx;
+    }
+
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
@@ -52,6 +62,14 @@ server {
     }
 
     location ~ /\.ht {
+        deny all;
+    }
+
+    location ~* adminer {
+        deny all;
+    }
+
+    location ~* \.sql\.zip|\.sql\.gz|backup {
         deny all;
     }
 
