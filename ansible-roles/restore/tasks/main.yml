@@ -243,6 +243,7 @@
 
     - name: Clear MODX system settings cache and restart FPM to apply Redis session handler
       become: true
+      when: restore_latest_db.stdout | trim != ""
       block:
         - name: Remove system settings cache
           ansible.builtin.file:
@@ -267,7 +268,6 @@
             name: php{{ php_version | default('8.3') }}-fpm
             state: restarted
             daemon_reload: true
-      when: restore_latest_db.stdout | trim != ""
 
 - name: Skip DB restore (already has data)
   ansible.builtin.debug:
