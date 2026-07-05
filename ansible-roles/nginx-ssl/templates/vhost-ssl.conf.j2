@@ -5,7 +5,8 @@ server {
     {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
 
     # Block direct IP access (bypasses Cloudflare WAF)
-    if ($host !~* ^({{ domain }}{% if domain_www | default(true) %}{{ "|www\\." }}{{ domain }}{% endif %})$) {
+    # localhost is allowed for local monitoring
+    if ($host !~* ^({{ domain }}{% if domain_www | default(true) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost)$) {
         return 444;
     }
 
