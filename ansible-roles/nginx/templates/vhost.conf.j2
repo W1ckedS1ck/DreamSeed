@@ -36,10 +36,12 @@ server {
 
     location ~* adminer {
         deny all;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     }
 
     location ~* \.sql\.zip|\.sql\.gz|backup {
         deny all;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     }
 
     location ~ \.php$ {
