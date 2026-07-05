@@ -14,6 +14,20 @@
     state: started
     enabled: true
 
+- name: Ensure self-signed SSL certs exist (for default SSL server)
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      if [ ! -f /etc/ssl/certs/selfsigned.crt ]; then
+        mkdir -p /etc/ssl/private
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+          -keyout /etc/ssl/private/selfsigned.key \
+          -out /etc/ssl/certs/selfsigned.crt \
+          -subj "/CN=localhost" 2>/dev/null
+        chmod 600 /etc/ssl/private/selfsigned.key
+      fi
+    creates: /etc/ssl/certs/selfsigned.crt
+
 - name: Deploy nginx main config
   become: true
   ansible.builtin.template:
