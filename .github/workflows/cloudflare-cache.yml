@@ -54,6 +54,11 @@ jobs:
         working-directory: terraform/cloudflare
         run: terraform init
 
+      - name: Select Terraform workspace
+        working-directory: terraform/cloudflare
+        run: |
+          terraform workspace select cloudflare 2>/dev/null || terraform workspace new cloudflare
+
       - name: Terraform Plan (apply)
         if: inputs.action == 'plan' || inputs.action == 'apply'
         working-directory: terraform/cloudflare
