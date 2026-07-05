@@ -66,6 +66,14 @@ server {
         {% include 'php_fastcgi.conf.j2' %}
     }
 
+    location ~* adminer {
+        deny all;
+    }
+
+    location ~* \.sql\.zip|\.sql\.gz|backup {
+        deny all;
+    }
+
     {% include 'php_fastcgi.conf.j2' %}
 
     location ~* \.(jpg|jpeg|gif|png|ico|css|js|svg|woff|woff2|ttf|eot|otf|webp)$ {
@@ -83,14 +91,6 @@ server {
     }
 
     location ~ /\.ht {
-        deny all;
-    }
-
-    location ~* adminer {
-        deny all;
-    }
-
-    location ~* \.sql\.zip|\.sql\.gz|backup {
         deny all;
     }
 

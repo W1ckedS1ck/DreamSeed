@@ -34,6 +34,14 @@ server {
         try_files $uri $uri/ @modx;
     }
 
+    location ~* adminer {
+        deny all;
+    }
+
+    location ~* \.sql\.zip|\.sql\.gz|backup {
+        deny all;
+    }
+
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
@@ -62,14 +70,6 @@ server {
     }
 
     location ~ /\.ht {
-        deny all;
-    }
-
-    location ~* adminer {
-        deny all;
-    }
-
-    location ~* \.sql\.zip|\.sql\.gz|backup {
         deny all;
     }
 
