@@ -16,7 +16,7 @@ CLOUDFLARE_API_TOKEN  →  Authorization: Bearer <token>
 
 Where to get: https://dash.cloudflare.com/profile/api-tokens → Create Token
 
-Required permissions: `DNS:Edit`, `Cache Settings Read/Write`, `Zone:Read`, `Page Rules Read/Write`, `Account Rulesets Read`.
+Required permissions: `DNS:Edit`, `Cache Settings Read/Write`, `Zone:Read`, `Zone Rulesets Read/Write`.
 
 Used by: `deploy.sh`, Ansible role `ssl`, Terraform.
 
@@ -47,8 +47,6 @@ curl -X POST "https://api.cloudflare.com/client/v4/user/tokens" \
         "permission_groups": [
           {"id": "c8fed203ed3043cba015a93ad1616f1f"},  # Zone Read
           {"id": "4755a26eedb94da69e1066d98aa820be"},  # DNS Write
-          {"id": "ed07f6c337da4195b4e72a1fb2c6bcae"},  # Page Rules Write
-          {"id": "b415b70a4fd1412886f164451f20405c"},   # Page Rules Read
           {"id": "3245da1cf36c45c3847bb9b483c62f97"},  # Cache Settings Read
           {"id": "9ff81cbbe65c400b97d92c3c1033cab6"}   # Cache Settings Write
         ]
@@ -85,6 +83,7 @@ curl -s -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
 ## Grafana Cloud
 
 Three separate stacks exist:
+
 - **prod** — `dreamseed.grafana.net` (org id 1)
 - **dev** — `vitalikuts.grafana.net` (org id 2, shared by dev-aws + dev-hetz)
 

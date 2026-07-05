@@ -98,7 +98,7 @@ jobs:
             echo "| Everything else | Cache with Edge TTL 1h |"
             echo ""
             echo "**Zone:** \`$(terraform -chdir=terraform/cloudflare output -raw zone)\`"
-            echo "**Pattern:** \`$(terraform -chdir=terraform/cloudflare output -raw url_pattern)\`"
+            echo "**Expression:** \`$(terraform -chdir=terraform/cloudflare output -raw cache_expression)\`"
             echo ""
             echo '```'
             terraform -chdir=terraform/cloudflare output -json
