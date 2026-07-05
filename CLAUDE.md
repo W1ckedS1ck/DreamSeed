@@ -10,6 +10,7 @@
 ## ⚠️ CRITICAL RULE: Deploy & destroy ONLY via GitHub Actions
 
 **Never run `./deploy.sh dev-aws -x` or any destroy/deploy locally.** Use the GitHub Actions UI:
+
 - [Deploy workflow](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml) — "Run workflow" → choose target + web server
 - Local `deploy.sh` is for: lint, dry-run, log tailing, single playbook debug ONLY.
 
@@ -129,6 +130,7 @@ DreamSeed/
 `./deploy.sh TARGET -n|-a [OPTIONS]`
 
 **Step sequence** (full prod deploy, Nginx):
+
 1. `parse_args` + `resolve_target` → sets `TF_PROVIDER`, `TF_WORKSPACE`, `DEPLOY_DOMAIN`, `TARGET_PREFIX`
 2. `preflight_checks` → SSH key, `.env` parseable, required vars, TF dir
 3. Prod prompt: `Continue? [y/N]`
@@ -144,6 +146,7 @@ DreamSeed/
 **Destroy path:** dev → 1 confirm, prod → 3 confirm ("type `destroy prod`"), terraform destroy, delete workspace (non-prod), wipe tfstate-backup.
 
 **Key design notes:**
+
 - Provider-agnostic past `resolve_target`; only `export_tf_env` and `main.tf` differ
 - AWS and Hetzner share `TARGET_PREFIX`-based env var mapping (`PROD_*`, `DEV_AWS_*`, `DEV_HETZ_*`, `PROD_HETZ_*`)
 - Inventory files are per-workspace and **auto-regenerated every deploy**
@@ -154,12 +157,14 @@ DreamSeed/
 ## 5. Ansible
 
 ### Config (`ansible.cfg`)
+
 - `roles_path = ../ansible-roles` — don't relocate playbooks
 - **`inject_facts_as_vars = False`** — use `{{ ansible_facts['memtotal_mb'] }}`, not bare `{{ ansible_memtotal_mb }}`. Intentional: prevents namespace pollution, reduces memory.
 - `become = False` at playbook level; individual tasks opt in. Playbooks 04/05/06 opt-in globally.
 - `gathering = smart`, fact caching via JSON file (1h TTL), `forks = 20`, pipelining enabled.
 
 ### Role specifics
+
 - **`packages_common`** auto-detects the highest installed PHP version (via `apt-cache search`) and sets `php_version` as cacheable fact. `group_vars/all.yml` PHP 8.3 is only a fallback. Installs `php{{ version }}-zip` and `php{{ version }}-gd` by default.
 - **`ssl`** — priority chain: local restore from `secrets/ssl/` → certbot DNS-Cloudflare (if CF token set) → certbot webroot (DNS-to-server check via 8.8.8.8) → self-signed fallback. Self-signed works for **both** Nginx and Apache — role runs unconditionally, both web server templates consume same cert paths.
 - **`restore`** skips if `/var/www/html/index.php` exists OR `rclone.conf` is missing.
@@ -175,6 +180,7 @@ DreamSeed/
 ## 6. Backup / restore / monitoring
 
 ### Backup pipeline
+
 | Step | When | What | Retention |
 |------|------|------|-----------|
 | Local project | Hourly | `smart_backup.sh` — hash-skip if unchanged, `tar.gz` | 5 copies |
@@ -188,9 +194,11 @@ On success: pushes `backup_last_success_timestamp` + `upload_last_success_timest
 On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 
 ### Restore path
+
 `RESTORE_ALL.sh` (interactive, English UI): choose scope (project/db/both) → select archive → confirm → stop web+FPM → restore → `TRUNCATE modx_session` → restart → HTTP 200 health check → Telegram summary.
 
 ### Monitoring stack (on-server)
+
 | Component | Port | Notes |
 |-----------|------|-------|
 | node_exporter | `:9100` | System metrics |
@@ -204,11 +212,13 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 | check_services.sh | timer 5min | Comprehensive service health |
 
 ### Alert matrix (24 rules)
+
 - **critical (8):** MySQL Down, PHP-FPM Down, Nginx/Apache Down, Site Down, MODX Core Missing, VictoriaMetrics Down, Redis Down, VMAgent Remote Write Failing
 - **warning (14):** High CPU, High RAM, Low Disk, Swap Thrashing, Site Response Time > 5s, MODX Cache Not Writable, Backup Cron Not Running, Cloud Upload Failed, Site Health Check Not Running, Admin Login, MiniShop2 Write, Backup Verify, Service Check Not Running
 - **info (2):** SSL Cert Expiring, DB Tables Below Threshold
 
 **Alert design:**
+
 - `noDataState: Alerting` for critical always-scraped services (MySQL, Nginx/ Apache, PHP-FPM, Site, VM, Redis) + Backup Cron + Cloud Upload + Service Check
 - `noDataState: OK` for probe/push metrics (admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify)
 - `for:` scraped 15s → 2m, pushed 1m → 5m, probes 15m → 6m; cron-based (backup/upload/etc): 70-75m to avoid false positives on fresh deploy
@@ -217,6 +227,7 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 - Some rules are conditional: Nginx Down vs Apache Down depends on `web_server`; VMAgent Remote Write Firing only if `grafana_cloud_url` is set.
 
 ### External monitoring
+
 | Layer | Type | Count | Delivery |
 |-------|------|-------|----------|
 | Grafana Cloud | Hosted metrics (vmagent) | always on | Cloud dashboard |
@@ -225,6 +236,7 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 | Better Stack | Cron heartbeats | 4 heartbeats | Better Stack → Telegram |
 
 ### Grafana 13 → 12 downgrade (memory regression)
+
 - **Issue:** [#123017](https://github.com/grafana/grafana/issues/123017) — v13 increased memory consumption (180→330MB idle) due to ngalert stale state maps + unbounded HTTP cache
 - **Fix:** [#123098](https://github.com/grafana/grafana/pull/123098) — `fix(ngalert): release stale transition value maps after full eval pipeline`
 - **Status:** Downgraded to v12.4.5 (Jul 2026). Revisit when 13.1.x ships with the fix.
@@ -256,6 +268,7 @@ Trivy ignores public ingress/egress on SG (port 80/443/22) via `#tfsec:ignore:`.
 All secrets in `secrets/.env` (ansible-vault encrypted, password in `~/.vault_pass_dreamseed`). Template: `.env.example`.
 
 ### Per-target mapping
+
 | Target     | Prefix       | Keys |
 |------------|-------------|------|
 | `prod`     | `PROD_`     | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
@@ -266,13 +279,16 @@ All secrets in `secrets/.env` (ansible-vault encrypted, password in `~/.vault_pa
 Unprefixed fallback for Hetzner: `HCLOUD_TOKEN`, `HETZNER_SERVER_TYPE`, etc.
 
 ### Shared vars
+
 `DB_NAME` `DB_PASS` `GRAFANA_PASS` `CLOUDFLARE_API_TOKEN` `CLOUDFLARE_ZONE_ID` `TG_TOKEN` `TG_CHAT_ID` `TG_THREAD_ID` `OWNER` `EMAIL_USER` `EMAIL_PASS` `SMTP_SERVER` `SMTP_PORT` `BETTERUPTIME_API_TOKEN`
 
 ### Grafana Cloud (per-target)
+
 - `PROD_GRAFANA_CLOUD_*` — org 1
 - `DEV_GRAFANA_CLOUD_*` — org 2 (shared by dev-hetz + dev-aws)
 
 ### SSL
+
 Cloudflare token is **optional**. If set → certbot DNS-01 (Cloudflare). If absent → certbot webroot HTTP-01. If all fail → self-signed fallback.
 
 ---
