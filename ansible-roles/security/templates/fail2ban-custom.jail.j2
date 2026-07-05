@@ -17,6 +17,7 @@ enabled     = true
 port        = http,https
 filter      = modx-admin
 backend     = pyinotify
+banaction  = nginx-deny
 {% if web_server == "nginx" %}
 logpath  = /var/log/nginx/{{ domain }}_access.log
           /var/log/nginx/{{ domain }}-ssl-access.log
@@ -35,6 +36,7 @@ bantime  = 3600
 [nginx-http-auth]
 enabled  = true
 backend  = pyinotify
+banaction = nginx-deny
 port     = http,https
 logpath  = /var/log/nginx/error.log
 maxretry = 5
@@ -43,6 +45,7 @@ bantime  = 1h
 [nginx-botsearch]
 enabled  = true
 backend  = pyinotify
+banaction = nginx-deny
 port     = http,https
 logpath  = /var/log/nginx/{{ domain }}_access.log
           /var/log/nginx/{{ domain }}-ssl-access.log
@@ -52,6 +55,7 @@ bantime  = 12h
 [nginx-bad-request]
 enabled  = true
 backend  = pyinotify
+banaction = nginx-deny
 port     = http,https
 logpath  = /var/log/nginx/{{ domain }}_access.log
           /var/log/nginx/{{ domain }}-ssl-access.log

@@ -80,6 +80,16 @@
     mode: "0644"
   notify: Restart Fail2ban
 
+- name: Deploy nginx-deny action (ban via nginx, not iptables)
+  become: true
+  ansible.builtin.copy:
+    src: nginx-deny-action.conf
+    dest: /etc/fail2ban/action.d/nginx-deny.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
 - name: Deploy custom Fail2ban jails
   become: true
   ansible.builtin.template:
