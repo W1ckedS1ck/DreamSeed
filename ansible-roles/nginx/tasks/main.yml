@@ -56,6 +56,30 @@
     force: true
   notify: Reload Nginx
 
+- name: Deploy Cloudflare real IP updater
+  become: true
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/update_cloudflare_ips.sh"
+    dest: "{{ scripts_dir_remote }}/update_cloudflare_ips.sh"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Run Cloudflare real IP updater (initial)
+  become: true
+  ansible.builtin.command: "{{ scripts_dir_remote }}/update_cloudflare_ips.sh"
+  changed_when: false
+  failed_when: false
+
+- name: Ensure weekly cron for Cloudflare IP refresh
+  become: true
+  ansible.builtin.cron:
+    name: update-cloudflare-ips
+    job: "{{ scripts_dir_remote }}/update_cloudflare_ips.sh >/dev/null 2>&1"
+    hour: "2"
+    minute: "0"
+    weekday: "0"
+
 - name: Test nginx configuration
   become: true
   ansible.builtin.command: nginx -t
