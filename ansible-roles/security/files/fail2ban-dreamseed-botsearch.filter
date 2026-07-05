@@ -1,0 +1,10 @@
+# Custom DreamSeed filter for nginx access log (combined format).
+# Blocks requests to known vulnerability scanner paths / CMS defaults.
+# nginx sees real visitor IPs via Cloudflare CF-Connecting-IP + realip_module.
+#
+# Log format (combined): $remote_addr - $remote_user [$time_local] "$request" $status ...
+
+[Definition]
+failregex = ^<HOST> - \S+ \[.*\] "(?:GET|POST|HEAD) \/(?:wp-login|wp-admin|xmlrpc\.php|phpmyadmin|pma|mysqladmin|adminer|cgi-bin|\.env|\.git|backup|\.\.(?:/|%%2f)|vendor|composer\.json|package\.json|artisan|debug|shell|cmd|exec|eval|joomla|wordpress|drupal|laravel|symfony|yii|cakephp|codeigniter|setup|install\.php|import\.php|class\.upload\.php).*" (?:403|404)
+
+ignoreregex =

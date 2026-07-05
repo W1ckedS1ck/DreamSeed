@@ -20,8 +20,8 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         echo "modx_core_ok{instance=\"{{ domain }}\"} 0"
     fi
 
-    # MODX cache writable check
-    if [ -w "{{ web_root }}/core/cache" ]; then
+    # MODX cache writable check (check as www-data — cache is 755 www-data:www-data)
+    if sudo -u www-data test -w "{{ web_root }}/core/cache"; then
         echo "modx_cache_ok{instance=\"{{ domain }}\"} 1"
     else
         echo "modx_cache_ok{instance=\"{{ domain }}\"} 0"

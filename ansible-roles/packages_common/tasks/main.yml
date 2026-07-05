@@ -44,6 +44,8 @@
       - "php{{ php_version }}-curl"
       - "php{{ php_version }}-mbstring"
       - "php{{ php_version }}-xml"
+      - "php{{ php_version }}-zip"
+      - "php{{ php_version }}-gd"
       - mariadb-server
       - certbot
       - fail2ban

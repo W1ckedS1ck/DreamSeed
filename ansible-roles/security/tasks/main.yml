@@ -80,6 +80,26 @@
     mode: "0644"
   notify: Restart Fail2ban
 
+- name: Deploy DreamSeed botsearch filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-dreamseed-botsearch.filter
+    dest: /etc/fail2ban/filter.d/dreamseed-botsearch.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Deploy DreamSeed bad-request filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-dreamseed-bad-request.filter
+    dest: /etc/fail2ban/filter.d/dreamseed-bad-request.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
 - name: Deploy custom Fail2ban jails
   become: true
   ansible.builtin.template:

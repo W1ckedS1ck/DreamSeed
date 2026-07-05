@@ -98,6 +98,11 @@
         (web_root == '' or web_root == '/' or
         web_root == '/var/www' or web_root == '/var/www/')
 
+    # NOTE: tmpfs handling for MODX cache.
+    # The PHP role (playbook-02) mounts tmpfs at {{ web_root }}/core/cache.
+    # We must unmount it before the mv below — otherwise mv drags the mount
+    # to the .bak.$$ path, orphans it, and leaves a regular dir in its place.
+    # After extraction, mount -a re-mounts tmpfs from the fstab entry.
     - name: Extract project
       become: true
       ansible.builtin.shell:
@@ -106,6 +111,7 @@
           _archive="/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}"
           _web="{{ web_root }}"
           tar -tzf "$_archive" > /dev/null 2>&1 || { echo "Corrupt archive: $_archive"; exit 1; }
+          mountpoint -q "$_web/core/cache" && umount "$_web/core/cache" || true
           mv "$_web" "${_web}.bak.$$" 2>/dev/null || true
           mkdir -p "$_web"
           if ! tar -xzf "$_archive" -C "$(dirname "$_web")"; then
@@ -113,6 +119,7 @@
             rm -rf "${_web}.bak.$$" 2>/dev/null || true
             exit 1
           fi
+          mount -a 2>/dev/null || true
           rm -rf "${_web}.bak.$$" 2>/dev/null || true
           chown -R www-data:www-data "$_web"
         executable: /bin/bash
@@ -250,12 +257,14 @@
             path: "{{ web_root }}/core/cache/system_settings/"
             state: absent
 
-        - name: Remove all MODX cache
-          ansible.builtin.file:
-            path: "{{ web_root }}/core/cache/"
-            state: absent
+        # NOTE: Keep tmpfs mount intact. With state: absent on a mount point
+        # Ansible would fail (EBUSY). Instead, clear contents with find -exec.
+        - name: Clear all MODX cache (keep tmpfs mount intact)
+          ansible.builtin.shell:
+            cmd: find {{ web_root }}/core/cache -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+          changed_when: false
 
-        - name: Recreate cache directory
+        - name: Ensure cache directory exists
           ansible.builtin.file:
             path: "{{ web_root }}/core/cache/"
             state: directory

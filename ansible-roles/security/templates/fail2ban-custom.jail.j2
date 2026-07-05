@@ -1,9 +1,10 @@
 # Custom Fail2ban jails for DreamSeed
-# Web jails disabled — behind Cloudflare, iptables bans are useless.
-# Protect web layer via Cloudflare WAF/Rate Limiting instead.
+# Web jails are ENABLED — nginx sees real visitor IPs via Cloudflare
+# CF-Connecting-IP + ngx_http_realip_module, so iptables/nftables bans work.
+# See: ansible-roles/security/templates/cloudflare-realip.conf.j2
 
 # ============================================================
-# SSH (works behind iptables, not behind Cloudflare)
+# SSH
 # ============================================================
 [sshd]
 enabled  = true
@@ -15,10 +16,10 @@ bantime  = 1h
 filter = sshd[publickey=any]
 
 # ============================================================
-# MODX Admin Panel — disabled (behind Cloudflare)
+# MODX Admin Panel brute-force
 # ============================================================
 [modx-admin]
-enabled     = false
+enabled     = true
 port        = http,https
 filter      = modx-admin
 backend     = pyinotify
@@ -27,61 +28,71 @@ logpath  = /var/log/nginx/{{ domain }}-ssl-access.log
 {% else %}
 logpath  = /var/log/apache2/{{ domain }}-ssl-access.log
 {% endif %}
-maxretry = 100
+maxretry = 25
 findtime = 600
 bantime  = 3600
 
-# ============================================================
-# Web server jails — disabled (behind Cloudflare)
-# ============================================================
 {% if web_server == "nginx" %}
+# ============================================================
+# Vulnerability scanner detection (nginx access log format)
+# ============================================================
+[dreamseed-botsearch]
+enabled     = true
+port        = http,https
+filter      = dreamseed-botsearch
+backend     = pyinotify
+logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
+maxretry    = 2
+findtime    = 600
+bantime     = 12h
+
+[dreamseed-bad-request]
+enabled     = true
+port        = http,https
+filter      = dreamseed-bad-request
+backend     = pyinotify
+logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
+maxretry    = 6
+findtime    = 600
+bantime     = 1h
+
 [nginx-http-auth]
 enabled  = false
 port     = http,https
 logpath  = /var/log/nginx/error.log
-maxretry = 5
-bantime  = 1h
-
-[nginx-botsearch]
-enabled  = false
-port     = http,https
-maxretry = 2
-bantime  = 12h
-
-[nginx-bad-request]
-enabled  = false
-port     = http,https
-maxretry = 6
-bantime  = 1h
 
 {% else %}
 [apache-auth]
 enabled  = false
 port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-error.log
 maxretry = 5
 bantime  = 1h
 
 [apache-shellshock]
 enabled  = false
 port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-error.log
 maxretry = 1
 bantime  = 1d
 
 [apache-badbots]
 enabled  = false
 port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-access.log
 maxretry = 2
 bantime  = 12h
 
 [apache-noscript]
 enabled  = false
 port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-error.log
 maxretry = 6
 bantime  = 1h
 {% endif %}
 
 # ============================================================
-# Recidive — extends bans for repeat offenders (SSH only)
+# Recidive — extends bans for repeat offenders
 # ============================================================
 [recidive]
 enabled  = true
