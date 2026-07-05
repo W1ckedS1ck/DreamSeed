@@ -18,7 +18,7 @@ Where to get: https://dash.cloudflare.com/profile/api-tokens → Create Token
 
 Required permissions: `DNS:Edit`, `Cache Settings Read/Write`, `Zone:Read`, `Page Rules Read/Write`, `Account Rulesets Read`.
 
-Used by: `deploy.sh`, Ansible roles (`cloudflare_cache`, `ssl`), Terraform.
+Used by: `deploy.sh`, Ansible role `ssl`, Terraform.
 
 ### Global API Key — for admin tasks
 

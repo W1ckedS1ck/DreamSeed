@@ -72,10 +72,6 @@ grafana_cloud_token: "{{ lookup('env', 'GRAFANA_CLOUD_TOKEN') | default('', true
 modx_cache_db: "0"
 modx_cache_db_session: "1"
 
-# ========================
-#  Cloudflare cache
-# ========================
-cloudflare_cache_ttl: "{{ 60 if (deploy_env | default('')) is search('^dev') else 3600 }}"
 
 # ========================
 #  Directories
