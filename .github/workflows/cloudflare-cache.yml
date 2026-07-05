@@ -27,7 +27,6 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
   TF_WORKSPACE: cloudflare
 
 jobs:
@@ -35,6 +34,8 @@ jobs:
     name: Cloudflare Cache — ${{ inputs.target }} (${{ inputs.action }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
     permissions:
       contents: read
     steps:

@@ -12,6 +12,10 @@ on:
         options: [prod, prod-hetz, dev-hetz, dev-aws]
         default: prod
 
+concurrency:
+  group: health-check-${{ github.event_name == 'schedule' && 'prod-hetz' || inputs.target }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 

@@ -20,18 +20,23 @@ on:
         options: [apply, refresh-only]
         default: apply
 
+concurrency:
+  group: tf-${{ inputs.workspace }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
 
 jobs:
   apply:
     name: TF ${{ inputs.mode }} ${{ inputs.workspace }} (${{ inputs.provider }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
