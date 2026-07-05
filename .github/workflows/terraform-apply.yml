@@ -7,12 +7,12 @@ on:
         description: 'Cloud provider'
         required: true
         type: choice
-        options: [aws, hetzner]
+        options: [aws, hetzner, cloudflare]
       workspace:
         description: 'Terraform workspace'
         required: true
         type: choice
-        options: [dev-aws, prod, dev-hetz, prod-hetz]
+        options: [dev-aws, prod, dev-hetz, prod-hetz, cloudflare]
       mode:
         description: 'Apply mode'
         required: true
@@ -72,6 +72,10 @@ jobs:
             fi
             echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
           fi
+          if [ "${{ inputs.provider }}" = "cloudflare" ]; then
+            echo "CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+            echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV"
+          fi
           if [ "${{ inputs.provider }}" = "hetzner" ]; then
             if [ "$IS_PROD" = "true" ]; then
               echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
@@ -111,6 +115,8 @@ jobs:
             terraform apply -auto-approve -input=false $MODE_FLAG \
               -var="ssh_public_key_path=/tmp/key.pub" \
               -var="environment=${{ inputs.workspace }}"
+          elif [ "${{ inputs.provider }}" = "cloudflare" ]; then
+            terraform apply -auto-approve -input=false $MODE_FLAG
           else
             terraform apply -auto-approve -input=false $MODE_FLAG \
               -var="ssh_key_name=" \
