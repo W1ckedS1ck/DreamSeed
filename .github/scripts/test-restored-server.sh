@@ -98,8 +98,8 @@ GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ -
 ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" && pass "Telegram bot running" || warn "Telegram bot not running"
 
 # Security — fail2ban custom jails
-ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban modx-admin jail" || fail "fail2ban modx-admin: MISSING"
-ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban grafana jail" || fail "fail2ban grafana: MISSING"
+ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban modx-admin jail" || warn "fail2ban modx-admin: disabled (behind CF)"
+ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban grafana jail" || warn "fail2ban grafana: disabled (not deployed)"
 
 # Redis — server and exporter
 ssh ubuntu@"$SERVER_IP" "systemctl is-active redis-server" && pass "Redis server running" || fail "Redis server"
