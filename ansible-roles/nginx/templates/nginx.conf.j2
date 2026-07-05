@@ -15,7 +15,7 @@ http {
     server_tokens off;
 
     # Cloudflare real IP (restores visitor IP behind CF proxy)
-    include /etc/nginx/conf.d/cloudflare-realip.conf;
+    # Included via conf.d/*.conf wildcard below.
 
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
