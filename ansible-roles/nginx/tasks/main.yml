@@ -56,20 +56,15 @@
     force: true
   notify: Reload Nginx
 
-- name: Deploy Cloudflare real IP updater
+- name: Deploy Cloudflare real IP config
   become: true
   ansible.builtin.copy:
-    src: "{{ scripts_dir }}/update_cloudflare_ips.sh"
-    dest: "{{ scripts_dir_remote }}/update_cloudflare_ips.sh"
+    src: cloudflare-realip.conf
+    dest: /etc/nginx/conf.d/cloudflare-realip.conf
     owner: root
     group: root
-    mode: "0755"
-
-- name: Run Cloudflare real IP updater (initial)
-  become: true
-  ansible.builtin.command: "{{ scripts_dir_remote }}/update_cloudflare_ips.sh"
-  changed_when: false
-  failed_when: false
+    mode: "0644"
+  notify: Reload Nginx
 
 - name: Test nginx configuration
   become: true
