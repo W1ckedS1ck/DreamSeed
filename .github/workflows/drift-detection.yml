@@ -86,8 +86,7 @@ jobs:
         run: |
           PLAN_FILE="/tmp/${{ matrix.target }}.tfplan"
           terraform plan -detailed-exitcode -no-color \
-            -var="ssh_key_name=Vitali.pub" \
-            ${{ contains(matrix.target, 'hetz') && '-var="enable_primary_ip=true"' || '' }} \
+            ${{ contains(matrix.target, 'hetz') && '-var="ssh_key_name=Vitali.pub" -var="enable_primary_ip=true"' || '' }} \
             -out="$PLAN_FILE" 2>&1 | tee /tmp/plan.log
           rc=${PIPESTATUS[0]}
 
