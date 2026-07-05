@@ -432,7 +432,7 @@ jobs:
       - name: Wait for stack to settle
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           for i in $(seq 1 10); do
             vm_ok=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8428/health 2>/dev/null || echo 'not_ready'" 2>/dev/null || echo "not_ready")
@@ -446,7 +446,7 @@ jobs:
         id: initial_content
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           ROWS=$(ssh ubuntu@"$SERVER_IP" \
             "mysql modx_db -N -e 'SELECT COUNT(*) FROM modx_site_content' 2>/dev/null || echo 0")
@@ -456,7 +456,7 @@ jobs:
       - name: Create backup via smart_backup.sh
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           # Force fresh backup by removing marker file (hash-skip would skip otherwise)
           ssh ubuntu@"$SERVER_IP" "rm -f /home/ubuntu/backups/.project_marker" 2>/dev/null || true
@@ -475,7 +475,7 @@ jobs:
         id: verify_backup
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Local backups ==="
           ssh ubuntu@"$SERVER_IP" "ls -lh /home/ubuntu/backups/project/ 2>/dev/null || echo 'No project backups'"
@@ -509,7 +509,7 @@ jobs:
         id: gdrive_upload
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Uploading backup to GDrive ==="
           set +e
@@ -528,7 +528,7 @@ jobs:
       - name: Verify backup archives integrity
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Running verify_backups.sh ==="
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/verify_backups.sh" 2>&1 || true
@@ -536,7 +536,7 @@ jobs:
       - name: Check Grafana proxy
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Checking Grafana via nginx proxy ==="
           GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
@@ -553,7 +553,7 @@ jobs:
         id: artifact_hash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Recording artifact hashes before destroy ==="
           PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
@@ -573,7 +573,7 @@ jobs:
       - name: Destroy data — simulate disaster
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Destroying data to simulate disaster ==="
           ssh ubuntu@"$SERVER_IP" \
@@ -591,7 +591,7 @@ jobs:
         id: restore
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           RESTORE_START=$(date +%s)
           echo "=== Running RESTORE_ALL.sh --auto-latest ==="
@@ -612,7 +612,7 @@ jobs:
         id: verify_content
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Verifying restored content ==="
 
@@ -681,7 +681,7 @@ jobs:
         id: validate_hash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Validating restored artifacts ==="
 
@@ -751,7 +751,7 @@ jobs:
         id: disk
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           DISK_USAGE=$(ssh ubuntu@$SERVER_IP \
             "df -h / | awk 'NR==2 {print \$5}' | sed 's/%//'" || echo "?")
@@ -766,7 +766,7 @@ jobs:
         id: ssl
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -i "$SSH_KEY" "$@"; }
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           LE_CERT=$(ssh ubuntu@"$SERVER_IP" "test -f /etc/letsencrypt/live/test.dreamseed.online/fullchain.pem && echo yes || echo no" 2>/dev/null || echo "no")
           if [ "$LE_CERT" = "yes" ]; then
