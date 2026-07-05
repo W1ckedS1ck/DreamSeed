@@ -212,6 +212,11 @@ Better Stack (cloud)
 ## Security Layers
 
 ```
+Layer 0 — Edge (Cloudflare):
+  Free Managed Ruleset (OWASP Top 10, protocol attacks) — block mode
+  Cache Rules (bypass admin, bypass logged-in, 1h TTL)
+  DDoS protection (always-on)
+
 Layer 1 — Network:
   Cloudflare proxy (hides origin IP)
   Hetzner Firewall / AWS SG: ports 22, 80, 443 only
@@ -221,8 +226,9 @@ Layer 2 — SSH:
   Disable EC2 Instance Connect (AuthorizedKeysCommand stripped)
 
 Layer 3 — Application:
-  fail2ban: custom MODX /manager/ login filter
-  fail2ban: custom Grafana login filter
+  fail2ban: modx-admin (POST /connectors/ — 25 retries)
+  fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits)
+  fail2ban: dreamseed-bad-request (HTTP 400 — 6 hits)
   MODX core dirs: 0750, config: 0640 root:www-data
 
 Layer 4 — System:
@@ -277,7 +283,7 @@ DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
 ├── .github/
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 8 workflows + Renovate
+│   └── workflows/         # 9 workflows + Renovate
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP

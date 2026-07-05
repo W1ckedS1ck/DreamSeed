@@ -69,7 +69,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL/Redis exporters · 24 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **CI/CD** | GitHub Actions (9 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -171,7 +171,8 @@ DreamSeed/
     ├── rollback.yml          # Emergency rollback with prod confirmation
     ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
     ├── health-check.yml      # Weekly server update (apt upgrade + reboot check)
-    └── terraform-apply.yml   # Quick TF apply without Ansible
+    ├── TF: Infra + Cloudflare # Apply Terraform (infra, cloudflare WAF/cache)
+    └── cloudflare-cache.yml  # Legacy — replace by TF: Infra + Cloudflare
 ```
 
 ---
@@ -225,7 +226,7 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 8 Workflows + Renovate
+### 🧪 CI/CD Pipeline — 9 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
@@ -236,7 +237,8 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch |
 | **Health Check** — weekly server update | Weekly Monday + manual |
-| **Terraform Apply** — quick TF apply without Ansible | Manual dispatch |
+| **TF: Infra + Cloudflare** — terraform apply (infra + WAF/cache) | Manual dispatch |
+| **Cloudflare Cache** — legacy (WAF/cache in TF now) | Manual dispatch |
 
 CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 
