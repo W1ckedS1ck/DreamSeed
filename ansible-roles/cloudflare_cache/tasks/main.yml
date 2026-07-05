@@ -8,7 +8,6 @@
   ansible.builtin.set_fact:
     _cf_zone_name: "{{ domain | regex_replace('^[^.]+\\.', '') if domain | regex_search('^[^.]+\\.[^.]+\\.[^.]+$') else domain }}"
     _cf_cache_ttl: "{{ cloudflare_cache_ttl | default(3600) }}"
-    _cf_url_pattern: "{{ cloudflare_cache_url_pattern }}"
 
 - name: Resolve zone ID from zone name
   ansible.builtin.shell: |
@@ -23,46 +22,53 @@
   ansible.builtin.set_fact:
     _cf_zone_id: "{{ _cf_zone_cmd.stdout }}"
 
-- name: Find existing page rule for this domain
+- name: Find existing cache ruleset
   ansible.builtin.shell: |
     curl -s -H "Authorization: Bearer {{ cloudflare_api_token }}" \
-      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/pagerules?status=active" | \
+      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/rulesets" | \
       python3 -c "
     import sys,json
     for r in json.load(sys.stdin).get('result',[]):
-        for t in r.get('targets',[]):
-            if t.get('constraint',{}).get('value') == '{{ _cf_url_pattern }}':
-                print(r['id'])
-                sys.exit(0)
+        if r.get('phase') == 'http_request_cache_settings' and r.get('name','').startswith('MODX Cache Rules'):
+            print(r['id'])
+            break
     "
-  register: _cf_existing_rule
+  register: _cf_existing_ruleset
   failed_when: false
   delegate_to: localhost
   run_once: true
 
-- name: Delete existing cache rule
+- name: Delete existing cache ruleset
   ansible.builtin.shell: |
     curl -s -X DELETE -H "Authorization: Bearer {{ cloudflare_api_token }}" \
-      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/pagerules/{{ _cf_existing_rule.stdout }}"
-  when: _cf_existing_rule.stdout | length > 0
+      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/rulesets/{{ _cf_existing_ruleset.stdout }}"
+  when: _cf_existing_ruleset.stdout | length > 0
   changed_when: true
   delegate_to: localhost
   run_once: true
 
-- name: Create cache everything page rule
+- name: Create cache ruleset
   ansible.builtin.shell: |
     curl -s -X POST \
       -H "Authorization: Bearer {{ cloudflare_api_token }}" \
       -H "Content-Type: application/json" \
       -d '{
-        "targets":[{"target":"url","constraint":{"operator":"matches","value":"{{ _cf_url_pattern }}"}}],
-        "actions":[
-          {"id":"cache_level","value":"cache_everything"},
-          {"id":"edge_cache_ttl","value":{{ _cf_cache_ttl }}}
-        ],
-        "priority":1,"status":"active"
+        "name": "MODX Cache Rules — {{ _cf_zone_name }}",
+        "description": "Cache HTML, bypass admin and logged-in users",
+        "kind": "zone",
+        "phase": "http_request_cache_settings",
+        "rules": [{
+          "action": "set_cache_settings",
+          "action_parameters": {
+            "cache": true,
+            "edge_ttl": {"mode": "override_origin", "default": {{ _cf_cache_ttl }}}
+          },
+          "expression": "(not starts_with(http.request.uri.path, \"/manager/\")) and (not http.cookie contains \"PHPSESSID\")",
+          "description": "Cache: all except admin and logged-in users",
+          "enabled": true
+        }]
       }' \
-      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/pagerules"
+      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/rulesets"
   register: _cf_create_result
   changed_when: _cf_create_result.stdout is search('"success":true')
   delegate_to: localhost

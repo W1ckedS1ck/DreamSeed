@@ -3,17 +3,12 @@ output "zone" {
   value = local.zone_name
 }
 
-output "url_pattern" {
-  description = "Page rule URL pattern"
-  value = local.url_pattern
+output "ruleset_id" {
+  description = "Cache ruleset ID"
+  value = cloudflare_ruleset.cache.id
 }
 
-output "cache_rule_id" {
-  description = "Cache-all page rule ID"
-  value = cloudflare_page_rule.cache_all.id
-}
-
-output "manager_bypass_id" {
-  description = "Manager bypass page rule ID"
-  value = cloudflare_page_rule.manager_bypass.id
+output "cache_expression" {
+  description = "Cache rule expression"
+  value = one(cloudflare_ruleset.cache.rules[*].expression)
 }
