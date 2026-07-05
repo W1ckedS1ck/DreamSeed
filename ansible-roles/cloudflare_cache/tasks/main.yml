@@ -1,0 +1,69 @@
+---
+- name: Fail if cloudflare_api_token not set
+  ansible.builtin.fail:
+    msg: "cloudflare_api_token is required for cache rule"
+  when: cloudflare_api_token | default('') | length == 0
+
+- name: Compute zone name (strip subdomain for dev targets)
+  ansible.builtin.set_fact:
+    _cf_zone_name: "{{ domain | regex_replace('^[^.]+\\.', '') if domain | regex_search('^[^.]+\\.[^.]+\\.[^.]+$') else domain }}"
+    _cf_cache_ttl: "{{ cloudflare_cache_ttl | default(3600) }}"
+    _cf_url_pattern: "{{ cloudflare_cache_url_pattern }}"
+
+- name: Resolve zone ID from zone name
+  ansible.builtin.shell: |
+    curl -s -H "Authorization: Bearer {{ cloudflare_api_token }}" \
+      "https://api.cloudflare.com/client/v4/zones?name={{ _cf_zone_name }}" | \
+      python3 -c "import sys,json; print(json.load(sys.stdin)['result'][0]['id'])"
+  register: _cf_zone_cmd
+  delegate_to: localhost
+  run_once: true
+
+- name: Set fact for zone ID
+  ansible.builtin.set_fact:
+    _cf_zone_id: "{{ _cf_zone_cmd.stdout }}"
+
+- name: Find existing page rule for this domain
+  ansible.builtin.shell: |
+    curl -s -H "Authorization: Bearer {{ cloudflare_api_token }}" \
+      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/pagerules?status=active" | \
+      python3 -c "
+    import sys,json
+    for r in json.load(sys.stdin).get('result',[]):
+        for t in r.get('targets',[]):
+            if t.get('constraint',{}).get('value') == '{{ _cf_url_pattern }}':
+                print(r['id'])
+                sys.exit(0)
+    "
+  register: _cf_existing_rule
+  failed_when: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Delete existing cache rule
+  ansible.builtin.shell: |
+    curl -s -X DELETE -H "Authorization: Bearer {{ cloudflare_api_token }}" \
+      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/pagerules/{{ _cf_existing_rule.stdout }}"
+  when: _cf_existing_rule.stdout | length > 0
+  changed_when: true
+  delegate_to: localhost
+  run_once: true
+
+- name: Create cache everything page rule
+  ansible.builtin.shell: |
+    curl -s -X POST \
+      -H "Authorization: Bearer {{ cloudflare_api_token }}" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "targets":[{"target":"url","constraint":{"operator":"matches","value":"{{ _cf_url_pattern }}"}}],
+        "actions":[
+          {"id":"cache_level","value":"cache_everything"},
+          {"id":"edge_cache_ttl","value":{{ _cf_cache_ttl }}}
+        ],
+        "priority":1,"status":"active"
+      }' \
+      "https://api.cloudflare.com/client/v4/zones/{{ _cf_zone_id }}/pagerules"
+  register: _cf_create_result
+  changed_when: _cf_create_result.stdout is search('"success":true')
+  delegate_to: localhost
+  run_once: true

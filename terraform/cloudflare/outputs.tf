@@ -5,9 +5,13 @@ output "zone_ids" {
   }
 }
 
-output "cache_ruleset_ids" {
-  description = "Map of zone names to ruleset IDs"
+output "page_rules" {
+  description = "Map of page rule targets to IDs"
   value = {
-    for k, r in cloudflare_ruleset.cache : k => r.id
+    for k, r in cloudflare_page_rule.cache_all : k => {
+      id     = r.id
+      target = r.target
+      status = r.status
+    }
   }
 }
