@@ -60,12 +60,13 @@ else
     fail "Adminer exposed via domain — HTTP $_adminer_code" "adminer_domain_blocked"
 fi
 
-# Adminer blocked via direct IP + Host
+# Adminer blocked via direct IP + Host (nginx 444 → empty reply → curl exits 52)
 _raw_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 if [[ -n "$_raw_ip" ]]; then
-    _adm_direct=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 -H "Host: ${DOMAIN}" "https://${_raw_ip}/adminer-4.8.1-mysql.php" 2>/dev/null || echo "000")
-    if [[ "$_adm_direct" == "403" || "$_adm_direct" == "404" || "$_adm_direct" == "000" ]]; then
-        ok "Adminer blocked (direct IP) — $_adm_direct" "adminer_direct_blocked"
+    _adm_rc=0
+    _adm_direct=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 -H "Host: ${DOMAIN}" "https://${_raw_ip}/adminer-4.8.1-mysql.php" 2>/dev/null) || _adm_rc=$?
+    if [[ $_adm_rc -ne 0 || "$_adm_direct" == "403" || "$_adm_direct" == "404" ]]; then
+        ok "Adminer blocked (direct IP) — nginx 444" "adminer_direct_blocked"
     else
         fail "Adminer accessible via direct IP — HTTP $_adm_direct" "adminer_direct_blocked"
     fi
@@ -117,7 +118,7 @@ else
 fi
 
 # Fail2ban additional jails
-for _fj in modx-admin nginx-botsearch nginx-bad-request; do
+for _fj in modx-admin dreamseed-botsearch dreamseed-bad-request; do
     if sudo fail2ban-client status "$_fj" &>/dev/null; then
         ok "Fail2ban jail: $_fj" "f2b_jail_$_fj"
     else
