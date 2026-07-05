@@ -4,6 +4,11 @@ server {
     server_name {{ domain }}
     {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
 
+    # Block direct IP access (bypasses Cloudflare WAF)
+    if ($host !~* ^({{ domain }}{% if domain_www | default(true) %}|www\.{{ domain }}{% endif %})$) {
+        return 444;
+    }
+
     root {{ web_root }};
     index index.php index.html index.htm;
 
