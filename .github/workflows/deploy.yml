@@ -245,33 +245,6 @@ jobs:
             --data-urlencode "parse_mode=MarkdownV2" \
             --data-urlencode "text=$MSG" > /dev/null || true
 
-      - name: Purge Cloudflare cache (blocked paths)
-        if: success() && inputs.action == 'deploy'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          case "${{ inputs.environment }}" in
-            prod|prod-hetz) DOMAIN="dreamseed.online" ;;
-            dev-aws) DOMAIN="aws.vitalikuts.online" ;;
-            dev-hetz) DOMAIN="hetz.vitalikuts.online" ;;
-          esac
-          for d in "$DOMAIN" "${DOMAIN#*.}"; do
-            ZONE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=${d}&status=active" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq -r '.result[0].id // empty' 2>/dev/null)
-            [ -n "$ZONE" ] && break
-          done
-          if [ -n "$ZONE" ]; then
-            RESULT=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d '{"files":["https://'"$DOMAIN"'/adminer-4.8.1-mysql.php"]}')
-            echo "$RESULT" | jq -r '.success' | grep -q true && echo "CF cache purged" || {
-              echo "CF cache purge failed: $(echo "$RESULT" | jq -r '.errors[0].message // "unknown"')"
-            }
-          else
-            echo "CF cache purge skipped (zone not found)"
-          fi
-
       - name: Notify success
         if: success() && inputs.action == 'deploy'
         env:
