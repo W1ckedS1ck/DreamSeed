@@ -745,7 +745,7 @@ jobs:
           set -o pipefail
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
-            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
+            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|memory_pct|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
 
       - name: Run disk check
         id: disk
