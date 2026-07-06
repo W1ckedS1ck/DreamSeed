@@ -115,7 +115,7 @@ DreamSeed/
 ├── configs/fail2ban/jail.local
 ├── .env.example                # Template with all required vars
 ├── .github/
-│   ├── workflows/              # 9 workflows (see CI/CD section)
+│   ├── workflows/              # 8 workflows (see CI/CD section)
 │   └── actions/                # setup-ansible, setup-terraform composite actions
 └── secrets/                    # ALL GITIGNORED
     ├── .env                    # Live secrets (ansible-vault encrypted)
@@ -252,7 +252,7 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 | `deploy.yml` | Manual dispatch | Deploy or destroy any target from GitHub UI |
 | `test-restore.yml` | Weekly (Mon) + manual | Full backup/restore integration test on ephemeral server (AWS or Hetzner) |
 | `TF: Infra + Cloudflare` | Manual dispatch | Terraform apply (infra-only) or Cloudflare WAF/cache rules |
-| `cloudflare-cache.yml` | Manual dispatch | Legacy — apply Cache Rules only (replaced by `TF: Infra + Cloudflare`) |
+| ~~`cloudflare-cache.yml`~~ | Removed | Replaced by `TF: Infra + Cloudflare` |
 | `health-check.yml` | Weekly (Sun) | SSH in, `apt upgrade`, check reboot required |
 | `drift-detection.yml` | Daily | Terraform plan on both AWS and Hetzner, alerts on drift |
 | `rollback.yml` | Manual dispatch | Restore tfstate from backup and re-apply |
