@@ -76,19 +76,6 @@ jobs:
         working-directory: terraform/grafana
         run: terraform plan
 
-      - name: Test Grafana API connectivity
-        env:
-          GRAFANA_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
-          GRAFANA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
-        run: |
-          echo "Testing with -L (follow redirects)..."
-          curl -sL -w "\nHTTP %{http_code}\n" "$GRAFANA_URL/api/org" \
-            -H "Authorization: Bearer $GRAFANA_TOKEN" 2>&1 | head -10
-          echo "---"
-          echo "Testing /api/folders with redirect..."
-          curl -sL -w "\nHTTP %{http_code}\n" "$GRAFANA_URL/api/folders" \
-            -H "Authorization: Bearer $GRAFANA_TOKEN" 2>&1 | head -10
-
       - name: Terraform Apply
         working-directory: terraform/grafana
         run: terraform apply -auto-approve
