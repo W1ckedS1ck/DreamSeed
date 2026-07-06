@@ -33,6 +33,34 @@ resource "cloudflare_ruleset" "waf" {
   }
 }
 
+resource "cloudflare_ruleset" "rate_limit" {
+  zone_id     = data.cloudflare_zone.this.id
+  name        = "DreamSeed Rate Limits — ${local.zone_name}"
+  description = "Rate limit admin area to prevent brute force"
+  kind        = "zone"
+  phase       = "http_ratelimit"
+
+  rules {
+    action = "block"
+    action_parameters {
+      response {
+        status_code  = 429
+        content      = "429 Too Many Requests"
+        content_type = "text/plain"
+      }
+    }
+    ratelimit {
+      characteristics     = ["cf.colo.id", "ip.src"]
+      period              = 60
+      requests_per_period = 100
+      mitigation_timeout  = 600
+    }
+    expression  = "(starts_with(http.request.uri.path, \"/manager/\"))"
+    description = "Rate limit /manager/ — 100 req/60s, block 10min"
+    enabled     = true
+  }
+}
+
 resource "cloudflare_ruleset" "cache" {
   zone_id     = data.cloudflare_zone.this.id
   name        = "MODX Cache Rules — ${local.zone_name}"
