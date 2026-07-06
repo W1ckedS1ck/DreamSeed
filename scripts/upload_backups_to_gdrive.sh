@@ -47,7 +47,7 @@ UPLOAD_MSG=""
 # ====== 1. Upload project ======
 LAST_PROJECT=$(find "$PROJECT_DIR" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_PROJECT" ]; then
-    export RCLONE_TIMEOUT=1800
+    export RCLONE_CMD_TIMEOUT=1800
     if ! rclone_retry copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV_SUFFIX}/" --no-check-dest; then
         UPLOAD_MSG+="❌ Project upload error
 "
@@ -62,7 +62,7 @@ fi
 # ====== 2. Upload database ======
 LAST_DB=$(find "$DB_DIR" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_DB" ]; then
-    export RCLONE_TIMEOUT=1800
+    export RCLONE_CMD_TIMEOUT=1800
     if ! rclone_retry copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV_SUFFIX}/" --no-check-dest; then
         UPLOAD_MSG+="❌ DB upload error
 "
@@ -78,7 +78,7 @@ fi
 if [[ -d "$REDIS_DIR" ]]; then
     LAST_REDIS=$(find "$REDIS_DIR" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     if [ -n "$LAST_REDIS" ]; then
-        export RCLONE_TIMEOUT=600
+        export RCLONE_CMD_TIMEOUT=600
         if ! rclone_retry copy "$LAST_REDIS" "$RCLONE_REMOTE:$REMOTE_BASE/redis${ENV_SUFFIX}/" --no-check-dest; then
             UPLOAD_MSG+="❌ Redis upload error
 "

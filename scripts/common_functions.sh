@@ -128,14 +128,14 @@ ping_heartbeat() {
 
 rclone_retry() {
     local max_attempts="${RCLONE_RETRIES:-3}"
-    local attempt=1 rc
+    local attempt=1 rc timeout_secs="${RCLONE_CMD_TIMEOUT:-600}"
     while [ "$attempt" -le "$max_attempts" ]; do
         if [ "$attempt" -gt 1 ]; then
             local delay=$((attempt * 5))
             echo "[rclone_retry] attempt $attempt/$max_attempts — waiting ${delay}s" >&2
             sleep "$delay"
         fi
-        timeout "${RCLONE_TIMEOUT:-600}" rclone "$@" --retries-sleep 1s && return 0
+        timeout "$timeout_secs" rclone "$@" --timeout=30s --retries-sleep 1s && return 0
         rc=$?
         attempt=$((attempt + 1))
     done
