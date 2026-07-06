@@ -2,9 +2,8 @@
 
 ![CI](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg)
-![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 ![BackupRestorationTest](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/test-restore.yml/badge.svg)
-![Gitleaks](https://img.shields.io/badge/Gitleaks-passed-00C853?logo=gitleaks)
+![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
@@ -12,8 +11,8 @@
 ![Ansible](https://img.shields.io/badge/Ansible-14%2B-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Checkov](https://img.shields.io/badge/Checkov-passed-2A6F97?logo=checkov)
-![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
+![Grafana](https://img.shields.io/badge/Grafana-12.4-F46800?logo=grafana)
+![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
