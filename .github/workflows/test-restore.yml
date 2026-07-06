@@ -740,7 +740,7 @@ jobs:
           set -o pipefail
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
-            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|memory_pct|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
+            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|memory_pct|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|redis_session_keys|session_handler_ok|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
 
       - name: Run disk check
         id: disk
@@ -942,6 +942,8 @@ jobs:
           CLOUD_PROJ="${{ steps.service_tests.outputs.cloud_project }}"
           CLOUD_DB="${{ steps.service_tests.outputs.cloud_db }}"
           CLOUD_REDIS="${{ steps.service_tests.outputs.cloud_redis }}"
+          SESSION_HANDLER="${{ steps.service_tests.outputs.session_handler_ok }}"
+          REDIS_KEYS="${{ steps.service_tests.outputs.redis_session_keys }}"
 
           COMMIT_SHA="${{ github.sha }}"
           COMMIT_SHORT="${COMMIT_SHA:0:7}"
@@ -968,6 +970,7 @@ jobs:
             "📊 Services  $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
             "  Cron: ${CRON_JOBS:-?} jobs" \
             "  Exporters: $(exp_status "$EXP_NODE") node $(exp_status "$EXP_MYSQL") mysql $(exp_status "$EXP_REDIS") redis $(exp_status "$EXP_WEB") web $(exp_status "$EXP_VM") vm" \
+            "🗄️ Sessions: $(ok_yn "$SESSION_HANDLER") handler $( [ -n "$REDIS_KEYS" ] && echo "${REDIS_KEYS} keys" || echo '?' )" \
             "🔒 SSL       ${SSL_ICON} ${SSL_STATUS:-?}" \
             "Destroy    $(ok_destroy $DESTROY)")
 

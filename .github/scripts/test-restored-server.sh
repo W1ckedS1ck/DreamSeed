@@ -124,8 +124,10 @@ echo "redis_cloud_backups=$REDIS_CLOUD"
 SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N $DB_NAME -e \"SELECT value FROM modx_system_settings WHERE key = 'session_handler_class'\" 2>/dev/null || true")
 if [ -z "$SHC" ]; then
     pass "session_handler_class empty (Redis sessions)"
+    echo "session_handler_ok=yes"
 else
     fail "session_handler_class = '$SHC' (should be empty)"
+    echo "session_handler_ok=no"
 fi
 
 # Redis — session keys after curl
@@ -135,16 +137,18 @@ AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null || echo 0")
 echo "Redis keys: before=$BEFORE session_keys=$SESSIONS total=$AFTER"
 if [ -n "$(echo "$SESSIONS" | tr -d ' ')" ]; then
     pass "Redis sessions active ($AFTER keys)"
+    echo "redis_session_keys=$AFTER"
 else
-    # Force a session by curling the site
     ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null https://localhost/ 2>/dev/null || true"
     sleep 1
     AFTER2=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null || echo 0")
     SESSIONS2=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | head -3 | tr '\n' ' '" || true)
     if [ -n "$(echo "$SESSIONS2" | tr -d ' ')" ]; then
         pass "Redis sessions active after curl ($AFTER2 keys)"
+        echo "redis_session_keys=$AFTER2"
     else
         warn "Redis: no session keys (may need login first)"
+        echo "redis_session_keys=0"
     fi
 fi
 
