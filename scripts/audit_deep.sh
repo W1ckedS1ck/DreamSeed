@@ -76,7 +76,7 @@ else
 fi
 
 # Logrotate
-_lr_count=$(ls /etc/logrotate.d/ 2>/dev/null | grep -c -E 'nginx|php|mariadb|redis' || echo "0")
+_lr_count=$(ls /etc/logrotate.d/ 2>/dev/null | grep -c -E 'nginx|php|mariadb|redis' || true)
 if [[ "$_lr_count" -ge 4 ]]; then
   ok "Logrotate: $_lr_count entries (nginx php mariadb redis)" "logrotate_entries"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 # Apt updates
-_apt_updates=$(apt-get --just-print upgrade 2>/dev/null | grep -c '^Inst' || echo "0")
+_apt_updates=$(apt-get --just-print upgrade 2>/dev/null | grep -c '^Inst' || true)
 echo "    Apt updates available: $_apt_updates"
 
 # ── 2. Web Server ──────────────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ else
 fi
 
 # Cloudflare real IP
-_cf_count=$(grep -c 'set_real_ip_from' /etc/nginx/conf.d/cloudflare-realip.conf 2>/dev/null || echo "0")
+_cf_count=$(grep -c 'set_real_ip_from' /etc/nginx/conf.d/cloudflare-realip.conf 2>/dev/null || true)
 if [[ "$_cf_count" -ge 15 ]]; then
   ok "Cloudflare real IP: $_cf_count ranges" "cloudflare_realip"
 else
@@ -279,7 +279,7 @@ echo "    Version: $(mysql -V 2>/dev/null | head -1)"
 echo "    Uptime: $(mysql -N -e "SHOW STATUS LIKE \"Uptime\"" 2>/dev/null | awk '{print $2 "s"}')"
 
 _db_name=$(grep "^\\\$dbase" /var/www/html/core/config/config.inc.php 2>/dev/null | cut -d"'" -f2 || echo "modx_db")
-_db_tables=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${_db_name}';" 2>/dev/null || echo "0")
+_db_tables=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${_db_name}';" 2>/dev/null || true)
 if [[ "$_db_tables" -ge 50 ]]; then
   ok "MODX: $_db_tables tables" "modx_tables"
 elif [[ "$_db_tables" -ge 1 ]]; then
@@ -288,7 +288,7 @@ else
   fail "MODX: no tables in $_db_name" "modx_tables"
 fi
 
-_db_size=$(mysql -N -e "SELECT ROUND(SUM(data_length+index_length)/1024/1024,2) FROM information_schema.tables WHERE table_schema='${_db_name}';" 2>/dev/null || echo "0")
+_db_size=$(mysql -N -e "SELECT ROUND(SUM(data_length+index_length)/1024/1024,2) FROM information_schema.tables WHERE table_schema='${_db_name}';" 2>/dev/null || true)
 _innodb_buf=$(mysql -N -e "SHOW VARIABLES LIKE 'innodb_buffer_pool_size'" 2>/dev/null | awk '{printf "%.0f MB", $2/1024/1024}')
 _slow_q=$(mysql -N -e "SHOW GLOBAL STATUS LIKE 'Slow_queries'" 2>/dev/null | awk '{print $2}')
 echo "    Size: ${_db_size} MB | InnoDB buffer: ${_innodb_buf} | Slow queries: $_slow_q"
@@ -320,7 +320,7 @@ else
   fail "Redis NOT bound to localhost" "redis_bind_local"
 fi
 
-_redis_cmds=$(sudo grep -c 'rename-command' /etc/redis/redis.conf 2>/dev/null || echo "0")
+_redis_cmds=$(sudo grep -c 'rename-command' /etc/redis/redis.conf 2>/dev/null || true)
 if [[ "$_redis_cmds" -ge 5 ]]; then
   ok "Redis dangerous commands renamed ($_redis_cmds)" "redis_rename_cmds"
 else
@@ -341,7 +341,7 @@ else
 fi
 
 # Redis session test
-_redis_before=$(redis-cli DBSIZE 2>/dev/null || echo "0")
+_redis_before=$(redis-cli DBSIZE 2>/dev/null || true)
 _session_keys=$(redis-cli --scan --pattern "PHPREDIS_SESSION:*" 2>/dev/null | head -3 | tr '\n' ' ')
 echo "    Redis session keys: $_redis_before total ($_session_keys)"
 
@@ -417,7 +417,7 @@ echo "    Static: $_static"
 _size=$(curl -sk -o /dev/null -w '%{size_download} bytes' --max-time 10 "https://${DOMAIN}/" 2>/dev/null || echo "error")
 echo "    Page size: $_size"
 
-_brotli=$(curl -sI -H 'Accept-Encoding: br' --max-time 5 "https://${DOMAIN}/theme/css/style.css" 2>/dev/null | grep -ci 'content-encoding: br' || echo "0")
+_brotli=$(curl -sI -H 'Accept-Encoding: br' --max-time 5 "https://${DOMAIN}/theme/css/style.css" 2>/dev/null | grep -ci 'content-encoding: br' || true)
 if [[ "$_brotli" -ge 1 ]]; then
   ok "Brotli compression" "brotli"
 else
@@ -453,8 +453,8 @@ else
 fi
 
 # vmagent
-_vmagent_blocks=$(curl -s 'http://127.0.0.1:8429/metrics' 2>/dev/null | grep '^vmagent_remotewrite_blocks_sent_total' | awk '{sum+=$2} END {print sum}' || echo "0")
-_vmagent_errors=$(curl -s 'http://127.0.0.1:8429/metrics' 2>/dev/null | grep '^vmagent_remotewrite_errors_total' | awk '{sum+=$2} END {print sum}' || echo "0")
+_vmagent_blocks=$(curl -s 'http://127.0.0.1:8429/metrics' 2>/dev/null | grep '^vmagent_remotewrite_blocks_sent_total' | awk '{sum+=$2} END {print sum}' || true)
+_vmagent_errors=$(curl -s 'http://127.0.0.1:8429/metrics' 2>/dev/null | grep '^vmagent_remotewrite_errors_total' | awk '{sum+=$2} END {print sum}' || true)
 if [[ "$_vmagent_blocks" -gt 0 && "$_vmagent_errors" -eq 0 ]]; then
   ok "vmagent: $_vmagent_blocks blocks sent, 0 errors" "vmagent"
 else
@@ -473,7 +473,7 @@ for _p in 9100 9113 9121 9104; do
 done
 
 # Custom metrics
-_custom=$(curl -s 'http://127.0.0.1:9100/metrics' 2>/dev/null | grep -c 'backup_last_success\|upload_last_success' || echo "0")
+_custom=$(curl -s 'http://127.0.0.1:9100/metrics' 2>/dev/null | grep -c 'backup_last_success\|upload_last_success' || true)
 echo "    Custom node metrics: $_custom"
 
 # ── 12. Grafana ────────────────────────────────────────────────────────────────
@@ -524,7 +524,7 @@ echo ""
 echo "── 13. Backups ──"
 
 # Cron jobs
-_cron_count=$(crontab -l 2>/dev/null | grep -c "^[0-9]" || echo "0")
+_cron_count=$(crontab -l 2>/dev/null | grep -c "^[0-9]" || true)
 if [[ "$_cron_count" -ge 5 ]]; then
   ok "Backup crons: $_cron_count entries" "backup_crons"
 else
@@ -550,7 +550,7 @@ for _d in project db redis; do
 done
 
 # rclone_retry in scripts
-_rr=$(grep -c "rclone_retry" "$SCRIPTS_DIR/common_functions.sh" 2>/dev/null || echo "0")
+_rr=$(grep -c "rclone_retry" "$SCRIPTS_DIR/common_functions.sh" 2>/dev/null || true)
 if [[ "$_rr" -ge 1 ]]; then
   ok "rclone_retry in common_functions.sh ($_rr)" "rclone_retry"
 else
@@ -564,7 +564,7 @@ echo "── 14. Telegram Bot ──"
 
 if systemctl is-active telegram-bot &>/dev/null; then
   ok "Telegram bot active" "tg_bot_active"
-  _tg_errors=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || echo "0")
+  _tg_errors=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
   if [[ "$_tg_errors" -eq 0 ]]; then
     ok "Telegram bot: 0 errors" "tg_bot_errors"
   else
@@ -601,7 +601,7 @@ fi
 # Fail2ban bans
 echo "  ── Fail2ban bans ──"
 for _fj in dreamseed-botsearch dreamseed-bad-request modx-admin recidive sshd; do
-  _b=$(sudo fail2ban-client status "$_fj" 2>/dev/null | grep "Total banned" | awk '{print $4}' || echo "0")
+  _b=$(sudo fail2ban-client status "$_fj" 2>/dev/null | grep "Total banned" | awk '{print $4}' || true)
   echo "    $_fj: $_b total banned"
 done
 
@@ -661,7 +661,7 @@ fi
 echo ""
 echo "── 19. Journal Errors (last 1h) ──"
 
-_err_count=$(journalctl --since "1 hour ago" -p err --no-pager 2>/dev/null | grep -v 'snapd\|ModemManager\|shutdown\|loop' | wc -l || echo "0")
+_err_count=$(journalctl --since "1 hour ago" -p err --no-pager 2>/dev/null | grep -v 'snapd\|ModemManager\|shutdown\|loop' | wc -l || true)
 if [[ "$_err_count" -eq 0 ]]; then
   ok "0 journal errors in last hour" "journal_errors"
 else
@@ -675,7 +675,7 @@ echo ""
 echo "── 20. Functional Checks ──"
 
 # Brotli (duplicate check for completeness)
-_brotli2=$(curl -sI -H 'Accept-Encoding: br' --max-time 5 "https://${DOMAIN}/theme/css/style.css" 2>/dev/null | grep -ci 'content-encoding: br' || echo "0")
+_brotli2=$(curl -sI -H 'Accept-Encoding: br' --max-time 5 "https://${DOMAIN}/theme/css/style.css" 2>/dev/null | grep -ci 'content-encoding: br' || true)
 if [[ "$_brotli2" -ge 1 ]]; then
   ok "Brotli compression" "functional_brotli"
 fi
