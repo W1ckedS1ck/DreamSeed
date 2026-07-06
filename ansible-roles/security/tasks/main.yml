@@ -105,7 +105,7 @@
   ansible.builtin.command: fail2ban-client -t
   register: fail2ban_test
   changed_when: false
-  failed_when: fail2ban_test.rc != 0
+  failed_when: fail2ban_test.rc != 0 and "Have not found any log file" not in fail2ban_test.stderr
 
 - name: Apply Fail2ban configuration
   ansible.builtin.meta: flush_handlers
