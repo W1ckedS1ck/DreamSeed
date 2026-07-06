@@ -299,6 +299,7 @@ Cloudflare token is **optional**. If set → certbot DNS-01 (Cloudflare). If abs
 - **Better Stack** replaced healthchecks.io: cron scripts ping `https://uptime.betterstack.com/api/v1/heartbeat/<KEY>` on success.
 - **`deploy.sh --lint`** delegates to `scripts/lint.sh` — single source of truth.
 - **`check_services.sh`** runs via systemd timer every 5 min, plus once at end of deploy.
+- **Dev = Prod rule:** Dev must mirror prod in EVERYTHING — monitoring, backups, alerting, scripts. No "skip for dev" logic. Dev backups upload to cloud same as prod (separate paths). Even though restore always pulls from prod, dev runs the identical pipeline.
 - **Promote feature abandoned:** no DB sync between prod and dev environments (intentional — dev is ephemeral, always pulls latest prod data on restore).
 - **`*.service` files are gitignored** — only `.j2` templates ship to git.
 - **Ansible roles are stateless** — not all fully idempotent (cron uses `state: present|absent` from `backup_cron_enabled`).
