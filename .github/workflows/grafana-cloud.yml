@@ -81,12 +81,13 @@ jobs:
           GRAFANA_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           GRAFANA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
         run: |
-          echo "URL length: ${#GRAFANA_URL}"
-          echo "URL hex:"
-          echo -n "$GRAFANA_URL" | xxd | head -5
-          echo ""
-          echo "Testing API connection..."
-          curl -sv "$GRAFANA_URL/api/org" -H "Authorization: Bearer $GRAFANA_TOKEN" 2>&1 | head -20
+          echo "Testing with -L (follow redirects)..."
+          curl -sL -w "\nHTTP %{http_code}\n" "$GRAFANA_URL/api/org" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" 2>&1 | head -10
+          echo "---"
+          echo "Testing /api/folders with redirect..."
+          curl -sL -w "\nHTTP %{http_code}\n" "$GRAFANA_URL/api/folders" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" 2>&1 | head -10
 
       - name: Terraform Apply
         working-directory: terraform/grafana
