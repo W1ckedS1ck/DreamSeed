@@ -111,7 +111,7 @@ jobs:
           DOMAIN="${TF_VAR_domain}"
           ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['result'][0]['id'])" 2>/dev/null)
+            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['result'][0]['id'])" 2>/dev/null || true)
           RULESET_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
             python3 -c "
@@ -125,7 +125,7 @@ jobs:
             echo "Deleting existing rate limit ruleset: $RULESET_ID"
             curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/$RULESET_ID" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-              python3 -c "import json,sys; d=json.load(sys.stdin); print('Result:', 'OK' if d.get('success') else 'FAIL')" 2>/dev/null
+              python3 -c "import json,sys; d=json.load(sys.stdin); print('Result:', 'OK' if d.get('success') else 'FAIL')" 2>/dev/null || true
           else
             echo "No existing rate limit ruleset — nothing to delete"
           fi
