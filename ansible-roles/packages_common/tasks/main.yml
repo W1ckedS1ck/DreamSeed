@@ -5,47 +5,10 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Check if requested PHP version is available
-  ansible.builtin.shell: apt-cache show "php{{ php_version }}" >/dev/null 2>&1 && echo ok || echo missing
-  args:
-    executable: /bin/bash
-  register: php_avail
-  changed_when: false
-  failed_when: false
-
-- name: Fallback to highest available PHP version
-  ansible.builtin.shell: |
-    set -o pipefail
-    apt-cache search '^php[0-9]\.[0-9]$' | grep -oP 'php\K[0-9]\.[0-9]' | sort -V | tail -1
-  args:
-    executable: /bin/bash
-  register: php_fallback
-  changed_when: false
-  when: php_avail.stdout == "missing"
-
-- name: Set fallback php_version
-  ansible.builtin.set_fact:
-    php_version: "{{ php_fallback.stdout }}"
-  when: php_avail.stdout == "missing" and php_fallback.stdout | length > 0
-
-- name: Fail if no PHP version found
-  ansible.builtin.fail:
-    msg: "Could not auto-detect PHP version (apt-cache search returned nothing). Check apt sources."
-  when: php_avail.stdout == "missing" and php_fallback.stdout | length == 0
-
-- name: Install common packages
+- name: Install system packages (base OS-level)
   become: true
   ansible.builtin.apt:
     name:
-      - "php{{ php_version }}"
-      - "php{{ php_version }}-fpm"
-      - "php{{ php_version }}-cli"
-      - "php{{ php_version }}-mysql"
-      - "php{{ php_version }}-curl"
-      - "php{{ php_version }}-mbstring"
-      - "php{{ php_version }}-xml"
-      - "php{{ php_version }}-zip"
-      - "php{{ php_version }}-gd"
       - mariadb-server
       - certbot
       - fail2ban
@@ -58,8 +21,6 @@
       - debsums
       - apt-show-versions
       - libpam-tmpdir
-      - "redis-server"
-      - "php{{ php_version }}-redis"
       - libpam-pwquality
       - unattended-upgrades
     state: present
@@ -94,3 +55,16 @@
     executable: /bin/bash
   timeout: 120
   changed_when: false
+
+- name: Setup PHP version and packages
+  ansible.builtin.include_tasks: php.yml
+
+- name: Install redis packages
+  become: true
+  ansible.builtin.apt:
+    name:
+      - "redis-server"
+      - "php{{ php_version }}-redis"
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
