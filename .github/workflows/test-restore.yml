@@ -396,7 +396,7 @@ jobs:
           pids=()
           cd ansible
           ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml & pids+=($!)
-          ansible-playbook -i inventory/hosts-test.yml playbook-07-security.yml -e @/tmp/test_vault.yml & pids+=($!)
+          ansible-playbook -i inventory/hosts-test.yml playbook-04-security.yml -e @/tmp/test_vault.yml & pids+=($!)
           failed=0
           for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
           set -e
@@ -414,15 +414,15 @@ jobs:
           set +e
           pids=()
           cd ansible
-          ansible-playbook -i inventory/hosts-test.yml playbook-04-monitor.yml -e @/tmp/test_vault.yml & pids+=($!)
-          ansible-playbook -i inventory/hosts-test.yml playbook-05-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
+          ansible-playbook -i inventory/hosts-test.yml playbook-05-monitor.yml -e @/tmp/test_vault.yml & pids+=($!)
+          ansible-playbook -i inventory/hosts-test.yml playbook-06-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
           failed=0
           for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
           set -e
           [ "$failed" -eq 0 ] || exit 1
 
       - name: Deploy Grafana
-        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-06-grafana.yml -e @/tmp/test_vault.yml
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-07-grafana.yml -e @/tmp/test_vault.yml
 
       - name: Wait for stack to settle
         run: |
