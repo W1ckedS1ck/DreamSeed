@@ -77,35 +77,32 @@ rotate_logs() {
 
 _cfcurl() { curl -s --connect-timeout 5 --max-time 15 "$@"; }
 
-update_cloudflare_dns() {
-    local domain="$1" ip="$2"
-    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && {
-        log "Cloudflare DNS: skip (CLOUDFLARE_API_TOKEN not set)"
-        return 0
-    }
-
-    # Resolve zone ID from domain (API token must have Zone:Read access)
-    # For apex domains (e.g. dreamseed.online, 1 dot), use domain as-is.
-    # For subdomains (e.g. aws.vitalikuts.online, 2+ dots), strip first component.
-    local zone_id api_base zone_lookup
-    api_base="https://api.cloudflare.com/client/v4"
+# Resolve Cloudflare zone ID from domain.
+# For apex domains (dreamseed.online) use domain as-is.
+# For subdomains (aws.vitalikuts.online) strip first component.
+_cf_zone_id() {
+    local domain="$1"
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare: CLOUDFLARE_API_TOKEN not set"; return 1; }
+    local api_base="https://api.cloudflare.com/client/v4"
     local dot_count="${domain//[^.]}"
-    if [[ ${#dot_count} -ge 2 ]]; then
-        zone_lookup="${domain#*.}"
-    else
-        zone_lookup="$domain"
-    fi
-    zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    local zone_lookup="$domain"
+    [[ ${#dot_count} -ge 2 ]] && zone_lookup="${domain#*.}"
+    _cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$api_base/zones?name=$zone_lookup" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 zones=d.get('result',[])
 if zones:
     print(zones[0]['id'])
-" 2>/dev/null || echo "")
+" 2>/dev/null || { log "Cloudflare: no zone found for $domain"; return 1; }
+}
 
-    [[ -z "$zone_id" ]] && { log "Cloudflare DNS: skip (no zone found for $domain)"; return 0; }
-
+update_cloudflare_dns() {
+    local domain="$1" ip="$2"
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS: skip (token not set)"; return 0; }
+    local api_base="https://api.cloudflare.com/client/v4"
+    local zone_id
+    zone_id=$(_cf_zone_id "$domain") || return 0
     local base="$api_base/zones/$zone_id/dns_records"
     local type="A"
 
@@ -158,30 +155,10 @@ else:
 
 delete_cloudflare_dns() {
     local domain="$1"
-    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && {
-        log "Cloudflare DNS cleanup: skip (CLOUDFLARE_API_TOKEN not set)"
-        return 0
-    }
-
-    local zone_id api_base zone_lookup
-    api_base="https://api.cloudflare.com/client/v4"
-    local dot_count="${domain//[^.]}"
-    if [[ ${#dot_count} -ge 2 ]]; then
-        zone_lookup="${domain#*.}"
-    else
-        zone_lookup="$domain"
-    fi
-    zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "$api_base/zones?name=$zone_lookup" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-zones=d.get('result',[])
-if zones:
-    print(zones[0]['id'])
-" 2>/dev/null || echo "")
-
-    [[ -z "$zone_id" ]] && { log "Cloudflare DNS cleanup: skip (no zone found for $domain)"; return 0; }
-
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS cleanup: skip (token not set)"; return 0; }
+    local api_base="https://api.cloudflare.com/client/v4"
+    local zone_id
+    zone_id=$(_cf_zone_id "$domain") || return 0
     local base="$api_base/zones/$zone_id/dns_records"
 
     local existing
