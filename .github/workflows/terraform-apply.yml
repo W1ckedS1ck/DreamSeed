@@ -103,6 +103,42 @@ jobs:
           terraform state rm hcloud_ssh_key.ci_key[0] 2>/dev/null || true
           echo "Stale resources removed from state"
 
+      - name: Import existing Cloudflare resources (prevents duplicate creation errors)
+        if: inputs.provider == 'cloudflare' && inputs.mode == 'apply'
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          DOMAIN="${{ env.TF_VAR_domain }}"
+          ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['result'][0]['id'])" 2>/dev/null)
+          echo "Zone: $DOMAIN ($ZONE_ID)"
+
+          # Import rate limit ruleset if it exists in zone but not in terraform state
+          RATE_LIMIT_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+            python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          for rs in d.get('result', []):
+              if rs.get('phase') == 'http_ratelimit':
+                  print(rs['id'])
+          " 2>/dev/null)
+
+          if [[ -n "$RATE_LIMIT_ID" ]]; then
+            if terraform state list 2>/dev/null | grep -q cloudflare_ruleset.rate_limit; then
+              echo "  rate_limit already in state — skipping import"
+            else
+              echo "  Importing rate_limit ruleset: $RATE_LIMIT_ID"
+              terraform init -input=false > /dev/null 2>&1
+              terraform import cloudflare_ruleset.rate_limit "$ZONE_ID/$RATE_LIMIT_ID" 2>&1 || \
+                echo "  ⚠ Import failed (will be handled by apply)"
+            fi
+          else
+            echo "  No existing rate limit ruleset — will be created by apply"
+          fi
+
       - name: Terraform ${{ inputs.mode }}
         working-directory: ${{ env.TF_DIR }}
         run: |
