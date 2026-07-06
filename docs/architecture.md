@@ -281,7 +281,20 @@ Bot events         Renovate              Dependency updates (auto PRs)
 ```
 DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
+├── lib/                   # Modules: env.sh, helpers.sh, terraform.sh, ansible.sh, gen_vars.py
+│   └── helpers.sh          # _cf_zone_id() — shared Cloudflare zone resolver
 ├── .github/
+│   ├── actions/
+│   │   ├── setup-terraform/  # Composite: install tf + plugin cache
+│   │   ├── setup-ansible/    # Composite: install ansible + galaxy collections
+│   │   └── setup-secrets/    # Composite: SSH deploy key, vault password, rclone config
+│   ├── scripts/
+│   │   └── test-restored-server.sh  # Post-restore verification suite
+│   └── workflows/           # 8 workflows (see CI/CD section)
+├── scripts/
+│   ├── audit_deep.sh        # Full server audit — covers all AUDIT_CHECKLIST sections
+│   ├── smart_backup.sh      # Local backup (project, DB, Redis)
+│   └── upload_backups_to_gdrive.sh  # Cloud upload via rclone_retry()
 │   ├── actions/           # Composite actions: setup-terraform, setup-ansible
 │   └── workflows/         # 9 workflows + Renovate
 ├── terraform/
@@ -289,7 +302,13 @@ DreamSeed/
 │   ├── hetzner/           # Server + firewall + primary IP
 │   └── grafana/           # Grafana Cloud dashboard provisioning via Terraform
 ├── ansible/
-│   ├── playbook-01-base.yml ... playbook-07-grafana.yml
+│   ├── playbook-01-base.yml     # System packages, swap
+│   ├── playbook-02-web.yml      # Nginx + PHP-FPM + Redis + SSL
+│   ├── playbook-03-db.yml       # MariaDB + restore from backup
+│   ├── playbook-04-security.yml # Fail2ban, SSH, sysctl hardening
+│   ├── playbook-05-monitor.yml  # VictoriaMetrics, exporters, vmagent
+│   ├── playbook-06-backup.yml   # Cron jobs, rclone, telegram bot
+│   └── playbook-07-grafana.yml  # Grafana + alerting + dashboards
 │   └── group_vars/all.yml
 ├── ansible-roles/         # 16 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks
