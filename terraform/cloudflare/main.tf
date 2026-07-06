@@ -53,10 +53,10 @@ resource "cloudflare_ruleset" "rate_limit" {
       characteristics     = ["cf.colo.id", "ip.src"]
       period              = 10
       requests_per_period = 20
-      mitigation_timeout  = 60
+      mitigation_timeout  = 10
     }
     expression  = "(starts_with(http.request.uri.path, \"/manager/\"))"
-    description = "Rate limit /manager/ — 20 req/10s, block 1min"
+    description = "Rate limit /manager/ — 20 req/10s, block 10s"
     enabled     = true
   }
 }
