@@ -161,7 +161,7 @@ run_terraform_validate() {
     local tf
     tf=$(command -v tofu || command -v terraform)
 
-    for dir in terraform/aws terraform/hetzner terraform/grafana; do
+    for dir in terraform/aws terraform/hetzner terraform/grafana terraform/cloudflare; do
         [[ ! -d "$dir" ]] && continue
         echo "    Validating $dir..."
         # Use TF_VAR_ env vars (works with both terraform and tofu validate)
@@ -172,6 +172,10 @@ run_terraform_validate() {
             export TF_VAR_sm_enabled="false"
             export TF_VAR_domain="x"
             export TF_VAR_sm_url="x"
+        fi
+        if [[ "$dir" == *"cloudflare" ]]; then
+            export TF_VAR_cloudflare_api_token="x"
+            export TF_VAR_domain="x"
         fi
 
         # Handle ansible-vault encrypted terraform.tfvars (grafana module)
