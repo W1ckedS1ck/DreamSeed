@@ -76,6 +76,24 @@ jobs:
         working-directory: terraform/grafana
         run: terraform plan
 
+      - name: Test Grafana API connectivity
+        env:
+          GRAFANA_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
+          GRAFANA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+        run: |
+          echo "Testing API connection..."
+          curl -s "$GRAFANA_URL/api/org" -H "Authorization: Bearer $GRAFANA_TOKEN" | head -5
+          echo ""
+          echo "Testing folder creation..."
+          curl -s -X POST "$GRAFANA_URL/api/folders" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"title":"test-folder-audit","uid":"test-folder-audit"}' | head -5
+          echo ""
+          echo "Cleaning up test folder..."
+          curl -s -X DELETE "$GRAFANA_URL/api/folders/test-folder-audit" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" | head -2
+
       - name: Terraform Apply
         working-directory: terraform/grafana
         run: terraform apply -auto-approve
