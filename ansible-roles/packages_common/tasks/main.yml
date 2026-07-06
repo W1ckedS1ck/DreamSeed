@@ -77,13 +77,14 @@
       APT::Periodic::Download-Upgradeable-Packages "1";
     mode: "0644"
 
-- name: Ensure 2G swap file
+- name: Ensure swap file
   become: true
   ansible.builtin.shell: |
     set -o pipefail
     if ! swapon --show | grep -q /swapfile; then
       if [ ! -f /swapfile ]; then
-        fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+        fallocate -l {{ swap_size }} /swapfile 2>/dev/null || \
+          dd if=/dev/zero of=/swapfile bs=1M count={{ (swap_size | regex_replace('[^0-9]', '') | int) * 1024 }} status=progress
         chmod 600 /swapfile
       fi
       mkswap /swapfile && swapon /swapfile

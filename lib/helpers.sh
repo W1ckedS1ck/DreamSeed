@@ -125,9 +125,10 @@ else:
     print('0||')
 " 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
+    local ttl="${CLOUDFLARE_DNS_TTL:-120}"
     local dns_body
-    dns_body=$(printf '{"type":"%s","name":"%s","content":"%s","ttl":120,"proxied":true}' \
-        "$type" "$domain" "$ip") || dns_body=""
+    dns_body=$(printf '{"type":"%s","name":"%s","content":"%s","ttl":%s,"proxied":true}' \
+        "$type" "$domain" "$ip" "$ttl") || dns_body=""
 
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }

@@ -155,7 +155,7 @@
     path: "{{ web_root }}/core/cache"
     src: tmpfs
     fstype: tmpfs
-    opts: "size=128M,mode=0755,uid=33,gid=33"
+    opts: "size={{ modx_cache_tmpfs_size }},mode=0755,uid=33,gid=33"
     state: mounted
 
 # ========================
