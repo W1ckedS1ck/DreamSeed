@@ -40,25 +40,15 @@ jobs:
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - name: Setup secrets
+      - uses: ./.github/actions/setup-secrets
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+
+      - name: Set TG_TOKEN
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
-          PROD_EIP: ${{ secrets.PROD_EIP }}
-          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
-          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
-          PROD_REGION: ${{ secrets.PROD_REGION }}
-          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
-          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
-          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
-          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2>/dev/null
-          echo "TG_TOKEN=$TG_TOKEN" >> "$GITHUB_ENV"
+        run: echo "TG_TOKEN=$TG_TOKEN" >> "$GITHUB_ENV"
 
       - name: Resolve server IP
         id: server-ip
