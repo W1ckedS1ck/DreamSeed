@@ -138,11 +138,13 @@ jobs:
           # Parse summary lines (last occurrence of each)
           PROJECT=$(echo "$OUTPUT" | grep "^Project:" | tail -1 | sed 's/.*: //')
           DB=$(echo "$OUTPUT" | grep "^DB:" | tail -1 | sed 's/.*: //')
+          REDIS=$(echo "$OUTPUT" | grep "^Redis:" | tail -1 | sed 's/.*: //')
           SITE=$(echo "$OUTPUT" | grep "^Site:" | tail -1 | sed 's/.*: //')
           TIME=$(echo "$OUTPUT" | grep "^Time:" | tail -1 | sed 's/.*: //')
           {
             echo "project=$PROJECT"
             echo "db=$DB"
+            echo "redis=$REDIS"
             echo "site=$SITE"
             echo "time=$TIME"
           } >> "$GITHUB_OUTPUT"
@@ -204,11 +206,12 @@ jobs:
           else
             STATUS="⚠️  SITE UNHEALTHY"
           fi
-          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\n📝 Project: %s\n🗄️ DB: %s\n🌐 Site: %s\n⏱️ Time: %s\n🖥 %s %s' \
+          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\n📝 Project: %s\n🗄️ DB: %s\n♻️ Redis: %s\n🌐 Site: %s\n⏱️ Time: %s\n🖥 %s %s' \
             "$STATUS" \
             "$(date '+%Y-%m-%d %H:%M')" \
             "${{ steps.restore.outputs.project }}" \
             "${{ steps.restore.outputs.db }}" \
+            "${{ steps.restore.outputs.redis }}" \
             "${{ steps.restore.outputs.site }}" \
             "${{ steps.restore.outputs.time }}" \
             "${{ steps.server-ip.outputs.ip }}" \
@@ -251,6 +254,7 @@ jobs:
           echo "|---|---|" >> "$M"
           echo "| Project | ${{ steps.restore.outputs.project }} |" >> "$M"
           echo "| DB | ${{ steps.restore.outputs.db }} |" >> "$M"
+          echo "| Redis | ${{ steps.restore.outputs.redis }} |" >> "$M"
           echo "| Site | ${{ steps.restore.outputs.site }} |" >> "$M"
           echo "| Duration | ${{ steps.restore.outputs.time }} |" >> "$M"
 
