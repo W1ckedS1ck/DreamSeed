@@ -49,24 +49,25 @@ jobs:
         run: |
           if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
             TOKEN="${PROD_SA_TOKEN:-$PROD_TOKEN}"
-            jq -n \
-              --arg url "${{ secrets.PROD_GRAFANA_CLOUD_URL }}" \
-              --arg token "$TOKEN" \
-              --arg sm_token "${{ secrets.PROD_SM_ACCESS_TOKEN }}" \
-              --arg domain "dreamseed.online" \
-              --arg sm_url "https://synthetic-monitoring-api-us-east-0.grafana.net" \
-              '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_token | length > 0)}' \
-              > terraform.tfvars.json
+            SM_TOKEN="${{ secrets.PROD_SM_ACCESS_TOKEN }}"
+            GRAFANA_URL="https://dreamseed.grafana.net"
+            DOMAIN="dreamseed.online"
+            SM_URL="https://synthetic-monitoring-api-us-east-0.grafana.net"
           else
-            jq -n \
-              --arg url "${{ secrets.DEV_GRAFANA_CLOUD_URL }}" \
-              --arg token "${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}" \
-              --arg sm_token "${{ secrets.DEV_SM_ACCESS_TOKEN }}" \
-              --arg domain "hetz.vitalikuts.online" \
-              --arg sm_url "https://synthetic-monitoring-api-eu-north-0.grafana.net" \
-              '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_token | length > 0)}' \
-              > terraform.tfvars.json
+            TOKEN="${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}"
+            SM_TOKEN="${{ secrets.DEV_SM_ACCESS_TOKEN }}"
+            GRAFANA_URL="https://vitalikuts.grafana.net"
+            DOMAIN="hetz.vitalikuts.online"
+            SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
           fi
+          jq -n \
+            --arg url "$GRAFANA_URL" \
+            --arg token "$TOKEN" \
+            --arg sm_token "$SM_TOKEN" \
+            --arg domain "$DOMAIN" \
+            --arg sm_url "$SM_URL" \
+            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_token | length > 0)}' \
+            > terraform.tfvars.json
 
       - name: Terraform Init
         working-directory: terraform/grafana
