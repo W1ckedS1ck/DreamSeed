@@ -60,16 +60,6 @@
   loop: "{{ additional_ssh_keys | default([]) }}"
 
 # --- Fail2ban ---
-- name: Upload fail2ban config
-  become: true
-  ansible.builtin.copy:
-    src: "{{ configs_dir }}/fail2ban/jail.local"
-    dest: /etc/fail2ban/jail.local
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Restart Fail2ban
-
 - name: Deploy custom MODX admin filter
   become: true
   ansible.builtin.copy:
