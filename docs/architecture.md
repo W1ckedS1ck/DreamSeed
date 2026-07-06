@@ -289,7 +289,7 @@ DreamSeed/
 │   ├── hetzner/           # Server + firewall + primary IP
 │   └── grafana/           # Grafana Cloud dashboard provisioning via Terraform
 ├── ansible/
-│   ├── playbook-01-base.yml ... playbook-07-security.yml
+│   ├── playbook-01-base.yml ... playbook-07-grafana.yml
 │   └── group_vars/all.yml
 ├── ansible-roles/         # 16 custom roles
 ├── scripts/               # Backup, restore, Telegram bot, health checks

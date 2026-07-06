@@ -191,10 +191,10 @@ main() {
         "playbook-01-base.yml:Base packages"
         "$web_playbook"
         "playbook-03-db.yml:Database & Restore"
-        "playbook-04-monitor.yml:Monitoring"
-        "playbook-05-backup.yml:Backup & Telegram bot"
-        "playbook-06-grafana.yml:Grafana"
-        "playbook-07-security.yml:Security hardening"
+        "playbook-04-security.yml:Security hardening"
+        "playbook-05-monitor.yml:Monitoring"
+        "playbook-06-backup.yml:Backup & Telegram bot"
+        "playbook-07-grafana.yml:Grafana"
     )
 
     preflight_checks
@@ -440,15 +440,15 @@ INVEOF
 
         # Phase 2.5: Security (sequential — requires DB + web config)
         step_start "Security hardening"
-        run_ansible "playbook-07-security.yml" "Security hardening" || step_fail "Security hardening failed"
+        run_ansible "playbook-04-security.yml" "Security hardening" || step_fail "Security hardening failed"
         step_ok
 
         # Phase 3: Monitoring + Backup + Grafana
         step_start "Phase 3: Monitoring/Backup/Grafana"
         run_parallel "Monitoring/Backup/Grafana" \
-            "playbook-04-monitor.yml:Monitoring" \
-            "playbook-05-backup.yml:Backup & Telegram bot" \
-            "playbook-06-grafana.yml:Grafana" || step_fail "Phase 3 failed"
+            "playbook-05-monitor.yml:Monitoring" \
+            "playbook-06-backup.yml:Backup & Telegram bot" \
+            "playbook-07-grafana.yml:Grafana" || step_fail "Phase 3 failed"
         step_ok
     else
         for entry in "${playbooks[@]}"; do
