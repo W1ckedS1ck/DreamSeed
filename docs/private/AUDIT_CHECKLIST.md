@@ -121,7 +121,7 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 | Verify key | `redis-cli KEYS 'PHPREDIS_SESSION:*'` → expect **session key** |
 | Cleanup | `sudo rm -f /var/www/html/session_test.php` |
 
-**Note:** GET `/manager/` and POST `/connectors/` trigger `session_start()` and create Redis sessions. Even plain GET `/` may create sessions if MODX starts them for anonymous visitors.  
+**Note:** GET `/manager/` and POST `/connectors/` trigger `session_start()` and create Redis sessions. Even plain GET `/` may create sessions if MODX starts them for anonymous visitors.
 **Critical:** `session_handler_class` must be **empty** in MODX system settings — otherwise MODX overrides PHP handler and writes to DB:
 ```bash
 mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"session_handler_class\""
@@ -232,8 +232,8 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 systemctl list-units --type=service --state=running --no-legend | awk '{print $1}'
 ```
 
-Expected: nginx, php*-fpm, mariadb, redis-server, fail2ban, grafana-server, 
-node_exporter, mysqld_exporter, nginx_exporter (or apache_exporter), 
+Expected: nginx, php*-fpm, mariadb, redis-server, fail2ban, grafana-server,
+node_exporter, mysqld_exporter, nginx_exporter (or apache_exporter),
 redis_exporter, victoria-metrics, vmagent, telegram-bot, ssh, cron, unattended-upgrades
 
 ## 17. Processes — Top by Memory
@@ -242,7 +242,7 @@ redis_exporter, victoria-metrics, vmagent, telegram-bot, ssh, cron, unattended-u
 ps aux --sort=-%mem | head -10 | awk '{printf "%-25s %5s %s MB\n", $11, $4, int($6/1024)}'
 ```
 
-Expected: Grafana ~250-350MB, MariaDB ~150-200MB, VM ~50-70MB, 
+Expected: Grafana ~250-350MB, MariaDB ~150-200MB, VM ~50-70MB,
 vmagent ~30-40MB, fail2ban ~40-50MB, PHP-FPM ~30MB each
 
 ## 18. Open Ports (Public)
