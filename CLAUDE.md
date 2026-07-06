@@ -305,7 +305,16 @@ Cloudflare token is **optional**. If set → certbot DNS-01 (Cloudflare). If abs
 - **Ansible roles are stateless** — not all fully idempotent (cron uses `state: present|absent` from `backup_cron_enabled`).
 - **PHP version auto-detection** runs in playbook-01 and caches the fact for subsequent playbooks.
 - **`tfstate-backup/`** kept locally, auto-rotated to 5 per workspace.
+- **`deploy.yml`** uses `tee /tmp/deploy.log` instead of redirect — real-time streaming in GH Actions logs (no more "hanging" step).
+- **`grafana-alerts.yaml.j2`** uses `{{ deploy_env }}` as env label (shows `dev-aws`, `prod`, etc.) instead of `{{ domain }}`. Env always appears first in Telegram message: `🔴 [dev-aws] Alert Name`.
 - **`common_functions.sh`** `prune_cloud_backups` uses `grep -c ... || true` — prevents `set -euo pipefail` from aborting when rclone listing is empty.
+- **`rclone_retry()`** — wrapper in `common_functions.sh` that retries rclone commands 3× with exponential backoff + `--retries-sleep 1s`. Uses `RCLONE_CMD_TIMEOUT` env var (NOT `RCLONE_TIMEOUT` — that clashes with rclone's own `--timeout` flag).
+- **`session_handler_class`** must be **empty** in MODX system settings. When empty, MODX falls through to PHP's native session handler → Redis. `backup/tasks/main.yml` clears it on every deploy. `restore/tasks/main.yml` also clears it.
+- **`setup-secrets`** composite action (`.github/actions/setup-secrets/`) writes SSH key, vault password, and rclone config. Used by `deploy.yml`, `health-check.yml`, `test-restore.yml`.
+- **`_cf_zone_id()`** in `lib/helpers.sh` — shared function that resolves Cloudflare zone ID from domain. Both `update_cloudflare_dns()` and `delete_cloudflare_dns()` use it.
+- **Cloudflare rate limit** on `/manager/` — 20 req/10s, block 10s (Free plan limitation — period only 10, mitigation_timeout only 10). Combined with fail2ban `modx-admin` jail (25 failures → 1h ban).
+- **Grafana Cloud URLs** are different for vmagent (Prometheus remote_write endpoint) vs Terraform (Grafana instance URL). Instance URLs are hardcoded in `grafana-cloud.yml` (`vitalikuts.grafana.net` / `dreamseed.grafana.net`). Prometheus endpoints are per-region secrets (`DEV/PROD_GRAFANA_CLOUD_URL`).
+- **Playbook order** after renumbering: 01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana.
 - **`deploy.yml`** uses `tee /tmp/deploy.log` instead of redirect — real-time streaming in GH Actions logs (no more "hanging" step).
 - **`grafana-alerts.yaml.j2`** uses `{{ deploy_env }}` as env label (shows `dev-aws`, `prod`, etc.) instead of `{{ domain }}`. Env always appears first in Telegram message: `🔴 [dev-aws] Alert Name`.
 - **nginx + PHP-FPM** have systemd `Restart=always` via drop-in overrides — auto-recover after OOM/crash.
