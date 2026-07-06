@@ -131,11 +131,14 @@ if [[ "$WEB_SVC" == "apache2" ]]; then
     _check_ep 9117 apache_ apache_exporter || fail=1
 fi
 _check_ep 9121 redis_ redis_exporter || fail=1
-# --- Backup cron ---
+# --- Backup crons ---
 if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
   echo "  ✓ cron: backup"
   export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
 else echo "  ✗ cron: backup not set"; fail=1; fi
+if crontab -u ubuntu -l 2>/dev/null | grep -q upload_backups_to_gdrive; then
+  echo "  ✓ cron: upload"
+else echo "  ✗ cron: upload not set"; fail=1; fi
 
 # --- fail2ban ---
 jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
