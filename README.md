@@ -69,7 +69,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL/Redis exporters · 24 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (9 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -153,10 +153,10 @@ DreamSeed/
 │   ├── playbook-01-base.yml      # OS packages
 │   ├── playbook-02-web.yml          # Nginx/Apache + PHP + SSL
 │   ├── playbook-03-db.yml        # MariaDB + restore logic
-│   ├── playbook-04-monitor.yml   # VictoriaMetrics + exporters
-│   ├── playbook-05-backup.yml   # Backup cron + Telegram bot
-│   ├── playbook-06-grafana.yml   # Grafana dashboards + alerts
-│   └── playbook-07-security.yml  # Hardening
+│   ├── playbook-04-security.yml  # Hardening (fail2ban, SSH)
+│   ├── playbook-05-monitor.yml   # VictoriaMetrics + exporters
+│   ├── playbook-06-backup.yml   # Backup cron + Telegram bot
+│   └── playbook-07-grafana.yml   # Grafana dashboards + alerts
 ├── ansible-roles/            # 16 reusable roles (nginx, mariadb, ssl, redis, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
