@@ -120,6 +120,34 @@ fi
 REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
 echo "redis_cloud_backups=$REDIS_CLOUD"
 
+# MODX — session_handler_class must be empty (Redis sessions)
+SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N $DB_NAME -e \"SELECT value FROM modx_system_settings WHERE key = 'session_handler_class'\" 2>/dev/null || true")
+if [ -z "$SHC" ]; then
+    pass "session_handler_class empty (Redis sessions)"
+else
+    fail "session_handler_class = '$SHC' (should be empty)"
+fi
+
+# Redis — session keys after curl
+BEFORE=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null || echo 0")
+SESSIONS=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | head -3 | tr '\n' ' '" || true)
+AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null || echo 0")
+echo "Redis keys: before=$BEFORE session_keys=$SESSIONS total=$AFTER"
+if [ -n "$(echo "$SESSIONS" | tr -d ' ')" ]; then
+    pass "Redis sessions active ($AFTER keys)"
+else
+    # Force a session by curling the site
+    ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null https://localhost/ 2>/dev/null || true"
+    sleep 1
+    AFTER2=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null || echo 0")
+    SESSIONS2=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | head -3 | tr '\n' ' '" || true)
+    if [ -n "$(echo "$SESSIONS2" | tr -d ' ')" ]; then
+        pass "Redis sessions active after curl ($AFTER2 keys)"
+    else
+        warn "Redis: no session keys (may need login first)"
+    fi
+fi
+
 # MODX — manager accessible
 MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/manager/ 2>/dev/null || echo '000'")
 [ "$MANAGER_CODE" = "200" ] && pass "MODX manager: HTTP 200" || warn "MODX manager: HTTP $MANAGER_CODE"
