@@ -94,6 +94,12 @@ configs_dir: "{{ playbook_dir }}/../configs"
 deploy_env: "{{ lookup('env', 'DEPLOY_ENV') | mandatory('DEPLOY_ENV required — run via deploy.sh or pass -e deploy_env=...') }}"
 
 # ========================
+#  Hardware
+# ========================
+swap_size: "2G"
+modx_cache_tmpfs_size: "128M"
+
+# ========================
 #  Security
 # ========================
 additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per line)

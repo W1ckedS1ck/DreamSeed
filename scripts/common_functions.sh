@@ -126,6 +126,22 @@ ping_heartbeat() {
     curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/$key" > /dev/null 2>&1
 }
 
+rclone_retry() {
+    local max_attempts="${RCLONE_RETRIES:-3}"
+    local attempt=1 rc timeout_secs="${RCLONE_CMD_TIMEOUT:-600}"
+    while [ "$attempt" -le "$max_attempts" ]; do
+        if [ "$attempt" -gt 1 ]; then
+            local delay=$((attempt * 5))
+            echo "[rclone_retry] attempt $attempt/$max_attempts — waiting ${delay}s" >&2
+            sleep "$delay"
+        fi
+        timeout "$timeout_secs" rclone "$@" --timeout=30s --retries-sleep 1s && return 0
+        rc=$?
+        attempt=$((attempt + 1))
+    done
+    return "$rc"
+}
+
 prune_cloud_backups() {
     local subdir="$1" max="$2"
     local all
@@ -134,7 +150,7 @@ prune_cloud_backups() {
     count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]' || true)
     if [ "$count" -gt "$max" ]; then
         printf '%s\n' "$all" | tail -n +$((max + 1)) | while read -r file; do
-            [ -n "$file" ] && timeout 60 rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/$file"
+            [ -n "$file" ] && timeout 60 rclone delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/$file" || true
         done
     fi
 }

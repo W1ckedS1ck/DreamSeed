@@ -149,6 +149,13 @@
     msg: "⊘ Site already exists at {{ web_root }}, skipping restore"
   when: restore_site_exists.stat.exists
 
+- name: Mount tmpfs for MODX cache (fstab entry exists from PHP role)
+  become: true
+  ansible.builtin.shell:
+    cmd: mount /var/www/html/core/cache 2>/dev/null || true
+    executable: /bin/bash
+  changed_when: false
+
 # ========================
 #  Restore Database
 # ========================

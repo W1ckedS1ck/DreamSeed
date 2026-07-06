@@ -27,31 +27,21 @@ def main():
     script_dir = sys.argv[2]
     dst = sys.argv[3]
 
+    # group_vars/all.yml handles static defaults via lookup('env').
+    # Only pass dynamic per-target vars that cannot be expressed in group_vars.
     data = {
-        'db_pass': os.environ.get('DB_PASS', ''),
+        'deploy_env': target,
         'server_ip': os.environ.get('SERVER_IP', ''),
         'web_server': os.environ.get('WEB_SERVER', ''),
-        'domain': os.environ.get('DEPLOY_DOMAIN', ''),
-        'domain_www': target.startswith('prod'),
-        'cloudflare_enabled': target.startswith('prod'),
         'secrets_dir': f'{script_dir}/secrets',
         'configs_dir': f'{script_dir}/configs',
         'scripts_dir': f'{script_dir}/scripts',
-        'deploy_env': target,
     }
-
-    optional_map = {
-        'CLOUDFLARE_API_TOKEN': 'cloudflare_api_token',
-        'GRAFANA_PASS': 'grafana_admin_password',
-        'SSH_PUBLIC_KEY_PATH': 'ssh_public_key_path',
-        'GRAFANA_CLOUD_URL': 'grafana_cloud_url',
-        'GRAFANA_CLOUD_USERNAME': 'grafana_cloud_username',
-        'GRAFANA_CLOUD_TOKEN': 'grafana_cloud_token',
-    }
-    for env_var, key in optional_map.items():
-        val = os.environ.get(env_var)
-        if val:
-            data[key] = val
+    ssh_key = os.environ.get('SSH_PUBLIC_KEY_PATH', '')
+    if ssh_key.strip():
+        data['ssh_public_key_path'] = ssh_key.strip()
+    if target.startswith('prod'):
+        data['domain_www'] = True
 
     additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
     if additional_keys.strip():

@@ -172,8 +172,7 @@ DreamSeed/
     ├── rollback.yml          # Emergency rollback with prod confirmation
     ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
     ├── health-check.yml      # Weekly server update (apt upgrade + reboot check)
-    ├── TF: Infra + Cloudflare # Apply Terraform (infra, cloudflare WAF/cache)
-    └── cloudflare-cache.yml  # Legacy — replace by TF: Infra + Cloudflare
+    └── TF: Infra + Cloudflare # Apply Terraform (infra, cloudflare WAF/cache)
 ```
 
 ---

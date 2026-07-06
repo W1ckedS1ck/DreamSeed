@@ -45,7 +45,13 @@ jobs:
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
         id: start_time
 
-      - name: Setup secrets
+      - uses: ./.github/actions/setup-secrets
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
+      - name: Write secrets/.env
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           DB_PASS: ${{ secrets.DB_PASS }}
@@ -60,9 +66,6 @@ jobs:
           BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
           BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
           BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
-          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
@@ -77,8 +80,7 @@ jobs:
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
         run: |
-          mkdir -p secrets ~/.ssh
-
+          mkdir -p secrets
           {
             echo "TG_TOKEN=$TG_TOKEN"
             echo "TG_CHAT_ID=${{ vars.TG_CHAT_ID }}"
@@ -120,15 +122,8 @@ jobs:
           } > secrets/.env
           chmod 600 secrets/.env
 
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2>/dev/null
-
-          echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
-          chmod 600 ~/.vault_pass_dreamseed
-
-          [[ -n "$RCLONE_CONF_BASE64" ]] && echo "$RCLONE_CONF_BASE64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
-
+      - name: Setup SSH config
+        run: |
           echo "Host *" > ~/.ssh/config
           echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
           echo "  IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
@@ -401,7 +396,7 @@ jobs:
           pids=()
           cd ansible
           ansible-playbook -i inventory/hosts-test.yml playbook-03-db.yml -e @/tmp/test_vault.yml & pids+=($!)
-          ansible-playbook -i inventory/hosts-test.yml playbook-07-security.yml -e @/tmp/test_vault.yml & pids+=($!)
+          ansible-playbook -i inventory/hosts-test.yml playbook-04-security.yml -e @/tmp/test_vault.yml & pids+=($!)
           failed=0
           for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
           set -e
@@ -419,15 +414,15 @@ jobs:
           set +e
           pids=()
           cd ansible
-          ansible-playbook -i inventory/hosts-test.yml playbook-04-monitor.yml -e @/tmp/test_vault.yml & pids+=($!)
-          ansible-playbook -i inventory/hosts-test.yml playbook-05-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
+          ansible-playbook -i inventory/hosts-test.yml playbook-05-monitor.yml -e @/tmp/test_vault.yml & pids+=($!)
+          ansible-playbook -i inventory/hosts-test.yml playbook-06-backup.yml -e @/tmp/test_vault.yml & pids+=($!)
           failed=0
           for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
           set -e
           [ "$failed" -eq 0 ] || exit 1
 
       - name: Deploy Grafana
-        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-06-grafana.yml -e @/tmp/test_vault.yml
+        run: cd ansible && ansible-playbook -i inventory/hosts-test.yml playbook-07-grafana.yml -e @/tmp/test_vault.yml
 
       - name: Wait for stack to settle
         run: |
@@ -745,7 +740,7 @@ jobs:
           set -o pipefail
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           DB_NAME=modx_db ./.github/scripts/test-restored-server.sh "${{ steps.terraform.outputs.server_ipv4 }}" \
-            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|memory_pct|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
+            | tee /dev/stderr | grep -E '^(test_summary|test_fails|memory_usage|memory_pct|response_time_ms|cloud_project|cloud_db|cloud_redis|redis_cloud_backups|redis_session_keys|session_handler_ok|exporter_node|exporter_mysql|exporter_redis|exporter_web|exporter_vm|modx_manager_code|cron_jobs)=' >> "$GITHUB_OUTPUT"
 
       - name: Run disk check
         id: disk
@@ -775,34 +770,6 @@ jobs:
           else
             echo "ssl_status=self-signed" >> "$GITHUB_OUTPUT"
             echo "SSL: self-signed (cloudflare disabled)"
-          fi
-
-      - name: Cleanup temp files and DNS
-        if: always()
-        run: |
-          set -a
-          source secrets/.env
-          set +a
-          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
-          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
-          rm -f ~/.ssh/deploy_key.pub ~/.ssh/config
-          rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
-          echo "Temp files cleaned"
-
-          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
-          if [ -n "$RECORD_ID" ]; then
-            DEL_RESP=$(curl -s --retry 3 --retry-delay 5 -X DELETE \
-              "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-            if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
-              echo "DNS record deleted"
-            else
-              echo "::warning::DNS record deletion failed"
-            fi
-          else
-            echo "No DNS record found to delete"
           fi
 
       - name: Server info on failure
@@ -884,6 +851,34 @@ jobs:
             echo "Destroy OK"
           fi
 
+      - name: Cleanup temp files and DNS
+        if: always()
+        run: |
+          set -a
+          source secrets/.env
+          set +a
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          rm -f ~/.ssh/deploy_key.pub ~/.ssh/config
+          rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
+          echo "Temp files cleaned"
+
+          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          if [ -n "$RECORD_ID" ]; then
+            DEL_RESP=$(curl -s --retry 3 --retry-delay 5 -X DELETE \
+              "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
+              echo "DNS record deleted"
+            else
+              echo "::warning::DNS record deletion failed"
+            fi
+          else
+            echo "No DNS record found to delete"
+          fi
+
       - name: Send Telegram report
         if: always()
         env:
@@ -947,12 +942,14 @@ jobs:
           CLOUD_PROJ="${{ steps.service_tests.outputs.cloud_project }}"
           CLOUD_DB="${{ steps.service_tests.outputs.cloud_db }}"
           CLOUD_REDIS="${{ steps.service_tests.outputs.cloud_redis }}"
+          SESSION_HANDLER="${{ steps.service_tests.outputs.session_handler_ok }}"
+          REDIS_KEYS="${{ steps.service_tests.outputs.redis_session_keys }}"
 
           COMMIT_SHA="${{ github.sha }}"
           COMMIT_SHORT="${COMMIT_SHA:0:7}"
           BRANCH="$HEAD_REF"
 
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 *Restore Test* $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
@@ -973,6 +970,7 @@ jobs:
             "📊 Services  $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
             "  Cron: ${CRON_JOBS:-?} jobs" \
             "  Exporters: $(exp_status "$EXP_NODE") node $(exp_status "$EXP_MYSQL") mysql $(exp_status "$EXP_REDIS") redis $(exp_status "$EXP_WEB") web $(exp_status "$EXP_VM") vm" \
+            "🗄️ Sessions: $(ok_yn "$SESSION_HANDLER") handler $( [ -n "$REDIS_KEYS" ] && echo "${REDIS_KEYS} keys" || echo '?' )" \
             "🔒 SSL       ${SSL_ICON} ${SSL_STATUS:-?}" \
             "Destroy    $(ok_destroy $DESTROY)")
 

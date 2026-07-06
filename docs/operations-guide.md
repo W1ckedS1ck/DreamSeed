@@ -230,10 +230,10 @@ ansible-roles/<name>/
    - `playbook-01-base.yml` — packages, users, system config
    - `playbook-02-web.yml` — web server config
    - `playbook-03-db.yml` — database
-   - `playbook-04-monitor.yml` — monitoring
-   - `playbook-05-backup.yml` — backup/restore
-   - `playbook-06-grafana.yml` — Grafana
-   - `playbook-07-security.yml` — security
+   - `playbook-04-security.yml` — security
+   - `playbook-05-monitor.yml` — monitoring
+   - `playbook-06-backup.yml` — backup/restore
+   - `playbook-07-grafana.yml` — Grafana
 
    Add a single include:
 

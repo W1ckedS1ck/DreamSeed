@@ -65,7 +65,40 @@ jobs:
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - name: Setup secrets
+      - name: Mask secrets
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          PROD_HETZ_HCLOUD_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          GRAFANA_PASS: ${{ secrets.GRAFANA_PASS }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          BETTERUPTIME_BACKUP_KEY: ${{ secrets.BETTERUPTIME_BACKUP_KEY }}
+          BETTERUPTIME_GDRIVE_KEY: ${{ secrets.BETTERUPTIME_GDRIVE_KEY }}
+          BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
+          BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
+          BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+        run: |
+          for v in TG_TOKEN DB_PASS CLOUDFLARE_API_TOKEN HCLOUD_TOKEN \
+                   PROD_HETZ_HCLOUD_TOKEN GRAFANA_PASS \
+                   BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY \
+                   BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY \
+                   BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY \
+                   DEV_AWS_SECRET_KEY PROD_SECRET_KEY; do
+            val="${!v:-}"
+            [[ -n "$val" ]] && echo "::add-mask::$val" || true
+          done
+
+      - uses: ./.github/actions/setup-secrets
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
+      - name: Write secrets/.env
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           DB_PASS: ${{ secrets.DB_PASS }}
@@ -80,9 +113,6 @@ jobs:
           BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
           BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
           BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
-          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
@@ -97,21 +127,7 @@ jobs:
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
         run: |
-          # Mask secrets before writing — prevents leak to logs
-          for v in TG_TOKEN DB_PASS CLOUDFLARE_API_TOKEN HCLOUD_TOKEN \
-                   PROD_HETZ_HCLOUD_TOKEN GRAFANA_PASS SSH_PRIVATE_KEY \
-                   VAULT_PASSWORD RCLONE_CONF_BASE64 \
-                   BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY \
-                   BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY \
-                   BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY \
-                   DEV_GRAFANA_CLOUD_TOKEN PROD_GRAFANA_CLOUD_TOKEN \
-                   DEV_AWS_SECRET_KEY PROD_SECRET_KEY; do
-            val="${!v}"
-            [[ -n "$val" ]] && echo "::add-mask::$val" || true
-          done
-
-          mkdir -p secrets ~/.ssh
-
+          mkdir -p secrets
           {
             echo "TG_TOKEN=$TG_TOKEN"
             echo "TG_CHAT_ID=${{ vars.TG_CHAT_ID }}"
@@ -139,7 +155,6 @@ jobs:
             echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
 
-            # AWS credentials (per-target)
             echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
             echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
             echo "DEV_AWS_REGION=$DEV_AWS_REGION"
@@ -149,25 +164,15 @@ jobs:
             echo "PROD_REGION=$PROD_REGION"
             echo "PROD_EIP=$PROD_EIP"
 
-            # Hetzner SSH key, server type, and Primary IP (per-target)
             echo "DEV_HETZ_SSH_KEY_NAME=Vitali.pub"
             echo "DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1"
-            echo "DEV_HETZ_SERVER_TYPE=cx23"
-            echo "PROD_HETZ_SERVER_TYPE=cx43"
+            echo "DEV_HETZ_SERVER_TYPE=cx23"  # keep in sync with drift-detection.yml (dev-hetz)
+            echo "PROD_HETZ_SERVER_TYPE=cx43"  # keep in sync with drift-detection.yml (prod-hetz)
             echo "PROD_HETZ_SSH_KEY_NAME=Vitali.pub"
             echo "PROD_HETZ_PRIMARY_IP_NAME="
             echo "PROD_HETZ_ENABLE_PRIMARY_IP=true"
           } > secrets/.env
           chmod 600 secrets/.env
-
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2>/dev/null
-
-          echo -n "$VAULT_PASSWORD" > ~/.vault_pass_dreamseed
-          chmod 600 ~/.vault_pass_dreamseed
-
-          [[ -n "$RCLONE_CONF_BASE64" ]] && echo "$RCLONE_CONF_BASE64" | base64 -d > secrets/rclone.conf && chmod 600 secrets/rclone.conf
 
       - name: Deploy
         if: inputs.action == 'deploy'

@@ -9,16 +9,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
+# ====== Logging ======
+LOG_DIR="${BACKUP_DIR:-/home/ubuntu/backups}/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/upload_$(date +%Y-%m-%d).log"
+exec >> "$LOG_FILE" 2>&1
+
 # ====== Start time ======
 START_TIME=$(date +%s)
 DOMAIN="${DOMAIN:-$(hostname -f 2>/dev/null || echo "unknown")}"
 
-# NOTE: Dev environments upload to DreamSeed/backups/{project,db}-dev/ (via
-# ENV suffix from detect_env()), but ALL restore paths (deploy's restore role,
-# RESTORE_ALL.sh --auto-latest, RESTORE_ALL.sh interactive) pull from prod
-# paths only. Dev backups in the cloud are informational / safety net only.
-# This is intentional: dev is an ephemeral copy of prod, not independent.
-# Do not add restore-from-dev logic without understanding this design.
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Upload started — environment suffix: $(detect_env)"
+
+# NOTE: Dev = Prod. Everything prod does, dev does too — same monitoring,
+# same backups, same alerting. Even though restore always pulls from prod
+# paths, dev must mirror prod behavior exactly (including cloud uploads).
+# Do NOT skip dev uploads or introduce dev-vs-prod logic.
 
 # ====== Settings ======
 LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
@@ -49,12 +55,18 @@ UPLOAD_MSG=""
 # ====== 1. Upload project ======
 LAST_PROJECT=$(find "$PROJECT_DIR" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_PROJECT" ]; then
-    if ! timeout 1800 rclone copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV_SUFFIX}/" --no-check-dest; then
+    echo "  Project: $(basename "$LAST_PROJECT") ($(du -h "$LAST_PROJECT" | cut -f1))"
+    export RCLONE_CMD_TIMEOUT=1800
+    if rclone_retry copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV_SUFFIX}/" --no-check-dest; then
+        echo "  Project: ✅ uploaded"
+    else
+        echo "  Project: ❌ upload failed"
         UPLOAD_MSG+="❌ Project upload error
 "
         HAS_ERROR=1
     fi
 else
+    echo "  Project: ⚠️ backup not found"
     UPLOAD_MSG+="⚠️ Project backup not found
 "
     HAS_ERROR=1
@@ -63,12 +75,18 @@ fi
 # ====== 2. Upload database ======
 LAST_DB=$(find "$DB_DIR" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LAST_DB" ]; then
-    if ! timeout 1800 rclone copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV_SUFFIX}/" --no-check-dest; then
+    echo "  DB: $(basename "$LAST_DB") ($(du -h "$LAST_DB" | cut -f1))"
+    export RCLONE_CMD_TIMEOUT=1800
+    if rclone_retry copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV_SUFFIX}/" --no-check-dest; then
+        echo "  DB: ✅ uploaded"
+    else
+        echo "  DB: ❌ upload failed"
         UPLOAD_MSG+="❌ DB upload error
 "
         HAS_ERROR=1
     fi
 else
+    echo "  DB: ⚠️ backup not found"
     UPLOAD_MSG+="⚠️ DB backup not found
 "
     HAS_ERROR=1
@@ -78,7 +96,12 @@ fi
 if [[ -d "$REDIS_DIR" ]]; then
     LAST_REDIS=$(find "$REDIS_DIR" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
     if [ -n "$LAST_REDIS" ]; then
-        if ! timeout 600 rclone copy "$LAST_REDIS" "$RCLONE_REMOTE:$REMOTE_BASE/redis${ENV_SUFFIX}/" --no-check-dest; then
+        echo "  Redis: $(basename "$LAST_REDIS") ($(du -h "$LAST_REDIS" | cut -f1))"
+        export RCLONE_CMD_TIMEOUT=600
+        if rclone_retry copy "$LAST_REDIS" "$RCLONE_REMOTE:$REMOTE_BASE/redis${ENV_SUFFIX}/" --no-check-dest; then
+            echo "  Redis: ✅ uploaded"
+        else
+            echo "  Redis: ❌ upload failed"
             UPLOAD_MSG+="❌ Redis upload error
 "
             HAS_ERROR=1
@@ -88,28 +111,29 @@ fi
 
 # ====== 4. Clean old backups in cloud ======
 
-prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || {
-    UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
+prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
 "
-    HAS_ERROR=1
-}
-prune_cloud_backups "db" "$MAX_DB_BACKUPS" || {
-    UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
+prune_cloud_backups "db" "$MAX_DB_BACKUPS" || UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
 "
-    HAS_ERROR=1
-}
-prune_cloud_backups "redis" "$MAX_REDIS_BACKUPS" || {
-    UPLOAD_MSG+="⚠️ Redis listing failed, cleanup skipped
+prune_cloud_backups "redis" "$MAX_REDIS_BACKUPS" || UPLOAD_MSG+="⚠️ Redis listing failed, cleanup skipped
 "
-    HAS_ERROR=1
-}
 
-timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null
+if timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null; then
+    echo "  Cleanup: ✅ trash emptied"
+else
+    echo "  Cleanup: ⚠️ skipped (timeout or error)"
+fi
+
+# ====== 5. Rotate old logs (keep 30 days) ======
+find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
 
 if [[ "$HAS_ERROR" -eq 0 ]]; then
     echo "upload_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
     [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]] && ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All uploads successful"
+else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Upload completed with errors"
 fi
 
 # ====== Suppress alert on fresh servers (<1h uptime — backup cron races with manual steps) ======

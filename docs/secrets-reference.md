@@ -66,17 +66,35 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 ## Grafana Cloud
 
+### Prometheus remote_write (vmagent → hosted metrics)
+
+The URL points to the Prometheus endpoint, **not** the Grafana instance.
+
 | Secret | Env | Purpose | Used in |
 |--------|-----|---------|---------|
-| `DEV_GRAFANA_CLOUD_URL` | dev | Push URL for vmagent | `deploy.yml`, `test-restore.yml`, `grafana-cloud.yml` |
-| `DEV_GRAFANA_CLOUD_USERNAME` | dev | vmagent username | `deploy.yml`, `test-restore.yml` |
-| `DEV_GRAFANA_CLOUD_TOKEN` | dev | vmagent API token | `deploy.yml`, `test-restore.yml` |
-| `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token (Terraform) | `grafana-cloud.yml` |
+| `DEV_GRAFANA_CLOUD_URL` | dev | Prometheus remote_write endpoint (e.g. `prometheus-prod-39-prod-eu-north-0.grafana.net`) | `deploy.yml`, `test-restore.yml` |
+| `DEV_GRAFANA_CLOUD_USERNAME` | dev | vmagent username (numeric instance ID) | `deploy.yml`, `test-restore.yml` |
+| `DEV_GRAFANA_CLOUD_TOKEN` | dev | Cloud Access Policy token for vmagent (`glc_*`, scope=metrics:write) | `deploy.yml`, `test-restore.yml` |
+| `PROD_GRAFANA_CLOUD_URL` | prod | Prometheus remote_write endpoint | `deploy.yml`, `test-restore.yml` |
+| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username (numeric instance ID) | `deploy.yml`, `test-restore.yml` |
+| `PROD_GRAFANA_CLOUD_TOKEN` | prod | Cloud Access Policy token for vmagent (`glc_*`, scope=metrics:write) | `deploy.yml`, `test-restore.yml` |
+
+### Terraform (Grafana API — dashboards, folders, SM)
+
+Uses the Grafana **instance** URL (`*.grafana.net`), NOT the Prometheus endpoint.
+Instance URL is hardcoded in `grafana-cloud.yml`, not stored in secrets.
+
+| Secret | Env | Purpose | Used in |
+|--------|-----|---------|---------|
+| `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token for Terraform (`glsa_*`, role=Admin) | `grafana-cloud.yml` |
+| `PROD_GRAFANA_CLOUD_SA_TOKEN` | prod | Service Account token for Terraform | `grafana-cloud.yml` |
+| `PROD_GRAFANA_CLOUD_TOKEN` | prod | Fallback if SA_TOKEN is empty | `grafana-cloud.yml` |
 | `DEV_SM_ACCESS_TOKEN` | dev | Synthetic Monitoring token | `grafana-cloud.yml` |
-| `PROD_GRAFANA_CLOUD_URL` | prod | Push URL for vmagent | `deploy.yml`, `test-restore.yml`, `grafana-cloud.yml` |
-| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username | `deploy.yml`, `test-restore.yml` |
-| `PROD_GRAFANA_CLOUD_TOKEN` | prod | vmagent API + SA token | `deploy.yml`, `test-restore.yml`, `grafana-cloud.yml` |
 | `PROD_SM_ACCESS_TOKEN` | prod | Synthetic Monitoring token | `grafana-cloud.yml` |
+
+> **Note:** Grafana instance URLs are `https://vitalikuts.grafana.net` (dev) and `https://dreamseed.grafana.net` (prod).
+> These are public, not secrets — hardcoded in `grafana-cloud.yml`.
+> Prometheus endpoints are per-region and found in Grafana Cloud → Stack → Prometheus → Remote Write Endpoint.
 
 ---
 

@@ -160,6 +160,19 @@
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
+- name: Clear session_handler_class (force PHP native handler → Redis)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      UPDATE `{{ db_name }}`.`{{ db_prefix }}system_settings`
+      SET `value` = ''
+      WHERE `key` = 'session_handler_class'
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
 - name: Truncate MODX session table on deploy (clear stale sessions)
   ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock

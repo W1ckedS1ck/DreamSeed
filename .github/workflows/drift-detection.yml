@@ -65,10 +65,15 @@ jobs:
             prod-hetz)
               echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=prod-hetz" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx43" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:170
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+              echo "TF_VAR_enable_primary_ip=true" >> "$GITHUB_ENV"
               ;;
             dev-hetz)
               echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:169
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
               ;;
           esac
 
@@ -86,7 +91,6 @@ jobs:
         run: |
           PLAN_FILE="/tmp/${{ matrix.target }}.tfplan"
           terraform plan -detailed-exitcode -no-color \
-            ${{ contains(matrix.target, 'hetz') && '-var="ssh_key_name=Vitali.pub" -var="enable_primary_ip=true"' || '' }} \
             -out="$PLAN_FILE" 2>&1 | tee /tmp/plan.log
           rc=${PIPESTATUS[0]}
 

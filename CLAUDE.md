@@ -115,7 +115,7 @@ DreamSeed/
 ├── configs/fail2ban/jail.local
 ├── .env.example                # Template with all required vars
 ├── .github/
-│   ├── workflows/              # 9 workflows (see CI/CD section)
+│   ├── workflows/              # 8 workflows (see CI/CD section)
 │   └── actions/                # setup-ansible, setup-terraform composite actions
 └── secrets/                    # ALL GITIGNORED
     ├── .env                    # Live secrets (ansible-vault encrypted)
@@ -252,7 +252,7 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 | `deploy.yml` | Manual dispatch | Deploy or destroy any target from GitHub UI |
 | `test-restore.yml` | Weekly (Mon) + manual | Full backup/restore integration test on ephemeral server (AWS or Hetzner) |
 | `TF: Infra + Cloudflare` | Manual dispatch | Terraform apply (infra-only) or Cloudflare WAF/cache rules |
-| `cloudflare-cache.yml` | Manual dispatch | Legacy — apply Cache Rules only (replaced by `TF: Infra + Cloudflare`) |
+| ~~`cloudflare-cache.yml`~~ | Removed | Replaced by `TF: Infra + Cloudflare` |
 | `health-check.yml` | Weekly (Sun) | SSH in, `apt upgrade`, check reboot required |
 | `drift-detection.yml` | Daily | Terraform plan on both AWS and Hetzner, alerts on drift |
 | `rollback.yml` | Manual dispatch | Restore tfstate from backup and re-apply |
@@ -299,12 +299,22 @@ Cloudflare token is **optional**. If set → certbot DNS-01 (Cloudflare). If abs
 - **Better Stack** replaced healthchecks.io: cron scripts ping `https://uptime.betterstack.com/api/v1/heartbeat/<KEY>` on success.
 - **`deploy.sh --lint`** delegates to `scripts/lint.sh` — single source of truth.
 - **`check_services.sh`** runs via systemd timer every 5 min, plus once at end of deploy.
+- **Dev = Prod rule:** Dev must mirror prod in EVERYTHING — monitoring, backups, alerting, scripts. No "skip for dev" logic. Dev backups upload to cloud same as prod (separate paths). Even though restore always pulls from prod, dev runs the identical pipeline.
 - **Promote feature abandoned:** no DB sync between prod and dev environments (intentional — dev is ephemeral, always pulls latest prod data on restore).
 - **`*.service` files are gitignored** — only `.j2` templates ship to git.
 - **Ansible roles are stateless** — not all fully idempotent (cron uses `state: present|absent` from `backup_cron_enabled`).
 - **PHP version auto-detection** runs in playbook-01 and caches the fact for subsequent playbooks.
 - **`tfstate-backup/`** kept locally, auto-rotated to 5 per workspace.
+- **`deploy.yml`** uses `tee /tmp/deploy.log` instead of redirect — real-time streaming in GH Actions logs (no more "hanging" step).
+- **`grafana-alerts.yaml.j2`** uses `{{ deploy_env }}` as env label (shows `dev-aws`, `prod`, etc.) instead of `{{ domain }}`. Env always appears first in Telegram message: `🔴 [dev-aws] Alert Name`.
 - **`common_functions.sh`** `prune_cloud_backups` uses `grep -c ... || true` — prevents `set -euo pipefail` from aborting when rclone listing is empty.
+- **`rclone_retry()`** — wrapper in `common_functions.sh` that retries rclone commands 3× with exponential backoff + `--retries-sleep 1s`. Uses `RCLONE_CMD_TIMEOUT` env var (NOT `RCLONE_TIMEOUT` — that clashes with rclone's own `--timeout` flag).
+- **`session_handler_class`** must be **empty** in MODX system settings. When empty, MODX falls through to PHP's native session handler → Redis. `backup/tasks/main.yml` clears it on every deploy. `restore/tasks/main.yml` also clears it.
+- **`setup-secrets`** composite action (`.github/actions/setup-secrets/`) writes SSH key, vault password, and rclone config. Used by `deploy.yml`, `health-check.yml`, `test-restore.yml`.
+- **`_cf_zone_id()`** in `lib/helpers.sh` — shared function that resolves Cloudflare zone ID from domain. Both `update_cloudflare_dns()` and `delete_cloudflare_dns()` use it.
+- **Cloudflare rate limit** on `/manager/` — 20 req/10s, block 10s (Free plan limitation — period only 10, mitigation_timeout only 10). Combined with fail2ban `modx-admin` jail (25 failures → 1h ban).
+- **Grafana Cloud URLs** are different for vmagent (Prometheus remote_write endpoint) vs Terraform (Grafana instance URL). Instance URLs are hardcoded in `grafana-cloud.yml` (`vitalikuts.grafana.net` / `dreamseed.grafana.net`). Prometheus endpoints are per-region secrets (`DEV/PROD_GRAFANA_CLOUD_URL`).
+- **Playbook order** after renumbering: 01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana.
 - **`deploy.yml`** uses `tee /tmp/deploy.log` instead of redirect — real-time streaming in GH Actions logs (no more "hanging" step).
 - **`grafana-alerts.yaml.j2`** uses `{{ deploy_env }}` as env label (shows `dev-aws`, `prod`, etc.) instead of `{{ domain }}`. Env always appears first in Telegram message: `🔴 [dev-aws] Alert Name`.
 - **nginx + PHP-FPM** have systemd `Restart=always` via drop-in overrides — auto-recover after OOM/crash.
