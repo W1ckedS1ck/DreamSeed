@@ -1,0 +1,35 @@
+name: Import Cloudflare Rate Limit Ruleset
+
+on:
+  workflow_dispatch:
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Import existing rate limit ruleset for dreamseed.online
+        working-directory: terraform/cloudflare
+        run: |
+          ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['result'][0]['id'])" 2>/dev/null)
+          echo "Zone ID: $ZONE_ID"
+
+          RULESET_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); [print(rs['id']) for rs in d.get('result',[]) if rs.get('phase') == 'http_ratelimit']" 2>/dev/null)
+          echo "Ruleset ID: ${RULESET_ID:-none}"
+
+          if [[ -n "$RULESET_ID" ]]; then
+            terraform init -input=false > /dev/null 2>&1
+            terraform import cloudflare_ruleset.rate_limit "$ZONE_ID/$RULESET_ID"
+            echo "✅ Imported rate limit ruleset into terraform state"
+          else
+            echo "No existing rate limit ruleset found — nothing to import"
+          fi
