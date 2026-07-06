@@ -51,12 +51,12 @@ resource "cloudflare_ruleset" "rate_limit" {
     }
     ratelimit {
       characteristics     = ["cf.colo.id", "ip.src"]
-      period              = 60
-      requests_per_period = 100
-      mitigation_timeout  = 600
+      period              = 10
+      requests_per_period = 20
+      mitigation_timeout  = 60
     }
     expression  = "(starts_with(http.request.uri.path, \"/manager/\"))"
-    description = "Rate limit /manager/ — 100 req/60s, block 10min"
+    description = "Rate limit /manager/ — 20 req/10s, block 1min"
     enabled     = true
   }
 }
