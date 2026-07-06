@@ -23,3 +23,11 @@ provider "registry.terraform.io/grafana/grafana" {
     "zh:f0c7ae3fbcd2651348f1d8ec455f61eae59fd8a06cf97778b53c7b91bd0b981b",
   ]
 }
+
+provider "registry.terraform.io/hashicorp/http" {
+  version     = "3.6.0"
+  constraints = "~> 3.0"
+  hashes = [
+    "h1:ligOpkIiBTS1ZkLoFp3cwkRYCwYyaZj1Z7t3GdfNa+c=",
+  ]
+}
