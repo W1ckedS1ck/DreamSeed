@@ -26,10 +26,10 @@ runs:
         terraform_version: ${{ inputs.terraform-version }}
         cli_config_credentials_token: ${{ inputs.cli-config-credentials-token }}
 
-    - name: Enable Terraform provider plugin cache
+    - name: Enable Terraform provider plugin cache (preserve existing credentials)
       shell: bash
       run: |
         mkdir -p ~/.terraform.d/plugin-cache
-        cat > ~/.terraformrc <<'EOF'
-        plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"
-        EOF
+        if ! grep -q 'plugin_cache_dir' ~/.terraformrc 2>/dev/null; then
+          echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' >> ~/.terraformrc
+        fi
