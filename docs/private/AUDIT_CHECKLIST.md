@@ -58,7 +58,7 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 | Sensitive paths | `for p in /.env /core/config/config.inc.php /.git/config /backup.sql; do curl -sk -o /dev/null -w '%{http_code}\n' https://<domain>$p; done` → expect **404/403** |
 | Rate limit on connectors | `ab -n 200 -c 10 https://<domain>/connectors/index.php 2>&1 \| grep 'Failed requests'` or check nginx logs for 503 |
 
-## 4. PHP
+## 4. PHP — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -72,7 +72,7 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 | Opcache | `php -i \| grep -E 'opcache.enable\|opcache.memory_consumption\|opcache.max_accelerated_files'` |
 | Opcache status | `php -r '$s=opcache_get_status(false);$m=$s["memory_usage"];$t=$s["opcache_statistics"];echo "Mem: ".round($m["used_memory"]/1024/1024,2)."/".round(($m["used_memory"]+$m["free_memory"])/1024/1024,2)." MB | Files: ".$t["num_cached_scripts"]." | Hits: ".$t["hits"]." | Hit rate: ".round($t["hits"]/($t["hits"]+$t["misses"])*100,2)."%"'` |
 
-## 5. Database (MariaDB)
+## 5. Database (MariaDB) — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -88,7 +88,7 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 | Slow queries | `mysql -e "SHOW GLOBAL STATUS LIKE 'Slow_queries'" \| tail -1` |
 | Network bind | `ss -tlnp \| grep 3306` (should be `127.0.0.1:3306`) |
 
-## 6. Redis
+## 6. Redis — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -100,7 +100,7 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 | Network bind | `ss -tlnp \| grep 6379` (should be `127.0.0.1:6379`) |
 | Config (renamed commands) | `sudo grep rename-command /etc/redis/redis.conf` (should block FLUSHALL, CONFIG, SHUTDOWN, DEBUG) |
 
-## 7. PHP Sessions (Redis via FPM)
+## 7. PHP Sessions (Redis via FPM) — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -110,7 +110,7 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 
 **Note:** CLI `php -i` shows `files` — this is expected. FPM uses Redis.
 
-## 7b. Redis Session — Practical Test
+## 7b. Redis Session — Practical Test — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -136,7 +136,7 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | Local cert (if direct) | `ls /etc/letsencrypt/live/ 2>/dev/null \|\| echo "no local cert"` |
 | Certbot certs | `sudo certbot certificates 2>/dev/null` |
 
-## 9. MODX
+## 9. MODX — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -160,7 +160,7 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | Static file (cached) | `curl -sk -o /dev/null -w '%{http_code} | %{time_total}s\n' https://<domain>/theme/css/style.css` |
 | Page size | `curl -sk -o /dev/null -w 'Size: %{size_download} bytes (%{content_type})\n' https://<domain>/` |
 
-## 11. Monitoring
+## 11. Monitoring — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -175,7 +175,7 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | Scrape targets | `curl -s 'localhost:8428/api/v1/query?query=up' \| python3 -c "import sys,json; d=json.load(sys.stdin); [print(r['metric']['job'], r['value'][1]) for r in d['data']['result']]"` |
 | Exporter errors | `curl -s localhost:8428/api/v1/query?query=up \| python3 -c "import sys,json; d=json.load(sys.stdin); down=[r for r in d['data']['result'] if r['value'][1]=='0']; print(f'{len(down)} down') if down else print('all up')"` |
 
-## 12. Grafana
+## 12. Grafana — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -187,7 +187,7 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | Log errors | `journalctl -u grafana-server --no-pager --since "1 hour ago" \| grep -ci 'error\|panic' \|\| echo "0"` |
 | Alerts in Telegram | `journalctl -u grafana-server --no-pager --since "1 hour ago" \| grep -c 'notify\|alert.*sent\|notified' \|\| echo "no alerts triggered"` |
 
-## 13. Backups
+## 13. Backups — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -200,7 +200,7 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | **Prune no-block metric** | After upload, check `journalctl -u cron --no-pager --since '1 hour ago' \| grep upload` — prune warnings ok, metric must push |
 | Systemd timers | `systemctl list-timers --no-legend \| awk '{print $NF}'` |
 
-## 14. Telegram Bot
+## 14. Telegram Bot — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -208,7 +208,7 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | Recent logs | `journalctl -u telegram-bot --no-pager --since "1 hour ago" \| tail -10` |
 | Error count | `journalctl -u telegram-bot --no-pager \| grep -ci 'error\|traceback\|exception' \|\| echo "0"` |
 
-## 15. Security
+## 15. Security — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -226,7 +226,7 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | Fail2ban real ban (SSH) | `ssh -o PasswordAuthentication=no nonexistent@<IP> 2>&1 \|\| true; sleep 3; sudo fail2ban-client status sshd \| grep 'Total failed'` → expect **total > 0** |
 | iptables f2b chains | `sudo iptables -L -n 2>/dev/null \| grep -c f2b \|\| echo "0 (no bans yet)"` |
 
-## 16. Systemd Services — ALL Running
+## 16. Systemd Services — ALL Running — Automated (audit_deep.sh)
 
 ```bash
 systemctl list-units --type=service --state=running --no-legend | awk '{print $1}'
@@ -236,7 +236,7 @@ Expected: nginx, php*-fpm, mariadb, redis-server, fail2ban, grafana-server,
 node_exporter, mysqld_exporter, nginx_exporter (or apache_exporter),
 redis_exporter, victoria-metrics, vmagent, telegram-bot, ssh, cron, unattended-upgrades
 
-## 17. Processes — Top by Memory
+## 17. Processes — Top by Memory — Automated (audit_deep.sh)
 
 ```bash
 ps aux --sort=-%mem | head -10 | awk '{printf "%-25s %5s %s MB\n", $11, $4, int($6/1024)}'
@@ -245,7 +245,7 @@ ps aux --sort=-%mem | head -10 | awk '{printf "%-25s %5s %s MB\n", $11, $4, int(
 Expected: Grafana ~250-350MB, MariaDB ~150-200MB, VM ~50-70MB,
 vmagent ~30-40MB, fail2ban ~40-50MB, PHP-FPM ~30MB each
 
-## 18. Open Ports (Public)
+## 18. Open Ports (Public) — Automated (audit_deep.sh)
 
 | Check | Command |
 |-------|---------|
@@ -254,13 +254,13 @@ vmagent ~30-40MB, fail2ban ~40-50MB, PHP-FPM ~30MB each
 
 Expected public ports: **22, 80, 443** only.
 
-## 19. Logs — Errors in Last Hour
+## 19. Logs — Errors in Last Hour — Automated (audit_deep.sh)
 
 ```bash
 journalctl --since "1 hour ago" -p err --no-pager | grep -v 'snapd\|ModemManager\|shutdown\|loop' | head -20
 ```
 
-## 20. Functional Checks (code actually works)
+## 20. Functional Checks (code actually works) — Automated (audit_deep.sh)
 
 | Check | Command | Expected |
 |-------|---------|----------|
