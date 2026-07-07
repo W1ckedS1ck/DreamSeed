@@ -24,9 +24,6 @@
     ]
   },
   "terraform": {
-    "managerFilePatterns": [
-      "/terraform/.*\\.tf$/"
-    ],
     "versioning": "semver"
   },
 
