@@ -81,7 +81,8 @@ for spec in \
     "gdrive-upload|BETTERUPTIME_GDRIVE_KEY|86400|1800" \
     "report-daily|BETTERUPTIME_REPORT_DAILY_KEY|86400|1800" \
     "report-weekly|BETTERUPTIME_REPORT_WEEKLY_KEY|604800|3600" \
-    "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600"; do
+    "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600" \
+    "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|60"; do
 
     IFS='|' read -r name var_name period grace <<< "$spec"
 
@@ -159,7 +160,6 @@ payload = {
     'request_timeout': 30,
     'regions': ['eu', 'us', 'as', 'au'],
     'required_keyword': keyword,
-    'keyword_type': 'exists'
 }
 print(json.dumps(payload))
 " "$url" "$name" "$keyword" "$freq")
@@ -203,7 +203,8 @@ for r in json.load(sys.stdin).get('data', []):
 
 for spec in \
     "Monitor|4015585|🌐 dreamseed.online|0" \
-    "Monitor|4015606|📊 Grafana|1" ; do
+    "Monitor|4015606|📊 Grafana|1" \
+    "Monitor|4641003|🤖 Telegram Bot|2" ; do
 
     IFS='|' read -r rtype rid name pos <<< "$spec"
     rtype_cap="${rtype}"

@@ -171,6 +171,9 @@ fi
 # --- Heartbeat ---
 export_metric "check_services_last_run{instance=\"$DOMAIN\"} $(date +%s)"
 
+# --- Ping external heartbeat ---
+ping_heartbeat "${BETTERUPTIME_CHECK_SERVICES_KEY:-}" || true
+
 # --- Export overall health status ---
 if [[ $fail -eq 0 ]]; then
     export_metric "dreamseed_health_overall 1"

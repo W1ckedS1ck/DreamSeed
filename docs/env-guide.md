@@ -164,6 +164,7 @@ Each backup/upload/report script pings a unique heartbeat URL on success:
 | `BETTERUPTIME_REPORT_DAILY_KEY` | `send_report.sh daily` |
 | `BETTERUPTIME_REPORT_WEEKLY_KEY` | `send_report.sh weekly` |
 | `BETTERUPTIME_VERIFY_KEY` | `verify_backups.sh` |
+| `BETTERUPTIME_CHECK_SERVICES_KEY` | `check_services.sh` |
 
 Where to get: https://uptime.betterstack.com → Heartbeats → create → copy the UUID at the end of the URL.
 

@@ -204,7 +204,7 @@ Better Stack (cloud)
 | Type | Items | Delivery |
 |------|-------|----------|
 | HTTP monitors | 3 (dreamseed.online, keyword, grafana) | Better Stack webhook → Telegram |
-| Cron heartbeats | 4 (backup, gdrive, report-daily, report-weekly) | Better Stack webhook → Telegram |
+| Cron heartbeats | 5 (backup, gdrive, report-daily, report-weekly, verify-backups) | Better Stack webhook → Telegram |
 | Status page | go-dreams.betterstackstatus.com (custom domain: status.dreamseed.online) | Public |
 
 ---
