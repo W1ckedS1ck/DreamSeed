@@ -107,6 +107,17 @@
     },
     {
       "customType": "regex",
+      "description": "Track redis_exporter version",
+      "managerFilePatterns": [
+        "/^ansible/group_vars/all\\.yml$/"
+      ],
+      "matchStrings": ["monitoring_redis_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
+      "depNameTemplate": "oliver006/redis_exporter",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
       "description": "Track gitleaks version",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
