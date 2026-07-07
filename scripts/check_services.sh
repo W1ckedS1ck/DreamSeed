@@ -42,6 +42,16 @@ for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_expor
     fi
 done
 
+# --- Promtail (optional) ---
+if command -v promtail &>/dev/null; then
+    if systemctl is-active promtail &>/dev/null; then
+        echo "  ✓ promtail"
+    else
+        echo "  ✗ promtail (inactive)"
+        fail=1
+    fi
+fi
+
 # --- Site HTTP ---
 if [[ -n "$DOMAIN" ]]; then
     http=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/" 2>/dev/null || echo "000")
