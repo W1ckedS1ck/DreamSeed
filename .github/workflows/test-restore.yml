@@ -736,7 +736,7 @@ jobs:
           CACHE_DIRS=$(ssh ubuntu@"$SERVER_IP" "ls /var/www/html/core/cache/ 2>/dev/null | wc -l" || echo 0)
           echo "Cache entries: $CACHE_DIRS"
 
-      - name: Check Faro RUM, Promtail, Better Stack
+      - name: Check Faro RUM + Promtail
         run: |
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
@@ -753,18 +753,6 @@ jobs:
             echo "[PASS] Promtail active"
           else
             echo "[WARN] Promtail not running"
-          fi
-
-          echo "=== Better Stack heartbeat ==="
-          if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
-            HB_CODE=$(curl -sS -o /dev/null -w "%{http_code}" "https://uptime.betterstack.com/api/v1/heartbeat/$BETTERUPTIME_BACKUP_KEY" 2>/dev/null || echo "000")
-            if [ "$HB_CODE" = "200" ]; then
-              echo "[PASS] Backup heartbeat OK"
-            else
-              echo "[WARN] Backup heartbeat: HTTP $HB_CODE"
-            fi
-          else
-            echo "  ⏭ No backup heartbeat key"
           fi
 
       - name: Run full service tests
