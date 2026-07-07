@@ -54,10 +54,10 @@ grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_P
 grafana_port: 3000
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.11.1', true) }}"
 monitoring_nginx_version: "{{ lookup('env', 'MONITORING_NGINX_VERSION') | default('1.5.1', true) }}"
-monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | default('1.0.12', true) }}"
+monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | default('1.1.1', true) }}"
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.19.0', true) }}"
-monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.145.0', true) }}"
-monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.145.0', true) }}"
+monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.147.0', true) }}"
+monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.147.0', true) }}"
 monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.86.0', true) }}"
 monitoring_promtail_enabled: true
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
