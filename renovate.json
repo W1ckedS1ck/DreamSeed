@@ -34,8 +34,7 @@
       ],
       "matchStrings": ["monitoring_node_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "prometheus/node_exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -45,8 +44,7 @@
       ],
       "matchStrings": ["monitoring_nginx_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "nginxinc/nginx-prometheus-exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -56,8 +54,7 @@
       ],
       "matchStrings": ["monitoring_mysql_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "prometheus/mysqld_exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -67,8 +64,7 @@
       ],
       "matchStrings": ["monitoring_vm_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -78,8 +74,7 @@
       ],
       "matchStrings": ["grafana_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "grafana/grafana",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -89,8 +84,7 @@
       ],
       "matchStrings": ["monitoring_apache_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "Lusitaniae/apache_exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -100,8 +94,7 @@
       ],
       "matchStrings": ["monitoring_vmagent_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -111,8 +104,7 @@
       ],
       "matchStrings": ["monitoring_redis_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "oliver006/redis_exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -122,8 +114,7 @@
       ],
       "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
       "depNameTemplate": "gitleaks/gitleaks",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -132,8 +123,7 @@
         "/^\\.tflint\\.hcl$/"
       ],
       "matchStrings": ["version = \"(?<currentValue>[\\d.]+)\"\\s+# renovate: depName=(?<depName>\\S+)"],
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -143,8 +133,7 @@
       ],
       "matchStrings": ["default: \"(?<currentValue>[\\d.]+)\"\\s+# renovate: depName=hashicorp/terraform"],
       "depNameTemplate": "hashicorp/terraform",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -154,8 +143,7 @@
       ],
       "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>.*?)\""],
       "depNameTemplate": "terraform-linters/tflint",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -165,8 +153,7 @@
       ],
       "matchStrings": ["pip install j2lint==(?<currentValue>[\\d.]+)"],
       "depNameTemplate": "aristanetworks/j2lint",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
