@@ -131,7 +131,7 @@
       "managerFilePatterns": [
         "/^\\.github/actions/setup-terraform/action\\.yml$/"
       ],
-      "matchStrings": ["default: \"(?<currentValue>[\\d.]+)\"\\s+# renovate: depName=hashicorp/terraform"],
+      "matchStrings": ["default: \"(?<currentValue>[\\w.\\-]+)\"\\s+# renovate: depName=hashicorp/terraform"],
       "depNameTemplate": "hashicorp/terraform",
       "datasourceTemplate": "github-releases"
     },
@@ -151,7 +151,7 @@
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
-      "matchStrings": ["pip install j2lint==(?<currentValue>[\\d.]+)"],
+      "matchStrings": ["pip install j2lint==(?<currentValue>[\\w.\\-]+)"],
       "depNameTemplate": "aristanetworks/j2lint",
       "datasourceTemplate": "github-releases"
     }
