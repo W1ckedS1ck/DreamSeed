@@ -40,6 +40,7 @@ concurrency:
 
 permissions:
   contents: read
+  deployments: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -49,6 +50,8 @@ jobs:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment == 'prod' && 'production' || '' }}
     permissions:
       contents: read
 
@@ -313,4 +316,5 @@ jobs:
         run: |
           shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
           shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          shred -u secrets/.env 2>/dev/null || rm -f secrets/.env
           rm -f ~/.ssh/deploy_key.pub
