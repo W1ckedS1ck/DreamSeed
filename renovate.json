@@ -30,7 +30,7 @@
       "customType": "regex",
       "description": "Track node_exporter version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["monitoring_node_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "prometheus/node_exporter",
@@ -40,7 +40,7 @@
       "customType": "regex",
       "description": "Track nginx-prometheus-exporter version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["monitoring_nginx_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "nginxinc/nginx-prometheus-exporter",
@@ -50,7 +50,7 @@
       "customType": "regex",
       "description": "Track mysqld_exporter version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["monitoring_mysql_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "prometheus/mysqld_exporter",
@@ -60,7 +60,7 @@
       "customType": "regex",
       "description": "Track VictoriaMetrics version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["monitoring_vm_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
@@ -70,7 +70,7 @@
       "customType": "regex",
       "description": "Track Grafana version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["grafana_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "grafana/grafana",
@@ -80,7 +80,7 @@
       "customType": "regex",
       "description": "Track apache_exporter version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["monitoring_apache_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "Lusitaniae/apache_exporter",
@@ -90,7 +90,7 @@
       "customType": "regex",
       "description": "Track vmagent version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["monitoring_vmagent_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
@@ -100,7 +100,7 @@
       "customType": "regex",
       "description": "Track redis_exporter version",
       "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+        "/ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": ["monitoring_redis_version: \"\\{\\{.*?default\\('(?<currentValue>[^']+)'.*\\) \\}\\}\""],
       "depNameTemplate": "oliver006/redis_exporter",
