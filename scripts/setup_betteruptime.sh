@@ -202,14 +202,19 @@ for r in json.load(sys.stdin).get('data', []):
 }
 
 for spec in \
-    "Monitor|4015585|🌐 dreamseed.online|0" \
-    "Monitor|4015606|📊 Grafana|1" \
-    "Monitor|4641003|🤖 Telegram Bot|2" ; do
+    "Monitor|🌐 dreamseed.online|https://dreamseed.online/|0" \
+    "Monitor|📊 Grafana|https://dreamseed.online/grafana|1" \
+    "Monitor|🤖 Telegram Bot|https://dreamseed.online/bot-health|2" ; do
 
-    IFS='|' read -r rtype rid name pos <<< "$spec"
-    rtype_cap="${rtype}"
+    IFS='|' read -r rtype name url pos <<< "$spec"
 
-    existing_id=$(sp_resource_exists "$rtype_cap" "$rid")
+    rid=$(monitor_exists "$url" "$existing_mon")
+    if [[ -z "$rid" ]]; then
+        echo -e "  ${YELLOW}⚠${NC} $name — monitor not found (create it first)"
+        continue
+    fi
+
+    existing_id=$(sp_resource_exists "$rtype" "$rid")
 
     if [[ -n "$existing_id" ]]; then
         curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" -H "$AUTH" \
@@ -219,7 +224,7 @@ for spec in \
     else
         resp=$(curl -s -X POST "$API/status-pages/$SP_ID/resources" -H "$AUTH" \
           -H "Content-Type: application/json" \
-          -d "{\"resource_type\":\"$rtype_cap\",\"resource_id\":$rid,\"public_name\":\"$name\",\"position\":$pos}" || echo "")
+          -d "{\"resource_type\":\"$rtype\",\"resource_id\":$rid,\"public_name\":\"$name\",\"position\":$pos}" || echo "")
         sp_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null)
         if [[ -n "$sp_id" ]]; then
             echo -e "  ${GREEN}✓${NC} $name — added to status page"
