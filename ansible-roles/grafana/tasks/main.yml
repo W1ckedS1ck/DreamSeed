@@ -30,6 +30,8 @@
   ansible.builtin.apt:
     name: grafana
     state: present
+    update_cache: true
+    cache_valid_time: 0
   become: true
   environment:
     DEBIAN_FRONTEND: noninteractive
