@@ -23,9 +23,7 @@
       "/ansible/requirements\\.yml$/"
     ]
   },
-  "terraform": {
-    "versioning": "semver"
-  },
+  "terraform": {},
 
   "customManagers": [
     {
