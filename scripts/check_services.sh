@@ -141,9 +141,21 @@ if crontab -u ubuntu -l 2>/dev/null | grep -q upload_backups_to_gdrive; then
 else echo "  ✗ cron: upload not set"; fail=1; fi
 
 # --- fail2ban ---
-jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
-if echo "$jails" | grep -q "sshd"; then echo "  ✓ fail2ban: $jails"
-else echo "  ⚠ fail2ban: no jails ($jails)"; fi
+_f2b_active=$(systemctl is-active fail2ban 2>/dev/null || echo "inactive")
+if [[ "$_f2b_active" != "active" ]]; then
+    echo "  ✗ fail2ban: service $_f2b_active"
+    export_metric "fail2ban_up 0"
+    fail=1
+else
+    jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
+    if echo "$jails" | grep -q "sshd"; then
+        echo "  ✓ fail2ban: active ($jails)"
+        export_metric "fail2ban_up 1"
+    else
+        echo "  ⚠ fail2ban: active but no jails ($jails)"
+        export_metric "fail2ban_up 0"
+    fi
+fi
 
 # --- vmagent (Grafana Cloud metrics agent) ---
 if systemctl is-active vmagent &>/dev/null; then
