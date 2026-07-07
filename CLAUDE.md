@@ -231,9 +231,19 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 | Layer | Type | Count | Delivery |
 |-------|------|-------|----------|
 | Grafana Cloud | Hosted metrics (vmagent) | always on | Cloud dashboard |
-| Grafana Cloud | Synthetic Monitoring | 10k checks/mo | SM dashboard |
+| Grafana Cloud | Synthetic Monitoring | ~15k checks/mo | SM dashboard |
+| Grafana Cloud | Frontend Observability (Faro RUM) | LCP/CLS/INP/TTFB, JS errors, sessions | Faro dashboard |
 | Better Stack | HTTP monitors | 3 monitors | Better Stack → Telegram |
-| Better Stack | Cron heartbeats | 4 heartbeats | Better Stack → Telegram |
+| Better Stack | Cron heartbeats | 6 heartbeats | Better Stack → Telegram |
+
+### Frontend Observability (Faro RUM)
+
+- **Deployment:** nginx `sub_filter` in `vhost-ssl.conf.j2` — injects Faro Web SDK into `</head>` on every HTML page. No MODX changes needed.
+- **Collector:** Faro SDK sends data to `/faro-collect` (same origin) → nginx proxies to `faro-collector-prod-<region>.grafana.net/collect/<app_id>` — avoids adblockers.
+- **CSP:** `script-src` includes `https://unpkg.com` (Faro CDN), `connect-src` uses `'self'` (proxy bypasses external URL).
+- **Per-target:** `FARO_COLLECTOR_URL` env var (set in deploy or `secrets/.env`). If empty, Faro block not rendered.
+- **Dashboards:** Auto-generated in Grafana Cloud (Frontend → app). No Ansible imports needed.
+- **Limits:** 50k sessions/mo on Free plan.
 
 ### Grafana memory
 

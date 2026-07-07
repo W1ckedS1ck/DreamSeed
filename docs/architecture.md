@@ -161,7 +161,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 Better Stack (cloud)
    │
    ├─ 3 HTTP monitors ──── https://dreamseed.online (3min, 4 regions)
-   ├─ 4 cron heartbeats ── backup, gdrive, report-daily, report-weekly
+   ├─ 6 cron heartbeats ── backup, gdrive, report-daily, report-weekly, verify-backups, check-services
    └─ Status page ──────── status.dreamseed.online
    │
    └─ Outgoing webhooks
@@ -199,13 +199,13 @@ Better Stack (cloud)
 | VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | scraped 15s, for: 2m |
 | Cloud Upload Failed | warning | upload_last_success_timestamp >2h | pushed 1h, for: 1h |
 
-### External Monitoring (Better Stack — cloud)
+### External Monitoring
 
-| Type | Items | Delivery |
-|------|-------|----------|
-| HTTP monitors | 3 (dreamseed.online, keyword, grafana) | Better Stack webhook → Telegram |
-| Cron heartbeats | 5 (backup, gdrive, report-daily, report-weekly, verify-backups) | Better Stack webhook → Telegram |
-| Status page | go-dreams.betterstackstatus.com (custom domain: status.dreamseed.online) | Public |
+| Type | Provider | Items | Delivery |
+|------|----------|-------|----------|
+| Uptime | Better Stack | 3 monitors, 6 heartbeats, status page | Telegram webhooks |
+| Real User Monitoring | Grafana Cloud (Faro) | LCP/CLS/INP/TTFB, JS errors, sessions by browser/country | Grafana Cloud dashboard |
+| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP, MultiHTTP, Grafana, SSL) ~15k/mo | Grafana Cloud dashboard |
 
 ---
 
