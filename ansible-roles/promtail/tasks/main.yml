@@ -58,6 +58,32 @@
     - Reload systemd
     - Restart Promtail
 
+- name: Add promtail user to adm group (for syslog/auth access)
+  ansible.builtin.user:
+    name: promtail
+    groups: adm
+    append: true
+  become: true
+
+- name: Ensure promtail data dir exists
+  ansible.builtin.file:
+    path: /var/lib/promtail
+    state: directory
+    owner: promtail
+    group: nogroup
+    mode: "0755"
+  become: true
+
+- name: Ensure PHP-FPM log is world-readable
+  ansible.builtin.file:
+    path: "/var/log/php{{ php_version }}-fpm.log"
+    mode: "0644"
+  become: true
+  failed_when: false
+
+- name: Flush handlers before starting
+  ansible.builtin.meta: flush_handlers
+
 - name: Enable and start Promtail
   ansible.builtin.systemd:
     name: promtail
