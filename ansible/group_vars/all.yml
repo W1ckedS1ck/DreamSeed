@@ -105,6 +105,13 @@ modx_cache_tmpfs_size: "128M"
 additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per line)
 
 # ========================
+#  Frontend Observability (Faro — RUM)
+# ========================
+faro_enabled: true
+faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
+faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
+
+# ========================
 #  SSL
 # ========================
 cloudflare_enabled: true  # false → skip certbot, use self-signed (for test servers)
