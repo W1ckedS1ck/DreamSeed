@@ -34,6 +34,15 @@
   become: true
   notify: Restart Promtail
 
+- name: Create systemd drop-in directory for Promtail
+  ansible.builtin.file:
+    path: /etc/systemd/system/promtail.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
 - name: Deploy Promtail systemd drop-in for credentials and expand-env
   ansible.builtin.copy:
     dest: /etc/systemd/system/promtail.service.d/override.conf
