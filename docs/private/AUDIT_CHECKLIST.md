@@ -234,7 +234,7 @@ systemctl list-units --type=service --state=running --no-legend | awk '{print $1
 
 Expected: nginx, php*-fpm, mariadb, redis-server, fail2ban, grafana-server,
 node_exporter, mysqld_exporter, nginx_exporter (or apache_exporter),
-redis_exporter, victoria-metrics, vmagent, telegram-bot, ssh, cron, unattended-upgrades
+redis_exporter, victoria-metrics, vmagent, promtail, telegram-bot, ssh, cron, unattended-upgrades
 
 ## 17. Processes — Top by Memory — Automated (audit_deep.sh)
 
@@ -278,6 +278,12 @@ journalctl --since "1 hour ago" -p err --no-pager | grep -v 'snapd\|ModemManager
 | Grafana alerts in Telegram | `journalctl -u grafana-server --no-pager --since '1 hour ago' \| grep -c 'alert.*notify\|notify\|sent' \|\| echo 'no alerts triggered'` | varies |
 | VMagent data flowing | `curl -s localhost:8429/metrics \| grep vmagent_remotewrite_blocks_sent_total \| awk '{sum+=\\$NF} END {print sum " blocks sent"}'` | >0 |
 | Node exporter custom metrics | `curl -s localhost:9100/metrics 2>/dev/null \| grep -c 'backup_last_success\|upload_last_success' \|\| echo "no custom metrics"` | >0 |
+| Promtail service | `systemctl is-active promtail` | active |
+| Promtail positions | `sudo promtail --dry-run -config.file /etc/promtail/promtail.yml 2>&1 \| grep -c 'nginx\|php-fpm\|syslog' \|\| echo "check file paths"` | >0 |
+| Faro RUM (nginx sub_filter) | `curl -sk https://localhost/ -H 'Host: $DOMAIN' \| grep -c 'faro-web-sdk\|/faro-collect'` | >0 |
+| Faro RUM (CSP connect-src) | `curl -skI https://localhost/ -H 'Host: $DOMAIN' \| grep 'connect-src.*self'` | 'self' (no external) |
+| fail2ban_up metric | `curl -s localhost:8428/api/v1/query?query=fail2ban_up 2>/dev/null \| grep -c '"value".*"1"' \|\| echo "fail2ban_up != 1"` | 1 |
+| Better Stack check-services | `curl -s https://uptime.betterstack.com/api/v1/heartbeat/\$BETTERUPTIME_CHECK_SERVICES_KEY 2>/dev/null` | 200 |
 
 ---
 
@@ -304,3 +310,7 @@ Include:
 - Direct IP block status
 - Performance metrics (TTFB, total time)
 - PHP session handler (FPM = redis, CLI = files — both expected)
+- Faro RUM sub_filter present in nginx SSL config
+- Promtail service active + logs flowing to Loki
+- Better Stack heartbeats check-services up
+- fail2ban_up metric in VictoriaMetrics
