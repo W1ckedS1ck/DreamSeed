@@ -61,6 +61,7 @@ monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | de
 monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.86.0', true) }}"
 monitoring_promtail_enabled: true
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
+loki_username: "{{ lookup('env', 'LOKI_USERNAME') | default('', true) }}"
 
 vm_retention: 3
 monitoring_cron_enabled: true
