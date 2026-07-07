@@ -67,10 +67,10 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 | FPM pool | `ls /etc/php/*/fpm/pool.d/` |
 | FPM processes | `ps aux \| grep php-fpm \| grep -v grep \| wc -l` |
 | FPM memory | `ps aux \| grep php-fpm \| grep -v grep \| awk '{sum+=$6; count++} END {print int(sum/count/1024) " MB avg"}'` |
-| Extensions loaded | `php -m \| grep -iE 'pdo_mysql|redis|curl|mbstring|json|xml|zip|gd|openssl'` |
-| Limits | `php -i \| grep -E 'memory_limit|upload_max|post_max|max_execution|max_input'` |
+| Extensions loaded | `php -m \| grep -iE 'pdo_mysql&#124;redis&#124;curl&#124;mbstring&#124;json&#124;xml&#124;zip&#124;gd&#124;openssl'` |
+| Limits | `php -i \| grep -E 'memory_limit&#124;upload_max&#124;post_max&#124;max_execution&#124;max_input'` |
 | Opcache | `php -i \| grep -E 'opcache.enable\|opcache.memory_consumption\|opcache.max_accelerated_files'` |
-| Opcache status | `php -r '$s=opcache_get_status(false);$m=$s["memory_usage"];$t=$s["opcache_statistics"];echo "Mem: ".round($m["used_memory"]/1024/1024,2)."/".round(($m["used_memory"]+$m["free_memory"])/1024/1024,2)." MB | Files: ".$t["num_cached_scripts"]." | Hits: ".$t["hits"]." | Hit rate: ".round($t["hits"]/($t["hits"]+$t["misses"])*100,2)."%"'` |
+| Opcache status | `php -r '$s=opcache_get_status(false);$m=$s["memory_usage"];$t=$s["opcache_statistics"];echo "Mem: ".round($m["used_memory"]/1024/1024,2)."/".round(($m["used_memory"]+$m["free_memory"])/1024/1024,2)." MB &#124; Files: ".$t["num_cached_scripts"]." &#124; Hits: ".$t["hits"]." &#124; Hit rate: ".round($t["hits"]/($t["hits"]+$t["misses"])*100,2)."%"'` |
 
 ## 5. Database (MariaDB) — Automated (audit_deep.sh)
 
@@ -123,6 +123,7 @@ ssh -o LogLevel=ERROR -i ~/.ssh/Vitali.pem ubuntu@<IP>
 
 **Note:** GET `/manager/` and POST `/connectors/` trigger `session_start()` and create Redis sessions. Even plain GET `/` may create sessions if MODX starts them for anonymous visitors.
 **Critical:** `session_handler_class` must be **empty** in MODX system settings — otherwise MODX overrides PHP handler and writes to DB:
+
 ```bash
 mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"session_handler_class\""
 # → output must be empty (value = '')
@@ -153,11 +154,11 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 
 | Check | Command |
 |-------|---------|
-| Site via CF (warm) | `curl -o /dev/null -w '%{http_code} | TTFB: %{time_starttransfer}s | Total: %{time_total}s\n' https://<domain>/` |
+| Site via CF (warm) | `curl -o /dev/null -w '%{http_code} &#124; TTFB: %{time_starttransfer}s &#124; Total: %{time_total}s\n' https://<domain>/` |
 | Site via CF (cold) | run twice — first is cold, second is cached |
-| Direct to server | `curl -sk -H 'Host: <domain>' -o /dev/null -w 'TTFB: %{time_starttransfer}s | Total: %{time_total}s | Size: %{size_download}B\n' https://<IP>/` |
-| Manager | `curl -sk -o /dev/null -w '%{http_code} | %{time_total}s\n' https://<domain>/manager/` |
-| Static file (cached) | `curl -sk -o /dev/null -w '%{http_code} | %{time_total}s\n' https://<domain>/theme/css/style.css` |
+| Direct to server | `curl -sk -H 'Host: <domain>' -o /dev/null -w 'TTFB: %{time_starttransfer}s &#124; Total: %{time_total}s &#124; Size: %{size_download}B\n' https://<IP>/` |
+| Manager | `curl -sk -o /dev/null -w '%{http_code} &#124; %{time_total}s\n' https://<domain>/manager/` |
+| Static file (cached) | `curl -sk -o /dev/null -w '%{http_code} &#124; %{time_total}s\n' https://<domain>/theme/css/style.css` |
 | Page size | `curl -sk -o /dev/null -w 'Size: %{size_download} bytes (%{content_type})\n' https://<domain>/` |
 
 ## 11. Monitoring — Automated (audit_deep.sh)
@@ -300,6 +301,7 @@ REPORT
 ```
 
 Include:
+
 - All check results
 - Any anomalies (deviation from expected)
 - Grafana memory (check against GOMEMLIMIT 800MiB)
