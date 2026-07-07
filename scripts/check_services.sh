@@ -157,15 +157,33 @@ if [[ "$_f2b_active" != "active" ]]; then
     export_metric "fail2ban_up 0"
     fail=1
 else
-    jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
-    if echo "$jails" | grep -q "sshd"; then
-        echo "  ✓ fail2ban: active ($jails)"
+    _f2b_jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
+    _f2b_missing=0
+    for _j in sshd modx-admin dreamseed-botsearch dreamseed-bad-request recidive; do
+        if echo "$_f2b_jails" | grep -q "$_j"; then
+            :
+        else
+            _f2b_missing=1
+        fi
+    done
+    if [[ "$_f2b_missing" -eq 0 ]]; then
+        echo "  ✓ fail2ban: active ($_f2b_jails)"
         export_metric "fail2ban_up 1"
     else
-        echo "  ⚠ fail2ban: active but no jails ($jails)"
+        echo "  ⚠ fail2ban: active but missing jails"
         export_metric "fail2ban_up 0"
     fi
 fi
+
+# --- Systemd timers ---
+for _t in check-site.timer check-services.timer; do
+    if systemctl is-active "$_t" &>/dev/null; then
+        echo "  ✓ $_t"
+    else
+        echo "  ✗ $_t (inactive)"
+        fail=1
+    fi
+done
 
 # --- vmagent (Grafana Cloud metrics agent) ---
 if systemctl is-active vmagent &>/dev/null; then
