@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
-      name: ${{ inputs.environment == 'prod' && 'production' || '' }}
+      name: ${{ startsWith(inputs.environment, 'prod') && 'production' || '' }}
     permissions:
       contents: read
 
