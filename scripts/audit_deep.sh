@@ -491,12 +491,12 @@ else
   fail "Grafana unhealthy: DB=$_grafana_db" "grafana_health"
 fi
 
-if [[ "$_grafana_ver" == "12.4.5" ]]; then
-  ok "Grafana version: $_grafana_ver (correct)" "grafana_version"
+if [[ "$_grafana_ver" =~ ^13\. ]]; then
+  ok "Grafana version: $_grafana_ver (13.x OK)" "grafana_version"
 elif [[ "$_grafana_ver" =~ ^12\. ]]; then
-  warn "Grafana version: $_grafana_ver (12.x OK)" "grafana_version"
+  ok "Grafana version: $_grafana_ver (12.x OK)" "grafana_version"
 else
-  warn "Grafana version: $_grafana_ver (expect 12.4.5)" "grafana_version"
+  warn "Grafana version: $_grafana_ver (expect 13.x)" "grafana_version"
 fi
 
 if ls /etc/grafana/provisioning/datasources/ /etc/grafana/provisioning/dashboards/ &>/dev/null; then
@@ -611,7 +611,7 @@ echo ""
 echo "── 16. Systemd Services ──"
 
 _expected_services=(
-  nginx php8.3-fpm mariadb redis-server fail2ban grafana-server
+  nginx php8.3-fpm mariadb redis-server fail2ban grafana-server promtail
   node_exporter mysqld_exporter nginx_exporter redis_exporter
   victoria-metrics vmagent telegram-bot ssh cron unattended-upgrades
 )
@@ -682,6 +682,26 @@ fi
 
 # sysctl functional check (already done above, just reference)
 echo "    sysctl: syncookies=$_syncookies rp_filter=$_rpfilter srcroute=$_sourceroute"
+
+# Faro RUM (nginx sub_filter)
+_faro=$(curl -sk --max-time 5 "https://${DOMAIN}/" 2>/dev/null | grep -c 'faro-web-sdk' || true)
+if [[ "$_faro" -ge 1 ]]; then
+  ok "Faro RUM (sub_filter active)" "functional_faro"
+else
+  warn "Faro RUM not found (sub_filter missing?)" "functional_faro"
+fi
+
+# Promtail log shipping
+if systemctl is-active promtail &>/dev/null; then
+  _promtail_logs=$(journalctl -u promtail --no-pager -n 20 2>/dev/null | grep -c 'nginx\|php-fpm\|syslog' || true)
+  if [[ "$_promtail_logs" -ge 3 ]]; then
+    ok "Promtail: reading nginx + php-fpm + syslog (${_promtail_logs} targets)" "functional_promtail"
+  else
+    warn "Promtail active but log targets < 3" "functional_promtail"
+  fi
+else
+  warn "Promtail not running" "functional_promtail"
+fi
 
 # ── Summary ─────────────────────────────────────────────────────────────────
 

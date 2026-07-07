@@ -164,8 +164,33 @@ Each backup/upload/report script pings a unique heartbeat URL on success:
 | `BETTERUPTIME_REPORT_DAILY_KEY` | `send_report.sh daily` |
 | `BETTERUPTIME_REPORT_WEEKLY_KEY` | `send_report.sh weekly` |
 | `BETTERUPTIME_VERIFY_KEY` | `verify_backups.sh` |
+| `BETTERUPTIME_CHECK_SERVICES_KEY` | `check_services.sh` |
 
 Where to get: https://uptime.betterstack.com → Heartbeats → create → copy the UUID at the end of the URL.
+
+---
+
+## Frontend Observability (Faro RUM)
+
+Set per-target as GitHub Variables (not secrets):
+
+| Variable | Value (dev) | Value (prod) |
+|----------|------------|-------------|
+| `FARO_COLLECTOR_URL` | `https://faro-collector-prod-eu-north-0.grafana.net/collect/<app_id>` | `https://faro-collector-prod-us-east-2.grafana.net/collect/<app_id>` |
+| `FARO_APP_NAME` | *(auto = domain)* | *(auto = domain)* |
+
+---
+
+## Grafana Cloud Logs (Loki)
+
+Set per-target as GitHub Variables (not secrets):
+
+| Variable | Value (dev) | Value (prod) |
+|----------|------------|-------------|
+| `LOKI_URL` | `https://logs-prod-025.grafana.net/loki/api/v1/push` | `https://logs-prod-036.grafana.net/loki/api/v1/push` |
+| `LOKI_USERNAME` | `1630695` | `1630689` |
+
+Password is the same Access Policy token as vmagent (`grafana_cloud_token`).
 
 ---
 

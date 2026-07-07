@@ -40,6 +40,7 @@ concurrency:
 
 permissions:
   contents: read
+  deployments: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -49,6 +50,8 @@ jobs:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment:
+      name: ${{ startsWith(inputs.environment, 'prod') && 'production' || '' }}
     permissions:
       contents: read
 
@@ -79,6 +82,7 @@ jobs:
           BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
           BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
           BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
+          BETTERUPTIME_CHECK_SERVICES_KEY: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
         run: |
@@ -87,6 +91,7 @@ jobs:
                    BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY \
                    BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY \
                    BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY \
+                   BETTERUPTIME_CHECK_SERVICES_KEY \
                    DEV_AWS_SECRET_KEY PROD_SECRET_KEY; do
             val="${!v:-}"
             [[ -n "$val" ]] && echo "::add-mask::$val" || true
@@ -113,11 +118,15 @@ jobs:
           BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
           BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
           BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
+          BETTERUPTIME_CHECK_SERVICES_KEY: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          LOKI_URL: ${{ vars.LOKI_URL }}
+          LOKI_USERNAME: ${{ vars.LOKI_USERNAME }}
+          FARO_COLLECTOR_URL: ${{ vars.FARO_COLLECTOR_URL }}
           DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
@@ -143,6 +152,7 @@ jobs:
             echo "BETTERUPTIME_REPORT_DAILY_KEY=$BETTERUPTIME_REPORT_DAILY_KEY"
             echo "BETTERUPTIME_REPORT_WEEKLY_KEY=$BETTERUPTIME_REPORT_WEEKLY_KEY"
             echo "BETTERUPTIME_VERIFY_KEY=$BETTERUPTIME_VERIFY_KEY"
+            echo "BETTERUPTIME_CHECK_SERVICES_KEY=$BETTERUPTIME_CHECK_SERVICES_KEY"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
             printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "$USER_SSH_PUBLIC_KEY" "$VITALI_SSH_PUBLIC_KEY"
@@ -154,6 +164,11 @@ jobs:
             echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_URL"
             echo "PROD_GRAFANA_CLOUD_USERNAME=${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}"
             echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
+
+            # Loki logging — set per target
+            echo "LOKI_URL=${{ vars.LOKI_URL }}"
+            echo "LOKI_USERNAME=${{ vars.LOKI_USERNAME }}"
+            echo "FARO_COLLECTOR_URL=${{ vars.FARO_COLLECTOR_URL }}"
 
             echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
             echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
@@ -301,4 +316,5 @@ jobs:
         run: |
           shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
           shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          shred -u secrets/.env 2>/dev/null || rm -f secrets/.env
           rm -f ~/.ssh/deploy_key.pub

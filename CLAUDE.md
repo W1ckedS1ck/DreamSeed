@@ -231,16 +231,34 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 | Layer | Type | Count | Delivery |
 |-------|------|-------|----------|
 | Grafana Cloud | Hosted metrics (vmagent) | always on | Cloud dashboard |
-| Grafana Cloud | Synthetic Monitoring | 10k checks/mo | SM dashboard |
+| Grafana Cloud | Synthetic Monitoring | ~15k checks/mo | SM dashboard |
+| Grafana Cloud | Frontend Observability (Faro RUM) | LCP/CLS/INP/TTFB, JS errors, sessions | Faro dashboard |
 | Better Stack | HTTP monitors | 3 monitors | Better Stack → Telegram |
-| Better Stack | Cron heartbeats | 4 heartbeats | Better Stack → Telegram |
+| Better Stack | Cron heartbeats | 6 heartbeats | Better Stack → Telegram |
 
-### Grafana 13 → 12 downgrade (memory regression)
+### Frontend Observability (Faro RUM)
 
-- **Issue:** [#123017](https://github.com/grafana/grafana/issues/123017) — v13 increased memory consumption (180→330MB idle) due to ngalert stale state maps + unbounded HTTP cache
-- **Fix:** [#123098](https://github.com/grafana/grafana/pull/123098) — `fix(ngalert): release stale transition value maps after full eval pipeline`
-- **Status:** Downgraded to v12.4.5 (Jul 2026). Revisit when 13.1.x ships with the fix.
-- **GOMEMLIMIT=800MiB** retained in `/etc/systemd/system/grafana-server.service.d/memory.conf` (now in Ansible).
+- **Deployment:** nginx `sub_filter` in `vhost-ssl.conf.j2` — injects Faro Web SDK into `</head>` on every HTML page. No MODX changes needed.
+- **Collector:** Faro SDK sends data to `/faro-collect` (same origin) → nginx proxies to `faro-collector-prod-<region>.grafana.net/collect/<app_id>` — avoids adblockers.
+- **CSP:** `script-src` includes `https://unpkg.com` (Faro CDN), `connect-src` uses `'self'` (proxy bypasses external URL).
+- **Per-target:** `FARO_COLLECTOR_URL` env var (set in deploy or `secrets/.env`). If empty, Faro block not rendered.
+- **Dashboards:** Auto-generated in Grafana Cloud (Frontend → app). No Ansible imports needed.
+- **Limits:** 50k sessions/mo on Free plan.
+
+### Log shipping (Promtail → Loki)
+
+- **Deployment:** Promtail installed via apt from Grafana repo, configured by Ansible role `promtail` in `playbook-05-monitor.yml`. Conditional on `LOKI_URL` being set.
+- **Logs collected:** nginx access + error, PHP-FPM, syslog, auth, fail2ban. `catch_workers_output` enabled so PHP errors go to FPM log.
+- **Credentials:** Uses same Access Policy token as vmagent (`logs:write` scope). Loki username and URL are per-target GitHub Variables.
+- **Proxy:** Logs sent directly to `logs-prod-<region>.grafana.net`. Per-target Loki URL in `group_vars/all.yml`.
+- **Limits:** 50 GB/mo on Free plan, 14 days retention.
+- **Troubleshooting:** `sudo journalctl -u promtail --no-pager -n 30` to check connection errors. `sudo test -f /etc/promtail/promtail.yml` to verify config.
+
+### Grafana memory
+
+- **Current:** v13.1.0 (pinned in code, deployed via apt). Memory ~270MB with GOMEMLIMIT=800MiB.
+- **History:** [#123017](https://github.com/grafana/grafana/issues/123017) caused regression at v13 launch (180→330MB idle). Fixed in later 13.x releases.
+- **GOMEMLIMIT=800MiB** in `/etc/systemd/system/grafana-server.service.d/memory.conf` (managed by Ansible).
 
 ---
 

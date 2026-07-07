@@ -1,0 +1,92 @@
+---
+- name: Install Promtail
+  ansible.builtin.apt:
+    name: promtail
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  notify: Restart Promtail
+
+- name: Create promtail config dir
+  ansible.builtin.file:
+    path: /etc/promtail
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Validate credentials
+  ansible.builtin.assert:
+    that:
+      - grafana_cloud_username | length > 0
+      - grafana_cloud_token | length > 0
+    fail_msg: "grafana_cloud_username and grafana_cloud_token are required for Loki"
+
+- name: Deploy Promtail config
+  ansible.builtin.template:
+    src: promtail.yml.j2
+    dest: /etc/promtail/promtail.yml
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Restart Promtail
+
+- name: Create systemd drop-in directory for Promtail
+  ansible.builtin.file:
+    path: /etc/systemd/system/promtail.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Deploy Promtail systemd drop-in for credentials and expand-env
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/promtail.service.d/override.conf
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/promtail -config.expand-env=true -config.file=/etc/promtail/promtail.yml
+      Environment=LOKI_USERNAME={{ loki_username }}
+      Environment=LOKI_PASSWORD={{ grafana_cloud_token }}
+    mode: "0644"
+  become: true
+  notify:
+    - Reload systemd
+    - Restart Promtail
+
+- name: Add promtail user to adm group (for syslog/auth access)
+  ansible.builtin.user:
+    name: promtail
+    groups: adm
+    append: true
+  become: true
+
+- name: Ensure promtail data dir exists
+  ansible.builtin.file:
+    path: /var/lib/promtail
+    state: directory
+    owner: promtail
+    group: nogroup
+    mode: "0755"
+  become: true
+
+- name: Ensure PHP-FPM log is world-readable
+  ansible.builtin.file:
+    path: "/var/log/php{{ php_version }}-fpm.log"
+    mode: "0644"
+  become: true
+  failed_when: false
+
+- name: Flush handlers before starting
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Promtail
+  ansible.builtin.systemd:
+    name: promtail
+    state: started
+    enabled: true
+  become: true

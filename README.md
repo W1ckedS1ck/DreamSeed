@@ -2,18 +2,17 @@
 
 ![CI](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg)
-![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 ![BackupRestorationTest](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/test-restore.yml/badge.svg)
-![Gitleaks](https://img.shields.io/badge/Gitleaks-passed-00C853?logo=gitleaks)
+![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
-![Terraform / OpenTofu](https://img.shields.io/badge/Terraform-1.9%2B-7B42BC?logo=terraform)
-![Ansible](https://img.shields.io/badge/Ansible-14%2B-EE0000?logo=ansible)
+![Terraform](https://img.shields.io/badge/Terraform-1.15-7B42BC?logo=terraform)
+![Ansible](https://img.shields.io/badge/Ansible-14.1-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Checkov](https://img.shields.io/badge/Checkov-passed-2A6F97?logo=checkov)
-![Pre-commit](https://img.shields.io/badge/pre--commit-active-FAB040?logo=pre-commit)
+![Grafana](https://img.shields.io/badge/Grafana-13.1-F46800?logo=grafana)
+![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
@@ -36,7 +35,7 @@
 | Deploy time | ~8-10 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
-| Uptime coverage | 24 Grafana alert rules + 3 Better Stack monitors + 4 cron heartbeats → Telegram |
+| Uptime coverage | 24 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
 | CI checks per push | 9 parallel jobs (lint → security → validate) |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
@@ -50,7 +49,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 16 idempotent Ansible roles covering the full server lifecycle (base → web → database → redis → monitoring → backup → grafana → security)
-- **Observability** — VictoriaMetrics + Grafana stack with 24 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics. External watchdog via Better Stack: 3 HTTP monitors + 4 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Observability** — VictoriaMetrics + Grafana stack with 24 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
 - **CI/CD** — 9 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud, health-check workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
@@ -66,10 +65,10 @@ I own **everything below the application layer** — provisioning, configuration
 | **Configuration** | Ansible (16 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB · Redis |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Node/Nginx/MySQL/Redis exporters · 24 alert rules → Telegram · Better Stack (3 HTTP monitors + 4 cron heartbeats + status page) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 24 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (9 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -153,10 +152,10 @@ DreamSeed/
 │   ├── playbook-01-base.yml      # OS packages
 │   ├── playbook-02-web.yml          # Nginx/Apache + PHP + SSL
 │   ├── playbook-03-db.yml        # MariaDB + restore logic
-│   ├── playbook-04-monitor.yml   # VictoriaMetrics + exporters
-│   ├── playbook-05-backup.yml   # Backup cron + Telegram bot
-│   ├── playbook-06-grafana.yml   # Grafana dashboards + alerts
-│   └── playbook-07-security.yml  # Hardening
+│   ├── playbook-04-security.yml  # Hardening (fail2ban, SSH)
+│   ├── playbook-05-monitor.yml   # VictoriaMetrics + exporters
+│   ├── playbook-06-backup.yml   # Backup cron + Telegram bot
+│   └── playbook-07-grafana.yml   # Grafana dashboards + alerts
 ├── ansible-roles/            # 16 reusable roles (nginx, mariadb, ssl, redis, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── configs/                  # Fail2ban jails (incl. MODX admin filter)
@@ -206,16 +205,18 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 - **Grafana** (`:3000`) — 5 provisioned dashboards (Node Exporter, MySQL, Nginx, VictoriaMetrics, Session Table), 24 alert rules → Telegram
 - **check_site.sh** (cron, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
-**Grafana Cloud (hosted metrics):**
+**Grafana Cloud (hosted telemetry):**
 
 - **vmagent** (`:8429`) — VictoriaMetrics agent, scrapes on-server exporters and remote-writes to Grafana Cloud
+- **Promtail** (`:9080`) — log agent, ships nginx + php-fpm + syslog to Loki (Grafana Cloud)
+- **Faro RUM** — real user monitoring: Core Web Vitals (LCP/CLS/INP), JS errors, sessions by browser/country. Injected via nginx `sub_filter`, proxied through same domain to avoid adblockers
 - **Grafana Cloud dashboards** — 4 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Nginx 17452, VictoriaMetrics 10229)
 - **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 4 global regions + SSL checks from 3 regions
 
 **External (Better Stack cloud-hosted):**
 
 - **3 HTTP monitors** — `dreamseed.online` (HTTP 200 + keyword check + Grafana endpoint), 3min interval, 4 global regions
-- **4 cron heartbeats** — backup (1h/5m), gdrive-upload (24h/30m), report-daily (24h/30m), report-weekly (7d/1h)
+- **6 cron heartbeats** — backup (1h/5m), gdrive-upload (24h/30m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/60s)
 - **Public status page** — `status.dreamseed.online` with live uptime history
 - **Telegram alerts** via separate webhooks for incident start and resolve
 

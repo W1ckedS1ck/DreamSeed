@@ -1,0 +1,65 @@
+server:
+  http_listen_address: 127.0.0.1
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yml
+
+clients:
+  - url: {{ loki_url }}
+    basic_auth:
+      username: ${LOKI_USERNAME}
+      password: ${LOKI_PASSWORD}
+
+scrape_configs:
+  - job_name: nginx-access
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nginx
+          instance: {{ domain }}
+          type: access
+          __path__: /var/log/nginx/{{ domain }}*access*.log
+
+  - job_name: nginx-error
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nginx
+          instance: {{ domain }}
+          type: error
+          __path__: /var/log/nginx/{{ domain }}*error*.log
+
+  - job_name: php-fpm
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: php-fpm
+          instance: {{ domain }}
+          __path__: /var/log/php*-fpm.log
+
+  - job_name: syslog
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: system
+          instance: {{ domain }}
+          __path__: /var/log/syslog
+
+  - job_name: auth-log
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: system
+          instance: {{ domain }}
+          type: auth
+          __path__: /var/log/auth.log
+
+  - job_name: fail2ban
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: fail2ban
+          instance: {{ domain }}
+          __path__: /var/log/fail2ban.log

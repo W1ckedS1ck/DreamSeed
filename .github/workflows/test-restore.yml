@@ -66,6 +66,7 @@ jobs:
           BETTERUPTIME_REPORT_DAILY_KEY: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
           BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
           BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
+          BETTERUPTIME_CHECK_SERVICES_KEY: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
           USER_SSH_PUBLIC_KEY: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           DEV_GRAFANA_CLOUD_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
@@ -96,6 +97,7 @@ jobs:
             echo "BETTERUPTIME_REPORT_DAILY_KEY=$BETTERUPTIME_REPORT_DAILY_KEY"
             echo "BETTERUPTIME_REPORT_WEEKLY_KEY=$BETTERUPTIME_REPORT_WEEKLY_KEY"
             echo "BETTERUPTIME_VERIFY_KEY=$BETTERUPTIME_VERIFY_KEY"
+            echo "BETTERUPTIME_CHECK_SERVICES_KEY=$BETTERUPTIME_CHECK_SERVICES_KEY"
             echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
             echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
             printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "$USER_SSH_PUBLIC_KEY" "$VITALI_SSH_PUBLIC_KEY"
@@ -733,6 +735,25 @@ jobs:
           echo "=== MODX cache ==="
           CACHE_DIRS=$(ssh ubuntu@"$SERVER_IP" "ls /var/www/html/core/cache/ 2>/dev/null | wc -l" || echo 0)
           echo "Cache entries: $CACHE_DIRS"
+
+      - name: Check Faro RUM + Promtail
+        run: |
+          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+
+          echo "=== Faro RUM ==="
+          if ssh ubuntu@"$SERVER_IP" "curl -skS 'https://test.dreamseed.online/' | grep -q 'faro-web-sdk'"; then
+            echo "[PASS] Faro RUM injected"
+          else
+            echo "[WARN] Faro RUM not found"
+          fi
+
+          echo "=== Promtail ==="
+          if ssh ubuntu@"$SERVER_IP" "systemctl is-active promtail &>/dev/null"; then
+            echo "[PASS] Promtail active"
+          else
+            echo "[WARN] Promtail not running"
+          fi
 
       - name: Run full service tests
         id: service_tests

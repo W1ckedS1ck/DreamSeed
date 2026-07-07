@@ -109,6 +109,7 @@ All set in `deploy.yml` and consumed by the respective server scripts.
 | `BETTERUPTIME_REPORT_DAILY_KEY` | `send_report.sh` (daily) |
 | `BETTERUPTIME_REPORT_WEEKLY_KEY` | `send_report.sh` (weekly) |
 | `BETTERUPTIME_VERIFY_KEY` | `verify_backups.sh` |
+| `BETTERUPTIME_CHECK_SERVICES_KEY` | `check_services.sh` |
 
 ---
 
