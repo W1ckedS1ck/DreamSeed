@@ -1,0 +1,55 @@
+---
+- name: Install Promtail
+  ansible.builtin.apt:
+    name: promtail
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  notify: Restart Promtail
+
+- name: Create promtail config dir
+  ansible.builtin.file:
+    path: /etc/promtail
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Validate credentials
+  ansible.builtin.assert:
+    that:
+      - grafana_cloud_username | length > 0
+      - grafana_cloud_token | length > 0
+    fail_msg: "grafana_cloud_username and grafana_cloud_token are required for Loki"
+
+- name: Deploy Promtail config
+  ansible.builtin.template:
+    src: promtail.yml.j2
+    dest: /etc/promtail/promtail.yml
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Restart Promtail
+
+- name: Deploy Promtail systemd drop-in for credentials
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/promtail.service.d/credentials.conf
+    content: |
+      [Service]
+      Environment=LOKI_USERNAME={{ grafana_cloud_username }}
+      Environment=LOKI_PASSWORD={{ grafana_cloud_token }}
+    mode: "0644"
+  become: true
+  notify:
+    - Reload systemd
+    - Restart Promtail
+
+- name: Enable and start Promtail
+  ansible.builtin.systemd:
+    name: promtail
+    state: started
+    enabled: true
+  become: true
