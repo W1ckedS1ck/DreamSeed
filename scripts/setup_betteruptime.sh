@@ -8,6 +8,8 @@
 
 set -euo pipefail
 
+DOMAIN="${DOMAIN:-dreamseed.online}"
+
 # Ensure HOME is set for temp directories
 export HOME="${HOME:?ERROR: HOME environment variable not set}"
 
@@ -139,9 +141,9 @@ for item in data.get('data', []):
 }
 
 for spec in \
-    "https://dreamseed.online/|Main site|The Dreamers|180" \
-    "https://dreamseed.online/grafana|Grafana|Grafana|180" \
-    "https://dreamseed.online/bot-health|Telegram Bot|OK|180"; do
+    "https://${DOMAIN}/|Main site|The Dreamers|180" \
+    "https://${DOMAIN}/grafana|Grafana|Grafana|180" \
+    "https://${DOMAIN}/bot-health|Telegram Bot|OK|180"; do
 
     IFS='|' read -r url name keyword freq <<< "$spec"
 
@@ -202,9 +204,9 @@ for r in json.load(sys.stdin).get('data', []):
 }
 
 for spec in \
-    "Monitor|🌐 dreamseed.online|https://dreamseed.online/|0" \
-    "Monitor|📊 Grafana|https://dreamseed.online/grafana|1" \
-    "Monitor|🤖 Telegram Bot|https://dreamseed.online/bot-health|2" ; do
+    "Monitor|🌐 ${DOMAIN}|https://${DOMAIN}/|0" \
+    "Monitor|📊 Grafana|https://${DOMAIN}/grafana|1" \
+    "Monitor|🤖 Telegram Bot|https://${DOMAIN}/bot-health|2" ; do
 
     IFS='|' read -r rtype name url pos <<< "$spec"
 
