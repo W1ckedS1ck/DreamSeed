@@ -11,7 +11,7 @@
 ![Ansible](https://img.shields.io/badge/Ansible-14.1-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Grafana](https://img.shields.io/badge/Grafana-12.4.5-F46800?logo=grafana)
+![Grafana](https://img.shields.io/badge/Grafana-13.2-F46800?logo=grafana)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 

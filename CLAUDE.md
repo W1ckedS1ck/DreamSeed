@@ -235,12 +235,11 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 | Better Stack | HTTP monitors | 3 monitors | Better Stack → Telegram |
 | Better Stack | Cron heartbeats | 4 heartbeats | Better Stack → Telegram |
 
-### Grafana 13 → 12 downgrade (memory regression)
+### Grafana memory
 
-- **Issue:** [#123017](https://github.com/grafana/grafana/issues/123017) — v13 increased memory consumption (180→330MB idle) due to ngalert stale state maps + unbounded HTTP cache
-- **Fix:** [#123098](https://github.com/grafana/grafana/pull/123098) — `fix(ngalert): release stale transition value maps after full eval pipeline`
-- **Status:** Downgraded to v12.4.5 (Jul 2026). Revisit when 13.1.x ships with the fix.
-- **GOMEMLIMIT=800MiB** retained in `/etc/systemd/system/grafana-server.service.d/memory.conf` (now in Ansible).
+- **Current:** v13.2.0 on prod. Memory ~270MB with GOMEMLIMIT=800MiB.
+- **History:** [#123017](https://github.com/grafana/grafana/issues/123017) caused regression at v13 launch (180→330MB idle). Fixed in later 13.x releases.
+- **GOMEMLIMIT=800MiB** in `/etc/systemd/system/grafana-server.service.d/memory.conf` (managed by Ansible).
 
 ---
 

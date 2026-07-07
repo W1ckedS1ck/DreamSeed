@@ -491,12 +491,12 @@ else
   fail "Grafana unhealthy: DB=$_grafana_db" "grafana_health"
 fi
 
-if [[ "$_grafana_ver" == "12.4.5" ]]; then
-  ok "Grafana version: $_grafana_ver (correct)" "grafana_version"
+if [[ "$_grafana_ver" =~ ^13\. ]]; then
+  ok "Grafana version: $_grafana_ver (13.x OK)" "grafana_version"
 elif [[ "$_grafana_ver" =~ ^12\. ]]; then
-  warn "Grafana version: $_grafana_ver (12.x OK)" "grafana_version"
+  ok "Grafana version: $_grafana_ver (12.x OK)" "grafana_version"
 else
-  warn "Grafana version: $_grafana_ver (expect 12.4.5)" "grafana_version"
+  warn "Grafana version: $_grafana_ver (expect 13.x)" "grafana_version"
 fi
 
 if ls /etc/grafana/provisioning/datasources/ /etc/grafana/provisioning/dashboards/ &>/dev/null; then
