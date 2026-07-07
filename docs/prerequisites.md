@@ -47,6 +47,7 @@ All targets require:
 - `TF_API_TOKEN` — Terraform Cloud API token
 - `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 + DNS update; zone ID auto-detected)
 - `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
+- `BETTERUPTIME_BACKUP_KEY` … `BETTERUPTIME_CHECK_SERVICES_KEY` — per-script heartbeat keys (6 total)
 
 Hetzner (prefixed per-target, can also fall back to unprefixed vars):
 

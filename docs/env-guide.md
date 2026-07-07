@@ -170,6 +170,30 @@ Where to get: https://uptime.betterstack.com → Heartbeats → create → copy 
 
 ---
 
+## Frontend Observability (Faro RUM)
+
+Set per-target as GitHub Variables (not secrets):
+
+| Variable | Value (dev) | Value (prod) |
+|----------|------------|-------------|
+| `FARO_COLLECTOR_URL` | `https://faro-collector-prod-eu-north-0.grafana.net/collect/<app_id>` | `https://faro-collector-prod-us-east-2.grafana.net/collect/<app_id>` |
+| `FARO_APP_NAME` | `aws.vitalikuts.online` | `DreamSeed` |
+
+---
+
+## Grafana Cloud Logs (Loki)
+
+Set per-target as GitHub Variables (not secrets):
+
+| Variable | Value (dev) | Value (prod) |
+|----------|------------|-------------|
+| `LOKI_URL` | `https://logs-prod-025.grafana.net/loki/api/v1/push` | `https://logs-prod-036.grafana.net/loki/api/v1/push` |
+| `LOKI_USERNAME` | `1630695` | `1630689` |
+
+Password is the same Access Policy token as vmagent (`grafana_cloud_token`).
+
+---
+
 ## EIP (Elastic IP)
 
 ```

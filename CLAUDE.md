@@ -245,9 +245,18 @@ On failure: alerts Telegram. Better Stack heartbeats ping on each step.
 - **Dashboards:** Auto-generated in Grafana Cloud (Frontend → app). No Ansible imports needed.
 - **Limits:** 50k sessions/mo on Free plan.
 
+### Log shipping (Promtail → Loki)
+
+- **Deployment:** Promtail installed via apt from Grafana repo, configured by Ansible role `promtail` in `playbook-05-monitor.yml`. Conditional on `LOKI_URL` being set.
+- **Logs collected:** nginx access + error, PHP-FPM, syslog, auth, fail2ban. `catch_workers_output` enabled so PHP errors go to FPM log.
+- **Credentials:** Uses same Access Policy token as vmagent (`logs:write` scope). Loki username and URL are per-target GitHub Variables.
+- **Proxy:** Logs sent directly to `logs-prod-<region>.grafana.net`. Per-target Loki URL in `group_vars/all.yml`.
+- **Limits:** 50 GB/mo on Free plan, 14 days retention.
+- **Troubleshooting:** `sudo journalctl -u promtail --no-pager -n 30` to check connection errors. `sudo test -f /etc/promtail/promtail.yml` to verify config.
+
 ### Grafana memory
 
-- **Current:** v13.2.0 on prod. Memory ~270MB with GOMEMLIMIT=800MiB.
+- **Current:** v13.1.0 (pinned in code, deployed via apt). Memory ~270MB with GOMEMLIMIT=800MiB.
 - **History:** [#123017](https://github.com/grafana/grafana/issues/123017) caused regression at v13 launch (180→330MB idle). Fixed in later 13.x releases.
 - **GOMEMLIMIT=800MiB** in `/etc/systemd/system/grafana-server.service.d/memory.conf` (managed by Ansible).
 
