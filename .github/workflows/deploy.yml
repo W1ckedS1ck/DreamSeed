@@ -124,7 +124,6 @@ jobs:
           LOKI_URL: ${{ vars.LOKI_URL }}
           LOKI_USERNAME: ${{ vars.LOKI_USERNAME }}
           FARO_COLLECTOR_URL: ${{ vars.FARO_COLLECTOR_URL }}
-          FARO_APP_NAME: ${{ vars.FARO_APP_NAME }}
           DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
@@ -167,7 +166,6 @@ jobs:
             echo "LOKI_URL=${{ vars.LOKI_URL }}"
             echo "LOKI_USERNAME=${{ vars.LOKI_USERNAME }}"
             echo "FARO_COLLECTOR_URL=${{ vars.FARO_COLLECTOR_URL }}"
-            echo "FARO_APP_NAME=${{ vars.FARO_APP_NAME }}"
 
             echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
             echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"

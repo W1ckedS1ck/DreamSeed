@@ -177,7 +177,7 @@ Set per-target as GitHub Variables (not secrets):
 | Variable | Value (dev) | Value (prod) |
 |----------|------------|-------------|
 | `FARO_COLLECTOR_URL` | `https://faro-collector-prod-eu-north-0.grafana.net/collect/<app_id>` | `https://faro-collector-prod-us-east-2.grafana.net/collect/<app_id>` |
-| `FARO_APP_NAME` | `aws.vitalikuts.online` | `DreamSeed` |
+| `FARO_APP_NAME` | *(auto = domain)* | *(auto = domain)* |
 
 ---
 
