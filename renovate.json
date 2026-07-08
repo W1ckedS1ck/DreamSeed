@@ -4,109 +4,34 @@
     "config:recommended",
     ":dependencyDashboard"
   ],
-  "schedule": ["before 9am on monday"],
   "labels": ["dependencies", "renovate"],
+  "schedule": ["at any time"],
   "configMigration": true,
   "osvVulnerabilityAlerts": true,
   "major": {
     "dependencyDashboardApproval": true
   },
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "pre-commit", "regex"],
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "custom.regex"],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/ansible/requirements\\.txt$/",
-      "/ansible/requirements-deploy\\.txt$/"
+      "/^ansible/requirements\\.txt$/",
+      "/^ansible/requirements-deploy\\.txt$/"
     ]
   },
   "ansible-galaxy": {
     "managerFilePatterns": [
-      "/ansible/requirements\\.yml$/"
+      "/^ansible/requirements\\.yml$/"
     ]
-  },
-  "terraform": {
-    "managerFilePatterns": [
-      "/terraform/.*\\.tf$/"
-    ],
-    "versioning": "semver"
   },
 
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track node_exporter version",
+      "description": "Track Ansible monitoring versions via inline comments",
       "managerFilePatterns": [
         "/^ansible/group_vars/all\\.yml$/"
       ],
-      "matchStrings": ["monitoring_node_version: \"\\{\\{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) \\}\\}\""],
-      "depNameTemplate": "prometheus/node_exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "Track nginx-prometheus-exporter version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_nginx_version: \"\\{\\{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) \\}\\}\""],
-      "depNameTemplate": "nginxinc/nginx-prometheus-exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "Track mysqld_exporter version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_mysql_version: \"\\{\\{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) \\}\\}\""],
-      "depNameTemplate": "prometheus/mysqld_exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "Track VictoriaMetrics version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_vm_version: \"\\{\\{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) \\}\\}\""],
-      "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "Track Grafana version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["grafana_version: \"\\{\\{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) \\}\\}\""],
-      "depNameTemplate": "grafana/grafana",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "Track apache_exporter version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_apache_version: \"\\{\\{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) \\}\\}\""],
-      "depNameTemplate": "Lusitaniae/apache_exporter",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "Track vmagent version",
-      "managerFilePatterns": [
-        "/^ansible/group_vars/all\\.yml$/"
-      ],
-      "matchStrings": ["monitoring_vmagent_version: \"\\{\\{.*?default\\\\('(?<currentValue>[^']+)'.*\\\\) \\}\\}\""],
-      "depNameTemplate": "VictoriaMetrics/VictoriaMetrics",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "matchStrings": ["default\\('(?<currentValue>[\\w.\\-]+)'[^#]*# renovate: depName=(?<depName>\\S+)\\s+datasource=(?<datasource>\\S+)"]
     },
     {
       "customType": "regex",
@@ -116,8 +41,7 @@
       ],
       "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
       "depNameTemplate": "gitleaks/gitleaks",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -125,9 +49,8 @@
       "managerFilePatterns": [
         "/^\\.tflint\\.hcl$/"
       ],
-      "matchStrings": ["version = \"(?<currentValue>[\\d.]+)\"\\s+# renovate: depName=(?<depName>\\S+)"],
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "matchStrings": ["version = \"(?<currentValue>v?[\\w.\\-]+)\"\\s+# renovate: depName=(?<depName>\\S+)"],
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -135,10 +58,9 @@
       "managerFilePatterns": [
         "/^\\.github/actions/setup-terraform/action\\.yml$/"
       ],
-      "matchStrings": ["default: \"(?<currentValue>[\\d.]+)\"\\s+# renovate: depName=hashicorp/terraform"],
+      "matchStrings": ["default: \"(?<currentValue>[\\w.\\-]+)\"\\s+# renovate: depName=hashicorp/terraform"],
       "depNameTemplate": "hashicorp/terraform",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -148,8 +70,7 @@
       ],
       "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>.*?)\""],
       "depNameTemplate": "terraform-linters/tflint",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
@@ -157,10 +78,18 @@
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
-      "matchStrings": ["pip install j2lint==(?<currentValue>[\\d.]+)"],
+      "matchStrings": ["pip install j2lint==(?<currentValue>[\\w.\\-]+)"],
       "depNameTemplate": "aristanetworks/j2lint",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track pre-commit hooks",
+      "managerFilePatterns": [
+        "/^\\.pre-commit-config\\.yaml$/"
+      ],
+      "matchStrings": ["repo: https://github\\.com/(?<depName>[^\\s]+)\\s*\\n\\s*rev: (?<currentValue>[^\\s]+)"],
+      "datasourceTemplate": "github-tags"
     }
   ],
   "packageRules": [
@@ -196,6 +125,18 @@
       "matchManagers": ["terraform"],
       "matchUpdateTypes": ["major"],
       "labels": ["terraform", "major-update", "needs-review"]
+    },
+    {
+      "description": "Require approval for major GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Group non-major python dependencies",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Python pip packages"
     }
   ]
 }

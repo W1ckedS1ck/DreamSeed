@@ -4,16 +4,16 @@
 | Name | Version |
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5 |
-| <a name="requirement_grafana"></a> [grafana](#requirement\_grafana) | ~> 2.0 |
+| <a name="requirement_grafana"></a> [grafana](#requirement\_grafana) | ~> 4.0 |
 | <a name="requirement_http"></a> [http](#requirement\_http) | ~> 3.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 2.19.4 |
-| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 2.19.4 |
-| <a name="provider_http"></a> [http](#provider\_http) | ~> 3.0 |
+| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 4.40.0 |
+| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 4.40.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | 3.6.0 |
 
 ## Modules
 

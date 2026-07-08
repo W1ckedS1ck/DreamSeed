@@ -186,7 +186,7 @@ run_terraform_validate() {
             mv "$tfvars_file" "$tfvars_vaulted"
         fi
 
-        if "$tf" -chdir="$dir" init -backend=false 2>/dev/null && "$tf" -chdir="$dir" validate; then
+        if "$tf" -chdir="$dir" init -backend=false && "$tf" -chdir="$dir" validate; then
             print_ok "$dir — valid"
         else
             print_fail "$dir — validation failed"
