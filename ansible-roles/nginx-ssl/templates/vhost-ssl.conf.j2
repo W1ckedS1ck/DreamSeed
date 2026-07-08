@@ -9,11 +9,8 @@ server {
     sub_filter '</head>' '<script>(function(){var s=document.createElement("script");s.src="https://unpkg.com/@grafana/faro-web-sdk@2/dist/bundle/faro-web-sdk.iife.js";s.onload=function(){window.GrafanaFaroWebSdk.initializeFaro({url:"/faro-collect",app:{name:"{{ faro_app_name }}",version:"1.0.0",environment:"production"},sessionTracking:{samplingRate:1,persistent:true}});var t=document.createElement("script");t.src="https://unpkg.com/@grafana/faro-web-tracing@2/dist/bundle/faro-web-tracing.iife.js";t.onload=function(){window.GrafanaFaroWebSdk.faro.instrumentations.add(new window.GrafanaFaroWebTracing.TracingInstrumentation())};document.head.appendChild(t)};document.head.appendChild(s)})();</script></head>';
 {% endif %}
 
-    # Block direct IP access (bypasses Cloudflare WAF)
-    # localhost and IP loopbacks allowed for local monitoring and health checks
-    if ($host !~* ^({{ domain }}{% if domain_www | default(false) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost|127\.0\.0\.1|\[?::1\]?)$) {
-        return 444;
-    }
+    # Note: Host header check removed — Cloudflare health checks and other proxies
+    # may send non-standard Host headers. WAF protection is handled by Cloudflare rules.
 
     root {{ web_root }};
     index index.php index.html index.htm;
@@ -37,13 +34,7 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
 
-    add_header Content-Security-Policy "default-src 'self';
-script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com;
-img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com;
-font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com;
-connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com;
-frame-ancestors 'self';" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com; frame-ancestors 'self';" always;
 
     client_max_body_size 64M;
 
@@ -65,12 +56,7 @@ frame-ancestors 'self';" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
-        add_header Content-Security-Policy "default-src 'self';
-script-src 'self' 'unsafe-inline' 'unsafe-eval';
-style-src 'self' 'unsafe-inline';
-img-src 'self' data: https://www.gravatar.com;
-font-src 'self' data:;
-frame-ancestors 'self';" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.gravatar.com; font-src 'self' data:; frame-ancestors 'self';" always;
         try_files $uri $uri/ @modx;
 
         {% include 'php_fastcgi.conf.j2' %}
