@@ -2,7 +2,7 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name {{ domain }}
-    {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
+    {%- if domain_www | default(false) %} www.{{ domain }}{% endif %};
 {% if faro_enabled and faro_collector_url | length > 0 %}
     sub_filter_types text/html;
     sub_filter_once on;
@@ -11,7 +11,7 @@ server {
 
     # Block direct IP access (bypasses Cloudflare WAF)
     # localhost is allowed for local monitoring
-    if ($host !~* ^({{ domain }}{% if domain_www | default(true) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost)$) {
+    if ($host !~* ^({{ domain }}{% if domain_www | default(false) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost)$) {
         return 444;
     }
 

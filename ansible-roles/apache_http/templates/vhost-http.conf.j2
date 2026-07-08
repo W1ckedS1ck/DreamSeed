@@ -1,6 +1,6 @@
 <VirtualHost *:80>
     ServerName {{ domain }}
-{% if domain_www | default(true) %}
+{% if domain_www | default(false) %}
     ServerAlias www.{{ domain }}
 {% endif %}
     DocumentRoot {{ web_root }}

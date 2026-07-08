@@ -4,7 +4,6 @@
 # ========================
 ansible_python_interpreter: /usr/bin/python3
 domain: "{{ lookup('env', 'DEPLOY_DOMAIN') | mandatory('domain required — run via deploy.sh or pass -e domain=...') }}"
-domain_www: true
 admin_email: "hello@dreamseed.online"
 web_server: "nginx"
 
