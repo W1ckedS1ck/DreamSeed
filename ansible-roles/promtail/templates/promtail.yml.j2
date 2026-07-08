@@ -8,6 +8,7 @@ positions:
 
 clients:
   - url: {{ loki_url }}
+    batchwait: 2s
     basic_auth:
       username: ${LOKI_USERNAME}
       password: ${LOKI_PASSWORD}
@@ -19,8 +20,12 @@ scrape_configs:
           expression: >-
             ^(?P<remote_addr>\S+) \S+ \S+ \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<request_uri>\S+)(?: \S+)?" (?P<status>\d{3}) (?P<body_bytes_sent>[0-9-]+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"$
       - labels:
-          status:
+          remote_addr:
           method:
+          request_uri:
+          status:
+          body_bytes_sent:
+          http_referer:
     static_configs:
       - targets: [localhost]
         labels:
@@ -63,8 +68,12 @@ scrape_configs:
       - regex:
           expression: >-
             ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - regex:
+          expression: >-
+            level=(?P<level>\w+)
       - labels:
           process:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -77,8 +86,12 @@ scrape_configs:
       - regex:
           expression: >-
             ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - regex:
+          expression: >-
+            level=(?P<level>\w+)
       - labels:
           process:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -91,11 +104,12 @@ scrape_configs:
     pipeline_stages:
       - regex:
           expression: >-
-            ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \S+\[\d+\]: (?P<level>\S+) \[(?P<jail>\S+)\] (?P<action_kind>\w+) .*$
+            ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \S+\[\d+\]: (?P<level>\S+) \[(?P<jail>\S+)\] (?P<action_kind>\w+) (?P<ip>\S+)?.*$
       - labels:
           jail:
           action_kind:
           level:
+          ip:
     static_configs:
       - targets: [localhost]
         labels:
