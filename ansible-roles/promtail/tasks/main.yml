@@ -52,7 +52,7 @@
       ExecStart=/usr/bin/promtail -config.expand-env=true -config.file=/etc/promtail/promtail.yml
       Environment=LOKI_USERNAME={{ loki_username }}
       Environment=LOKI_PASSWORD={{ grafana_cloud_token }}
-    mode: "0644"
+    mode: "0600"
   become: true
   notify:
     - Reload systemd
