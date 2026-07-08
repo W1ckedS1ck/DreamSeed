@@ -84,3 +84,9 @@ resource "cloudflare_ruleset" "cache" {
     enabled     = true
   }]
 }
+
+resource "cloudflare_zone_setting" "email_obfuscation" {
+  zone_id    = data.cloudflare_zone.this.id
+  setting_id = "email_obfuscation"
+  value      = "off"
+}
