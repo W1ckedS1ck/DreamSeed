@@ -10,8 +10,8 @@ server {
 {% endif %}
 
     # Block direct IP access (bypasses Cloudflare WAF)
-    # localhost is allowed for local monitoring
-    if ($host !~* ^({{ domain }}{% if domain_www | default(false) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost)$) {
+    # localhost and IP loopbacks allowed for local monitoring and health checks
+    if ($host !~* ^({{ domain }}{% if domain_www | default(false) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost|127\.0\.0\.1|\[?::1\]?)$) {
         return 444;
     }
 
