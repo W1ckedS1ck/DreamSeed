@@ -67,7 +67,7 @@ jobs:
             --arg sm_token "$SM_TOKEN" \
             --arg domain "$DOMAIN" \
             --arg sm_url "$SM_URL" \
-            --arg sm_enabled "false" \
+            --arg sm_enabled "true" \
             '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_enabled == "true")}' \
             > terraform.tfvars.json
 
