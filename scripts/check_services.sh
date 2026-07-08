@@ -62,6 +62,9 @@ if [[ -n "$DOMAIN" ]]; then
     if [[ "$http" == "200" || "$http" == "301" ]]; then
         echo "  ✓ HTTP $http $DOMAIN"
         export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 1"
+    elif [[ "$http" == "520" ]]; then
+        echo "  ⚠ HTTP $http $DOMAIN — Cloudflare upstream sync (non-fatal)"
+        export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 0"
     else
         echo "  ✗ HTTP $http $DOMAIN — site not serving"
         export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 0"
