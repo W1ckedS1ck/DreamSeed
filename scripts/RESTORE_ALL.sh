@@ -591,7 +591,7 @@ else
 fi
 
 sudo mkdir -p "$PROJECT_DIR/core/cache/logs"
-sudo rm -rf "$PROJECT_DIR/core/cache"/*
+[[ -d "$PROJECT_DIR/core/cache" ]] && shopt -s nullglob && sudo rm -rf "$PROJECT_DIR/core/cache"/* && shopt -u nullglob
 sudo chown -R www-data:www-data "$PROJECT_DIR/core/cache"
 sudo chmod -R 775 "$PROJECT_DIR/core/cache"
 echo -e "${GREEN}✓ Cache cleared${NC}"

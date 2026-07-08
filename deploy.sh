@@ -263,7 +263,7 @@ main() {
         if [[ "${CI:-}" == "true" ]]; then
             echo "  CI mode — confirmation skipped"
         else
-            read -rp "  Continue? [y/N] " confirm < /dev/tty
+            read -rp "  Continue? [y/N] " confirm < /dev/tty 2>/dev/null || { echo "  Error: no TTY available. Use CI mode or --dry-run."; exit 1; }
             [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
         fi
     fi
@@ -407,7 +407,8 @@ INVEOF
 
     DEPLOY_VARS_TMP=$(mktemp -d); chmod 700 "$DEPLOY_VARS_TMP"
     DEPLOY_VARS_FILE="$DEPLOY_VARS_TMP/vars.json"
-    python3 "$SCRIPT_DIR/lib/gen_vars.py" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE"
+    python3 "$SCRIPT_DIR/lib/gen_vars.py" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE" || step_fail "gen_vars.py failed"
+    [[ -f "$DEPLOY_VARS_FILE" ]] || step_fail "gen_vars.py did not produce $DEPLOY_VARS_FILE"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
