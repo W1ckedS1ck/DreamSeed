@@ -1,4 +1,11 @@
 ---
+- name: Add www-data user to ssl-cert group for certificate access
+  become: true
+  ansible.builtin.user:
+    name: www-data
+    groups: ssl-cert
+    append: true
+
 - name: Deploy Nginx SSL vhost
   become: true
   ansible.builtin.template:
