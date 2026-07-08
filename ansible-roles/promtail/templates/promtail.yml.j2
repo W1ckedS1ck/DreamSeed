@@ -18,14 +18,14 @@ scrape_configs:
     pipeline_stages:
       - regex:
           expression: >-
-            ^(?P<remote_addr>\S+) \S+ \S+ \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<request_uri>\S+)(?: \S+)?" (?P<status>\d{3}) (?P<body_bytes_sent>[0-9-]+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"$
+            ^(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] "(?P<method>\S+) (?P<uri>\S+)(?: \S+)?" (?P<status>\d{3}) (?P<bytes>[0-9-]+) "(?P<referrer>[^"]*)" "(?P<user_agent>[^"]*)"$
       - labels:
-          remote_addr:
+          ip:
           method:
-          request_uri:
+          uri:
           status:
-          body_bytes_sent:
-          http_referer:
+          bytes:
+          referrer:
     static_configs:
       - targets: [localhost]
         labels:
