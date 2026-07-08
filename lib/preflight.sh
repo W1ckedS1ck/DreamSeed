@@ -18,9 +18,9 @@ preflight_checks() {
     local env_src; env_src=$(resolve_env_file "$ENV_FILE")
     validate_env_file "$env_src"
 
-    set +e
+    local old_opts; old_opts=$(set +o)
     source "$env_src"
-    set -e
+    eval "$old_opts"
     export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
     export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY

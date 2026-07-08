@@ -14,6 +14,13 @@ clients:
 
 scrape_configs:
   - job_name: nginx-access
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<remote_addr>\S+) \S+ \S+ \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<request_uri>\S+)(?: \S+)?" (?P<status>\d{3}) (?P<body_bytes_sent>[0-9-]+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"$
+      - labels:
+          status:
+          method:
     static_configs:
       - targets: [localhost]
         labels:
@@ -23,6 +30,12 @@ scrape_configs:
           __path__: /var/log/nginx/{{ domain }}*access*.log
 
   - job_name: nginx-error
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} \[(?P<level>\w+)\] .*$
+      - labels:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -32,6 +45,12 @@ scrape_configs:
           __path__: /var/log/nginx/{{ domain }}*error*.log
 
   - job_name: php-fpm
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\[\d{2}/\w{3}/\d{4} \d{2}:\d{2}:\d{2}\] (?P<level>\w+):.*$
+      - labels:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -40,6 +59,12 @@ scrape_configs:
           __path__: /var/log/php*-fpm.log
 
   - job_name: syslog
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - labels:
+          process:
     static_configs:
       - targets: [localhost]
         labels:
@@ -48,6 +73,12 @@ scrape_configs:
           __path__: /var/log/syslog
 
   - job_name: auth-log
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - labels:
+          process:
     static_configs:
       - targets: [localhost]
         labels:
@@ -57,6 +88,14 @@ scrape_configs:
           __path__: /var/log/auth.log
 
   - job_name: fail2ban
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \S+\[\d+\]: (?P<level>\S+) \[(?P<jail>\S+)\] (?P<action_kind>\w+) .*$
+      - labels:
+          jail:
+          action_kind:
+          level:
     static_configs:
       - targets: [localhost]
         labels:

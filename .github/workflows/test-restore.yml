@@ -377,14 +377,13 @@ jobs:
           deploy_env: test
           php_version: "8.3"
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
-          cloudflare_enabled: false
+          ssl_cf_dns_enabled: false
           grafana_admin_password: "${GRAFANA_PASS}"
           grafana_cloud_url: "${DEV_GRAFANA_CLOUD_URL}"
           grafana_cloud_username: "${DEV_GRAFANA_CLOUD_USERNAME}"
           grafana_cloud_token: "${DEV_GRAFANA_CLOUD_TOKEN}"
           scripts_dir: "${PWD}/scripts"
           secrets_dir: "${PWD}/secrets"
-          configs_dir: "${PWD}/configs"
           ssh_public_key_path: "${HOME}/.ssh/deploy_key.pub"
           EOF
           )

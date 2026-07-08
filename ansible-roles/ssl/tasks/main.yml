@@ -55,7 +55,7 @@
 
 # --- Certbot DNS Challenge (CloudFlare) ---
 - name: Obtain or skip Let's Encrypt certificate via DNS-01
-  when: cloudflare_enabled | default(true) | bool
+  when: ssl_cf_dns_enabled | default(true) | bool
   block:
     - name: Install CloudFlare DNS certbot plugin
       become: true
@@ -116,7 +116,7 @@
     msg: >-
       {%- if ssl_restored | default(false) -%}
       ✓ SSL: Restored from local backup{%- elif ssl_has_cert -%}
-      ✓ SSL: Let's Encrypt certificate ready{%- elif not cloudflare_enabled | default(true) | bool -%}
+      ✓ SSL: Let's Encrypt certificate ready{%- elif not ssl_cf_dns_enabled | default(true) | bool -%}
       ⊘ SSL: self-signed (Cloudflare disabled for this environment){%- else -%}
       ⊘ SSL: certbot failed — self-signed fallback. Fix DNS and re-run.{%- endif -%}
 

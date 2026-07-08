@@ -53,7 +53,7 @@ F2B=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active fail2ban" 2>/dev/null || echo
 [ "$F2B" = "active" ] && pass "fail2ban running" || warn "fail2ban: $F2B"
 
 # Security — SSH hardening
-ssh ubuntu@"$SERVER_IP" "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_config.d/99-hardening.conf 2>/dev/null" && pass "SSH hardening" || warn "SSH hardening: FAIL"
+ssh ubuntu@"$SERVER_IP" "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_config.d/00-hardening.conf 2>/dev/null" && pass "SSH hardening" || warn "SSH hardening: FAIL"
 
 # Database — table count
 TBL=$(ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"$DB_NAME\"'" 2>/dev/null || echo 0)

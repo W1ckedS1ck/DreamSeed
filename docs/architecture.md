@@ -223,7 +223,7 @@ Layer 1 — Network:
 
 Layer 2 — SSH:
   PermitRootLogin no, MaxAuthTries 3, LogLevel VERBOSE
-  Disable EC2 Instance Connect (AuthorizedKeysCommand stripped)
+  Disable EC2 Instance Connect (AuthorizedKeysCommand none, 00 prefix wins via sshd first-wins)
 
 Layer 3 — Application:
   fail2ban: modx-admin (POST /connectors/ — 25 retries)
@@ -314,5 +314,5 @@ DreamSeed/
 ├── scripts/               # Backup, restore, Telegram bot, health checks
 ├── .tflint.hcl            # Terraform linter config (root, drives all providers)
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/
-└── configs/               # fail2ban jails
+└── .github/workflows/
 ```

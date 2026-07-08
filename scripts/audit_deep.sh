@@ -64,7 +64,7 @@ echo "    Uptime: $(uptime -p 2>/dev/null || uptime | awk '{$1=$2=$3=""; print}'
 echo "    CPU: $(nproc) cores"
 echo "    Memory: $(free -h | awk '/Mem/ {print $3 " / " $2}')"
 echo "    Disk: $(df -h --total 2>/dev/null | grep total | awk '{print $3 " / " $2 " (" $5 ")"}')"
-if swapon --show 2>/dev/null | grep -q swapfile; then
+if swapon --show 2>/dev/null | grep -q .; then
   echo "    Swap: $(swapon --show 2>/dev/null | awk 'NR==2{print $3 " / " $2}')"
 fi
 
@@ -84,7 +84,7 @@ else
 fi
 
 # Swap
-if swapon --show 2>/dev/null | grep -q swapfile; then
+if swapon --show 2>/dev/null | grep -q .; then
   ok "Swap enabled" "swap_enabled"
 else
   warn "No swap" "swap_enabled"
@@ -161,7 +161,7 @@ fi
 if [[ -n "$RAW_IP" ]]; then
   _direct=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "https://${RAW_IP}/" 2>/dev/null || echo "000")
   _direct="${_direct:-000}"
-  if [[ "$_direct" == "000" || "${_direct:0:1}" == "0" ]]; then
+  if [[ "$_direct" == "000" || "$_direct" == "400" || "$_direct" == "403" || "$_direct" == "444" ]]; then
     ok "Direct IP blocked" "direct_ip_blocked"
   else
     fail "Direct IP not blocked — $_direct" "direct_ip_blocked"
@@ -172,7 +172,7 @@ fi
 if [[ -n "$RAW_IP" ]]; then
   _host=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 -H 'Host: evil.com' "https://${RAW_IP}/" 2>/dev/null || echo "000")
   _host="${_host:-000}"
-  if [[ "$_host" == "000" || "${_host:0:1}" == "0" ]]; then
+  if [[ "$_host" == "000" || "$_host" == "400" || "$_host" == "403" || "$_host" == "444" ]]; then
     ok "Host header injection blocked" "host_header_blocked"
   else
     fail "Host header injection not blocked — $_host" "host_header_blocked"
@@ -216,8 +216,8 @@ for _fj in modx-admin dreamseed-botsearch dreamseed-bad-request; do
 done
 
 # SSH hardening
-_ssh_root=$(sudo grep -E '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' || echo "")
-_ssh_pw=$(sudo grep -E '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' || echo "")
+_ssh_root=$(sudo sshd -T 2>/dev/null | grep -E '^permitrootlogin' | awk '{print $2}')
+_ssh_pw=$(sudo sshd -T 2>/dev/null | grep -E '^passwordauthentication' | awk '{print $2}')
 if [[ "$_ssh_root" == "no" && ("$_ssh_pw" == "no" || -z "$_ssh_pw") ]]; then
   ok "SSH: PermitRootLogin=$_ssh_root PasswordAuth=${_ssh_pw:-no}" "ssh_hardening"
 else

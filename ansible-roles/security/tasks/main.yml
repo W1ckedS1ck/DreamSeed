@@ -1,10 +1,16 @@
 ---
 # --- SSH Hardening ---
-- name: Deploy SSH hardening config
+- name: Remove old 99-hardening.conf (renamed to 00-hardening.conf)
+  become: true
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/99-hardening.conf
+    state: absent
+
+- name: Deploy SSH hardening config (00 prefix = first-wins priority)
   become: true
   ansible.builtin.template:
     src: sshd-hardening.conf.j2
-    dest: /etc/ssh/sshd_config.d/99-hardening.conf
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
     owner: root
     group: root
     mode: "0644"

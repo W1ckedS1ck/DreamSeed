@@ -158,7 +158,6 @@ DreamSeed/
 │   └── playbook-07-grafana.yml   # Grafana dashboards + alerts
 ├── ansible-roles/            # 16 reusable roles (nginx, mariadb, ssl, redis, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
-├── configs/                  # Fail2ban jails (incl. MODX admin filter)
 ├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
 ├── .tflint.hcl               # Terraform linter config (root, drives all providers)

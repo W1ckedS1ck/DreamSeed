@@ -161,19 +161,8 @@ main() {
         mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
         LOCK_FILE="$LOCK_DIR/deploy-${TARGET}.lock"
         exec 200>"$LOCK_FILE"
-        if ! flock -n 200; then
-            local stale_pid
-            stale_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-            if [[ -n "$stale_pid" ]] && kill -0 "$stale_pid" 2>/dev/null; then
-                echo "Error: deploy already running for $TARGET (PID $stale_pid)"
-                exit 1
-            fi
-            # Stale lock from dead process — kernel released flock, retry
-            flock -n 200 || { echo "Error: cannot acquire deploy lock for $TARGET"; exit 1; }
-            echo "  ⚠ Removed stale deploy lock (PID ${stale_pid:-unknown})"
-        fi
+        flock -w 5 200 || { echo "Error: deploy already running for $TARGET (could not acquire lock)"; exit 1; }
         LOCK_ACQUIRED=true
-        echo "$$" > "$LOCK_FILE"
     fi
 
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
@@ -297,6 +286,7 @@ main() {
 
         terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform init failed"; }
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
+        _tf validate -no-color >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
 
         local tf_args=()
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")

@@ -1,7 +1,11 @@
 #!/bin/bash
 # Post-deploy health checks. Runs on the server.
 # Called by deploy.sh via SSH, or manually for debugging.
+# Uses flock to prevent concurrent runs (deploy.sh + systemd timer).
 set -euo pipefail
+
+exec 200>/tmp/.check_services.lock
+flock -n 200 || { echo "check_services already running, skipping"; exit 0; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"

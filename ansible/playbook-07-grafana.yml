@@ -1,5 +1,5 @@
 ---
-- name: 06 Grafana
+- name: 07 Grafana
   hosts: dreamseed
   become: false
   gather_facts: false

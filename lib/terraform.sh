@@ -87,10 +87,10 @@ terraform_destroy() {
     echo "  ━━━ Destroying resources ($TARGET)"
 
     TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
-    set +e
+    local old_opts; old_opts=$(set +o)
     _tf destroy -auto-approve -no-color "${var_arg[@]}" 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
-    set -e
+    eval "$old_opts"
     if [[ $tf_exit -ne 0 ]]; then
         grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (exit $tf_exit, check $DEPLOY_TF_LOG)"
     fi

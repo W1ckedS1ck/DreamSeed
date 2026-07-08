@@ -1,4 +1,5 @@
 # Environment variable handling for deploy.sh
+# TODO: tech-debt — inline python3 -c (2 uses), replace with jq
 # shellcheck shell=bash
 # Sourced by deploy.sh — do not execute directly.
 

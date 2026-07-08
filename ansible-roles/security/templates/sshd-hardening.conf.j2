@@ -1,5 +1,5 @@
 # DreamSeed SSH Hardening
-# Overrides cloud-init defaults (50-cloud-init.conf, EC2 Instance Connect, etc.)
+# 00 prefix = processed first (sshd first-wins rule) — overrides 50-cloud-init.conf
 PasswordAuthentication no
 PermitRootLogin no
 AuthorizedKeysCommand none

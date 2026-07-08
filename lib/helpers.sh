@@ -1,4 +1,5 @@
 # Shared helper functions for deploy.sh
+# TODO: tech-debt — inline python3 -c (7 uses), replace with jq
 # Sourced by deploy.sh — do not execute directly.
 # shellcheck shell=bash
 
