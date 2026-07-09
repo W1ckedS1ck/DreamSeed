@@ -120,7 +120,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
 REDIS_STATUS=""
 REDIS_KEEP="${BACKUP_REDIS_KEEP:-${REDIS_KEEP:-5}}"
 
-if [[ -f "/var/lib/redis/dump.rdb" ]]; then
+if sudo test -f /var/lib/redis/dump.rdb; then
     mkdir -p "$BACKUP_DIR/redis"
     REDIS_BACKUP="$BACKUP_DIR/redis/redis_dump_$DATE.rdb"
     if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null && \
