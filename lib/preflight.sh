@@ -51,6 +51,15 @@ preflight_checks() {
     GRAFANA_CLOUD_TOKEN="${!gc_token:-}"
     export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
 
+    # Load Netdata Cloud credentials (PROD_ for prod, DEV_ for all dev)
+    local nc_pfx="DEV"
+    [[ "$TARGET" =~ ^prod ]] && nc_pfx="PROD"
+    local nc_token="${nc_pfx}_NETDATA_CLOUD_TOKEN"
+    local nc_room="${nc_pfx}_NETDATA_CLOUD_ROOM"
+    NETDATA_CLOUD_TOKEN="${!nc_token:-}"
+    NETDATA_CLOUD_ROOM="${!nc_room:-}"
+    export NETDATA_CLOUD_TOKEN NETDATA_CLOUD_ROOM
+
     # Sanity checks — remote_write to Grafana Cloud has 3 easy ways to fail silently.
     # Cheap format hints so a bad value doesn't ship a 401-loop to the server.
     if [[ -n "$GRAFANA_CLOUD_URL" ]]; then
