@@ -9,4 +9,5 @@ location ~ \.php$ {
     fastcgi_send_timeout 300s;
     fastcgi_read_timeout 300s;
     fastcgi_hide_header X-Powered-By;
+    fastcgi_param HTTP_HOST $host;
 }
