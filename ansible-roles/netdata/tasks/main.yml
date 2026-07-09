@@ -1,0 +1,78 @@
+---
+- name: Install prerequisites (gpg, curl)
+  ansible.builtin.apt:
+    name:
+      - gpg
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Download Netdata archive GPG key
+  ansible.builtin.get_url:
+    url: https://repository.netdata.cloud/netdatabot.gpg.key
+    dest: /usr/share/keyrings/netdata-archive-keyring.gpg
+    mode: "0644"
+  become: true
+
+- name: Add Netdata apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/netdata.sources
+    content: |
+      X-Repolib-Name: Netdata stable repository
+      Types: deb
+      URIs: http://repository.netdata.cloud/repos/stable/ubuntu/
+      Suites: {{ ansible_facts['distribution_release'] }}/
+      Signed-By: /usr/share/keyrings/netdata-archive-keyring.gpg
+      By-Hash: Yes
+      Enabled: Yes
+    mode: "0644"
+  become: true
+
+- name: Install Netdata
+  ansible.builtin.apt:
+    name: netdata
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  notify: Restart Netdata
+
+- name: Ensure cloud.d directory exists
+  ansible.builtin.file:
+    path: /var/lib/netdata/cloud.d
+    state: directory
+    owner: netdata
+    group: netdata
+    mode: "0750"
+  become: true
+
+- name: Deploy cloud.conf for Netdata Cloud claiming
+  ansible.builtin.template:
+    src: cloud.conf.j2
+    dest: /var/lib/netdata/cloud.d/cloud.conf
+    owner: netdata
+    group: netdata
+    mode: "0640"
+  become: true
+  when: netdata_cloud_token | length > 0
+  notify: Restart Netdata
+
+- name: Remove cloud.conf when no token (local-only mode)
+  ansible.builtin.file:
+    path: /var/lib/netdata/cloud.d/cloud.conf
+    state: absent
+  become: true
+  when: netdata_cloud_token | length == 0
+  notify: Restart Netdata
+
+- name: Flush handlers before enabling
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Netdata
+  ansible.builtin.systemd:
+    name: netdata
+    state: started
+    enabled: true
+  become: true

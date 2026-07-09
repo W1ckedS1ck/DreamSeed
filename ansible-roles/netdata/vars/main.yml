@@ -1,0 +1,4 @@
+---
+# Leave empty for local-only mode (no Cloud connection)
+netdata_cloud_token: "{{ lookup('env', 'NETDATA_CLOUD_TOKEN') | default('', true) }}"
+netdata_cloud_room: "{{ lookup('env', 'NETDATA_CLOUD_ROOM') | default('', true) }}"

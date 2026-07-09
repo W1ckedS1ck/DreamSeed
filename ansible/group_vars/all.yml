@@ -74,6 +74,12 @@ grafana_cloud_username: "{{ lookup('env', 'GRAFANA_CLOUD_USERNAME') | default(''
 grafana_cloud_token: "{{ lookup('env', 'GRAFANA_CLOUD_TOKEN') | default('', true) }}"
 
 # ========================
+#  Netdata
+# ========================
+netdata_cloud_token: "{{ lookup('env', 'NETDATA_CLOUD_TOKEN') | default('', true) }}"
+netdata_cloud_room: "{{ lookup('env', 'NETDATA_CLOUD_ROOM') | default('', true) }}"
+
+# ========================
 #  MODX cache settings
 # ========================
 modx_cache_db: "0"

@@ -7,3 +7,4 @@
   roles:
     - monitoring
     - promtail
+    - netdata
