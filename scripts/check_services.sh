@@ -1,7 +1,11 @@
 #!/bin/bash
 # Post-deploy health checks. Runs on the server.
 # Called by deploy.sh via SSH, or manually for debugging.
+# Uses flock to prevent concurrent runs (deploy.sh + systemd timer).
 set -euo pipefail
+
+exec 200>/tmp/.check_services.lock
+flock -n 200 || { echo "check_services already running, skipping"; exit 0; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
@@ -58,6 +62,9 @@ if [[ -n "$DOMAIN" ]]; then
     if [[ "$http" == "200" || "$http" == "301" ]]; then
         echo "  ✓ HTTP $http $DOMAIN"
         export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 1"
+    elif [[ "$http" == "520" ]]; then
+        echo "  ⚠ HTTP $http $DOMAIN — Cloudflare upstream sync (non-fatal)"
+        export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 0"
     else
         echo "  ✗ HTTP $http $DOMAIN — site not serving"
         export_metric "site_http_status{domain=\"$DOMAIN\",code=\"$http\"} 0"

@@ -4,7 +4,6 @@
 # ========================
 ansible_python_interpreter: /usr/bin/python3
 domain: "{{ lookup('env', 'DEPLOY_DOMAIN') | mandatory('domain required — run via deploy.sh or pass -e domain=...') }}"
-domain_www: true
 admin_email: "hello@dreamseed.online"
 web_server: "nginx"
 
@@ -89,7 +88,6 @@ backup_dir: "/home/ubuntu/backups"
 scripts_dir_remote: "/home/ubuntu/Scripts"
 scripts_dir: "{{ playbook_dir }}/../scripts"
 secrets_dir: "{{ playbook_dir }}/../secrets"
-configs_dir: "{{ playbook_dir }}/../configs"
 
 # ========================
 #  Environment
@@ -117,4 +115,4 @@ faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) 
 # ========================
 #  SSL
 # ========================
-cloudflare_enabled: true  # false → skip certbot, use self-signed (for test servers)
+ssl_cf_dns_enabled: true  # false → skip certbot DNS-01, use self-signed (for test servers)

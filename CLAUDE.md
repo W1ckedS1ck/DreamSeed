@@ -172,7 +172,7 @@ DreamSeed/
 - **`php`** — configures PHP-FPM + systemd `Restart=always` drop-in. Mounts tmpfs at `{{ web_root }}/core/cache` (128M, mode 0755, uid/gid 33). Restore role unmounts it before project extraction and re-mounts via `mount -a`. Cache is cleared with `find -exec` (never `state: absent` on mount point).
 - **`monitoring`** conditionally includes exporters based on `web_server` and `db_pass`. `check_site` cron runs every 1 min.
 - **`grafana`** resets admin password via `grafana-cli` on every deploy. Health check with 15×7s retry runs first; `failed_when: false` only catches edge cases. `no_log: true`, `changed_when: false`.
-- **`security`** strips `AuthorizedKeysCommand` from `/etc/ssh/sshd_config.d/50-cloud-init.conf` (disables EC2 Instance Connect).
+- **`security`** deploys `00-hardening.conf` (00 prefix = wins 50-cloud-init.conf via sshd first-wins rule). Disables EC2 Instance Connect, PasswordAuthentication, PermitRootLogin.
 - **Fail2ban** has three custom filters — `modx-admin`, `dreamseed-botsearch`, `dreamseed-bad-request` — all **enabled**. Web jails see real visitor IPs via Cloudflare CF-Connecting-IP + `ngx_http_realip_module`. The Jinja-generated `jail.d/custom.conf` branches on nginx vs apache.
 
 ---

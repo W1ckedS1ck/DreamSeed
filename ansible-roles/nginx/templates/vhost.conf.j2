@@ -2,7 +2,7 @@ server {
     listen 80;
     listen [::]:80;
     server_name {{ domain }}
-    {%- if domain_www | default(true) %} www.{{ domain }}{% endif %};
+    {%- if domain_www | default(false) %} www.{{ domain }}{% endif %};
 
     root {{ web_root }};
     index index.php index.html index.htm;
@@ -56,6 +56,7 @@ server {
         fastcgi_send_timeout 300s;
         fastcgi_read_timeout 300s;
         fastcgi_hide_header X-Powered-By;
+        fastcgi_param HTTP_HOST $host;
     }
 
     location ~* \.(jpg|jpeg|gif|png|ico|css|js|svg|woff|woff2|ttf|eot|otf|webp)$ {
@@ -76,6 +77,7 @@ server {
     }
 
     location = /favicon.ico {
+        try_files $uri =404;
         log_not_found off;
         access_log off;
     }

@@ -161,19 +161,8 @@ main() {
         mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
         LOCK_FILE="$LOCK_DIR/deploy-${TARGET}.lock"
         exec 200>"$LOCK_FILE"
-        if ! flock -n 200; then
-            local stale_pid
-            stale_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-            if [[ -n "$stale_pid" ]] && kill -0 "$stale_pid" 2>/dev/null; then
-                echo "Error: deploy already running for $TARGET (PID $stale_pid)"
-                exit 1
-            fi
-            # Stale lock from dead process — kernel released flock, retry
-            flock -n 200 || { echo "Error: cannot acquire deploy lock for $TARGET"; exit 1; }
-            echo "  ⚠ Removed stale deploy lock (PID ${stale_pid:-unknown})"
-        fi
+        flock -w 5 200 || { echo "Error: deploy already running for $TARGET (could not acquire lock)"; exit 1; }
         LOCK_ACQUIRED=true
-        echo "$$" > "$LOCK_FILE"
     fi
 
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
@@ -274,7 +263,7 @@ main() {
         if [[ "${CI:-}" == "true" ]]; then
             echo "  CI mode — confirmation skipped"
         else
-            read -rp "  Continue? [y/N] " confirm < /dev/tty
+            read -rp "  Continue? [y/N] " confirm < /dev/tty 2>/dev/null || { echo "  Error: no TTY available. Use CI mode or --dry-run."; exit 1; }
             [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
         fi
     fi
@@ -297,6 +286,7 @@ main() {
 
         terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform init failed"; }
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
+        _tf validate -no-color >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
 
         local tf_args=()
         [[ "$TF_PROVIDER" == "aws" ]] && tf_args+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")
@@ -417,7 +407,8 @@ INVEOF
 
     DEPLOY_VARS_TMP=$(mktemp -d); chmod 700 "$DEPLOY_VARS_TMP"
     DEPLOY_VARS_FILE="$DEPLOY_VARS_TMP/vars.json"
-    python3 "$SCRIPT_DIR/lib/gen_vars.py" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE"
+    python3 "$SCRIPT_DIR/lib/gen_vars.py" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE" || step_fail "gen_vars.py failed"
+    [[ -f "$DEPLOY_VARS_FILE" ]] || step_fail "gen_vars.py did not produce $DEPLOY_VARS_FILE"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
     [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done

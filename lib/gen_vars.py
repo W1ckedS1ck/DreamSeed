@@ -34,7 +34,6 @@ def main():
         'server_ip': os.environ.get('SERVER_IP', ''),
         'web_server': os.environ.get('WEB_SERVER', ''),
         'secrets_dir': f'{script_dir}/secrets',
-        'configs_dir': f'{script_dir}/configs',
         'scripts_dir': f'{script_dir}/scripts',
     }
     ssh_key = os.environ.get('SSH_PUBLIC_KEY_PATH', '')

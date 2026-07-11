@@ -214,8 +214,8 @@ mysql -N modx_db -e "SELECT key, value FROM modx_system_settings WHERE key = \"s
 | Check | Command |
 |-------|---------|
 | SSH port | `grep -E '^Port ' /etc/ssh/sshd_config \|\| echo "default 22"` |
-| Root login | `grep -E '^PermitRootLogin' /etc/ssh/sshd_config` |
-| Password auth | `grep -E '^PasswordAuthentication' /etc/ssh/sshd_config` |
+| Root login | `sshd -T 2>/dev/null \| grep -E '^permitrootlogin'` |
+| Password auth | `sshd -T 2>/dev/null \| grep -E '^passwordauthentication'` |
 | Sudo | `sudo -l 2>/dev/null \| head -5` |
 | UFW status | `sudo ufw status \| head -5 \|\| echo "ufw not active"` |
 | Fail2ban jails | `sudo fail2ban-client status \| grep 'Jail list'` |
@@ -269,10 +269,10 @@ journalctl --since "1 hour ago" -p err --no-pager | grep -v 'snapd\|ModemManager
 | Rclone config exists | `ls ~/.config/rclone/rclone.conf 2>/dev/null \|\| echo "MISSING"` | present |
 | Brotli compression | `curl -sI -H 'Accept-Encoding: br' https://<domain>/theme/css/style.css \| grep content-encoding` | `br` |
 | MariaDB optimizations | `mysql -e "SHOW VARIABLES LIKE '%optimiz%'" \| tail -5` | settings from optimizations.cnf |
-| Swap exists | `swapon --show \| grep swapfile` | `/swapfile` |
+| Swap exists | `swapon --show` | any swap active |
 | sysctl hardening | `sysctl net.ipv4.tcp_syncookies net.ipv4.conf.all.rp_filter net.ipv4.conf.all.accept_source_route 2>/dev/null` | syncookies=1, rp_filter=1, accept_source_route=0 |
-| SSH key auth (no password) | `sudo grep -E '^PasswordAuthentication' /etc/ssh/sshd_config` | `no` |
-| SSH deploy_key isolated | `ls /etc/ssh/sshd_config.d/50-cloud-init.conf 2>/dev/null \|\| echo "no cloud-init override"` | should exist or be stripped |
+| SSH key auth (no password) | `sshd -T 2>/dev/null \| grep -E '^passwordauthentication'` | `no` |
+| SSH hardening (00 prefix wins) | `cat /etc/ssh/sshd_config.d/00-hardening.conf` | all expected values present |
 | systemd nginx restart | `systemctl show nginx \| grep Restart=always` | `Restart=always` |
 | systemd php-fpm restart | `systemctl show php8.3-fpm \| grep Restart=always` | `Restart=always` |
 | MODX session prefix | `grep 'table_prefix' /var/www/html/core/config/config.inc.php` | `modx_` |

@@ -8,12 +8,24 @@ positions:
 
 clients:
   - url: {{ loki_url }}
+    batchwait: 2s
     basic_auth:
       username: ${LOKI_USERNAME}
       password: ${LOKI_PASSWORD}
 
 scrape_configs:
   - job_name: nginx-access
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] "(?P<method>\S+) (?P<uri>\S+)(?: \S+)?" (?P<status>\d{3}) (?P<bytes>[0-9-]+) "(?P<referrer>[^"]*)" "(?P<user_agent>[^"]*)"$
+      - labels:
+          ip:
+          method:
+          uri:
+          status:
+          bytes:
+          referrer:
     static_configs:
       - targets: [localhost]
         labels:
@@ -23,6 +35,12 @@ scrape_configs:
           __path__: /var/log/nginx/{{ domain }}*access*.log
 
   - job_name: nginx-error
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} \[(?P<level>\w+)\] .*$
+      - labels:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -32,6 +50,12 @@ scrape_configs:
           __path__: /var/log/nginx/{{ domain }}*error*.log
 
   - job_name: php-fpm
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\[\d{2}/\w{3}/\d{4} \d{2}:\d{2}:\d{2}\] (?P<level>\w+):.*$
+      - labels:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -40,6 +64,16 @@ scrape_configs:
           __path__: /var/log/php*-fpm.log
 
   - job_name: syslog
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - regex:
+          expression: >-
+            (?:level=(?P<level>\w+)|(?P<level2>error|warn|info|debug|notice|crit|alert|emerg)[ :])
+      - labels:
+          process:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -48,6 +82,16 @@ scrape_configs:
           __path__: /var/log/syslog
 
   - job_name: auth-log
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - regex:
+          expression: >-
+            (?:level=(?P<level>\w+)|(?P<level2>error|warn|info|debug|notice|crit|alert|emerg)[ :])
+      - labels:
+          process:
+          level:
     static_configs:
       - targets: [localhost]
         labels:
@@ -57,6 +101,15 @@ scrape_configs:
           __path__: /var/log/auth.log
 
   - job_name: fail2ban
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \S+\s*\[\d+\]: (?P<level>\S+)\s+\[(?P<jail>\S+)\]\s+(?P<action_kind>\w+)\s+(?P<ip>\S+)?.*$
+      - labels:
+          jail:
+          action_kind:
+          level:
+          ip:
     static_configs:
       - targets: [localhost]
         labels:

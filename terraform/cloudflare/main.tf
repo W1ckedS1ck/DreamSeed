@@ -84,3 +84,6 @@ resource "cloudflare_ruleset" "cache" {
     enabled     = true
   }]
 }
+
+# email_obfuscation отключено вручную через Cloudflare Dashboard
+# Terraform не может управлять этим — у токена нет прав zone:settings:edit

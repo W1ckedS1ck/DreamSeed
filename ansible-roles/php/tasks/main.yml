@@ -108,7 +108,7 @@
     path: "{{ web_root }}/core/cache"
     src: tmpfs
     fstype: tmpfs
-    opts: "size={{ modx_cache_tmpfs_size }},mode=0755,uid=33,gid=33"
+    opts: "size={{ modx_cache_tmpfs_size }},mode=0755,uid=33,gid=33,nofail"
     state: mounted
 
 - name: Restore cache from backup onto tmpfs

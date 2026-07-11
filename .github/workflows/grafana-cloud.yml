@@ -57,7 +57,8 @@ jobs:
             TOKEN="${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}"
             SM_TOKEN="${{ secrets.DEV_SM_ACCESS_TOKEN }}"
             GRAFANA_URL="https://vitalikuts.grafana.net"
-            DOMAIN="hetz.vitalikuts.online"
+            DOMAIN="aws.vitalikuts.online"
+            SM_ENABLED="true"
             SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
           fi
           jq -n \
@@ -66,7 +67,8 @@ jobs:
             --arg sm_token "$SM_TOKEN" \
             --arg domain "$DOMAIN" \
             --arg sm_url "$SM_URL" \
-            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_token | length > 0)}' \
+            --arg sm_enabled "true" \
+            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_enabled == "true")}' \
             > terraform.tfvars.json
 
       - name: Terraform Init

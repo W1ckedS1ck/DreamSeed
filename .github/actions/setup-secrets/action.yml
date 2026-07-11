@@ -18,22 +18,28 @@ runs:
   steps:
     - name: Setup SSH deploy key
       shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-private-key }}
       run: |
         mkdir -p ~/.ssh
-        echo "${{ inputs.ssh-private-key }}" > ~/.ssh/deploy_key
+        echo "$SSH_KEY" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
         ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2>/dev/null
 
     - name: Setup Ansible vault password
       shell: bash
+      env:
+        VAULT_PASS: ${{ inputs.vault-password }}
       run: |
-        echo -n "${{ inputs.vault-password }}" > ~/.vault_pass_dreamseed
+        echo -n "$VAULT_PASS" > ~/.vault_pass_dreamseed
         chmod 600 ~/.vault_pass_dreamseed
 
     - name: Setup rclone config
       if: inputs.rclone-conf-base64 != ''
       shell: bash
+      env:
+        RCLONE_CONF: ${{ inputs.rclone-conf-base64 }}
       run: |
         mkdir -p secrets
-        echo "${{ inputs.rclone-conf-base64 }}" | base64 -d > secrets/rclone.conf
+        echo "$RCLONE_CONF" | base64 -d > secrets/rclone.conf
         chmod 600 secrets/rclone.conf
