@@ -87,6 +87,9 @@ jobs:
           BETTERUPTIME_CHECK_SERVICES_KEY: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
         run: |
           for v in TG_TOKEN DB_PASS CLOUDFLARE_API_TOKEN HCLOUD_TOKEN \
                    PROD_HETZ_HCLOUD_TOKEN GRAFANA_PASS \
@@ -94,7 +97,8 @@ jobs:
                    BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY \
                    BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY \
                    BETTERUPTIME_CHECK_SERVICES_KEY \
-                   DEV_AWS_SECRET_KEY PROD_SECRET_KEY; do
+                   DEV_AWS_SECRET_KEY PROD_SECRET_KEY \
+                   SSH_PRIVATE_KEY VAULT_PASSWORD RCLONE_CONF_BASE64; do
             val="${!v:-}"
             [[ -n "$val" ]] && echo "::add-mask::$val" || true
           done
