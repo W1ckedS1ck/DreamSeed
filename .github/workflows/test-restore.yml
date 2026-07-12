@@ -879,6 +879,7 @@ jobs:
           set +a
           shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
           shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          shred -u secrets/.env 2>/dev/null || rm -f secrets/.env
           rm -f ~/.ssh/deploy_key.pub ~/.ssh/config
           rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
           echo "Temp files cleaned"

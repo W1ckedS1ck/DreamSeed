@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 
 DOMAIN="${DOMAIN:-}"
-fail=0
+fail_count=0
 
 # ── Auto-detect ──
 
@@ -43,7 +43,7 @@ BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 P="${GREEN}✓${NC}"; F="${RED}✗${NC}"; W="${YELLOW}⚠${NC}"
 
 ok()   { echo "  $P $1"; export_metric "audit_$2 1"; }
-fail() { echo "  $F $1"; export_metric "audit_$2 0"; fail=1; }
+fail() { echo "  $F $1"; export_metric "audit_$2 0"; fail_count=1; }
 warn() { echo "  $W $1"; export_metric "audit_$2 0"; }
 
 echo ""
@@ -195,7 +195,7 @@ if [[ $_sp_ok -eq 4 ]]; then
   export_metric "audit_sensitive_paths_blocked 1"
 else
   export_metric "audit_sensitive_paths_blocked 0"
-  fail=1
+  fail_count=1
 fi
 
 # Cloudflare real IP
@@ -707,13 +707,13 @@ fi
 
 echo ""
 echo "═══ AUDIT SUMMARY ═══"
-if [[ $fail -eq 0 ]]; then
+if [[ $fail_count -eq 0 ]]; then
   echo "  $P All checks passed"
   export_metric "audit_deep_overall 1"
 else
-  echo "  $F $fail check(s) failed or warned"
+  echo "  $F $fail_count check(s) failed or warned"
   export_metric "audit_deep_overall 0"
 fi
 echo ""
 
-exit $fail
+exit $fail_count

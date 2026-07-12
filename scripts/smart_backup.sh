@@ -48,6 +48,13 @@ fi
 echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
     curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 
+# ====== Validate MODX_TABLE_PREFIX ======
+MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
+if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
+    echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'" >&2
+    exit 1
+fi
+
 # ====== Pre-flight: disk space check ======
 AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{printf "%.0f", $4/1024}')
 if [ "$AVAILABLE_MB" -lt 500 ]; then
