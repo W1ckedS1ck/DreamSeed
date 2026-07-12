@@ -229,7 +229,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          mysql "{{ db_name | quote }}" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema={{ db_name | quote }};"
+          mysql "{{ db_name | quote }}" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
         executable: /bin/bash
       register: restore_db_table_count
       changed_when: false
