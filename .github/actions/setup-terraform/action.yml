@@ -5,7 +5,7 @@ inputs:
   terraform-version:
     description: Terraform version to install
     required: false
-    default: "1.15.7" # renovate: depName=hashicorp/terraform
+    default: "1.15.8" # renovate: depName=hashicorp/terraform
   cli-config-credentials-token:
     description: Terraform Cloud / Enterprise API token for CLI config
     required: false
