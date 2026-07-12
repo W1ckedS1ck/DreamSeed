@@ -71,9 +71,7 @@ grafana_telegram_chat_id: "{{ lookup('env', 'TG_CHAT_ID') }}"
 grafana_telegram_thread_id: "{{ lookup('env', 'TG_THREAD_ID') | default('', true) }}"
 grafana_cloud_url: "{{ lookup('env', 'GRAFANA_CLOUD_URL') | default('', true) }}"
 grafana_cloud_username: "{{ lookup('env', 'GRAFANA_CLOUD_USERNAME') | default('', true) }}"
-# Single token used for both vmagent (metrics:write) and Promtail (logs:write).
-# Intentional design: simplifies credential management for small deployments.
-# For larger deployments, consider separate tokens per service (metrics vs logs scopes).
+# Grafana Cloud authentication token (used by monitoring and logging services)
 grafana_cloud_token: "{{ lookup('env', 'GRAFANA_CLOUD_TOKEN') | default('', true) }}"
 
 # ========================
