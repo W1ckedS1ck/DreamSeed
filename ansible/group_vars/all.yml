@@ -51,7 +51,7 @@ cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.1.0', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
-monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.11.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
+monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.12.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
 monitoring_nginx_version: "{{ lookup('env', 'MONITORING_NGINX_VERSION') | default('1.5.1', true) }}" # renovate: depName=nginxinc/nginx-prometheus-exporter datasource=github-releases
 monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | default('1.1.1', true) }}" # renovate: depName=Lusitaniae/apache_exporter datasource=github-releases
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.19.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
