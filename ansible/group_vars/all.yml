@@ -117,3 +117,8 @@ faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) 
 #  SSL
 # ========================
 ssl_cf_dns_enabled: true  # false → skip certbot DNS-01, use self-signed (for test servers)
+
+# ========================
+#  Backup encryption (rclone crypt)
+# ========================
+rclone_crypt_password: "{{ lookup('env', 'RCLONE_CRYPT_PASSWORD') | default('', true) }}"

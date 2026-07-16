@@ -91,7 +91,7 @@ echo "$CRON" | grep -q "verify_backups" && pass "Cron: backup verification" || w
 echo "$CRON" | grep -q "session-cleanup" && pass "Cron: session cleanup" || warn "Cron: session cleanup missing"
 
 # Backup — cloud sync reachable
-GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
+GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | grep . || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
 [ "$GDRIVE" != "NO_BACKUPS" ] && pass "GDrive backups: $(echo "$GDRIVE" | tr -d '\n')" || fail "GDrive backups: not found"
 
 # Backup — telegram-bot service
@@ -117,7 +117,7 @@ else
 fi
 
 # Redis — cloud backups count
-REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
+REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l")
 echo "redis_cloud_backups=$REDIS_CLOUD"
 
 # MODX — session_handler_class must be empty (Redis sessions)
@@ -171,8 +171,8 @@ echo "memory_usage=${MEM_USED}MB/${MEM_TOTAL}MB (${MEM_PCT}%)"
 echo "memory_pct=$MEM_PCT"
 
 # Cloud backups count
-PROJ_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
-DB_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
+PROJ_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | wc -l")
+DB_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/db/ --max-depth 1 2>/dev/null | wc -l")
 echo "cloud_project=$PROJ_CLOUD"
 echo "cloud_db=$DB_CLOUD"
 echo "cloud_redis=$REDIS_CLOUD"
