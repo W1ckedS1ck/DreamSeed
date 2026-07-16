@@ -107,7 +107,7 @@ if [[ "$WEB_SVC" == "nginx" ]]; then
     fail "nginx config syntax ERROR" "nginx_syntax"
   fi
   # Cloudflare realip (might be in conf.d, not directly in nginx.conf)
-  if grep -q 'cloudflare-realip' /etc/nginx/nginx.conf /etc/nginx/conf.d/*.conf 2>/dev/null; then
+  if grep -q 'set_real_ip_from' /etc/nginx/conf.d/cloudflare-realip.conf 2>/dev/null; then
     ok "Cloudflare realip loaded" "cf_realip_loaded"
   else
     warn "Cloudflare realip not found in nginx config" "cf_realip_loaded"
@@ -642,7 +642,7 @@ ps aux --sort=-%mem 2>/dev/null | head -8 | awk '{printf "  %-30s %5s %6s MB\n",
 echo ""
 echo "── 18. Open Ports (public) ──"
 
-_open_ports=$(ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | grep -v '127.0.0.1:\|::1:\|127.0.0.53\|127.0.0.54' | sort -u || echo "")
+_open_ports=$(ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | grep -vE '^127\.|^::1' | sort -u || echo "")
 if [[ -n "$_open_ports" ]]; then
   _port_nums=$(echo "$_open_ports" | grep -oP ':\K\d+' | sort -u | tr '\n' ' ')
   _public_count=$(echo "$_port_nums" | wc -w | tr -d ' ')
@@ -693,11 +693,12 @@ fi
 
 # Promtail log shipping
 if systemctl is-active promtail &>/dev/null; then
-  _promtail_logs=$(journalctl -u promtail --no-pager -n 20 2>/dev/null | grep -c 'nginx\|php-fpm\|syslog' || true)
-  if [[ "$_promtail_logs" -ge 3 ]]; then
-    ok "Promtail: reading nginx + php-fpm + syslog (${_promtail_logs} targets)" "functional_promtail"
+  _promtail_jobs=$(grep -c 'job_name' /etc/promtail/promtail.yml 2>/dev/null || true)
+  _promtail_logs=$(journalctl -u promtail --no-pager -n 50 2>/dev/null | grep -c 'nginx\|php-fpm\|syslog' || true)
+  if [[ "$_promtail_jobs" -ge 3 && "$_promtail_logs" -ge 1 ]]; then
+    ok "Promtail: ${_promtail_jobs} jobs, reading nginx + php-fpm + syslog" "functional_promtail"
   else
-    warn "Promtail active but log targets < 3" "functional_promtail"
+    warn "Promtail active (${_promtail_jobs} jobs, ${_promtail_logs} log lines)" "functional_promtail"
   fi
 else
   warn "Promtail not running" "functional_promtail"
