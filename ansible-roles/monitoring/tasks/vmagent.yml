@@ -51,6 +51,18 @@
   notify: Restart vmagent
   when: _vmagent_enabled
 
+- name: Deploy vmagent password file (hidden from /proc)
+  ansible.builtin.copy:
+    dest: /etc/vmagent/password.txt
+    content: "{{ grafana_cloud_token }}"
+    owner: vmagent
+    group: vmagent
+    mode: "0600"
+  become: true
+  no_log: true
+  notify: Restart vmagent
+  when: _vmagent_enabled
+
 - name: Deploy vmagent scrape config
   ansible.builtin.include_tasks: _deploy_scrape.yml
   vars:

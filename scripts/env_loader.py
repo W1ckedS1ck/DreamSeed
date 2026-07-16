@@ -41,4 +41,6 @@ def load_env(env_path: str = "") -> None:
             value = value.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
                 value = value[1:-1]
+            if '$(' in value or '`' in value:
+                raise ValueError(f"Shell injection pattern detected in {key}")
             os.environ[key] = value

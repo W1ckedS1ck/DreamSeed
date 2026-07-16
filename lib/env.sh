@@ -27,7 +27,7 @@ validate_env_file() {
             elif [[ "$val" =~ ^\'(.*)$ ]] && [[ ! "$val" =~ ^\'(.*)\'$ ]]; then
                 quote="'"
             fi
-            if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
+            if [[ "$val" == *'$('* || "$val" == *'`'* || "$val" == *'${'* ]]; then
                 echo "Error: code injection detected in $f:$n: $line" >&2
                 exit 1
             fi

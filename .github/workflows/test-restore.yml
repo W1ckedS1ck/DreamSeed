@@ -871,34 +871,6 @@ jobs:
             echo "Destroy OK"
           fi
 
-      - name: Cleanup temp files and DNS
-        if: always()
-        run: |
-          set -a
-          source secrets/.env
-          set +a
-          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
-          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
-          rm -f ~/.ssh/deploy_key.pub ~/.ssh/config
-          rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
-          echo "Temp files cleaned"
-
-          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
-          if [ -n "$RECORD_ID" ]; then
-            DEL_RESP=$(curl -s --retry 3 --retry-delay 5 -X DELETE \
-              "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-            if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
-              echo "DNS record deleted"
-            else
-              echo "::warning::DNS record deletion failed"
-            fi
-          else
-            echo "No DNS record found to delete"
-          fi
-
       - name: Send Telegram report
         if: always()
         env:
@@ -998,6 +970,35 @@ jobs:
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Cleanup temp files and DNS
+        if: always()
+        run: |
+          set -a
+          source secrets/.env
+          set +a
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          shred -u secrets/.env 2>/dev/null || rm -f secrets/.env
+          rm -f ~/.ssh/deploy_key.pub ~/.ssh/config
+          rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
+          echo "Temp files cleaned"
+
+          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          if [ -n "$RECORD_ID" ]; then
+            DEL_RESP=$(curl -s --retry 3 --retry-delay 5 -X DELETE \
+              "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
+              echo "DNS record deleted"
+            else
+              echo "::warning::DNS record deletion failed"
+            fi
+          else
+            echo "No DNS record found to delete"
+          fi
 
       - name: Write job summary
         if: always()

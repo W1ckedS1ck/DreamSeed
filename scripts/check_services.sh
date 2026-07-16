@@ -4,7 +4,10 @@
 # Uses flock to prevent concurrent runs (deploy.sh + systemd timer).
 set -euo pipefail
 
-exec 200>/tmp/.check_services.lock
+LOCK_DIR="${HOME:-/root}/.locks"
+mkdir -p "$LOCK_DIR"
+LOCK_FILE="$LOCK_DIR/check_services.lock"
+exec 200>"$LOCK_FILE"
 flock -n 200 || { echo "check_services already running, skipping"; exit 0; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -82,9 +82,13 @@ jobs:
           if [ "${{ inputs.provider }}" = "hetzner" ]; then
             if [ "$IS_PROD" = "true" ]; then
               echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx43" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+              echo "TF_VAR_enable_primary_ip=true" >> "$GITHUB_ENV"
             else
               echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
               echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
             fi
             echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
           fi
@@ -149,8 +153,6 @@ jobs:
             terraform apply -auto-approve -input=false $MODE_FLAG
           else
             terraform apply -auto-approve -input=false $MODE_FLAG \
-              -var="ssh_key_name=" \
-              -var="ssh_public_key=" \
               -var="environment=${{ inputs.workspace }}"
           fi
 
