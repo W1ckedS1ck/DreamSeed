@@ -1,4 +1,5 @@
 #!/bin/bash
+# Type: manual
 # Better Stack Uptime inventory — lists monitors, heartbeats, and status pages.
 # Portfolio documentation script. Read-only, no side effects.
 

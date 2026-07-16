@@ -16,6 +16,26 @@
     shell: /bin/false
   become: true
 
+- name: Create redis_exporter directories
+  ansible.builtin.file:
+    path: /etc/redis_exporter
+    state: directory
+    owner: redis_exporter
+    group: redis_exporter
+    mode: "0755"
+  become: true
+
+- name: Deploy Redis Exporter password file (hidden from /proc)
+  ansible.builtin.copy:
+    dest: /etc/redis_exporter/password.txt
+    content: "{{ redis_password }}"
+    owner: redis_exporter
+    group: redis_exporter
+    mode: "0600"
+  become: true
+  no_log: true
+  when: redis_password | length > 0
+
 - name: Deploy Redis Exporter service
   ansible.builtin.copy:
     dest: /etc/systemd/system/redis_exporter.service
@@ -27,9 +47,8 @@
       [Service]
       Type=simple
       User=redis_exporter
-      Environment=REDIS_PASSWORD={{ redis_password }}
       ExecStart=
-      ExecStart=/usr/local/bin/redis_exporter -redis.addr 127.0.0.1:6379{% if redis_password | length > 0 %} -redis.password ${REDIS_PASSWORD}{% endif %} -web.listen-address 127.0.0.1:9121
+      ExecStart=/usr/local/bin/redis_exporter -redis.addr 127.0.0.1:6379{% if redis_password | length > 0 %} -redis.password-file /etc/redis_exporter/password.txt{% endif %} -web.listen-address 127.0.0.1:9121
       Restart=always
       RestartSec=5s
 

@@ -132,8 +132,6 @@ server {
     }
 
     location = /bot-health {
-        allow 127.0.0.1;
-        deny all;
         proxy_pass http://127.0.0.1:8553/health;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
