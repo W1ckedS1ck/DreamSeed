@@ -956,10 +956,10 @@ jobs:
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`" \
             "" \
-            "🔄 Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?}s)" \
+            "🔄 Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME%s}s)" \
             "  Source: ${RESTORE_SRC}" \
             "📁 Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
-            "  ☁️ Cloud: ${CLOUD_PROJ:-0} project / ${CLOUD_DB:-0} db / ${CLOUD_REDIS:-0} redis" \
+            "  ☁️ GDrive: ${CLOUD_PROJ:-?} proj / ${CLOUD_DB:-?} db / ${CLOUD_REDIS:-?} red" \
             "  Hash: ${PROJ_ICON} project ${DB_ICON} DB" \
             "" \
             "🌐 Web       HTTP ${HTTP_CODE:-?} (${RESP_TIME:-?}ms)" \
