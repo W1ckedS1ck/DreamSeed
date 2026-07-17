@@ -80,6 +80,7 @@ jobs:
           PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
+          RCLONE_CRYPT_PASSWORD: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
         run: |
           mkdir -p secrets
           {
@@ -119,6 +120,8 @@ jobs:
             echo "PROD_REGION=$PROD_REGION"
             echo "PROD_EIP=$PROD_EIP"
 
+            echo "RCLONE_CRYPT_PASSWORD=$RCLONE_CRYPT_PASSWORD"
+
             echo "HETZNER_SSH_KEY_NAME=Vitali.pub"
             echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
           } > secrets/.env
@@ -147,7 +150,7 @@ jobs:
                   print(f"::add-mask::{v}")
               if k in ("CLOUDFLARE_API_TOKEN", "DB_PASS", "TG_TOKEN", "GRAFANA_PASS",
                        "HCLOUD_TOKEN", "BETTERUPTIME_API_TOKEN",
-                       "VAULT_PASSWORD", "RCLONE_CONF_BASE64"):
+                       "VAULT_PASSWORD", "RCLONE_CONF_BASE64", "RCLONE_CRYPT_PASSWORD"):
                   print(f"::add-mask::{v}")
           PYEOF
 
@@ -385,6 +388,7 @@ jobs:
           scripts_dir: "${PWD}/scripts"
           secrets_dir: "${PWD}/secrets"
           ssh_public_key_path: "${HOME}/.ssh/deploy_key.pub"
+          rclone_crypt_password: "${RCLONE_CRYPT_PASSWORD}"
           EOF
           )
 
@@ -522,7 +526,7 @@ jobs:
           echo "Upload log:"
           ssh ubuntu@"$SERVER_IP" "tail -5 /home/ubuntu/backups/logs/upload_*.log 2>/dev/null" 2>&1 || true
           echo "GDrive listing (latest):"
-          ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -3 || echo 'No GDrive backups'" 2>/dev/null || true
+          ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -3 || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -3 || echo 'No GDrive backups'" 2>/dev/null || true
 
       - name: Verify backup archives integrity
         run: |

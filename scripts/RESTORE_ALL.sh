@@ -341,11 +341,17 @@ else
         # Interactive mode keeps ENV_SUFFIX="" for the same reason (line 222).
         # Do not add ENV_SUFFIX here. See detect_env() in common_functions.sh for design rationale.
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
-            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3
+            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || \
+        rclone copy "gdrive:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
+            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || true
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
-            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3
+            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || \
+        rclone copy "gdrive:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
+            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || true
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
-            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3
+            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || \
+        rclone copy "gdrive:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
+            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || true
 
         SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
         SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
