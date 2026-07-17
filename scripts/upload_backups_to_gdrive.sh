@@ -35,7 +35,7 @@ REDIS_DIR="$LOCAL_BACKUP_DIR/redis"
 RCLONE_REMOTE="gdrive"
 
 # Validate rclone remote name
-if ! [[ "$RCLONE_REMOTE" =~ ^[a-zA-Z0-9_]+$ ]]; then
+if ! [[ "$RCLONE_REMOTE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     echo "ERROR: Invalid rclone remote name: $RCLONE_REMOTE (must be alphanumeric + underscore)"
     exit 1
 fi
