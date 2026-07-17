@@ -619,7 +619,7 @@ else
 fi
 sleep 3
 
-HTTP_CODE=$(curl -sk "$SITE_URL" -o /dev/null -w "%{http_code}") || HTTP_CODE="000"
+HTTP_CODE=$(curl -sk --resolve "${SITE_DOMAIN:-localhost}:443:127.0.0.1" "$SITE_URL" -o /dev/null -w "%{http_code}") || HTTP_CODE="000"
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
     SITE_STATUS="✅ HTTP $HTTP_CODE"
     echo -e "${GREEN}✓ Site is up (HTTP $HTTP_CODE)${NC}"
