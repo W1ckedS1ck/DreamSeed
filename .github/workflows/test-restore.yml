@@ -619,6 +619,7 @@ jobs:
             "grep -hs 'server_name' /etc/nginx/sites-available/*.conf 2>/dev/null | grep -v 'server_name _' | awk '{print \$2}' | tr -d ';' | head -1" 2>/dev/null || echo "localhost")
           echo "domain=$DOMAIN"
 
+          # shellcheck disable=SC2029
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" \
             "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' --max-time 10 'https://$DOMAIN/'" 2>/dev/null || echo "000")
           echo "site_http=$HTTP_CODE"
@@ -628,6 +629,7 @@ jobs:
             echo "[FAIL] Site returned HTTP $HTTP_CODE"
           fi
 
+          # shellcheck disable=SC2029
           ADMINER_CODE=$(ssh ubuntu@"$SERVER_IP" \
             "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' --max-time 5 'https://$DOMAIN/adminer-4.8.1-mysql.php'" 2>/dev/null || echo "000")
           echo "adminer_http=$ADMINER_CODE"
