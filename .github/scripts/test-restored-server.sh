@@ -35,8 +35,13 @@ DOMAIN=$(ssh ubuntu@"$SERVER_IP" "grep -hs 'server_name' /etc/nginx/sites-availa
 HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/'" 2>/dev/null || echo "000")
 [ "$HTTPS_CODE" = "200" ] && pass "HTTPS 200" || fail "HTTPS $HTTPS_CODE"
 
+# Nginx config syntax
+ssh ubuntu@"$SERVER_IP" "nginx -t 2>&1 | grep -q 'syntax is ok'" && pass "Nginx config syntax OK" || warn "Nginx config: syntax check failed"
+
 # MODX core
 ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && pass "Config exists" || fail "Config missing"
+CONFIG_PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
+[ "$CONFIG_PERMS" = "640" ] && pass "Config permissions: 640" || warn "Config permissions: ${CONFIG_PERMS:-N/A} (expected 640)"
 ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && pass "Assets exists" || fail "Assets missing"
 
 # PHP error log check
@@ -89,7 +94,13 @@ echo "$CRON" | grep -q "upload_backups_to_gdrive" && pass "Cron: daily gdrive up
 echo "$CRON" | grep -q "send_report.sh daily" && pass "Cron: daily report" || warn "Cron: daily report missing"
 echo "$CRON" | grep -q "send_report.sh weekly" && pass "Cron: weekly report" || warn "Cron: weekly report missing"
 echo "$CRON" | grep -q "verify_backups" && pass "Cron: backup verification" || warn "Cron: backup verification missing"
-echo "$CRON" | grep -q "session-cleanup" && pass "Cron: session cleanup" || warn "Cron: session cleanup missing"
+echo "$CRON" | grep -q "session-cleanup" && warn "Cron: session cleanup (unexpected — Redis handles sessions)" || pass "Cron: no session cleanup (Redis handles sessions)"
+
+# Backup — scripts exist
+SCRIPTS_DIR="/home/ubuntu/Scripts"
+for script in smart_backup.sh upload_backups_to_gdrive.sh verify_backups.sh; do
+  ssh ubuntu@"$SERVER_IP" "test -f $SCRIPTS_DIR/$script" && pass "Script: $script" || fail "Script: $script missing"
+done
 
 # Backup — cloud sync reachable
 GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | grep . || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")

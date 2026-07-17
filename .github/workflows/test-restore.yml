@@ -542,9 +542,11 @@ jobs:
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Checking Grafana via nginx proxy ==="
-          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+          # shellcheck disable=SC2029
+          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:127.0.0.1 --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
           if [ "$GRAFANA_OK" -lt 1 ]; then
-            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://127.0.0.1/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+            # shellcheck disable=SC2029
+            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:$SERVER_IP --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
           fi
           if [ "$GRAFANA_OK" -ge 1 ]; then
             echo "[PASS] Grafana reachable via nginx proxy"
@@ -610,6 +612,14 @@ jobs:
           if [ "$RC" -ne 0 ]; then
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
           fi
+
+      - name: Restart fail2ban after restore (nginx stop/start breaks pyinotify)
+        run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          # shellcheck disable=SC2029
+          command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" ubuntu@"$SERVER_IP" \
+            "sudo systemctl restart fail2ban"
 
       - name: Verify restored content
         id: verify_content
@@ -757,14 +767,14 @@ jobs:
           if ssh ubuntu@"$SERVER_IP" "curl -skS 'https://test.dreamseed.online/' | grep -q 'faro-web-sdk'"; then
             echo "[PASS] Faro RUM injected"
           else
-            echo "[WARN] Faro RUM not found"
+            echo "[INFO] Faro RUM not found (not configured in CI)"
           fi
 
           echo "=== Promtail ==="
           if ssh ubuntu@"$SERVER_IP" "systemctl is-active promtail &>/dev/null"; then
             echo "[PASS] Promtail active"
           else
-            echo "[WARN] Promtail not running"
+            echo "[INFO] Promtail not running (not configured in CI)"
           fi
 
       - name: Run full service tests

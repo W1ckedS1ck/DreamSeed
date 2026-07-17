@@ -214,3 +214,12 @@
   no_log: true
   changed_when: false
   when: grafana_admin_password | default('') | length > 0
+
+- name: Create Grafana admin password marker
+  ansible.builtin.file:
+    path: /etc/grafana/.admin_password_set
+    state: touch
+    owner: root
+    group: grafana
+    mode: "0640"
+  become: true
