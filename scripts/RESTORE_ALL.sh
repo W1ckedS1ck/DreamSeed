@@ -63,7 +63,7 @@ PHP_FPM=$(systemctl list-units --type=service --state=running 2>/dev/null \
     | grep -oP 'php[\d.]+-fpm' | head -1 || echo "php-fpm")
 
 if [ "$WEB_SERVICE" = "nginx" ]; then
-    SITE_DOMAIN=$(grep -rh "server_name" /etc/nginx/sites-enabled/ 2>/dev/null \
+    SITE_DOMAIN=$(grep -hs "server_name" /etc/nginx/sites-available/*.conf 2>/dev/null \
         | grep -v "server_name _" | awk '{print $2}' | tr -d ';' | head -1 || true)
 else
     SITE_DOMAIN=$(grep -rh "ServerName" /etc/apache2/sites-enabled/ 2>/dev/null \
