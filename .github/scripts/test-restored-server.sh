@@ -31,7 +31,8 @@ echo "content_rows=$ROWS"
 # Web server
 ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx" && pass "Nginx running" || fail "Nginx"
 ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm" && pass "PHP-FPM running" || fail "PHP-FPM"
-HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/" 2>/dev/null || echo "000")
+DOMAIN=$(ssh ubuntu@"$SERVER_IP" "grep -hs 'server_name' /etc/nginx/sites-available/*.conf 2>/dev/null | grep -v 'server_name _' | awk '{print \$2}' | tr -d ';' | head -1" 2>/dev/null || echo "localhost")
+HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/'" 2>/dev/null || echo "000")
 [ "$HTTPS_CODE" = "200" ] && pass "HTTPS 200" || fail "HTTPS $HTTPS_CODE"
 
 # MODX core
@@ -139,7 +140,7 @@ if [ -n "$(echo "$SESSIONS" | tr -d ' ')" ]; then
     pass "Redis sessions active ($AFTER keys)"
     echo "redis_session_keys=$AFTER"
 else
-    ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null https://localhost/ 2>/dev/null || true"
+    ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null 'https://$DOMAIN/' 2>/dev/null || true"
     sleep 1
     AFTER2=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null || echo 0")
     SESSIONS2=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | head -3 | tr '\n' ' '" || true)
@@ -153,12 +154,12 @@ else
 fi
 
 # MODX — manager accessible
-MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/manager/ 2>/dev/null || echo '000'")
+MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/manager/' 2>/dev/null || echo '000'")
 [ "$MANAGER_CODE" = "200" ] && pass "MODX manager: HTTP 200" || warn "MODX manager: HTTP $MANAGER_CODE"
 echo "modx_manager_code=$MANAGER_CODE"
 
 # MODX — response time (ms)
-RESP_TIME=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{time_total}' https://localhost/ 2>/dev/null || echo '0'" | tr ',' '.')
+RESP_TIME=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{time_total}' 'https://$DOMAIN/' 2>/dev/null || echo '0'" | tr ',' '.')
 RESP_MS=$(printf "%.0f" "$RESP_TIME" 2>/dev/null || echo "0")
 echo "response_time_ms=$RESP_MS"
 [ "${RESP_MS:-999}" -lt 2000 ] && pass "Response time: ${RESP_MS}ms" || warn "Response time: ${RESP_MS}ms (slow)"
