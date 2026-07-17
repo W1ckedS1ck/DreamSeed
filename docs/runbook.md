@@ -140,7 +140,7 @@ Use cloud console to restart:
 
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
-| 1 | G1–G24 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent, Cloud Upload | ❌ No |
+| 1 | G1–G25 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent, Cloud Upload | ❌ No |
 | 2 | B1–B8 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (6 heartbeats) | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
@@ -1088,7 +1088,8 @@ crontab -l | grep upload
 bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh
 
 # Check rclone config
-rclone lsf gdrive:DreamSeed/backups/project-dev/ --files-only | head -3
+rclone lsf gdrive-crypt:DreamSeed/backups/project-dev/ --files-only 2>/dev/null || \
+  rclone lsf gdrive:DreamSeed/backups/project-dev/ --files-only | head -3
 
 # Check if VictoriaMetrics received the metric
 curl -s "http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp" | \

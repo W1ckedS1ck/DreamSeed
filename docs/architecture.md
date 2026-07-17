@@ -25,10 +25,10 @@
        │      01 Base ─── Packages, swap, PHP, MariaDB
        │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
        │      03 DB ────── MariaDB tuning, users, restore
-       │      04 Monitor ─ Exporters + VictoriaMetrics + vmagent + check_site cron
-       │      05 Backup ── Scripts, crons, Better Stack heartbeats, Telegram bot
-       │      06 Grafana ─ Dashboards, datasources, alerts
-       │      07 Security ── SSH, fail2ban, sysctl, MODX perms
+       │      04 Security ── SSH, fail2ban, sysctl, MODX perms
+       │      05 Monitor ── Exporters + VictoriaMetrics + vmagent + promtail + check_site cron
+       │      06 Backup ─── Scripts, crons, Better Stack heartbeats, Telegram bot
+       │      07 Grafana ── Dashboards, datasources, alerts
        │
        └─ 7. Post-deploy checks
                systemctl is-active (7 services + mysqld_exporter)
@@ -294,9 +294,9 @@ DreamSeed/
 ├── scripts/
 │   ├── audit_deep.sh        # Full server audit — covers all AUDIT_CHECKLIST sections
 │   ├── smart_backup.sh      # Local backup (project, DB, Redis)
-│   └── upload_backups_to_gdrive.sh  # Cloud upload via rclone_retry()
-│   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 9 workflows + Renovate
+│   ├── upload_backups_to_gdrive.sh  # Cloud upload via rclone (gdrive or gdrive-crypt)
+│   ├── RESTORE_ALL.sh               # Interactive restore from GDrive (supports encrypted backups)
+│   └── verify_backups.sh            # Cloud backup integrity verification
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP
@@ -310,7 +310,7 @@ DreamSeed/
 │   ├── playbook-06-backup.yml   # Cron jobs, rclone, telegram bot
 │   └── playbook-07-grafana.yml  # Grafana + alerting + dashboards
 │   └── group_vars/all.yml
-├── ansible-roles/         # 16 custom roles
+├── ansible-roles/         # 17 custom roles (including promtail)
 ├── scripts/               # Backup, restore, Telegram bot, health checks
 ├── .tflint.hcl            # Terraform linter config (root, drives all providers)
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/

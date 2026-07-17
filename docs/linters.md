@@ -5,7 +5,7 @@
 There are 2 layers of linting:
 
 - **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` (fast, covers all tools)
-- **CI on GitHub**: `ci.yml` (full, 9 parallel jobs)
+- **CI on GitHub**: `ci.yml` (full, 11 parallel jobs)
 
 ---
 
@@ -22,6 +22,8 @@ There are 2 layers of linting:
 | 7 | **gitleaks** | CI | Secret scanning across full git history | Git |
 | 8 | **pre-commit** | CI + local | YAML, large files, merge conflicts, keys | Git hooks |
 | 9 | **markdownlint-cli2** | local + CI | `docs/**/*.md`, `README.md` | Markdown |
+| 10 | **Checkov** | CI | IaC security scanning in `terraform/` | IaC Security |
+| 11 | **actionlint** | CI | `.github/workflows/*.yml` syntax | GitHub Actions |
 
 ---
 
