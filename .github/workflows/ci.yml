@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  TFLINT_VERSION: "v0.63.1"
+  TFLINT_VERSION: "v0.64.0"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   ARTIFACT_RETENTION_DAYS: 30
 
