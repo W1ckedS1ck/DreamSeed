@@ -519,7 +519,10 @@ jobs:
             echo "gdrive_status=ok" >> "$GITHUB_OUTPUT"
           fi
           echo "=== Checking cloud backups ==="
-          ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | head -3 || echo 'No GDrive backups'" 2>&1 || true
+          echo "Upload log:"
+          ssh ubuntu@"$SERVER_IP" "tail -5 /home/ubuntu/backups/logs/upload_*.log 2>/dev/null" 2>&1 || true
+          echo "GDrive listing (latest):"
+          ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -3 || echo 'No GDrive backups'" 2>/dev/null || true
 
       - name: Verify backup archives integrity
         run: |

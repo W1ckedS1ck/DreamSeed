@@ -181,6 +181,28 @@ Set per-target as GitHub Variables (not secrets):
 
 ---
 
+## Rclone Crypt (backup encryption)
+
+Password for the rclone crypt remote, used for AES-256 encryption of backups at rest.
+
+```
+RCLONE_CRYPT_PASSWORD
+```
+
+Stored in `secrets/.env` and GitHub Secrets. Without it, encrypted backups on Google Drive cannot be decrypted.
+
+---
+
+## Redis
+
+Redis is used by MODX for session storage and caching. Configured in `ansible-roles/redis`.
+
+```
+REDIS_PASSWORD=<password>
+```
+
+Defaults to empty (no auth) if not set. Stored in `secrets/.env`.
+
 ## Grafana Cloud Logs (Loki)
 
 Set per-target as GitHub Variables (not secrets):

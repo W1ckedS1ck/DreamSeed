@@ -27,3 +27,19 @@
     mode: "0600"
   no_log: true
   when: rclone_config_stat.stat.exists | default(false)
+
+- name: Create crypt remote for encrypted backups
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rclone config create gdrive-crypt crypt \
+        remote=gdrive: \
+        password="$(rclone obscure '{{ rclone_crypt_password }}')" 2>/dev/null || true
+    executable: /bin/bash
+  become: true
+  become_user: ubuntu
+  changed_when: false
+  no_log: true
+  when:
+    - rclone_crypt_password is defined
+    - rclone_crypt_password | length > 0

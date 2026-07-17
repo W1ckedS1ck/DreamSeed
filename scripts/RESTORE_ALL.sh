@@ -50,7 +50,7 @@ mkdir -p "$(dirname "$RESTORE_LOG")"
 MODE="${1:-interactive}"  # interactive or --auto-latest
 
 # ====== Settings ======
-: "${RCLONE_REMOTE:=gdrive}"
+: "${RCLONE_REMOTE:=gdrive-crypt}"
 : "${REMOTE_BASE:=DreamSeed/backups}"
 
 if systemctl is-active --quiet nginx 2>/dev/null; then

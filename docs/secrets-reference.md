@@ -18,7 +18,21 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `test-restore.yml`, `rollback.yml` |
 | `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml` |
 | `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
+| `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml` → `rclone_config.yml` |
 | `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml` |
+
+---
+
+## GitHub Variables (not Secrets)
+
+These are set as GitHub Actions **Variables**, not Secrets. They are not sensitive and visible in plain text.
+
+| Variable | Purpose | Used in |
+|----------|---------|---------|
+| `FARO_COLLECTOR_URL` | Grafana Faro collector URL for frontend telemetry | `deploy.yml` |
+| `FARO_APP_NAME` | Grafana Faro application name | `deploy.yml` |
+| `LOKI_URL` | Loki push endpoint for log shipping | `deploy.yml` |
+| `LOKI_USERNAME` | Loki username (numeric instance ID) | `deploy.yml` |
 
 ---
 
@@ -110,6 +124,18 @@ All set in `deploy.yml` and consumed by the respective server scripts.
 | `BETTERUPTIME_REPORT_WEEKLY_KEY` | `send_report.sh` (weekly) |
 | `BETTERUPTIME_VERIFY_KEY` | `verify_backups.sh` |
 | `BETTERUPTIME_CHECK_SERVICES_KEY` | `check_services.sh` |
+
+---
+
+## Backup
+
+| Item | Notes |
+|------|-------|
+| Remote | `gdrive-crypt` (AES-256 encrypted) — used instead of plain `gdrive:` for new backups |
+| Rclone config | `RCLONE_CONF_BASE64` — base64-encoded rclone config file |
+| Crypt password | `RCLONE_CRYPT_PASSWORD` — password for the `gdrive-crypt` encrypted remote |
+
+The `gdrive-crypt` remote wraps the base `gdrive:` remote with rclone crypt (AES-256). All new backups are pushed to the encrypted remote. The crypt password is consumed by Ansible `rclone_config.yml` during deploy.
 
 ---
 

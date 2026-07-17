@@ -36,7 +36,7 @@
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
 | Uptime coverage | 24 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
-| CI checks per push | 9 parallel jobs (lint → security → validate) |
+| CI checks per push | 11 parallel jobs (lint → security → validate) |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
 ---
@@ -48,10 +48,10 @@ I own **everything below the application layer** — provisioning, configuration
 ### What I Built
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
-- **Server automation** — 16 idempotent Ansible roles covering the full server lifecycle (base → web → database → redis → monitoring → backup → grafana → security)
-- **Observability** — VictoriaMetrics + Grafana stack with 24 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
-- **Backup & DR** — hourly MariaDB + file backups to Google Drive (rclone), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 9 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud, health-check workflows
+- **Server automation** — 17 idempotent Ansible roles covering the full server lifecycle (base → web → database → redis → monitoring → backup → grafana → security)
+- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 24 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
+- **CI/CD** — 11 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud, health-check workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -62,7 +62,7 @@ I own **everything below the application layer** — provisioning, configuration
 | Layer | Tools |
 |---|---|
 | **Infrastructure** | Terraform · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
-| **Configuration** | Ansible (16 custom roles) |
+| **Configuration** | Ansible (17 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB · Redis |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 24 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
@@ -87,10 +87,10 @@ I own **everything below the application layer** — provisioning, configuration
  │ • AWS       │ ──────► │ 01 Base      │
  │ • Hetzner   │  SSH    │ 02 Web       │
  └─────────────┘         │ 03 Database  │
-                         │ 04 Monitoring│
-                         │ 05 Backup    │
-                         │ 06 Grafana   │
-                         │ 07 Security  │
+                         │ 04 Security  │
+                         │ 05 Monitoring│
+                         │ 06 Backup    │
+                         │ 07 Grafana   │
                          └──────────────┘
                                 │
                                 ▼
@@ -156,7 +156,7 @@ DreamSeed/
 │   ├── playbook-05-monitor.yml   # VictoriaMetrics + exporters
 │   ├── playbook-06-backup.yml   # Backup cron + Telegram bot
 │   └── playbook-07-grafana.yml   # Grafana dashboards + alerts
-├── ansible-roles/            # 16 reusable roles (nginx, mariadb, ssl, redis, …)
+├── ansible-roles/            # 17 reusable roles (nginx, mariadb, ssl, redis, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
 ├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
@@ -227,11 +227,11 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 9 Workflows + Renovate
+### 🧪 CI/CD Pipeline — 8 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 9 parallel checks | Every PR + push to main |
+| **CI** — 11 parallel checks | Every PR + push to main |
 | **Deploy** — single-click deploy | Manual dispatch (all targets) |
 | **Restore Test** — full backup/restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
@@ -241,7 +241,7 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 | **TF: Infra + Cloudflare** — terraform apply (infra + WAF/cache) | Manual dispatch |
 | **Cloudflare Cache** — legacy (WAF/cache in TF now) | Manual dispatch |
 
-CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
+CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **actionlint** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 
 ### 🛑 Production Safeguards
 
