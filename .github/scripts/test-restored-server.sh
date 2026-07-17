@@ -6,7 +6,7 @@ set -euo pipefail
 SERVER_IP="${1:?Usage: $0 <SERVER_IP>}"
 DB_NAME="${DB_NAME:-modx_db}"
 SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-ssh() { command ssh -i "$SSH_KEY" "$@"; }
+ssh() { command ssh -i "$SSH_KEY" "$@" 2>/dev/null; }
 
 P=0 F=0 W=0
 FAIL_ITEMS=""
