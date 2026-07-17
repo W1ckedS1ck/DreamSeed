@@ -40,7 +40,7 @@ if ! rclone listremotes 2>/dev/null | grep -qF "${RCLONE_REMOTE}:"; then
 fi
 
 # Validate rclone remote name
-if ! [[ "$RCLONE_REMOTE" =~ ^[a-zA-Z0-9_]+$ ]]; then
+if ! [[ "$RCLONE_REMOTE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     echo "ERROR: Invalid rclone remote name: $RCLONE_REMOTE (must be alphanumeric + underscore)"
     exit 1
 fi
