@@ -99,6 +99,7 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          UBUNTU_PRO_TOKEN: ${{ secrets.UBUNTU_PRO_TOKEN }}
           RCLONE_CRYPT_PASSWORD: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
         run: |
           for v in TG_TOKEN DB_PASS CLOUDFLARE_API_TOKEN HCLOUD_TOKEN \
@@ -112,7 +113,7 @@ jobs:
                    DEV_AWS_ACCESS_KEY DEV_AWS_SECRET_KEY \
                    PROD_ACCESS_KEY PROD_SECRET_KEY \
                    SSH_PRIVATE_KEY VAULT_PASSWORD RCLONE_CONF_BASE64 \
-                   RCLONE_CRYPT_PASSWORD; do
+                   RCLONE_CRYPT_PASSWORD UBUNTU_PRO_TOKEN; do
             val="${!v:-}"
             [[ -n "$val" ]] && echo "::add-mask::$val" || true
           done
@@ -156,6 +157,7 @@ jobs:
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
           RCLONE_CRYPT_PASSWORD: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
+          UBUNTU_PRO_TOKEN: ${{ secrets.UBUNTU_PRO_TOKEN }}
         run: |
           mkdir -p secrets
           {
@@ -209,6 +211,8 @@ jobs:
             echo "PROD_HETZ_ENABLE_PRIMARY_IP=true"
 
             echo "RCLONE_CRYPT_PASSWORD=$RCLONE_CRYPT_PASSWORD"
+
+            echo "UBUNTU_PRO_TOKEN=$UBUNTU_PRO_TOKEN"
           } > secrets/.env
           chmod 600 secrets/.env
 

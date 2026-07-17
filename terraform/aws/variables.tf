@@ -27,6 +27,12 @@ variable "root_volume_size" {
   default     = 30
 }
 
+variable "ubuntu_pro_token" {
+  description = "Ubuntu Pro token for ESM (auto-attach on first boot)"
+  type        = string
+  default     = ""
+}
+
 variable "additional_ssh_keys" {
   description = "Additional SSH public keys to inject via cloud-init (in addition to the deploy key)"
   type        = list(string)

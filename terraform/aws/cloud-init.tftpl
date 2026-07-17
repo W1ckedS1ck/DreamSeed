@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 hostnamectl set-hostname dreamseed-${environment}
-pro attach C13zgkkj7jd9dLnprxDu7kmwtConRK 2>/dev/null || true
+%{if ubuntu_pro_token != ""~}
+pro attach ${ubuntu_pro_token} 2>/dev/null || true
+%{endif~}
 %{if length(additional_ssh_keys) > 0~}
 mkdir -p /home/ubuntu/.ssh
 %{for key in additional_ssh_keys~}

@@ -81,6 +81,7 @@ jobs:
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
           RCLONE_CRYPT_PASSWORD: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
+          UBUNTU_PRO_TOKEN: ${{ secrets.UBUNTU_PRO_TOKEN }}
         run: |
           mkdir -p secrets
           {
@@ -122,6 +123,7 @@ jobs:
 
             echo "RCLONE_CRYPT_PASSWORD=$RCLONE_CRYPT_PASSWORD"
 
+            echo "UBUNTU_PRO_TOKEN=$UBUNTU_PRO_TOKEN"
             echo "HETZNER_SSH_KEY_NAME=Vitali.pub"
             echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
           } > secrets/.env
@@ -150,7 +152,8 @@ jobs:
                   print(f"::add-mask::{v}")
               if k in ("CLOUDFLARE_API_TOKEN", "DB_PASS", "TG_TOKEN", "GRAFANA_PASS",
                        "HCLOUD_TOKEN", "BETTERUPTIME_API_TOKEN",
-                       "VAULT_PASSWORD", "RCLONE_CONF_BASE64", "RCLONE_CRYPT_PASSWORD"):
+                       "VAULT_PASSWORD", "RCLONE_CONF_BASE64", "RCLONE_CRYPT_PASSWORD",
+                       "UBUNTU_PRO_TOKEN"):
                   print(f"::add-mask::{v}")
           PYEOF
 
@@ -161,10 +164,12 @@ jobs:
               echo "AWS_DEFAULT_REGION=${DEV_AWS_REGION:-us-west-1}"
               echo "TF_VAR_environment=test"
               echo "TF_VAR_ssh_public_key_path=${HOME}/.ssh/deploy_key.pub"
+              [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && echo "TF_VAR_ubuntu_pro_token=$UBUNTU_PRO_TOKEN"
               echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
             } >> "$GITHUB_ENV"
           else
             {
+              [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && echo "TF_VAR_ubuntu_pro_token=$UBUNTU_PRO_TOKEN"
               echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN"
               echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)"
               echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali.pub}"

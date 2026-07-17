@@ -49,6 +49,12 @@ variable "location" {
   }
 }
 
+variable "ubuntu_pro_token" {
+  description = "Ubuntu Pro token for ESM (auto-attach on first boot)"
+  type        = string
+  default     = ""
+}
+
 variable "additional_ssh_keys" {
   type        = list(string)
   description = "Additional SSH public keys to inject via cloud-init (in addition to ssh_public_key)"
