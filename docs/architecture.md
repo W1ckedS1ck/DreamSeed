@@ -35,7 +35,7 @@
                curl https://$DOMAIN/ → 200|301
                SSL (Cloudflare/LE/self-signed), MODX index.php, DB tables
                VictoriaMetrics health, node + mysql + nginx/apache exporters, vmagent
-               fail2ban (7-8 jails, depends on web server), cron backup, MySQL write probe
+                fail2ban (5 jails for nginx / 3 for apache), cron backup, MySQL write probe
                → Push to VM: database_tables, dreamseed_health_overall
 ```
 
@@ -145,10 +145,10 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                  ┌──────────────┐           ┌──────────────────┐
                                  │   Grafana    │           │  Grafana Cloud   │
                                  │  :3000       │           │  (hosted metrics)│
-                                 │  5 dashboards│           │  4 community     │
-                                                                   │  24 alerts   │           │  dashboards      │
-                                 │              │           │  (gnet 1860/7362/│
-                                 │              │           │   17452/10229)   │
+                                  │  5 dashboards│           │  5 community     │
+                                                                    │  23 alerts   │           │  dashboards      │
+                                  │              │           │  (gnet 1860/7362/│
+                                  │              │           │   763/17452/10229)│
                                  └──────┬───────┘           └──────────────────┘
                                         │ Telegram  point
                                         ▼
@@ -170,7 +170,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 24 rules)
+### Alert Rules (Grafana — 23 rules)
 
 | Alert | Severity | Condition | Interval / for |
 |-------|----------|-----------|----------------|
@@ -184,7 +184,6 @@ Better Stack (cloud)
 | Site Down | critical | site_up != 1 | pushed 1m, for: 2m |
 | Site Response Time > 5s | warning | site_response > 5s | pushed 1m, for: 5m |
 | MODX Core Missing | critical | modx_core_ok == 0 | pushed 1m, for: 5m |
-| Site Content Mismatch | critical | site_content_ok == 0 | pushed 1m, for: 2m |
 | MODX Cache Not Writable | warning | modx_cache_ok == 0 | pushed 1m, for: 5m |
 | VictoriaMetrics Down | critical | victoria_up == 0 | scraped 15s, for: 1m |
 | Redis Down | critical | redis_up == 0 | scraped 15s, for: 2m |
@@ -263,9 +262,7 @@ Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
 
 Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
    manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
-                                          → DAST scan (nuclei)
-                                          → Lynis audit
-                                          → check_services (timers, fail2ban, exporters)
+                                           → check_services (timers, fail2ban, exporters)
                                            → Grafana alert rules check (≥23)
                                            → GDrive backup check
                                           → Destroy → Telegram report (P/F/W summary)
@@ -282,6 +279,7 @@ Bot events         Renovate              Dependency updates (auto PRs)
 DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
 ├── lib/                   # Modules: env.sh, helpers.sh, terraform.sh, ansible.sh, gen_vars.py
+│   ├── preflight.sh         # Pre-deploy checks (env, SSH key, provider vars)
 │   └── helpers.sh          # _cf_zone_id() — shared Cloudflare zone resolver
 ├── .github/
 │   ├── actions/

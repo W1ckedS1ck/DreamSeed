@@ -35,8 +35,8 @@
 | Deploy time | ~8-10 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
-| Uptime coverage | 24 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
-| CI checks per push | 11 parallel jobs (lint → security → validate) |
+| Uptime coverage | 23 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
+| CI checks per push | 9 parallel jobs (lint → security → validate) |
 | Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
 
 ---
@@ -49,9 +49,9 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 17 idempotent Ansible roles covering the full server lifecycle (base → web → database → redis → monitoring → backup → grafana → security)
-- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 24 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 23 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 11 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud, health-check workflows
+- **CI/CD** — 9 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud, health-check workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
 - **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
 
@@ -65,7 +65,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Configuration** | Ansible (17 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB · Redis |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 24 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 23 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
 | **CI/CD** | GitHub Actions (8 workflows) · ShellCheck · ansible-lint · j2lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
@@ -193,7 +193,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 
 ### 📊 Full Observability — Auto-Provisioned
 
-Grafana dashboards, datasources, **and 24 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
+Grafana dashboards, datasources, **and 23 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 **Internal (Grafana + VictoriaMetrics on-server):**
 
@@ -201,7 +201,7 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 - **Nginx Prometheus Exporter** (`:9113`) / **Apache Exporter** (`:9117`) — web server health
 - **MySQLd Exporter** (`:9104`) — queries, connections, replication
 - **VictoriaMetrics** (`:8428`) — 3-month retention, 15s scrape interval
-- **Grafana** (`:3000`) — 5 provisioned dashboards (Node Exporter, MySQL, Nginx, VictoriaMetrics, Session Table), 24 alert rules → Telegram
+- **Grafana** (`:3000`) — 5–6 provisioned dashboards depending on web server (Node Exporter, MySQL, VictoriaMetrics, Redis, Nginx/Apache), 23 alert rules → Telegram
 - **check_site.sh** (cron, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
 **Grafana Cloud (hosted telemetry):**
@@ -209,7 +209,7 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 - **vmagent** (`:8429`) — VictoriaMetrics agent, scrapes on-server exporters and remote-writes to Grafana Cloud
 - **Promtail** (`:9080`) — log agent, ships nginx + php-fpm + syslog to Loki (Grafana Cloud)
 - **Faro RUM** — real user monitoring: Core Web Vitals (LCP/CLS/INP), JS errors, sessions by browser/country. Injected via nginx `sub_filter`, proxied through same domain to avoid adblockers
-- **Grafana Cloud dashboards** — 4 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Nginx 17452, VictoriaMetrics 10229)
+- **Grafana Cloud dashboards** — 5 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Redis 763, Nginx 17452, VictoriaMetrics 10229)
 - **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 4 global regions + SSL checks from 3 regions
 
 **External (Better Stack cloud-hosted):**
@@ -231,7 +231,7 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 11 parallel checks | Every PR + push to main |
+| **CI** — 9 parallel checks | Every PR + push to main |
 | **Deploy** — single-click deploy | Manual dispatch (all targets) |
 | **Restore Test** — full backup/restore drill | Weekly Monday + manual |
 | **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
@@ -241,7 +241,7 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 | **TF: Infra + Cloudflare** — terraform apply (infra + WAF/cache) | Manual dispatch |
 | **Cloudflare Cache** — legacy (WAF/cache in TF now) | Manual dispatch |
 
-CI checks: ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt+docs) · **Trivy** · **Checkov** · **gitleaks** · **actionlint** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
+CI checks (9 parallel): ShellCheck · ansible-lint · j2lint · **Terraform** (tflint+validate+fmt) · **Trivy** · **Checkov** · **gitleaks** · **actionlint** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 
 ### 🛑 Production Safeguards
 
