@@ -34,9 +34,11 @@ REDIS_DIR="$LOCAL_BACKUP_DIR/redis"
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive-crypt}"
 
-# Fallback to unencrypted remote if crypt not configured
+# Fail if crypt remote is not configured — plaintext fallback is a security risk
 if ! rclone listremotes 2>/dev/null | grep -qF "${RCLONE_REMOTE}:"; then
-    RCLONE_REMOTE="gdrive"
+    echo "ERROR: $RCLONE_REMOTE remote not found — backup encryption disabled"
+    echo "ERROR: Set RCLONE_CRYPT_PASSWORD and redeploy to create crypt remote"
+    exit 1
 fi
 
 # Validate rclone remote name

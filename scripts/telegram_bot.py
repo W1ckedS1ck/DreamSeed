@@ -154,6 +154,7 @@ def cmd_status():
         msg += f"\n⏰ Last check: {time.strftime('%d.%m %H:%M')}"
         return msg
     except Exception as e:
+        log.exception("cmd_status failed")
         return f"Error: {e}"
 
 def cmd_backups():
@@ -170,6 +171,7 @@ def cmd_backups():
 
         return msg
     except Exception as e:
+        log.exception("cmd_backups failed")
         return f"Error: {e}"
 
 def main():

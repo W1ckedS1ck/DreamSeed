@@ -32,6 +32,7 @@ preflight_checks() {
     if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
             env_src=$(resolve_env_file "$ENV_FILE")
+            validate_env_file "$env_src"
             source "$env_src"
         else
             echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."

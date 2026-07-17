@@ -5,6 +5,10 @@ set -euo pipefail
 
 SERVER_IP="${1:?Usage: $0 <SERVER_IP>}"
 DB_NAME="${DB_NAME:-modx_db}"
+if [[ ! "$DB_NAME" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    echo "ERROR: DB_NAME contains invalid characters (got: '$DB_NAME')" >&2
+    exit 1
+fi
 SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
 ssh() { command ssh -i "$SSH_KEY" "$@" 2>/dev/null; }
 
@@ -133,7 +137,7 @@ REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups
 echo "redis_cloud_backups=$REDIS_CLOUD"
 
 # MODX — session_handler_class must be empty (Redis sessions)
-SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N $DB_NAME -e \"SELECT value FROM modx_system_settings WHERE key = 'session_handler_class'\" 2>/dev/null || true")
+SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N \"$DB_NAME\" -e \"SELECT value FROM modx_system_settings WHERE key = 'session_handler_class'\" 2>/dev/null || true")
 if [ -z "$SHC" ]; then
     pass "session_handler_class empty (Redis sessions)"
     echo "session_handler_ok=yes"

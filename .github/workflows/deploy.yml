@@ -48,8 +48,11 @@ env:
   ARTIFACT_RETENTION_DAYS: 30
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
   deploy:
     name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
+    needs: [ci]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -85,11 +88,18 @@ jobs:
           BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
           BETTERUPTIME_VERIFY_KEY: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
           BETTERUPTIME_CHECK_SERVICES_KEY: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
+          DEV_GRAFANA_CLOUD_URL: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
+          DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
+          PROD_GRAFANA_CLOUD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
+          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
           PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          RCLONE_CRYPT_PASSWORD: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
         run: |
           for v in TG_TOKEN DB_PASS CLOUDFLARE_API_TOKEN HCLOUD_TOKEN \
                    PROD_HETZ_HCLOUD_TOKEN GRAFANA_PASS \
@@ -97,7 +107,10 @@ jobs:
                    BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY \
                    BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY \
                    BETTERUPTIME_CHECK_SERVICES_KEY \
-                   DEV_AWS_SECRET_KEY PROD_SECRET_KEY \
+                   DEV_GRAFANA_CLOUD_URL DEV_GRAFANA_CLOUD_TOKEN \
+                   PROD_GRAFANA_CLOUD_URL PROD_GRAFANA_CLOUD_TOKEN \
+                   DEV_AWS_ACCESS_KEY DEV_AWS_SECRET_KEY \
+                   PROD_ACCESS_KEY PROD_SECRET_KEY \
                    SSH_PRIVATE_KEY VAULT_PASSWORD RCLONE_CONF_BASE64 \
                    RCLONE_CRYPT_PASSWORD; do
             val="${!v:-}"

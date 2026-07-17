@@ -25,6 +25,7 @@
 
 - name: Configure Redis session handler in php.ini (overrides defaults)
   become: true
+  no_log: true
   ansible.builtin.blockinfile:
     path: "/etc/php/{{ php_version }}/fpm/php.ini"
     marker: "; {mark} ANSIBLE MANAGED BLOCK - Redis Session Handler"

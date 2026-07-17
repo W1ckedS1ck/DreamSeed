@@ -28,6 +28,15 @@
   no_log: true
   when: rclone_config_stat.stat.exists | default(false)
 
+- name: Validate rclone crypt password
+  ansible.builtin.assert:
+    that:
+      - rclone_crypt_password | length > 0
+    fail_msg: >-
+      rclone_crypt_password is required when rclone config is present.
+      Set RCLONE_CRYPT_PASSWORD environment variable or add to secrets/.env.
+  when: rclone_config_stat.stat.exists | default(false)
+
 - name: Create crypt remote for encrypted backups
   ansible.builtin.shell:
     cmd: |
@@ -40,6 +49,3 @@
   become_user: ubuntu
   changed_when: false
   no_log: true
-  when:
-    - rclone_crypt_password is defined
-    - rclone_crypt_password | length > 0
