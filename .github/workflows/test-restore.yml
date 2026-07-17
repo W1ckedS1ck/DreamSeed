@@ -614,9 +614,13 @@ jobs:
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Verifying restored content ==="
+          # shellcheck disable=SC2029
+          DOMAIN=$(ssh ubuntu@"$SERVER_IP" \
+            "grep -hs 'server_name' /etc/nginx/sites-available/*.conf 2>/dev/null | grep -v 'server_name _' | awk '{print \$2}' | tr -d ';' | head -1" 2>/dev/null || echo "localhost")
+          echo "domain=$DOMAIN"
 
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" \
-            "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/" 2>/dev/null || echo "000")
+            "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' --max-time 10 'https://$DOMAIN/'" 2>/dev/null || echo "000")
           echo "site_http=$HTTP_CODE"
           if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
             echo "[PASS] Site HTTP $HTTP_CODE"
@@ -625,7 +629,7 @@ jobs:
           fi
 
           ADMINER_CODE=$(ssh ubuntu@"$SERVER_IP" \
-            "curl -sk -o /dev/null -w '%{http_code}' --max-time 5 https://localhost/adminer-4.8.1-mysql.php" 2>/dev/null || echo "000")
+            "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' --max-time 5 'https://$DOMAIN/adminer-4.8.1-mysql.php'" 2>/dev/null || echo "000")
           echo "adminer_http=$ADMINER_CODE"
           if [ "$ADMINER_CODE" = "403" ]; then
             echo "[PASS] Adminer blocked (HTTP 403)"
