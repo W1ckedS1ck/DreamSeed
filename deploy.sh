@@ -462,16 +462,6 @@ INVEOF
 
     # ----- Summary -----
     print_summary
-    if [[ "$SKIP_TERRAFORM" == "false" && "$SKIP_DNS" == "false" ]]; then
-        step_start "Cloudflare DNS update"
-        update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
-        step_ok
-    elif [[ "$SKIP_DNS" == "true" ]]; then
-        echo "  — Cloudflare DNS update skipped (--no-dns)"
-    fi
-
-    # ----- Summary -----
-    print_summary
 
     write_deploy_history "SUCCESS"
 
