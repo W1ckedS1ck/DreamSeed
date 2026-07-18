@@ -235,4 +235,6 @@
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
         sleep 2
       done
+  args:
+    executable: /bin/bash
   changed_when: false
