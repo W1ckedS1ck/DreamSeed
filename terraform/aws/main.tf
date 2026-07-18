@@ -59,8 +59,12 @@ resource "aws_security_group" "web" {
     ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
   }
 
+  # NOTE: Egress is intentionally restricted to known ports.
+  # Ports 80/443 cover apt, rclone, certbot, vmagent, curl, git+https.
+  # If a new service needs a different port (e.g. SSH:22, git:9418) —
+  # add it here explicitly. Do NOT open 0.0.0.0/0 all-ports.
   egress {
-    description = "HTTP/HTTPS (apt, certbot, rclone)"
+    description = "HTTP/HTTPS (apt, certbot, rclone, vmagent, git)"
     from_port   = 80
     to_port     = 443
     protocol    = "tcp"

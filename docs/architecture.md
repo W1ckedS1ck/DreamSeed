@@ -22,7 +22,7 @@
         │      hosts-<workspace>.yml, DEPLOY_VARS_TMP (0600)
        │
        ├─ 6. Ansible (7 playbooks)
-       │      01 Base ─── Packages, swap, PHP, MariaDB
+       │      01 Base ─── Packages, swap, PHP
        │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
        │      03 DB ────── MariaDB tuning, users, restore
        │      04 Security ── SSH, fail2ban, sysctl, MODX perms
@@ -58,10 +58,11 @@ Cloudflare Proxy (Full SSL)
    │
    └─ Monitoring backplane (127.0.0.1 only)
          Node Exporter   :9100
-         Nginx Exporter  :9113 / Apache Exporter :9117
-         MySQLd Exporter :9104
-         VictoriaMetrics :8428
-         vmagent         :8429 ──remote write──→ Grafana Cloud
+          Nginx Exporter  :9113 / Apache Exporter :9117
+          MySQLd Exporter :9104
+          Redis Exporter  :9121
+          VictoriaMetrics :8428
+          vmagent         :8429 ──remote write──→ Grafana Cloud
 ```
 
 ---
@@ -170,7 +171,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 23 rules)
+### Alert Rules (Grafana — 24 rules)
 
 | Alert | Severity | Condition | Interval / for |
 |-------|----------|-----------|----------------|
@@ -204,7 +205,7 @@ Better Stack (cloud)
 |------|----------|-------|----------|
 | Uptime | Better Stack | 3 monitors, 6 heartbeats, status page | Telegram webhooks |
 | Real User Monitoring | Grafana Cloud (Faro) | LCP/CLS/INP/TTFB, JS errors, sessions by browser/country | Grafana Cloud dashboard |
-| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP, MultiHTTP, Grafana, SSL) ~15k/mo | Grafana Cloud dashboard |
+| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP main from 3 America probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 1 probe) ~15k/mo | Grafana Cloud dashboard |
 
 ---
 
@@ -258,7 +259,7 @@ Manual dispatch    Deploy                Setup → secrets → deploy.sh / destr
                                           → Telegram
 
 Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
-  daily                                  (AWS prod only)
+  daily                                  (3 targets: prod-hetz, dev-aws, dev-hetz)
 
 Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
    manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)

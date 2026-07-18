@@ -9,9 +9,16 @@ data "cloudflare_zone" "this" {
   }
 }
 
-# Cloudflare Managed Free Ruleset ID (global, static)
+# Discover Cloudflare Managed Free Ruleset dynamically (account-level)
+data "cloudflare_rulesets" "managed" {
+  account_id = data.cloudflare_zone.this.account.id
+}
+
 locals {
-  cf_managed_free_ruleset_id = "77454fe2d30c4220b5701f6fdfb893ba"
+  cf_managed_free_ruleset_id = try(
+    [for rs in data.cloudflare_rulesets.managed.rulesets : rs.id if rs.phase == "http_request_firewall_managed"][0],
+    ""
+  )
 }
 
 resource "cloudflare_ruleset" "waf" {

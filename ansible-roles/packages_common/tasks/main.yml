@@ -9,7 +9,6 @@
   become: true
   ansible.builtin.apt:
     name:
-      - mariadb-server
       - certbot
       - fail2ban
       - jq

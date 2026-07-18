@@ -328,11 +328,6 @@ main() {
             TF_STATE_BACKUP_TMP=
             echo "  ⚠ Post-apply state backup failed (empty or error)" | tee -a "$LOG"
         fi
-        if [[ "$SKIP_DNS" == "false" ]]; then
-            update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
-        else
-            echo "  — Cloudflare DNS update skipped (--no-dns)"
-        fi
         step_ok
     else
         step_start "Using existing server"
@@ -455,6 +450,15 @@ INVEOF
     check_services
     STEP_NAMES+=("Post-deploy checks")
     STEP_TIMES+=($(( $(date +%s) - chk_start )))
+
+    # ----- DNS update (after SSL is configured) -----
+    if [[ "$SKIP_TERRAFORM" == "false" && "$SKIP_DNS" == "false" ]]; then
+        step_start "Cloudflare DNS update"
+        update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
+        step_ok
+    elif [[ "$SKIP_DNS" == "true" ]]; then
+        echo "  — Cloudflare DNS update skipped (--no-dns)"
+    fi
 
     # ----- Summary -----
     print_summary

@@ -67,9 +67,10 @@ preflight_checks() {
         fi
     fi
     if [[ -n "$GRAFANA_CLOUD_TOKEN" && "$GRAFANA_CLOUD_TOKEN" == glsa_* ]]; then
-        echo "⚠ Warning: ${gc_token} starts with glsa_ (Service Account token)."
+        echo "✗ Error: ${gc_token} starts with glsa_ (Service Account token)."
         echo "  vmagent needs a Cloud Access Policy token (glc_*, scope=metrics:write)."
         echo "  glsa_* tokens are for Terraform provider — belongs in ${gc_pfx}_GRAFANA_CLOUD_SA_TOKEN."
+        exit 1
     fi
 
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"

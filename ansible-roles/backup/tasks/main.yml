@@ -76,6 +76,12 @@
   become: true
 
 
+- name: Validate db_prefix format
+  ansible.builtin.assert:
+    that:
+      - db_prefix is regex('^[a-z0-9_]+$')
+    fail_msg: "Invalid db_prefix: {{ db_prefix }} (must be lowercase alphanumeric + underscore)"
+
 - name: Setup hourly backup cron
   ansible.builtin.cron:
     name: "DreamSeed hourly backup"
@@ -137,12 +143,6 @@
     user: ubuntu
     state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
-
-- name: Validate db_prefix format
-  ansible.builtin.assert:
-    that:
-      - db_prefix is regex('^[a-z0-9_]+$')
-    fail_msg: "Invalid db_prefix: {{ db_prefix }} (must be lowercase alphanumeric + underscore)"
 
 - name: Check MODX system_settings table
   ansible.mysql.mysql_query:
@@ -236,4 +236,3 @@
         sleep 2
       done
   changed_when: false
-  failed_when: false

@@ -1,4 +1,12 @@
 ---
+- name: Install MariaDB server
+  become: true
+  ansible.builtin.apt:
+    name: mariadb-server
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
 - name: Deploy optimized my.cnf
   become: true
   ansible.builtin.template:

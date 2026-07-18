@@ -210,7 +210,7 @@ Grafana dashboards, datasources, **and 23 alert rules** deployed automatically �
 - **Promtail** (`:9080`) — log agent, ships nginx + php-fpm + syslog to Loki (Grafana Cloud)
 - **Faro RUM** — real user monitoring: Core Web Vitals (LCP/CLS/INP), JS errors, sessions by browser/country. Injected via nginx `sub_filter`, proxied through same domain to avoid adblockers
 - **Grafana Cloud dashboards** — 5 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Redis 763, Nginx 17452, VictoriaMetrics 10229)
-- **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 4 global regions + SSL checks from 3 regions
+- **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 3 America probes + SSL checks from 1 probe
 
 **External (Better Stack cloud-hosted):**
 
