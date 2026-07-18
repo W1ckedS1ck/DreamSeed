@@ -236,3 +236,5 @@
         sleep 2
       done
   changed_when: false
+  args:
+    executable: /bin/bash
