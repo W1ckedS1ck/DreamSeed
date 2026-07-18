@@ -450,6 +450,10 @@ INVEOF
     if [[ "$SKIP_TERRAFORM" == "false" && "$SKIP_DNS" == "false" ]]; then
         step_start "Cloudflare DNS update"
         update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
+        # Grey-cloud (no proxy) — for direct SSH without Cloudflare (dev only)
+        if [[ ! "$TARGET" =~ ^prod ]]; then
+            update_cloudflare_dns_direct "ssh.${DEPLOY_DOMAIN}" "$SERVER_IP"
+        fi
         step_ok
     elif [[ "$SKIP_DNS" == "true" ]]; then
         echo "  — Cloudflare DNS update skipped (--no-dns)"
