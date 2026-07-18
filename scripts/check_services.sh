@@ -59,8 +59,8 @@ if command -v promtail &>/dev/null; then
     fi
 fi
 
-# --- Site HTTP (via localhost — bypasses Cloudflare, no DNS dependency) ---
-http=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://localhost/" 2>/dev/null || echo "000")
+# --- Site HTTP (via localhost with SNI — bypasses Cloudflare, no DNS dependency) ---
+http=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/" 2>/dev/null || echo "000")
 if [[ "$http" == "200" || "$http" == "301" ]]; then
     echo "  ✓ HTTP $http ${DOMAIN:-localhost}"
     export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 1"
