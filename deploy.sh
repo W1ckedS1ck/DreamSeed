@@ -446,12 +446,22 @@ INVEOF
     fi
 
     # ----- Post-deploy checks -----
+    # ----- DNS update (after SSL, before checks) -----
+    if [[ "$SKIP_TERRAFORM" == "false" && "$SKIP_DNS" == "false" ]]; then
+        step_start "Cloudflare DNS update"
+        update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
+        step_ok
+    elif [[ "$SKIP_DNS" == "true" ]]; then
+        echo "  — Cloudflare DNS update skipped (--no-dns)"
+    fi
+
     local chk_start; chk_start=$(date +%s)
     check_services
     STEP_NAMES+=("Post-deploy checks")
     STEP_TIMES+=($(( $(date +%s) - chk_start )))
 
-    # ----- DNS update (after SSL is configured) -----
+    # ----- Summary -----
+    print_summary
     if [[ "$SKIP_TERRAFORM" == "false" && "$SKIP_DNS" == "false" ]]; then
         step_start "Cloudflare DNS update"
         update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
