@@ -84,6 +84,19 @@ terraform_destroy() {
         fi
     fi
 
+    # Detach Ubuntu Pro before destroying (free token slots back)
+    echo "  ─── Detach Ubuntu Pro..."
+    local ubuntu_pro_ip
+    ubuntu_pro_ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
+    if [[ -n "$ubuntu_pro_ip" ]]; then
+        ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+            -i "$SSH_KEY" "ubuntu@$ubuntu_pro_ip" \
+            "sudo pro detach --assume-yes" 2>/dev/null || true
+        echo "  ✓ Ubuntu Pro detached"
+    else
+        echo "  — No server IP, skipping"
+    fi
+
     echo "  ━━━ Destroying resources ($TARGET)"
 
     TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
