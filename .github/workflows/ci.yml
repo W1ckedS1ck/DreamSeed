@@ -18,6 +18,20 @@ env:
   ARTIFACT_RETENTION_DAYS: 30
 
 jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          scandir: '.'
+          severity: error
+          ignore_paths: >-
+            .git
+
   ansible-lint:
     name: Ansible Lint
     runs-on: ubuntu-latest
@@ -33,6 +47,21 @@ jobs:
         run: |
           pip install -r ansible/requirements-deploy.txt --quiet
           bash scripts/lint.sh --ci --ansible-lint
+
+  j2lint:
+    name: Jinja2 Templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.x'
+
+      - name: Lint Jinja2 templates
+        run: |
+          pip install j2lint==1.2.0 --quiet
+          bash scripts/lint.sh --ci --j2lint
 
   terraform-checks:
     name: Terraform Lint + Validate
@@ -104,8 +133,19 @@ jobs:
       - name: Secret Scan (full history)
         run: bash scripts/lint.sh --ci --gitleaks-full-history
 
+  actionlint:
+    name: GitHub Actions Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Run actionlint
+        uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
+        with:
+          args: -shellcheck=
+
   pre-commit:
-    name: Lint & Pre-commit
+    name: Pre-commit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
