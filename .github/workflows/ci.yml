@@ -18,20 +18,6 @@ env:
   ARTIFACT_RETENTION_DAYS: 30
 
 jobs:
-  shellcheck:
-    name: ShellCheck
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
-        with:
-          scandir: '.'
-          severity: error
-          ignore_paths: >-
-            .git
-
   ansible-lint:
     name: Ansible Lint
     runs-on: ubuntu-latest
@@ -47,21 +33,6 @@ jobs:
         run: |
           pip install -r ansible/requirements-deploy.txt --quiet
           bash scripts/lint.sh --ci --ansible-lint
-
-  j2lint:
-    name: Jinja2 Templates
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.x'
-
-      - name: Lint Jinja2 templates
-        run: |
-          pip install j2lint==1.2.0 --quiet
-          bash scripts/lint.sh --ci --j2lint
 
   terraform-checks:
     name: Terraform Lint + Validate
@@ -133,19 +104,8 @@ jobs:
       - name: Secret Scan (full history)
         run: bash scripts/lint.sh --ci --gitleaks-full-history
 
-  actionlint:
-    name: GitHub Actions Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - name: Run actionlint
-        uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
-        with:
-          args: -shellcheck=
-
   pre-commit:
-    name: Pre-commit
+    name: Lint & Pre-commit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -167,21 +127,18 @@ jobs:
           path: ~/.cache/pre-commit
           key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: precommit-${{ runner.os }}-
-      - name: Install gitleaks
+      - name: Install pre-commit system deps
         env:
           GITLEAKS_VERSION: "8.30.1"
         run: |
+          # gitleaks
           sudo apt-get install -y gitleaks -qq 2>/dev/null || \
             (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
              sudo tar -xz -C /usr/local/bin gitleaks)
-      - name: Install pre-commit system deps
-        run: |
+
           # actionlint
           curl -sL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | \
             sudo tar -xz -C /usr/local/bin actionlint
-
-          # j2lint
-          pip install j2lint --quiet
 
           # Terraform (v1.15.5 — matching CI env)
           curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_amd64.zip"
@@ -192,11 +149,10 @@ jobs:
           sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
           tflint --init --config .tflint.hcl 2>/dev/null || true
 
-          # ansible-lint
-          pip install ansible-core ansible-lint --quiet
+          # pre-commit + j2lint
+          pip install pre-commit j2lint --quiet
       - name: Run pre-commit hooks (changed files only)
         run: |
-          pip install pre-commit
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             REF="origin/${{ github.base_ref }}"
           else
