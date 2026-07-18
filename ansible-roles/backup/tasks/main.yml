@@ -228,13 +228,10 @@
 - name: Push initial cron heartbeat to VictoriaMetrics
   ansible.builtin.shell:
     cmd: |
-      set -o pipefail
       # VM may still be starting — retry across ~30s instead of blocking 90s
       for i in $(seq 1 15); do
         echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
         sleep 2
       done
-  args:
-    executable: /bin/bash
   changed_when: false
