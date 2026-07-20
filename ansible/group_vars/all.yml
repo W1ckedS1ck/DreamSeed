@@ -55,8 +55,8 @@ monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default(
 monitoring_nginx_version: "{{ lookup('env', 'MONITORING_NGINX_VERSION') | default('1.5.1', true) }}" # renovate: depName=nginxinc/nginx-prometheus-exporter datasource=github-releases
 monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | default('1.1.1', true) }}" # renovate: depName=Lusitaniae/apache_exporter datasource=github-releases
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.19.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
-monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.147.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.147.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.148.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.148.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
 monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.86.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 monitoring_promtail_enabled: true  # reserved for future use
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
