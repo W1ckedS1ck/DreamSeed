@@ -31,10 +31,10 @@ TG_THREAD_STR = os.environ.get('TG_THREAD_ID', '').strip()
 TG_THREAD_ID = int(TG_THREAD_STR) if TG_THREAD_STR.isdigit() else None
 
 BACKUP_DIR = os.environ.get('BACKUP_DIR', '/home/ubuntu/backups')
-RCLONE_REMOTE = 'gdrive'
+RCLONE_REMOTE = os.environ.get('RCLONE_REMOTE', 'gdrive-crypt')
 REMOTE_BASE = os.environ.get('REMOTE_BASE', 'DreamSeed/backups')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')
-DB_PREFIX = os.environ.get('DB_PREFIX', 'db_modx_db_')
+DB_PREFIX = os.environ.get('DB_PREFIX', 'db_')
 
 
 class HealthHandler(BaseHTTPRequestHandler):

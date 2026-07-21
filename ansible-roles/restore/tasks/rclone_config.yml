@@ -37,13 +37,16 @@
       Set RCLONE_CRYPT_PASSWORD environment variable or add to secrets/.env.
   when: rclone_config_stat.stat.exists | default(false)
 
-- name: Create crypt remote for encrypted backups
+- name: Recreate crypt remote with correct settings (delete if exists)
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
+      rclone config delete gdrive-crypt 2>/dev/null || true
       rclone config create gdrive-crypt crypt \
         remote=gdrive: \
-        password="$(rclone obscure '{{ rclone_crypt_password }}')" 2>/dev/null || true
+        password="$(rclone obscure '{{ rclone_crypt_password }}')" \
+        filename_encryption=off \
+        directory_name_encryption=false
     executable: /bin/bash
   become: true
   become_user: ubuntu

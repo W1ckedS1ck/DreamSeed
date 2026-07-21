@@ -163,7 +163,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      mysql "{{ db_name | quote }}" -e "SHOW TABLES" 2>/dev/null | wc -l
+      mysql -N "{{ db_name | quote }}" -e "SHOW TABLES" 2>/dev/null | wc -l
     executable: /bin/bash
   register: restore_db_tables
   changed_when: false

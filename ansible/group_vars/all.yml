@@ -24,7 +24,10 @@ php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}"
 # ========================
 #  Redis
 # ========================
-redis_password: "{{ lookup('env', 'REDIS_PASSWORD') | default('', true) }}"  # fallback to highest available if missing in apt
+# Redis intentionally without password: bind 127.0.0.1 only, single-server setup.
+# Password would not stop local attacker (already owns the box).
+# See docs/privat/audit-2026-07-19.md #2
+redis_password: "{{ lookup('env', 'REDIS_PASSWORD') | default('', true) }}"
 
 # ========================
 #  Backup

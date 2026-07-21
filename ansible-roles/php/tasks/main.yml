@@ -23,21 +23,6 @@
     mode: "0644"
   notify: Restart PHP-FPM
 
-- name: Configure Redis session handler in php.ini (overrides defaults)
-  become: true
-  no_log: true
-  ansible.builtin.blockinfile:
-    path: "/etc/php/{{ php_version }}/fpm/php.ini"
-    marker: "; {mark} ANSIBLE MANAGED BLOCK - Redis Session Handler"
-    insertbefore: "^;ffi.preload"
-    block: |
-      session.save_handler = redis
-      session.save_path = "tcp://127.0.0.1:6379{% if redis_password | length > 0 %}?auth={{ redis_password }}{% endif %}"
-      session.gc_maxlifetime = 604800
-      session.gc_probability = 0
-      session.gc_divisor = 1000
-  notify: Restart PHP-FPM
-
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
 

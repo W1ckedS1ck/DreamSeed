@@ -98,7 +98,7 @@ format_env_escaped() {
 }
 
 format_name() {
-    basename "$1" | sed 's/DreamSeed_//; s/db_modx_db_//; s/.tar.gz//; s/.sql.gz//; s/_/ /'
+    basename "$1" | sed 's/DreamSeed_//; s/db_modx_db_//; s/^db_//; s/.tar.gz//; s/.sql.gz//; s/_/ /'
 }
 
 send_tg() {

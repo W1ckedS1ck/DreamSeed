@@ -38,7 +38,7 @@ else
 fi
 
 # ====== Verify local DB backup ======
-DB_BACKUP=$(find "$BACKUP_DIR/db" -maxdepth 1 -name "db_${DB_NAME}_*.sql.gz" -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+DB_BACKUP=$(find "$BACKUP_DIR/db" -maxdepth 1 -name "db_*.sql.gz" -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
 if [[ -n "$DB_BACKUP" && -f "$DB_BACKUP" ]]; then
     if gunzip -t "$DB_BACKUP" > /dev/null 2>&1; then
