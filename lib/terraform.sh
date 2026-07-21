@@ -90,6 +90,30 @@ terraform_destroy() {
         fi
     fi
 
+    if [[ "$TF_PROVIDER" == "hetzner" ]] && [[ "$TARGET" == "prod-hetz" ]]; then
+        echo "  ⚠ Removing Hetzner delete protection..."
+        local hcloud_token="${PROD_HETZ_HCLOUD_TOKEN:-${HCLOUD_TOKEN:-}}"
+        local server_id
+        server_id=$(_tf output -raw server_id 2>/dev/null || true)
+        if [[ -n "$server_id" && -n "$hcloud_token" ]]; then
+            curl -sf -X POST \
+                -H "Authorization: Bearer $hcloud_token" \
+                -H "Content-Type: application/json" \
+                "https://api.hetzner.cloud/v1/servers/$server_id/actions/change_protection" \
+                -d '{"delete":false,"rebuild":false}' >/dev/null 2>&1 || true
+            local pip_id
+            pip_id=$(_tf output -raw primary_ip_id 2>/dev/null || true)
+            [[ -n "$pip_id" ]] && curl -sf -X POST \
+                -H "Authorization: Bearer $hcloud_token" \
+                -H "Content-Type: application/json" \
+                "https://api.hetzner.cloud/v1/primary_ips/$pip_id/actions/change_protection" \
+                -d '{"delete":false}' >/dev/null 2>&1 || true
+            echo "  ✓ Hetzner protection removed"
+        else
+            echo "  — Could not remove protection (no server_id or token)"
+        fi
+    fi
+
     # Backup SSL certs (restore on next deploy avoids Let's Encrypt rate limit)
     echo "  ─── Backup SSL certificates..."
     local ssl_backup_ip

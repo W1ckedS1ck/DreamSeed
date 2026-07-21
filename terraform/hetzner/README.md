@@ -46,5 +46,7 @@ No modules.
 
 | Name | Description |
 | ---- | ----------- |
+| <a name="output_primary_ip_id"></a> [primary\_ip\_id](#output\_primary\_ip\_id) | ID of the Primary IP (for API operations) |
+| <a name="output_server_id"></a> [server\_id](#output\_server\_id) | ID of the Hetzner server (for API operations) |
 | <a name="output_server_ipv4"></a> [server\_ipv4](#output\_server\_ipv4) | Public IP address of the Hetzner instance |
 <!-- END_TF_DOCS -->
