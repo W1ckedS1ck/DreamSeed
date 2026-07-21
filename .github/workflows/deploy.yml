@@ -251,6 +251,7 @@ jobs:
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
           DESTROY_CONFIRM: ${{ inputs.confirm }}
+          PROD_HETZ_HCLOUD_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
         run: |
           ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
           export SSH_PUBLIC_KEY_PATH=~/.ssh/deploy_key.pub
