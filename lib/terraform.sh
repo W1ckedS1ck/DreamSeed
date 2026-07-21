@@ -95,7 +95,7 @@ terraform_destroy() {
         local hcloud_token="${PROD_HETZ_HCLOUD_TOKEN:-${HCLOUD_TOKEN:-}}"
         local server_id pip_id
         server_id=$(_tf state show hcloud_server.main 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
-        pip_id=$(_tf state show hcloud_primary_ip.main 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
+        pip_id=$(_tf state show 'hcloud_primary_ip.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
         if [[ -n "$server_id" && -n "$hcloud_token" ]]; then
             curl -sf -X POST \
                 -H "Authorization: Bearer $hcloud_token" \
