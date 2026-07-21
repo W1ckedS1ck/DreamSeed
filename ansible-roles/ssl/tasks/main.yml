@@ -134,7 +134,6 @@
     path: /etc/letsencrypt/renewal-hooks/deploy
     state: directory
     mode: "0755"
-  when: ssl_has_cert
 
 - name: Deploy certbot renewal hook
   become: true
