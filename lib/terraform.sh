@@ -93,11 +93,14 @@ terraform_destroy() {
     if [[ "$TF_PROVIDER" == "hetzner" ]] && [[ "$TARGET" == "prod-hetz" ]]; then
         echo "  ⚠ Removing Hetzner delete protection..."
         local hcloud_token="${PROD_HETZ_HCLOUD_TOKEN:-${HCLOUD_TOKEN:-}}"
-        local server_id pip_id
-        server_id=$(_tf state show 'hcloud_server.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
-        pip_id=$(_tf state show 'hcloud_primary_ip.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
-        if [[ -n "$server_id" && -n "$hcloud_token" ]]; then
-            curl -sf -X POST \
+        if [[ -z "$hcloud_token" ]]; then
+            echo "  — No Hetzner token available"
+        else
+            # Try to remove protection from server resource if it still exists
+            local server_id pip_id
+            server_id=$(_tf state show 'hcloud_server.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
+            pip_id=$(_tf state show 'hcloud_primary_ip.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
+            [[ -n "$server_id" ]] && curl -sf -X POST \
                 -H "Authorization: Bearer $hcloud_token" \
                 -H "Content-Type: application/json" \
                 "https://api.hetzner.cloud/v1/servers/$server_id/actions/change_protection" \
@@ -108,8 +111,6 @@ terraform_destroy() {
                 "https://api.hetzner.cloud/v1/primary_ips/$pip_id/actions/change_protection" \
                 -d '{"delete":false}' >/dev/null 2>&1 || true
             echo "  ✓ Hetzner protection removed"
-        else
-            echo "  — Could not remove protection (no server_id or token)"
         fi
     fi
 
