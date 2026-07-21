@@ -72,8 +72,11 @@ terraform_destroy() {
 
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
-    local var_arg=()
-    [[ "$TF_PROVIDER" == "aws" ]] && var_arg+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")
+    # TFC remote execution does not support -var flags; use auto.tfvars
+    if [[ "$TF_PROVIDER" == "aws" ]] && [[ "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
+        TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
+        printf 'ssh_public_key_path = "%s"\n' "$SSH_PUBLIC_KEY_PATH" > "$TF_VARS_FILE"
+    fi
 
     if [[ "$TF_PROVIDER" == "aws" ]] && [[ "$TARGET" == "prod" ]]; then
         echo "  ⚠ Removing termination protection..."
@@ -122,7 +125,7 @@ terraform_destroy() {
 
     TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
     local old_opts; old_opts=$(set +o)
-    _tf destroy -auto-approve -no-color "${var_arg[@]}" 2>&1 | tee -a "$TF_TMP_OUT"
+    _tf destroy -auto-approve -no-color 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
     eval "$old_opts"
     if [[ $tf_exit -ne 0 ]]; then

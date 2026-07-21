@@ -288,9 +288,15 @@ main() {
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
         _tf validate -no-color >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
 
+        # TFC remote execution does not support -var flags; use auto.tfvars
         local tf_args=()
-        [[ "$TF_PROVIDER" == "aws" ]] && tf_args+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")
-        [[ "$TF_PROVIDER" == "hetzner" ]] && tf_args+=(-var="environment=${TARGET}")
+        if [[ "$TF_PROVIDER" == "aws" ]]; then
+            TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
+            printf 'ssh_public_key_path = "%s"\n' "${SSH_PUBLIC_KEY_PATH:-/dev/null}" > "$TF_VARS_FILE"
+        elif [[ "$TF_PROVIDER" == "hetzner" ]]; then
+            TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
+            printf 'environment = "%s"\n' "$TARGET" > "$TF_VARS_FILE"
+        fi
 
         # Pre-apply state backup — rollback point if apply breaks
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
