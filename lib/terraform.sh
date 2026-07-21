@@ -73,9 +73,12 @@ terraform_destroy() {
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
     # TFC remote execution does not support -var flags; use auto.tfvars
-    if [[ "$TF_PROVIDER" == "aws" ]] && [[ "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
+    if [[ -n "${TF_DIR:-}" ]]; then
         TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
-        printf 'ssh_public_key_path = "%s"\n' "$SSH_PUBLIC_KEY_PATH" > "$TF_VARS_FILE"
+        {
+            printf 'environment = "%s"\n' "$TARGET"
+            [[ "$TF_PROVIDER" == "aws" ]] && printf 'ssh_public_key_path = "%s"\n' "${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+        } > "$TF_VARS_FILE"
     fi
 
     if [[ "$TF_PROVIDER" == "aws" ]] && [[ "$TARGET" == "prod" ]]; then

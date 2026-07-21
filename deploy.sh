@@ -290,13 +290,11 @@ main() {
 
         # TFC remote execution does not support -var flags; use auto.tfvars
         local tf_args=()
-        if [[ "$TF_PROVIDER" == "aws" ]]; then
-            TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
-            printf 'ssh_public_key_path = "%s"\n' "${SSH_PUBLIC_KEY_PATH:-/dev/null}" > "$TF_VARS_FILE"
-        elif [[ "$TF_PROVIDER" == "hetzner" ]]; then
-            TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
-            printf 'environment = "%s"\n' "$TARGET" > "$TF_VARS_FILE"
-        fi
+        TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
+        {
+            printf 'environment = "%s"\n' "$TARGET"
+            [[ "$TF_PROVIDER" == "aws" ]] && printf 'ssh_public_key_path = "%s"\n' "${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+        } > "$TF_VARS_FILE"
 
         # Pre-apply state backup — rollback point if apply breaks
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
