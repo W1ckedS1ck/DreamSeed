@@ -17,7 +17,6 @@
     mode: "0640"
     directory_mode: "0750"
   when: ssl_local_backup.stat.exists
-  register: ssl_restore_result
 
 - name: Secure archive and live directories (traversable)
   become: true

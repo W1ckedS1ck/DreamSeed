@@ -96,11 +96,11 @@ for item in data.get('data', []):
         print()
 PYEOF
 
+    trap 'rm -f "$json_tmp" "$py_tmp"' RETURN
+
     echo -e "${CYAN}${label}${NC}"
     printf "${CYAN}%*s${NC}\n" "${#label}" | tr ' ' '─'
     python3 "$py_tmp" "$json_tmp"
-
-    rm -f "$json_tmp" "$py_tmp"
 }
 
 fetch_and_format "monitors" "MONITORS"
