@@ -143,9 +143,9 @@ jobs:
           DEV_GRAFANA_CLOUD_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
           PROD_GRAFANA_CLOUD_URL: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
-          LOKI_URL: ${{ vars.LOKI_URL }}
-          LOKI_USERNAME: ${{ vars.LOKI_USERNAME }}
-          FARO_COLLECTOR_URL: ${{ vars.FARO_COLLECTOR_URL }}
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
+          FARO_COLLECTOR_URL: ${{ secrets.FARO_COLLECTOR_URL }}
           DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}

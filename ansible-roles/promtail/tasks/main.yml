@@ -66,6 +66,7 @@
       Environment=LOKI_PASSWORD={{ grafana_cloud_token }}
     mode: "0600"
   become: true
+  no_log: true
   notify:
     - Reload systemd
     - Restart Promtail

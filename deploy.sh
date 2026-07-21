@@ -322,7 +322,7 @@ main() {
         if _tf state pull > "$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
             mv "$TF_STATE_BACKUP_TMP" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
             TF_STATE_BACKUP_TMP=
-            ls -1t "$bk/${TF_WORKSPACE}"_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+            find "$bk" -maxdepth 1 -name "${TF_WORKSPACE}_[0-9]*.tfstate" -printf '%T@\t%p\0' 2>/dev/null | sort -rnz | tail -z -n +6 | cut -z -f2- | xargs -0 rm -f 2>/dev/null || true
         else
             rm -f "$TF_STATE_BACKUP_TMP"
             TF_STATE_BACKUP_TMP=

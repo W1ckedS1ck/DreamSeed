@@ -204,6 +204,7 @@ select_backup_cloud() {
         echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")" >&2
         echo -e "${YELLOW}Downloading...${NC}" >&2
         local temp_dir; temp_dir=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
+        RESTORE_TEMP_DIRS+=("$temp_dir")
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
         local temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
