@@ -10,13 +10,18 @@
     install_python_debian: true
     state: present
   become: true
+  register: grafana_repo
+
+- name: Update apt cache after adding Grafana repo
+  ansible.builtin.apt:
+    update_cache: true
+  become: true
+  when: grafana_repo is changed
 
 - name: Install Grafana (pinned version)
   ansible.builtin.apt:
     name: grafana={{ grafana_version }}
     state: present
-    update_cache: true
-    cache_valid_time: 600
   become: true
   environment:
     DEBIAN_FRONTEND: noninteractive
