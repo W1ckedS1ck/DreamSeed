@@ -203,7 +203,7 @@ jobs:
             echo "DEV_HETZ_SSH_KEY_NAME=Vitali.pub"
             echo "DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1"
             echo "DEV_HETZ_SERVER_TYPE=cx23"  # keep in sync with drift-detection.yml (dev-hetz)
-            echo "PROD_HETZ_SERVER_TYPE=cx43"  # keep in sync with drift-detection.yml (prod-hetz)
+            echo "PROD_HETZ_SERVER_TYPE=cx33"  # keep in sync with drift-detection.yml (prod-hetz)
             echo "PROD_HETZ_SSH_KEY_NAME=Vitali.pub"
             echo "PROD_HETZ_PRIMARY_IP_NAME="
             echo "PROD_HETZ_ENABLE_PRIMARY_IP=true"

@@ -23,7 +23,7 @@ DOMAIN="${DOMAIN:-unknown}"
 
 DATE=$(date +%F_%H-%M)
 PROJECT_BACKUP="$BACKUP_DIR/project/DreamSeed_$DATE.tar.gz"
-DB_BACKUP="$BACKUP_DIR/db/db_$DATE.sql.gz"
+DB_BACKUP="$BACKUP_DIR/db/db_${DB_NAME}_$DATE.sql.gz"
 
 mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db" "$BACKUP_DIR/logs"
 LOG_FILE="$BACKUP_DIR/logs/backup_$(date +%Y-%m-%d).log"
