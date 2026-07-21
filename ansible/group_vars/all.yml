@@ -48,7 +48,7 @@ cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 # ========================
 #  Monitoring (Grafana + VictoriaMetrics)
 # ========================
-grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.1.0', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.1.1', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.12.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
