@@ -148,7 +148,6 @@
       fi
     dest: /etc/letsencrypt/renewal-hooks/deploy/reload-web.sh
     mode: "0755"
-  when: ssl_has_cert
 
 # --- Self-signed fallback (generic name, works for both Nginx and Apache) ---
 - name: Generate self-signed private key

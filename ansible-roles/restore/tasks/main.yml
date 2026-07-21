@@ -152,9 +152,10 @@
 - name: Mount tmpfs for MODX cache (fstab entry exists from PHP role)
   become: true
   ansible.builtin.shell:
-    cmd: mount /var/www/html/core/cache 2>/dev/null || true
+    cmd: mount /var/www/html/core/cache
     executable: /bin/bash
   changed_when: false
+  failed_when: false
 
 # ========================
 #  Restore Database
