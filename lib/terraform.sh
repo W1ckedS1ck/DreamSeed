@@ -84,6 +84,27 @@ terraform_destroy() {
         fi
     fi
 
+    # Backup SSL certs (restore on next deploy avoids Let's Encrypt rate limit)
+    echo "  ─── Backup SSL certificates..."
+    local ssl_backup_ip
+    ssl_backup_ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
+    if [[ -n "$ssl_backup_ip" ]]; then
+        local ssl_dest="$SCRIPT_DIR/secrets/ssl/letsencrypt"
+        mkdir -p "$ssl_dest"
+        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+            -i "$SSH_KEY" "ubuntu@$ssl_backup_ip" \
+            "sudo tar -cz -C /etc/letsencrypt live/ 2>/dev/null" > "$ssl_dest/certs.tar.gz" 2>/dev/null || true
+        if tar -tzf "$ssl_dest/certs.tar.gz" 2>/dev/null | grep -q 'fullchain.pem'; then
+            tar -xzf "$ssl_dest/certs.tar.gz" -C "$ssl_dest/" 2>/dev/null || true
+            echo "  ✓ SSL certificates backed up"
+        else
+            echo "  — No Let's Encrypt certs on server"
+        fi
+        rm -f "$ssl_dest/certs.tar.gz"
+    else
+        echo "  — No server IP, skipping SSL backup"
+    fi
+
     # Detach Ubuntu Pro before destroying (free token slots back)
     echo "  ─── Detach Ubuntu Pro..."
     local ubuntu_pro_ip
