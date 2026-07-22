@@ -74,7 +74,9 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive-crypt:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /home/ubuntu/backups/.restore_cache/ 2>/dev/null || rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /home/ubuntu/backups/.restore_cache/ 2>/dev/null
+          from="gdrive-crypt:DreamSeed/backups/project/" to="/home/ubuntu/backups/.restore_cache/" inc="{{ restore_latest_project.stdout | trim }}"
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "$from" "$to" --include "$inc" 2>/dev/null || \
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive:DreamSeed/backups/project/" "$to" --include "$inc" 2>/dev/null
         executable: /bin/bash
       changed_when: false
       when: restore_latest_project.stdout | trim != ""
@@ -210,7 +212,8 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive-crypt:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /home/ubuntu/backups/.restore_cache/ 2>/dev/null || rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /home/ubuntu/backups/.restore_cache/ 2>/dev/null
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive-crypt:DreamSeed/backups/db/" /home/ubuntu/backups/.restore_cache/ --include "{{ restore_latest_db.stdout | trim }}" 2>/dev/null || \
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive:DreamSeed/backups/db/" /home/ubuntu/backups/.restore_cache/ --include "{{ restore_latest_db.stdout | trim }}" 2>/dev/null
         executable: /bin/bash
       changed_when: false
       when: restore_latest_db.stdout | trim != ""
