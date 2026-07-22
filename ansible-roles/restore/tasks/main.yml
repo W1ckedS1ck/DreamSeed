@@ -121,7 +121,7 @@
             rm -rf "${_web}.bak.$$" 2>/dev/null || true
             exit 1
           fi
-          mount -a 2>/dev/null || true
+          mount /var/www/html/core/cache 2>/dev/null || mount -a 2>/dev/null || true
           rm -rf "${_web}.bak.$$" 2>/dev/null || true
           chown -R www-data:www-data "$_web"
         executable: /bin/bash
@@ -134,6 +134,16 @@
         path: "{{ web_root }}/index.php"
       register: restore_index_check
       failed_when: restore_index_check.stat is not defined or not restore_index_check.stat.exists or restore_index_check.stat.size == 0
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Verify MODX cache is on tmpfs
+      become: true
+      ansible.builtin.shell:
+        cmd: mountpoint -q "{{ web_root }}/core/cache"
+        executable: /bin/bash
+      register: restore_cache_tmpfs
+      changed_when: false
+      failed_when: false
       when: restore_latest_project.stdout | trim != ""
 
     - name: Show restored project
