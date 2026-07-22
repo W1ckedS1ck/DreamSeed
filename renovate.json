@@ -160,11 +160,13 @@
       "description": "Group and automerge dev & monitoring tool updates (non-major)",
       "matchManagers": ["custom.regex"],
       "matchUpdateTypes": ["minor", "patch"],
-      "excludePackageNames": ["VictoriaMetrics/VictoriaMetrics"],
       "groupName": "Dev & monitoring tools",
       "automerge": true,
       "automergeType": "pr",
-      "automergeStrategy": "squash"
+      "automergeStrategy": "squash",
+      "matchPackageNames": [
+        "!VictoriaMetrics/VictoriaMetrics"
+      ]
     }
   ]
 }
