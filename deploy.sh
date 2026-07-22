@@ -288,9 +288,13 @@ main() {
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
         _tf validate -no-color >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
 
+        # TFC remote execution does not support -var flags; use auto.tfvars
         local tf_args=()
-        [[ "$TF_PROVIDER" == "aws" ]] && tf_args+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")
-        [[ "$TF_PROVIDER" == "hetzner" ]] && tf_args+=(-var="environment=${TARGET}")
+        TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
+        {
+            printf 'environment = "%s"\n' "$TARGET"
+            [[ "$TF_PROVIDER" == "aws" ]] && printf 'ssh_public_key_path = "%s"\n' "${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+        } > "$TF_VARS_FILE"
 
         # Pre-apply state backup — rollback point if apply breaks
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
@@ -322,16 +326,11 @@ main() {
         if _tf state pull > "$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
             mv "$TF_STATE_BACKUP_TMP" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
             TF_STATE_BACKUP_TMP=
-            ls -1t "$bk/${TF_WORKSPACE}"_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+            find "$bk" -maxdepth 1 -name "${TF_WORKSPACE}_[0-9]*.tfstate" -printf '%T@\t%p\0' 2>/dev/null | sort -rnz | tail -z -n +6 | cut -z -f2- | xargs -0 rm -f 2>/dev/null || true
         else
             rm -f "$TF_STATE_BACKUP_TMP"
             TF_STATE_BACKUP_TMP=
             echo "  ⚠ Post-apply state backup failed (empty or error)" | tee -a "$LOG"
-        fi
-        if [[ "$SKIP_DNS" == "false" ]]; then
-            update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
-        else
-            echo "  — Cloudflare DNS update skipped (--no-dns)"
         fi
         step_ok
     else
@@ -451,6 +450,19 @@ INVEOF
     fi
 
     # ----- Post-deploy checks -----
+    # ----- DNS update (after SSL, before checks) -----
+    if [[ "$SKIP_TERRAFORM" == "false" && "$SKIP_DNS" == "false" ]]; then
+        step_start "Cloudflare DNS update"
+        update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
+        # Grey-cloud (no proxy) — for direct SSH without Cloudflare (dev only)
+        if [[ ! "$TARGET" =~ ^prod ]]; then
+            update_cloudflare_dns_direct "ssh.${DEPLOY_DOMAIN}" "$SERVER_IP"
+        fi
+        step_ok
+    elif [[ "$SKIP_DNS" == "true" ]]; then
+        echo "  — Cloudflare DNS update skipped (--no-dns)"
+    fi
+
     local chk_start; chk_start=$(date +%s)
     check_services
     STEP_NAMES+=("Post-deploy checks")

@@ -32,3 +32,5 @@ rename-command SCRIPT ""
 {% if redis_password | length > 0 %}
 requirepass {{ redis_password }}
 {% endif %}
+# No password by design: bind 127.0.0.1 only, single-server setup.
+# See ansible/group_vars/all.yml (Redis section) for rationale.

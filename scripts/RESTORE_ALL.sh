@@ -50,7 +50,7 @@ mkdir -p "$(dirname "$RESTORE_LOG")"
 MODE="${1:-interactive}"  # interactive or --auto-latest
 
 # ====== Settings ======
-: "${RCLONE_REMOTE:=gdrive}"
+: "${RCLONE_REMOTE:=gdrive-crypt}"
 : "${REMOTE_BASE:=DreamSeed/backups}"
 
 if systemctl is-active --quiet nginx 2>/dev/null; then
@@ -63,7 +63,7 @@ PHP_FPM=$(systemctl list-units --type=service --state=running 2>/dev/null \
     | grep -oP 'php[\d.]+-fpm' | head -1 || echo "php-fpm")
 
 if [ "$WEB_SERVICE" = "nginx" ]; then
-    SITE_DOMAIN=$(grep -rh "server_name" /etc/nginx/sites-enabled/ 2>/dev/null \
+    SITE_DOMAIN=$(grep -hs "server_name" /etc/nginx/sites-available/*.conf 2>/dev/null \
         | grep -v "server_name _" | awk '{print $2}' | tr -d ';' | head -1 || true)
 else
     SITE_DOMAIN=$(grep -rh "ServerName" /etc/apache2/sites-enabled/ 2>/dev/null \
@@ -204,6 +204,7 @@ select_backup_cloud() {
         echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")" >&2
         echo -e "${YELLOW}Downloading...${NC}" >&2
         local temp_dir; temp_dir=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
+        RESTORE_TEMP_DIRS+=("$temp_dir")
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
         local temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
@@ -341,11 +342,17 @@ else
         # Interactive mode keeps ENV_SUFFIX="" for the same reason (line 222).
         # Do not add ENV_SUFFIX here. See detect_env() in common_functions.sh for design rationale.
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
-            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3
+            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || \
+        rclone copy "gdrive:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
+            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || true
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
-            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3
+            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || \
+        rclone copy "gdrive:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
+            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || true
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
-            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3
+            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || \
+        rclone copy "gdrive:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
+            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || true
 
         SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
         SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
@@ -619,7 +626,7 @@ else
 fi
 sleep 3
 
-HTTP_CODE=$(curl -sk "$SITE_URL" -o /dev/null -w "%{http_code}") || HTTP_CODE="000"
+HTTP_CODE=$(curl -sk --resolve "${SITE_DOMAIN:-localhost}:443:127.0.0.1" "$SITE_URL" -o /dev/null -w "%{http_code}") || HTTP_CODE="000"
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
     SITE_STATUS="✅ HTTP $HTTP_CODE"
     echo -e "${GREEN}✓ Site is up (HTTP $HTTP_CODE)${NC}"

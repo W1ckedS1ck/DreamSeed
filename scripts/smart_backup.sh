@@ -116,7 +116,7 @@ set -o pipefail
 if [ "${DUMP_RC[0]}" -eq 0 ] && [ "${DUMP_RC[1]}" -eq 0 ] && [ -s "$TMP_DB_BACKUP" ]; then
     mv "$TMP_DB_BACKUP" "$DB_BACKUP"
     DB_STATUS="✅ Database backed up"
-    rotate_files "$BACKUP_DIR/db/db_${DB_NAME}_*.sql.gz" "$DB_KEEP"
+    rotate_files "$BACKUP_DIR/db/db_*.sql.gz" "$DB_KEEP"
 else
     rm -f "$TMP_DB_BACKUP"
     DB_STATUS="❌ Database dump failed"

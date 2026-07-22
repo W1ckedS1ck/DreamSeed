@@ -94,6 +94,8 @@ PROD_GRAFANA_CLOUD_URL="https://prometheus-prod-56-prod-us-east-2.grafana.net"
 DEV_GRAFANA_CLOUD_URL="https://prometheus-prod-39-prod-eu-north-0.grafana.net"
 ```
 
+> **Note:** These URLs are per-region and may change if the Grafana Cloud stack is migrated or recreated. Always verify the current URL in Grafana Cloud Portal → Stack → Details → "Prometheus URL".
+
 Where to get: Grafana Cloud Portal → Stack → Details → "Prometheus URL".
 
 **This is the Prometheus remote_write endpoint (regional).** NOT the vanity URL like `dreamseed.grafana.net`. Do NOT append `/api/prom/push` — the Ansible template adds it.
@@ -180,6 +182,28 @@ Set per-target as GitHub Variables (not secrets):
 | `FARO_APP_NAME` | *(auto = domain)* | *(auto = domain)* |
 
 ---
+
+## Rclone Crypt (backup encryption)
+
+Password for the rclone crypt remote, used for AES-256 encryption of backups at rest.
+
+```
+RCLONE_CRYPT_PASSWORD
+```
+
+Stored in `secrets/.env` and GitHub Secrets. Without it, encrypted backups on Google Drive cannot be decrypted.
+
+---
+
+## Redis
+
+Redis is used by MODX for session storage and caching. Configured in `ansible-roles/redis`.
+
+```
+REDIS_PASSWORD=<password>
+```
+
+Defaults to empty (no auth) if not set. Stored in `secrets/.env`.
 
 ## Grafana Cloud Logs (Loki)
 

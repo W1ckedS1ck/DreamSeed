@@ -5,7 +5,7 @@
     ":dependencyDashboard"
   ],
   "labels": ["dependencies", "renovate"],
-  "schedule": ["at any time"],
+  "schedule": ["on sunday before 6am"],
   "configMigration": true,
   "osvVulnerabilityAlerts": true,
   "major": {
@@ -111,14 +111,21 @@
       "matchPackageNames": ["VictoriaMetrics/VictoriaMetrics"],
       "matchManagers": ["custom.regex"],
       "groupName": "VictoriaMetrics",
-      "labels": ["dependencies", "monitoring"]
+      "labels": ["dependencies", "monitoring"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
     },
     {
-      "description": "Group all non-major Terraform provider updates",
+      "description": "Group and automerge non-major Terraform provider updates",
       "matchManagers": ["terraform"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "Terraform providers",
-      "labels": ["terraform", "update"]
+      "labels": ["terraform", "update"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
     },
     {
       "description": "Major Terraform updates — separate PRs with review label",
@@ -133,10 +140,31 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Group non-major python dependencies",
+      "description": "Group and automerge non-major python dependencies",
       "matchManagers": ["pip_requirements"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "Python pip packages"
+      "groupName": "Python pip packages",
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Automerge non-major GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Group and automerge dev & monitoring tool updates (non-major)",
+      "matchManagers": ["custom.regex"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "excludePackageNames": ["VictoriaMetrics/VictoriaMetrics"],
+      "groupName": "Dev & monitoring tools",
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
     }
   ]
 }

@@ -1,18 +1,13 @@
 ---
-- name: Add Grafana GPG key
-  ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana.gpg || curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana.gpg
-    executable: /bin/bash
-  args:
-    creates: /usr/share/keyrings/grafana.gpg
-  become: true
-
 - name: Add Grafana repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main"
-    filename: grafana
+  ansible.builtin.deb822_repository:
+    name: grafana
+    types: deb
+    uris: https://apt.grafana.com
+    suites: stable
+    components: main
+    signed_by: https://apt.grafana.com/gpg.key
+    install_python_debian: true
     state: present
   become: true
 
@@ -71,6 +66,7 @@
       Environment=LOKI_PASSWORD={{ grafana_cloud_token }}
     mode: "0600"
   become: true
+  no_log: true
   notify:
     - Reload systemd
     - Restart Promtail

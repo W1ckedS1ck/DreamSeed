@@ -5,8 +5,12 @@ set -euo pipefail
 
 SERVER_IP="${1:?Usage: $0 <SERVER_IP>}"
 DB_NAME="${DB_NAME:-modx_db}"
+if [[ ! "$DB_NAME" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    echo "ERROR: DB_NAME contains invalid characters (got: '$DB_NAME')" >&2
+    exit 1
+fi
 SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-ssh() { command ssh -i "$SSH_KEY" "$@"; }
+ssh() { command ssh -i "$SSH_KEY" "$@" 2>/dev/null; }
 
 P=0 F=0 W=0
 FAIL_ITEMS=""
@@ -31,11 +35,17 @@ echo "content_rows=$ROWS"
 # Web server
 ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx" && pass "Nginx running" || fail "Nginx"
 ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm" && pass "PHP-FPM running" || fail "PHP-FPM"
-HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/" 2>/dev/null || echo "000")
+DOMAIN=$(ssh ubuntu@"$SERVER_IP" "grep -hs 'server_name' /etc/nginx/sites-available/*.conf 2>/dev/null | grep -v 'server_name _' | awk '{print \$2}' | tr -d ';' | head -1" 2>/dev/null || echo "localhost")
+HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/'" 2>/dev/null || echo "000")
 [ "$HTTPS_CODE" = "200" ] && pass "HTTPS 200" || fail "HTTPS $HTTPS_CODE"
+
+# Nginx config syntax
+ssh ubuntu@"$SERVER_IP" "nginx -t 2>&1 | grep -q 'syntax is ok'" && pass "Nginx config syntax OK" || warn "Nginx config: syntax check failed"
 
 # MODX core
 ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && pass "Config exists" || fail "Config missing"
+CONFIG_PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
+[ "$CONFIG_PERMS" = "640" ] && pass "Config permissions: 640" || warn "Config permissions: ${CONFIG_PERMS:-N/A} (expected 640)"
 ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && pass "Assets exists" || fail "Assets missing"
 
 # PHP error log check
@@ -88,10 +98,16 @@ echo "$CRON" | grep -q "upload_backups_to_gdrive" && pass "Cron: daily gdrive up
 echo "$CRON" | grep -q "send_report.sh daily" && pass "Cron: daily report" || warn "Cron: daily report missing"
 echo "$CRON" | grep -q "send_report.sh weekly" && pass "Cron: weekly report" || warn "Cron: weekly report missing"
 echo "$CRON" | grep -q "verify_backups" && pass "Cron: backup verification" || warn "Cron: backup verification missing"
-echo "$CRON" | grep -q "session-cleanup" && pass "Cron: session cleanup" || warn "Cron: session cleanup missing"
+echo "$CRON" | grep -q "session-cleanup" && warn "Cron: session cleanup (unexpected — Redis handles sessions)" || pass "Cron: no session cleanup (Redis handles sessions)"
+
+# Backup — scripts exist
+SCRIPTS_DIR="/home/ubuntu/Scripts"
+for script in smart_backup.sh upload_backups_to_gdrive.sh verify_backups.sh; do
+  ssh ubuntu@"$SERVER_IP" "test -f $SCRIPTS_DIR/$script" && pass "Script: $script" || fail "Script: $script missing"
+done
 
 # Backup — cloud sync reachable
-GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
+GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | grep . || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
 [ "$GDRIVE" != "NO_BACKUPS" ] && pass "GDrive backups: $(echo "$GDRIVE" | tr -d '\n')" || fail "GDrive backups: not found"
 
 # Backup — telegram-bot service
@@ -117,11 +133,11 @@ else
 fi
 
 # Redis — cloud backups count
-REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
+REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l")
 echo "redis_cloud_backups=$REDIS_CLOUD"
 
 # MODX — session_handler_class must be empty (Redis sessions)
-SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N $DB_NAME -e \"SELECT value FROM modx_system_settings WHERE key = 'session_handler_class'\" 2>/dev/null || true")
+SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N \"$DB_NAME\" -e \"SELECT value FROM modx_system_settings WHERE key = 'session_handler_class'\" 2>/dev/null || true")
 if [ -z "$SHC" ]; then
     pass "session_handler_class empty (Redis sessions)"
     echo "session_handler_ok=yes"
@@ -139,7 +155,7 @@ if [ -n "$(echo "$SESSIONS" | tr -d ' ')" ]; then
     pass "Redis sessions active ($AFTER keys)"
     echo "redis_session_keys=$AFTER"
 else
-    ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null https://localhost/ 2>/dev/null || true"
+    ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null 'https://$DOMAIN/' 2>/dev/null || true"
     sleep 1
     AFTER2=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null || echo 0")
     SESSIONS2=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | head -3 | tr '\n' ' '" || true)
@@ -153,12 +169,12 @@ else
 fi
 
 # MODX — manager accessible
-MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{http_code}' https://localhost/manager/ 2>/dev/null || echo '000'")
+MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/manager/' 2>/dev/null || echo '000'")
 [ "$MANAGER_CODE" = "200" ] && pass "MODX manager: HTTP 200" || warn "MODX manager: HTTP $MANAGER_CODE"
 echo "modx_manager_code=$MANAGER_CODE"
 
 # MODX — response time (ms)
-RESP_TIME=$(ssh ubuntu@"$SERVER_IP" "curl -sk -o /dev/null -w '%{time_total}' https://localhost/ 2>/dev/null || echo '0'" | tr ',' '.')
+RESP_TIME=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{time_total}' 'https://$DOMAIN/' 2>/dev/null || echo '0'" | tr ',' '.')
 RESP_MS=$(printf "%.0f" "$RESP_TIME" 2>/dev/null || echo "0")
 echo "response_time_ms=$RESP_MS"
 [ "${RESP_MS:-999}" -lt 2000 ] && pass "Response time: ${RESP_MS}ms" || warn "Response time: ${RESP_MS}ms (slow)"
@@ -171,8 +187,8 @@ echo "memory_usage=${MEM_USED}MB/${MEM_TOTAL}MB (${MEM_PCT}%)"
 echo "memory_pct=$MEM_PCT"
 
 # Cloud backups count
-PROJ_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
-DB_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/db/ --max-depth 1 2>/dev/null | wc -l || echo 0" || echo 0)
+PROJ_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | wc -l")
+DB_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/db/ --max-depth 1 2>/dev/null | wc -l")
 echo "cloud_project=$PROJ_CLOUD"
 echo "cloud_db=$DB_CLOUD"
 echo "cloud_redis=$REDIS_CLOUD"

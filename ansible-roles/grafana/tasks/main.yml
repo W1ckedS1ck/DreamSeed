@@ -1,19 +1,19 @@
 ---
-- name: Add Grafana GPG key
-  ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana.gpg || curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana.gpg
-    executable: /bin/bash
-  args:
-    creates: /usr/share/keyrings/grafana.gpg
+- name: Add Grafana repository
+  ansible.builtin.deb822_repository:
+    name: grafana
+    types: deb
+    uris: https://apt.grafana.com
+    suites: stable
+    components: main
+    signed_by: https://apt.grafana.com/gpg.key
+    install_python_debian: true
+    state: present
   become: true
 
-- name: Add Grafana repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main"
-    filename: grafana
-    state: present
+- name: Update apt cache after adding Grafana repo
+  ansible.builtin.apt:
+    update_cache: true
   become: true
 
 - name: Install Grafana (pinned version)
@@ -24,7 +24,7 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
   register: grafana_install_result
-  failed_when: false
+  ignore_errors: true
 
 - name: Install Grafana (fallback — latest if pinned version unavailable)
   ansible.builtin.apt:
@@ -162,8 +162,6 @@
   become: true
   loop: "{{ _ws_remove_dashboards }}"
 
-
-
 - name: Create Grafana alerting provisioning directory
   ansible.builtin.file:
     path: /etc/grafana/provisioning/alerting
@@ -195,8 +193,6 @@
     enabled: true
   become: true
 
-
-
 - name: Wait for Grafana to be ready
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
@@ -214,3 +210,12 @@
   no_log: true
   changed_when: false
   when: grafana_admin_password | default('') | length > 0
+
+- name: Create Grafana admin password marker
+  ansible.builtin.file:
+    path: /etc/grafana/.admin_password_set
+    state: touch
+    owner: root
+    group: grafana
+    mode: "0640"
+  become: true

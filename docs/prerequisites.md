@@ -48,6 +48,7 @@ All targets require:
 - `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 + DNS update; zone ID auto-detected)
 - `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
 - `BETTERUPTIME_BACKUP_KEY` … `BETTERUPTIME_CHECK_SERVICES_KEY` — per-script heartbeat keys (6 total)
+- `RCLONE_CRYPT_PASSWORD` — password for rclone crypt remote (AES-256 backup encryption)
 
 Hetzner (prefixed per-target, can also fall back to unprefixed vars):
 
@@ -59,6 +60,7 @@ Grafana Cloud (per target):
 - `DEV_GRAFANA_CLOUD_URL` or `PROD_GRAFANA_CLOUD_URL` — Prometheus push endpoint
 - `DEV_GRAFANA_CLOUD_USERNAME` or `PROD_GRAFANA_CLOUD_USERNAME` — instance ID
 - `DEV_GRAFANA_CLOUD_TOKEN` or `PROD_GRAFANA_CLOUD_TOKEN` — vmagent token
+- `DEV_GRAFANA_CLOUD_SA_TOKEN` or `PROD_GRAFANA_CLOUD_SA_TOKEN` — Service Account token (Terraform)
 
 ## Site restore (secrets/rclone.conf)
 
@@ -120,4 +122,4 @@ cp .env.example secrets/.env
 # edit secrets/.env with your values
 ```
 
-See `secrets/.env.example` for the full list of variables.
+See `.env.example` for the full list of variables.

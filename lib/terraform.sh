@@ -72,8 +72,14 @@ terraform_destroy() {
 
     _tf show -no-color 2>/dev/null | grep -q "No state" && { echo "  No resources to destroy"; return 0; }
 
-    local var_arg=()
-    [[ "$TF_PROVIDER" == "aws" ]] && var_arg+=(-var="ssh_public_key_path=${SSH_PUBLIC_KEY_PATH:-/dev/null}")
+    # TFC remote execution does not support -var flags; use auto.tfvars
+    if [[ -n "${TF_DIR:-}" ]]; then
+        TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
+        {
+            printf 'environment = "%s"\n' "$TARGET"
+            [[ "$TF_PROVIDER" == "aws" ]] && printf 'ssh_public_key_path = "%s"\n' "${SSH_PUBLIC_KEY_PATH:-/dev/null}"
+        } > "$TF_VARS_FILE"
+    fi
 
     if [[ "$TF_PROVIDER" == "aws" ]] && [[ "$TARGET" == "prod" ]]; then
         echo "  ⚠ Removing termination protection..."
@@ -84,11 +90,69 @@ terraform_destroy() {
         fi
     fi
 
+    if [[ "$TF_PROVIDER" == "hetzner" ]] && [[ "$TARGET" == "prod-hetz" ]]; then
+        echo "  ⚠ Removing Hetzner delete protection..."
+        local hcloud_token="${PROD_HETZ_HCLOUD_TOKEN:-${HCLOUD_TOKEN:-}}"
+        if [[ -z "$hcloud_token" ]]; then
+            echo "  — No Hetzner token available"
+        else
+            # Try to remove protection from server resource if it still exists
+            local server_id pip_id
+            server_id=$(_tf state show 'hcloud_server.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
+            pip_id=$(_tf state show 'hcloud_primary_ip.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
+            [[ -n "$server_id" ]] && curl -sf -X POST \
+                -H "Authorization: Bearer $hcloud_token" \
+                -H "Content-Type: application/json" \
+                "https://api.hetzner.cloud/v1/servers/$server_id/actions/change_protection" \
+                -d '{"delete":false,"rebuild":false}' >/dev/null 2>&1 || true
+            [[ -n "$pip_id" ]] && curl -sf -X POST \
+                -H "Authorization: Bearer $hcloud_token" \
+                -H "Content-Type: application/json" \
+                "https://api.hetzner.cloud/v1/primary_ips/$pip_id/actions/change_protection" \
+                -d '{"delete":false}' >/dev/null 2>&1 || true
+            echo "  ✓ Hetzner protection removed"
+        fi
+    fi
+
+    # Backup SSL certs (restore on next deploy avoids Let's Encrypt rate limit)
+    echo "  ─── Backup SSL certificates..."
+    local ssl_backup_ip
+    ssl_backup_ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
+    if [[ -n "$ssl_backup_ip" ]]; then
+        local ssl_dest="$SCRIPT_DIR/secrets/ssl/letsencrypt"
+        mkdir -p "$ssl_dest"
+        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+            -i "$SSH_KEY" "ubuntu@$ssl_backup_ip" \
+            "sudo tar -czh -C /etc/letsencrypt live/ 2>/dev/null" > "$ssl_dest/certs.tar.gz" 2>/dev/null || true
+        if tar -tzf "$ssl_dest/certs.tar.gz" 2>/dev/null | grep -q 'fullchain.pem'; then
+            tar -xzf "$ssl_dest/certs.tar.gz" -C "$ssl_dest/" 2>/dev/null || true
+            echo "  ✓ SSL certificates backed up"
+        else
+            echo "  — No Let's Encrypt certs on server"
+        fi
+        rm -f "$ssl_dest/certs.tar.gz"
+    else
+        echo "  — No server IP, skipping SSL backup"
+    fi
+
+    # Detach Ubuntu Pro before destroying (free token slots back)
+    echo "  ─── Detach Ubuntu Pro..."
+    local ubuntu_pro_ip
+    ubuntu_pro_ip=$(_tf output -raw server_ipv4 2>/dev/null || true)
+    if [[ -n "$ubuntu_pro_ip" ]]; then
+        ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+            -i "$SSH_KEY" "ubuntu@$ubuntu_pro_ip" \
+            "sudo pro detach --assume-yes" 2>/dev/null || true
+        echo "  ✓ Ubuntu Pro detached"
+    else
+        echo "  — No server IP, skipping"
+    fi
+
     echo "  ━━━ Destroying resources ($TARGET)"
 
     TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
     local old_opts; old_opts=$(set +o)
-    _tf destroy -auto-approve -no-color "${var_arg[@]}" 2>&1 | tee -a "$TF_TMP_OUT"
+    _tf destroy -auto-approve -no-color 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
     eval "$old_opts"
     if [[ $tf_exit -ne 0 ]]; then

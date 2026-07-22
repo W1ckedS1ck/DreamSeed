@@ -15,7 +15,7 @@ pm.max_requests = 500
 
 ; Session storage via Redis
 php_value[session.save_handler] = redis
-php_value[session.save_path] = "tcp://127.0.0.1:6379"
+php_value[session.save_path] = "tcp://127.0.0.1:6379{% if redis_password | length > 0 %}?auth={{ redis_password }}{% endif %}"
 php_value[session.gc_maxlifetime] = 604800
 php_value[session.gc_probability] = 0
 php_value[session.gc_divisor] = 1000

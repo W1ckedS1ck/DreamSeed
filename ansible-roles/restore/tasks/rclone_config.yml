@@ -27,3 +27,28 @@
     mode: "0600"
   no_log: true
   when: rclone_config_stat.stat.exists | default(false)
+
+- name: Validate rclone crypt password
+  ansible.builtin.assert:
+    that:
+      - rclone_crypt_password | length > 0
+    fail_msg: >-
+      rclone_crypt_password is required when rclone config is present.
+      Set RCLONE_CRYPT_PASSWORD environment variable or add to secrets/.env.
+  when: rclone_config_stat.stat.exists | default(false)
+
+- name: Recreate crypt remote with correct settings (delete if exists)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rclone config delete gdrive-crypt 2>/dev/null || true
+      rclone config create gdrive-crypt crypt \
+        remote=gdrive: \
+        password="$(rclone obscure '{{ rclone_crypt_password }}')" \
+        filename_encryption=off \
+        directory_name_encryption=false
+    executable: /bin/bash
+  become: true
+  become_user: ubuntu
+  changed_when: false
+  no_log: true

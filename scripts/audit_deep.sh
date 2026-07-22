@@ -10,6 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
+[[ -f "$SCRIPT_DIR/.env" ]] && load_env "$SCRIPT_DIR/.env"
 
 DOMAIN="${DOMAIN:-}"
 fail_count=0

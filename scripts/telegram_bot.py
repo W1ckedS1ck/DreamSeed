@@ -31,10 +31,10 @@ TG_THREAD_STR = os.environ.get('TG_THREAD_ID', '').strip()
 TG_THREAD_ID = int(TG_THREAD_STR) if TG_THREAD_STR.isdigit() else None
 
 BACKUP_DIR = os.environ.get('BACKUP_DIR', '/home/ubuntu/backups')
-RCLONE_REMOTE = 'gdrive'
+RCLONE_REMOTE = os.environ.get('RCLONE_REMOTE', 'gdrive-crypt')
 REMOTE_BASE = os.environ.get('REMOTE_BASE', 'DreamSeed/backups')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', 'DreamSeedOnline_bot')
-DB_PREFIX = os.environ.get('DB_PREFIX', 'db_modx_db_')
+DB_PREFIX = os.environ.get('DB_PREFIX', 'db_')
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -154,6 +154,7 @@ def cmd_status():
         msg += f"\n⏰ Last check: {time.strftime('%d.%m %H:%M')}"
         return msg
     except Exception as e:
+        log.exception("cmd_status failed")
         return f"Error: {e}"
 
 def cmd_backups():
@@ -170,6 +171,7 @@ def cmd_backups():
 
         return msg
     except Exception as e:
+        log.exception("cmd_backups failed")
         return f"Error: {e}"
 
 def main():

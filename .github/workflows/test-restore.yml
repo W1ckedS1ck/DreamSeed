@@ -80,6 +80,8 @@ jobs:
           PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
           PROD_REGION: ${{ secrets.PROD_REGION }}
           PROD_EIP: ${{ secrets.PROD_EIP }}
+          RCLONE_CRYPT_PASSWORD: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
+          UBUNTU_PRO_TOKEN: ${{ secrets.UBUNTU_PRO_TOKEN }}
         run: |
           mkdir -p secrets
           {
@@ -119,6 +121,9 @@ jobs:
             echo "PROD_REGION=$PROD_REGION"
             echo "PROD_EIP=$PROD_EIP"
 
+            echo "RCLONE_CRYPT_PASSWORD=$RCLONE_CRYPT_PASSWORD"
+
+            echo "UBUNTU_PRO_TOKEN=$UBUNTU_PRO_TOKEN"
             echo "HETZNER_SSH_KEY_NAME=Vitali.pub"
             echo "HETZNER_PRIMARY_IP_NAME=primary_ip-1"
           } > secrets/.env
@@ -147,7 +152,8 @@ jobs:
                   print(f"::add-mask::{v}")
               if k in ("CLOUDFLARE_API_TOKEN", "DB_PASS", "TG_TOKEN", "GRAFANA_PASS",
                        "HCLOUD_TOKEN", "BETTERUPTIME_API_TOKEN",
-                       "VAULT_PASSWORD", "RCLONE_CONF_BASE64"):
+                       "VAULT_PASSWORD", "RCLONE_CONF_BASE64", "RCLONE_CRYPT_PASSWORD",
+                       "UBUNTU_PRO_TOKEN"):
                   print(f"::add-mask::{v}")
           PYEOF
 
@@ -158,10 +164,12 @@ jobs:
               echo "AWS_DEFAULT_REGION=${DEV_AWS_REGION:-us-west-1}"
               echo "TF_VAR_environment=test"
               echo "TF_VAR_ssh_public_key_path=${HOME}/.ssh/deploy_key.pub"
+              [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && echo "TF_VAR_ubuntu_pro_token=$UBUNTU_PRO_TOKEN"
               echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
             } >> "$GITHUB_ENV"
           else
             {
+              [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && echo "TF_VAR_ubuntu_pro_token=$UBUNTU_PRO_TOKEN"
               echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN"
               echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)"
               echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali.pub}"
@@ -385,6 +393,7 @@ jobs:
           scripts_dir: "${PWD}/scripts"
           secrets_dir: "${PWD}/secrets"
           ssh_public_key_path: "${HOME}/.ssh/deploy_key.pub"
+          rclone_crypt_password: "${RCLONE_CRYPT_PASSWORD}"
           EOF
           )
 
@@ -519,7 +528,10 @@ jobs:
             echo "gdrive_status=ok" >> "$GITHUB_OUTPUT"
           fi
           echo "=== Checking cloud backups ==="
-          ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | head -3 || echo 'No GDrive backups'" 2>&1 || true
+          echo "Upload log:"
+          ssh ubuntu@"$SERVER_IP" "tail -5 /home/ubuntu/backups/logs/upload_*.log 2>/dev/null" 2>&1 || true
+          echo "GDrive listing (latest):"
+          ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -3 || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -3 || echo 'No GDrive backups'" 2>/dev/null || true
 
       - name: Verify backup archives integrity
         run: |
@@ -535,9 +547,11 @@ jobs:
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Checking Grafana via nginx proxy ==="
-          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+          # shellcheck disable=SC2029
+          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:127.0.0.1 --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
           if [ "$GRAFANA_OK" -lt 1 ]; then
-            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --max-time 5 https://127.0.0.1/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+            # shellcheck disable=SC2029
+            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:$SERVER_IP --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
           fi
           if [ "$GRAFANA_OK" -ge 1 ]; then
             echo "[PASS] Grafana reachable via nginx proxy"
@@ -604,6 +618,14 @@ jobs:
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
           fi
 
+      - name: Restart fail2ban after restore (nginx stop/start breaks pyinotify)
+        run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          # shellcheck disable=SC2029
+          command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" ubuntu@"$SERVER_IP" \
+            "sudo systemctl restart fail2ban"
+
       - name: Verify restored content
         id: verify_content
         run: |
@@ -611,9 +633,14 @@ jobs:
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
           echo "=== Verifying restored content ==="
+          # shellcheck disable=SC2029
+          DOMAIN=$(ssh ubuntu@"$SERVER_IP" \
+            "grep -hs 'server_name' /etc/nginx/sites-available/*.conf 2>/dev/null | grep -v 'server_name _' | awk '{print \$2}' | tr -d ';' | head -1" 2>/dev/null || echo "localhost")
+          echo "domain=$DOMAIN"
 
+          # shellcheck disable=SC2029
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" \
-            "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/" 2>/dev/null || echo "000")
+            "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' --max-time 10 'https://$DOMAIN/'" 2>/dev/null || echo "000")
           echo "site_http=$HTTP_CODE"
           if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ]; then
             echo "[PASS] Site HTTP $HTTP_CODE"
@@ -621,8 +648,9 @@ jobs:
             echo "[FAIL] Site returned HTTP $HTTP_CODE"
           fi
 
+          # shellcheck disable=SC2029
           ADMINER_CODE=$(ssh ubuntu@"$SERVER_IP" \
-            "curl -sk -o /dev/null -w '%{http_code}' --max-time 5 https://localhost/adminer-4.8.1-mysql.php" 2>/dev/null || echo "000")
+            "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' --max-time 5 'https://$DOMAIN/adminer-4.8.1-mysql.php'" 2>/dev/null || echo "000")
           echo "adminer_http=$ADMINER_CODE"
           if [ "$ADMINER_CODE" = "403" ]; then
             echo "[PASS] Adminer blocked (HTTP 403)"
@@ -744,14 +772,14 @@ jobs:
           if ssh ubuntu@"$SERVER_IP" "curl -skS 'https://test.dreamseed.online/' | grep -q 'faro-web-sdk'"; then
             echo "[PASS] Faro RUM injected"
           else
-            echo "[WARN] Faro RUM not found"
+            echo "[INFO] Faro RUM not found (not configured in CI)"
           fi
 
           echo "=== Promtail ==="
           if ssh ubuntu@"$SERVER_IP" "systemctl is-active promtail &>/dev/null"; then
             echo "[PASS] Promtail active"
           else
-            echo "[WARN] Promtail not running"
+            echo "[INFO] Promtail not running (not configured in CI)"
           fi
 
       - name: Run full service tests
@@ -832,7 +860,7 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
-            --data-urlencode "parse_mode=MarkdownV2" \
+            --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
 
       - name: Keep server for debugging
@@ -941,34 +969,33 @@ jobs:
           COMMIT_SHORT="${COMMIT_SHA:0:7}"
           BRANCH="$HEAD_REF"
 
-          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "📦 *Restore Test* $STATUS" \
             "📅 $(date '+%Y-%m-%d %H:%M')  ⏱ ${MINS}m ${SECS}s" \
             "🖥 ${{ steps.terraform.outputs.server_ipv4 }}" \
             "🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`" \
             "" \
-            "🔄 Restore    ${RESTORE_OK} (${ROWS:-0} rows, ${TABLES:-0} tables, HTTP ${HTTP_CODE:-?}, ⏱ ${RESTORE_TIME:-?}s)" \
+            "🔄 *Restore* ${RESTORE_OK} ${ROWS:-0} rows · ${TABLES:-0} tables · HTTP ${HTTP_CODE:-?} · ${RESTORE_TIME%s}s" \
             "  Source: ${RESTORE_SRC}" \
-            "📁 Backup     ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
-            "  ☁️ Cloud: ${CLOUD_PROJ:-0} project / ${CLOUD_DB:-0} db / ${CLOUD_REDIS:-0} redis" \
-            "  Hash: ${PROJ_ICON} project ${DB_ICON} DB" \
+            "📁 *Backup* ✅ ${BACKUP_FILES} files  ${GDRIVE_ICON} GDrive ${GDRIVE_STATUS}" \
+            "  ☁️ ${CLOUD_PROJ:-?} proj / ${CLOUD_DB:-?} db / ${CLOUD_REDIS:-?} red" \
+            "  Hash: ${PROJ_ICON} project · ${DB_ICON} DB" \
             "" \
-            "🌐 Web       HTTP ${HTTP_CODE:-?} (${RESP_TIME:-?}ms)" \
-            "  MODX mgr: ${MODX_MANAGER:-?}" \
+            "🌐 *Web* HTTP ${HTTP_CODE:-?} (${RESP_TIME:-?}ms) · mgr ${MODX_MANAGER:-?}" \
             "" \
-            "💾 Memory    ${MEM_PCT:-?}%" \
-            "🖴 Disk      ${DISK_ICON} ${DISK_USAGE:-?}%" \
+            "💾 *Memory* ${MEM_PCT:-?}%  🖴 *Disk* ${DISK_ICON} ${DISK_USAGE:-?}%" \
             "" \
-            "📊 Services  $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
+            "📊 *Services* $(ok $TESTS) ${SUMMARY:-?}${FAIL_DETAIL}" \
             "  Cron: ${CRON_JOBS:-?} jobs" \
             "  Exporters: $(exp_status "$EXP_NODE") node $(exp_status "$EXP_MYSQL") mysql $(exp_status "$EXP_REDIS") redis $(exp_status "$EXP_WEB") web $(exp_status "$EXP_VM") vm" \
-            "🗄️ Sessions: $(ok_yn "$SESSION_HANDLER") handler $( [ -n "$REDIS_KEYS" ] && echo "${REDIS_KEYS} keys" || echo '?' )" \
-            "🔒 SSL       ${SSL_ICON} ${SSL_STATUS:-?}" \
-            "Destroy    $(ok_destroy $DESTROY)")
+            "🗄️ *Sessions* $(ok_yn "$SESSION_HANDLER") handler · $( [ -n "$REDIS_KEYS" ] && echo "${REDIS_KEYS} keys" || echo '?' )" \
+            "🔒 *SSL* ${SSL_ICON} ${SSL_STATUS:-?}" \
+            "🗑️ *Destroy* $(ok_destroy $DESTROY)")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
 
       - name: Cleanup temp files and DNS

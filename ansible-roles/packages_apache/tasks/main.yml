@@ -8,3 +8,21 @@
     state: present
   environment:
     DEBIAN_FRONTEND: noninteractive
+
+- name: Ensure systemd override directory exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/apache2.service.d
+    state: directory
+    mode: "0755"
+
+- name: Harden Apache systemd unit — auto-restart on crash
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apache2.service.d/override.conf
+    content: |
+      [Service]
+      Restart=always
+      RestartSec=5s
+    mode: "0644"
+  notify: Reload systemd and restart apache

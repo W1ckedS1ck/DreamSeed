@@ -4,15 +4,29 @@
   become: false
   gather_facts: true
 
-  roles:
-    - role: nginx
+  tasks:
+    - name: Configure Nginx
+      ansible.builtin.include_role:
+        name: nginx
       when: web_server == "nginx"
-    - role: apache_http
+    - name: Configure Apache HTTP
+      ansible.builtin.include_role:
+        name: apache_http
       when: web_server == "apache"
-    - ssl
-    - role: nginx-ssl
+    - name: SSL certs
+      ansible.builtin.include_role:
+        name: ssl
+    - name: Configure Nginx SSL
+      ansible.builtin.include_role:
+        name: nginx-ssl
       when: web_server == "nginx"
-    - role: apache_ssl
+    - name: Configure Apache SSL
+      ansible.builtin.include_role:
+        name: apache_ssl
       when: web_server == "apache"
-    - redis
-    - php
+    - name: Redis
+      ansible.builtin.include_role:
+        name: redis
+    - name: PHP
+      ansible.builtin.include_role:
+        name: php

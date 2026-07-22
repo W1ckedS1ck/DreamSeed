@@ -26,11 +26,13 @@ preflight_checks() {
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY
     export TG_TOKEN TG_CHAT_ID TG_THREAD_ID
     export EMAIL_USER EMAIL_PASS SMTP_SERVER SMTP_PORT OWNER LOKI_URL LOKI_USERNAME FARO_COLLECTOR_URL FARO_APP_NAME
+    export RCLONE_CRYPT_PASSWORD
 
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
             env_src=$(resolve_env_file "$ENV_FILE")
+            validate_env_file "$env_src"
             source "$env_src"
         else
             echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."
@@ -65,9 +67,10 @@ preflight_checks() {
         fi
     fi
     if [[ -n "$GRAFANA_CLOUD_TOKEN" && "$GRAFANA_CLOUD_TOKEN" == glsa_* ]]; then
-        echo "⚠ Warning: ${gc_token} starts with glsa_ (Service Account token)."
+        echo "✗ Error: ${gc_token} starts with glsa_ (Service Account token)."
         echo "  vmagent needs a Cloud Access Policy token (glc_*, scope=metrics:write)."
         echo "  glsa_* tokens are for Terraform provider — belongs in ${gc_pfx}_GRAFANA_CLOUD_SA_TOKEN."
+        exit 1
     fi
 
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"

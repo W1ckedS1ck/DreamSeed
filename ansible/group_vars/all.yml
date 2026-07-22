@@ -24,7 +24,10 @@ php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}"
 # ========================
 #  Redis
 # ========================
-redis_password: "{{ lookup('env', 'REDIS_PASSWORD') | default('', true) }}"  # fallback to highest available if missing in apt
+# Redis intentionally without password: bind 127.0.0.1 only, single-server setup.
+# Password would not stop local attacker (already owns the box).
+# See docs/privat/audit-2026-07-19.md #2
+redis_password: "{{ lookup('env', 'REDIS_PASSWORD') | default('', true) }}"
 
 # ========================
 #  Backup
@@ -117,3 +120,8 @@ faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) 
 #  SSL
 # ========================
 ssl_cf_dns_enabled: true  # false → skip certbot DNS-01, use self-signed (for test servers)
+
+# ========================
+#  Backup encryption (rclone crypt)
+# ========================
+rclone_crypt_password: "{{ lookup('env', 'RCLONE_CRYPT_PASSWORD') | default('', true) }}"

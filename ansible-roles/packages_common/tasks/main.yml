@@ -9,7 +9,6 @@
   become: true
   ansible.builtin.apt:
     name:
-      - mariadb-server
       - certbot
       - fail2ban
       - jq
@@ -24,6 +23,11 @@
       - libpam-pwquality
       - unattended-upgrades
     state: present
+    update_cache: true
+  register: _apt_result
+  retries: 3
+  delay: 10
+  until: _apt_result is success
   environment:
     DEBIAN_FRONTEND: noninteractive
 

@@ -51,6 +51,7 @@ cleanup() {
     [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
     [[ -n "${TF_STATE_BACKUP_TMP:-}" && -f "${TF_STATE_BACKUP_TMP:-}" ]] && rm -f "$TF_STATE_BACKUP_TMP"
+    [[ -n "${TF_VARS_FILE:-}" && -f "${TF_VARS_FILE:-}" ]] && rm -f "$TF_VARS_FILE"
     [[ -n "${LOCK_FILE:-}" && "$LOCK_ACQUIRED" == "true" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
 }
 
@@ -185,6 +186,55 @@ if results:
     else
         log "Cloudflare DNS: DELETE FAILED for $domain"
         echo "  ✗ Cloudflare DNS: delete failed (check token/permissions)"
+    fi
+}
+
+# Update Cloudflare DNS A record WITHOUT proxy (grey cloud) — for SSH access
+update_cloudflare_dns_direct() {
+    local subdomain="$1" ip="$2"
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare direct DNS: skip (token not set)"; return 0; }
+    local zone_id
+    zone_id=$(_cf_zone_id "$subdomain") || return 0
+    local base="https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records"
+    local ttl="${CLOUDFLARE_DNS_TTL:-120}"
+
+    local existing
+    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?type=A&name=$subdomain" 2>/dev/null)
+
+    IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+results = d.get('result', [])
+c = len(results)
+if c: print(f'{c}|{results[0][\"id\"]}|{results[0][\"content\"]}')
+else: print('0||')
+" 2>/dev/null) || { count=0; record_id=; old_ip=; }
+
+    local dns_body
+    dns_body=$(printf '{"type":"A","name":"%s","content":"%s","ttl":%s,"proxied":false}' \
+        "$subdomain" "$ip" "$ttl") || dns_body=""
+
+    if [[ "$count" -gt 0 ]]; then
+        [[ "$old_ip" == "$ip" ]] && { log "Cloudflare direct DNS: $subdomain → $ip (unchanged)"; return 0; }
+        if _cfcurl --retry 1 --retry-delay 3 -X PUT "$base/$record_id" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$dns_body" > /dev/null 2>&1; then
+            log "Cloudflare direct DNS: $subdomain → $ip"
+            echo "  ✓ SSH DNS: $subdomain → $ip"
+        else
+            log "Cloudflare direct DNS: UPDATE FAILED for $subdomain"
+        fi
+    else
+        if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$dns_body" > /dev/null 2>&1; then
+            log "Cloudflare direct DNS: $subdomain → $ip (created)"
+            echo "  ✓ SSH DNS: $subdomain → $ip"
+        else
+            log "Cloudflare direct DNS: CREATE FAILED for $subdomain"
+        fi
     fi
 }
 

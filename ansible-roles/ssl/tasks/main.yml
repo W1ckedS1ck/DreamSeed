@@ -17,7 +17,6 @@
     mode: "0640"
     directory_mode: "0750"
   when: ssl_local_backup.stat.exists
-  register: ssl_restore_result
 
 - name: Secure archive and live directories (traversable)
   become: true
@@ -135,7 +134,6 @@
     path: /etc/letsencrypt/renewal-hooks/deploy
     state: directory
     mode: "0755"
-  when: ssl_has_cert
 
 - name: Deploy certbot renewal hook
   become: true
@@ -149,7 +147,6 @@
       fi
     dest: /etc/letsencrypt/renewal-hooks/deploy/reload-web.sh
     mode: "0755"
-  when: ssl_has_cert
 
 # --- Self-signed fallback (generic name, works for both Nginx and Apache) ---
 - name: Generate self-signed private key

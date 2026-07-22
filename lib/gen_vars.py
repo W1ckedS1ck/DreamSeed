@@ -39,9 +39,6 @@ def main():
     ssh_key = os.environ.get('SSH_PUBLIC_KEY_PATH', '')
     if ssh_key.strip():
         data['ssh_public_key_path'] = ssh_key.strip()
-    if target.startswith('prod'):
-        data['domain_www'] = True
-
     additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
     if additional_keys.strip():
         data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]

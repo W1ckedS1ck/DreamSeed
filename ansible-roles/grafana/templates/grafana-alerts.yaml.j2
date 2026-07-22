@@ -166,7 +166,7 @@ groups:
           summary: >-
             {% raw %}SSL cert expires in {{ $values.A.Value }} days on {{ $labels.instance }}{% endraw %}
 
-{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 900, 1, 'lt', '6m', 'OK', 'Error', 'warning') }}
+{{ alert_body('admin-login', 'Admin Login Failed', 'admin_login_ok', 900, 1, 'lt', '15m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: Admin panel (/manager/) not responding with MODX content
 

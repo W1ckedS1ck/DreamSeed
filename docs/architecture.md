@@ -22,20 +22,20 @@
         │      hosts-<workspace>.yml, DEPLOY_VARS_TMP (0600)
        │
        ├─ 6. Ansible (7 playbooks)
-       │      01 Base ─── Packages, swap, PHP, MariaDB
+       │      01 Base ─── Packages, swap, PHP
        │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
        │      03 DB ────── MariaDB tuning, users, restore
-       │      04 Monitor ─ Exporters + VictoriaMetrics + vmagent + check_site cron
-       │      05 Backup ── Scripts, crons, Better Stack heartbeats, Telegram bot
-       │      06 Grafana ─ Dashboards, datasources, alerts
-       │      07 Security ── SSH, fail2ban, sysctl, MODX perms
+       │      04 Security ── SSH, fail2ban, sysctl, MODX perms
+       │      05 Monitor ── Exporters + VictoriaMetrics + vmagent + promtail + check_site cron
+       │      06 Backup ─── Scripts, crons, Better Stack heartbeats, Telegram bot
+       │      07 Grafana ── Dashboards, datasources, alerts
        │
        └─ 7. Post-deploy checks
                systemctl is-active (7 services + mysqld_exporter)
                curl https://$DOMAIN/ → 200|301
                SSL (Cloudflare/LE/self-signed), MODX index.php, DB tables
                VictoriaMetrics health, node + mysql + nginx/apache exporters, vmagent
-               fail2ban (7-8 jails, depends on web server), cron backup, MySQL write probe
+                fail2ban (5 jails for nginx / 3 for apache), cron backup, MySQL write probe
                → Push to VM: database_tables, dreamseed_health_overall
 ```
 
@@ -58,10 +58,11 @@ Cloudflare Proxy (Full SSL)
    │
    └─ Monitoring backplane (127.0.0.1 only)
          Node Exporter   :9100
-         Nginx Exporter  :9113 / Apache Exporter :9117
-         MySQLd Exporter :9104
-         VictoriaMetrics :8428
-         vmagent         :8429 ──remote write──→ Grafana Cloud
+          Nginx Exporter  :9113 / Apache Exporter :9117
+          MySQLd Exporter :9104
+          Redis Exporter  :9121
+          VictoriaMetrics :8428
+          vmagent         :8429 ──remote write──→ Grafana Cloud
 ```
 
 ---
@@ -145,10 +146,10 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                  ┌──────────────┐           ┌──────────────────┐
                                  │   Grafana    │           │  Grafana Cloud   │
                                  │  :3000       │           │  (hosted metrics)│
-                                 │  5 dashboards│           │  4 community     │
-                                                                   │  24 alerts   │           │  dashboards      │
-                                 │              │           │  (gnet 1860/7362/│
-                                 │              │           │   17452/10229)   │
+                                  │  5 dashboards│           │  5 community     │
+                                                                    │  23 alerts   │           │  dashboards      │
+                                  │              │           │  (gnet 1860/7362/│
+                                  │              │           │   763/17452/10229)│
                                  └──────┬───────┘           └──────────────────┘
                                         │ Telegram  point
                                         ▼
@@ -184,7 +185,6 @@ Better Stack (cloud)
 | Site Down | critical | site_up != 1 | pushed 1m, for: 2m |
 | Site Response Time > 5s | warning | site_response > 5s | pushed 1m, for: 5m |
 | MODX Core Missing | critical | modx_core_ok == 0 | pushed 1m, for: 5m |
-| Site Content Mismatch | critical | site_content_ok == 0 | pushed 1m, for: 2m |
 | MODX Cache Not Writable | warning | modx_cache_ok == 0 | pushed 1m, for: 5m |
 | VictoriaMetrics Down | critical | victoria_up == 0 | scraped 15s, for: 1m |
 | Redis Down | critical | redis_up == 0 | scraped 15s, for: 2m |
@@ -205,7 +205,7 @@ Better Stack (cloud)
 |------|----------|-------|----------|
 | Uptime | Better Stack | 3 monitors, 6 heartbeats, status page | Telegram webhooks |
 | Real User Monitoring | Grafana Cloud (Faro) | LCP/CLS/INP/TTFB, JS errors, sessions by browser/country | Grafana Cloud dashboard |
-| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP, MultiHTTP, Grafana, SSL) ~15k/mo | Grafana Cloud dashboard |
+| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP main from 3 America probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 1 probe) ~15k/mo | Grafana Cloud dashboard |
 
 ---
 
@@ -259,13 +259,11 @@ Manual dispatch    Deploy                Setup → secrets → deploy.sh / destr
                                           → Telegram
 
 Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
-  daily                                  (AWS prod only)
+  daily                                  (3 targets: prod-hetz, dev-aws, dev-hetz)
 
 Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
    manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
-                                          → DAST scan (nuclei)
-                                          → Lynis audit
-                                          → check_services (timers, fail2ban, exporters)
+                                           → check_services (timers, fail2ban, exporters)
                                            → Grafana alert rules check (≥23)
                                            → GDrive backup check
                                           → Destroy → Telegram report (P/F/W summary)
@@ -282,6 +280,7 @@ Bot events         Renovate              Dependency updates (auto PRs)
 DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
 ├── lib/                   # Modules: env.sh, helpers.sh, terraform.sh, ansible.sh, gen_vars.py
+│   ├── preflight.sh         # Pre-deploy checks (env, SSH key, provider vars)
 │   └── helpers.sh          # _cf_zone_id() — shared Cloudflare zone resolver
 ├── .github/
 │   ├── actions/
@@ -294,9 +293,9 @@ DreamSeed/
 ├── scripts/
 │   ├── audit_deep.sh        # Full server audit — covers all AUDIT_CHECKLIST sections
 │   ├── smart_backup.sh      # Local backup (project, DB, Redis)
-│   └── upload_backups_to_gdrive.sh  # Cloud upload via rclone_retry()
-│   ├── actions/           # Composite actions: setup-terraform, setup-ansible
-│   └── workflows/         # 9 workflows + Renovate
+│   ├── upload_backups_to_gdrive.sh  # Cloud upload via rclone (gdrive or gdrive-crypt)
+│   ├── RESTORE_ALL.sh               # Interactive restore from GDrive (supports encrypted backups)
+│   └── verify_backups.sh            # Cloud backup integrity verification
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP
@@ -310,7 +309,7 @@ DreamSeed/
 │   ├── playbook-06-backup.yml   # Cron jobs, rclone, telegram bot
 │   └── playbook-07-grafana.yml  # Grafana + alerting + dashboards
 │   └── group_vars/all.yml
-├── ansible-roles/         # 16 custom roles
+├── ansible-roles/         # 17 custom roles (including promtail)
 ├── scripts/               # Backup, restore, Telegram bot, health checks
 ├── .tflint.hcl            # Terraform linter config (root, drives all providers)
 ├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/

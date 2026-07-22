@@ -117,10 +117,14 @@ resource "hcloud_server" "main" {
   user_data = templatefile("${path.module}/cloud-init.tftpl", {
     environment         = var.environment
     additional_ssh_keys = var.additional_ssh_keys
+    ubuntu_pro_token    = var.ubuntu_pro_token
   })
 
   lifecycle {
     create_before_destroy = true
+    # ssh_keys: managed by Ansible (security role → authorized_key).
+    #   Removing from ignore_changes would trigger server recreate on key change.
+    # user_data: cloud-init runs once at first boot. Changing template has no effect.
     ignore_changes = [
       ssh_keys,
       user_data,

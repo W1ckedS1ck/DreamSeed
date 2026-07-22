@@ -114,7 +114,7 @@ SSH → sudo journalctl -u vmagent --no-pager -n 20
 
 ### Where alerts are defined
 
-All 24 alert rules live in one file:
+All 23 alert rules live in one file:
 
 ```
 ansible-roles/grafana/templates/grafana-alerts.yaml.j2
@@ -367,3 +367,4 @@ Store these **outside the repo** (password manager / team vault):
 - Cloudflare Dashboard login — to rotate API tokens
 - BotFather access — to rotate Telegram bot token
 - Hetzner / AWS console access — to destroy/rebuild servers
+- `RCLONE_CRYPT_PASSWORD` — AES-256 backup encryption password; without it, encrypted backups on Google Drive cannot be decrypted during restore

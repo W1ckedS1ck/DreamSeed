@@ -65,7 +65,7 @@ jobs:
             prod-hetz)
               echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=prod-hetz" >> "$GITHUB_ENV"
-              echo "TF_VAR_server_type=cx43" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:170
+              echo "TF_VAR_server_type=cx33" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:206
               echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
               echo "TF_VAR_enable_primary_ip=true" >> "$GITHUB_ENV"
               ;;
@@ -132,7 +132,7 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
-            --data-urlencode "parse_mode=MarkdownV2" \
+            --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
           exit 1
 
