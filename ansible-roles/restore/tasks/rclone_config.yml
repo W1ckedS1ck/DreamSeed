@@ -44,7 +44,9 @@
       rclone config delete gdrive-crypt 2>/dev/null || true
       rclone config create gdrive-crypt crypt \
         remote=gdrive: \
-        password="$(rclone obscure '{{ rclone_crypt_password }}')"
+        password="$(rclone obscure '{{ rclone_crypt_password }}')" \
+        filename_encryption=off \
+        directory_name_encryption=false
     executable: /bin/bash
   become: true
   become_user: ubuntu
