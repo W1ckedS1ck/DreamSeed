@@ -49,3 +49,4 @@ CLAUDE.md
 docs/private/
 AUDIT_*
 vanilla/
+secrets/ssl/
