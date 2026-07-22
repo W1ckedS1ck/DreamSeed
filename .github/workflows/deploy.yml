@@ -145,7 +145,8 @@ jobs:
           PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
           LOKI_URL: ${{ secrets.LOKI_URL }}
           LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
-          FARO_COLLECTOR_URL: ${{ secrets.FARO_COLLECTOR_URL }}
+          PROD_FARO_COLLECTOR_URL: ${{ secrets.PROD_FARO_COLLECTOR_URL }}
+          DEV_FARO_COLLECTOR_URL: ${{ secrets.DEV_FARO_COLLECTOR_URL }}
           DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
@@ -189,7 +190,11 @@ jobs:
             # Loki logging — set per target
             echo "LOKI_URL=${{ vars.LOKI_URL }}"
             echo "LOKI_USERNAME=${{ vars.LOKI_USERNAME }}"
-            echo "FARO_COLLECTOR_URL=${{ vars.FARO_COLLECTOR_URL }}"
+            if [[ "$ENV" == prod* ]]; then
+              echo "FARO_COLLECTOR_URL=$PROD_FARO_COLLECTOR_URL"
+            else
+              echo "FARO_COLLECTOR_URL=$DEV_FARO_COLLECTOR_URL"
+            fi
 
             echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
             echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
