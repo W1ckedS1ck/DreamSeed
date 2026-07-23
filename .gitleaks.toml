@@ -17,4 +17,5 @@ tags = ["grafana", "secret"]
 paths = [
   '''\.claude/''',
   '''\.terraform\.lock\.hcl''',
+  '''secrets/''',
 ]
