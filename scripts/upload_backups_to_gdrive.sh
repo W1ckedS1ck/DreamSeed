@@ -32,7 +32,7 @@ PROJECT_DIR="$LOCAL_BACKUP_DIR/project"
 DB_DIR="$LOCAL_BACKUP_DIR/db"
 REDIS_DIR="$LOCAL_BACKUP_DIR/redis"
 
-RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
+RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive-crypt}"
 
 # Fail if crypt remote is not configured — plaintext fallback is a security risk
 if ! rclone listremotes 2>/dev/null | grep -qF "${RCLONE_REMOTE}:"; then
