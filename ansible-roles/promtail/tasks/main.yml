@@ -16,7 +16,7 @@
     name: promtail
     state: present
     update_cache: true
-    cache_valid_time: 3600
+    cache_valid_time: 0
   become: true
   notify: Restart Promtail
 
