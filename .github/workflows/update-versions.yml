@@ -24,7 +24,7 @@ jobs:
       - name: Extract versions
         run: |
           ANSIBLE=$(grep -oP '^ansible==\K.*' ansible/requirements-deploy.txt)
-          GRAFANA=$(grep -oP "default\('[0-9]+\.[0-9]+\.[0-9]+" ansible/group_vars/all.yml | grep -oP "[0-9]+\.[0-9]+\.[0-9]+")
+          GRAFANA=$(grep grafana_version ansible/group_vars/all.yml | grep -oP "[0-9]+\.[0-9]+\.[0-9]+")
           TERRAFORM=$(terraform --version | head -1 | grep -oP '\d+\.\d+')
 
           cat > versions.json <<EOF
