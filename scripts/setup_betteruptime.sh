@@ -80,7 +80,7 @@ existing_hb=$(get_existing_heartbeats)
 
 for spec in \
     "backup|BETTERUPTIME_BACKUP_KEY|3600|300" \
-    "gdrive-upload|BETTERUPTIME_GDRIVE_KEY|86400|1800" \
+    "gdrive-upload|BETTERUPTIME_GDRIVE_KEY|3600|300" \
     "report-daily|BETTERUPTIME_REPORT_DAILY_KEY|86400|1800" \
     "report-weekly|BETTERUPTIME_REPORT_WEEKLY_KEY|604800|3600" \
     "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600" \

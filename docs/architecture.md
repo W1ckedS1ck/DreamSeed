@@ -105,7 +105,7 @@ smart_backup.sh (hourly via cron)
 
 upload_backups_to_gdrive.sh (every hour at :05)
    │
-   ├─ rclone copy latest project + db → gdrive:DreamSeed/backups/ (ignore-existing)
+   ├─ rclone copy latest project + db → gdrive-crypt:DreamSeed/backups/{project,db}${ENV}/ (ignore-existing)
    │
    ├─ Prune cloud: 10 project + 100 db → cleanup trash
    │
@@ -171,7 +171,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 24 rules)
+### Alert Rules (Grafana — 23 rules)
 
 | Alert | Severity | Condition | Interval / for |
 |-------|----------|-----------|----------------|

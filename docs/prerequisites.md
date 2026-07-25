@@ -62,21 +62,24 @@ Grafana Cloud (per target):
 - `DEV_GRAFANA_CLOUD_TOKEN` or `PROD_GRAFANA_CLOUD_TOKEN` — vmagent token
 - `DEV_GRAFANA_CLOUD_SA_TOKEN` or `PROD_GRAFANA_CLOUD_SA_TOKEN` — Service Account token (Terraform)
 
-## Site restore (secrets/rclone.conf)
+## Site restore (rclone config)
 
 The `restore` Ansible role downloads the MODX site from Google Drive during deploy.
-It reads `secrets/rclone.conf` — a standard rclone config with a `gdrive:` remote.
+It needs a `gdrive-crypt` (AES-256 encrypted) remote pointing to the DreamSeed backups folder.
 
-Without it, the deploy will finish (all services configured) but **the site will not be restored**.
-The deploy will fail at the final health check with "HTTP 403 — site not serving".
+The config is automatically created in CI from two GitHub Secrets:
 
-To get this file, ask a team member who has rclone configured with GDrive access, or run:
+- **`RCLONE_CONF_BASE64`** — base64-encoded rclone config with `gdrive:` remote
+- **`RCLONE_CRYPT_PASSWORD`** — password for the `gdrive-crypt` crypt wrapper
+
+Locally, you can run:
 
 ```bash
-rclone config
+bash scripts/lint.sh --secrets  # check if all secrets are present
 ```
 
-and set up a remote named `gdrive` pointing to the DreamSeed backups folder.
+Without the rclone config, the deploy will finish (all services configured) but **the site will not be restored**.
+The deploy will fail at the final health check with "HTTP 403 — site not serving".
 
 You can also deploy without restore support and restore later:
 
@@ -84,7 +87,7 @@ You can also deploy without restore support and restore later:
 ./deploy.sh <target> -n -i <server-ip>
 ```
 
-after adding `rclone.conf`.
+after setting up the rclone config manually on the server.
 
 ## Pre-commit hooks (recommended)
 

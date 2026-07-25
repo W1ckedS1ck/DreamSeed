@@ -1,0 +1,5 @@
+{
+  "terraform": "1.15",
+  "ansible": "14.2.0",
+  "grafana": "13.1.1"
+}

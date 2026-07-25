@@ -2,16 +2,16 @@
 
 ![CI](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/deploy.yml/badge.svg)
-![BackupRestorationTest](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/test-restore.yml/badge.svg)
+![Restore Test](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/test-restore.yml/badge.svg)
 ![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
-![Terraform](https://img.shields.io/badge/Terraform-1.15-7B42BC?logo=terraform)
-![Ansible](https://img.shields.io/badge/Ansible-14.1-EE0000?logo=ansible)
+![Terraform](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/W1ckedS1ck/DreamSeed/main/versions.json&query=$.terraform&label=Terraform&color=7B42BC&logo=terraform)
+![Ansible](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/W1ckedS1ck/DreamSeed/main/versions.json&query=$.ansible&label=Ansible&color=EE0000&logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Grafana](https://img.shields.io/badge/Grafana-13.1-F46800?logo=grafana)
+![Grafana](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/W1ckedS1ck/DreamSeed/main/versions.json&query=$.grafana&label=Grafana&color=F46800&logo=grafana)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
@@ -48,7 +48,7 @@ I own **everything below the application layer** — provisioning, configuration
 ### What I Built
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
-- **Server automation** — 17 idempotent Ansible roles covering the full server lifecycle (base → web → database → redis → monitoring → backup → grafana → security)
+- **Server automation** — 17 idempotent Ansible roles across 7 playbooks (01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana)
 - **Observability** — VictoriaMetrics + Promtail + Grafana stack with 23 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
 - **CI/CD** — 9 parallel GitHub Actions jobs: ShellCheck, ansible-lint, j2lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, backup-test, drift-detection, rollback, grafana-cloud, health-check workflows
@@ -141,7 +141,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (500 lines + 5 modular lib files)
+├── deploy.sh                 # Main orchestrator (500 lines + 6 modular lib files)
 ├── .github/actions/          # Composite actions: setup-terraform, setup-ansible
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group
@@ -159,7 +159,7 @@ DreamSeed/
 ├── ansible-roles/            # 17 reusable roles (nginx, mariadb, ssl, redis, …)
 ├── scripts/                  # Backup, restore, Telegram bot, health checks
 ├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
-├── secrets/                  # Secrets: .env (may be vault-encrypted), rclone.conf, ssl/ (gitignored)
+├── secrets/                  # Secrets: .env (ansible-vault encrypted), tfstate-backup/, ssl/ (all gitignored)
 ├── .tflint.hcl               # Terraform linter config (root, drives all providers)
 ├── renovate.json              # Automated dependency update config
 └── .github/workflows/
@@ -215,7 +215,7 @@ Grafana dashboards, datasources, **and 23 alert rules** deployed automatically �
 **External (Better Stack cloud-hosted):**
 
 - **3 HTTP monitors** — `dreamseed.online` (HTTP 200 + keyword check + Grafana endpoint), 3min interval, 4 global regions
-- **6 cron heartbeats** — backup (1h/5m), gdrive-upload (24h/30m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/60s)
+- **6 cron heartbeats** — backup (1h/5m), gdrive-upload (1h/5m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/60s)
 - **Public status page** — `status.dreamseed.online` with live uptime history
 - **Telegram alerts** via separate webhooks for incident start and resolve
 
