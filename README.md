@@ -268,10 +268,10 @@ CI checks (9 parallel): ShellCheck · ansible-lint · j2lint · **Terraform** (t
 
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|
-| `prod` | AWS EC2 (`us-west-1`) | [dreamseed.online](https://dreamseed.online) | Nginx + PHP 8.3 + MariaDB |
-| `prod-hetz` | Hetzner (`nbg1`) | [dreamseed.online](https://dreamseed.online) | Nginx + PHP 8.3 + MariaDB |
-| `dev-aws` | AWS EC2 | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Nginx + PHP 8.3 + MariaDB |
-| `dev-hetz` | Hetzner (`nbg1`) | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Nginx + PHP 8.3 + MariaDB |
+| `prod` | AWS EC2 (`us-west-1`) | [dreamseed.online](https://dreamseed.online) | Nginx/Apache + PHP 8.3 + MariaDB |
+| `prod-hetz` | Hetzner (`nbg1`) | [dreamseed.online](https://dreamseed.online) | Nginx/Apache + PHP 8.3 + MariaDB |
+| `dev-aws` | AWS EC2 | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
+| `dev-hetz` | Hetzner (`nbg1`) | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 
 All environments are fully monitored, backed up, and behind Cloudflare proxy.
 
