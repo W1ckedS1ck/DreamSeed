@@ -268,8 +268,6 @@ CI checks (9 parallel): ShellCheck · ansible-lint · j2lint · **Terraform** (t
 
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|
-| Target | Provider | Domain | Stack |
-|--------|----------|--------|-------|
 | `prod` | `AWS` | [dreamseed.online](https://dreamseed.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 | `prod-hetz` | `Hetzner` | [dreamseed.online](https://dreamseed.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 | `dev-aws` | `AWS` | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
