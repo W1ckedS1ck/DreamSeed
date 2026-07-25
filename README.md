@@ -7,11 +7,11 @@
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
-![Terraform](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/W1ckedS1ck/DreamSeed/dev/versions.json&query=$.terraform&label=Terraform&color=7B42BC&logo=terraform)
-![Ansible](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/W1ckedS1ck/DreamSeed/dev/versions.json&query=$.ansible&label=Ansible&color=EE0000&logo=ansible)
+![Terraform](https://img.shields.io/badge/Terraform-1.15-7B42BC?logo=terraform)
+![Ansible](https://img.shields.io/badge/Ansible-14.2.0-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Grafana](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/W1ckedS1ck/DreamSeed/dev/versions.json&query=$.grafana&label=Grafana&color=F46800&logo=grafana)
+![Grafana](https://img.shields.io/badge/Grafana-13.1.1-F46800?logo=grafana)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
