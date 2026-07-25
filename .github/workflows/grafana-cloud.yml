@@ -1,4 +1,4 @@
-name: Grafana Cloud Dashboards
+name: "[M] Grafana Cloud"
 
 on:
   workflow_dispatch:
@@ -29,6 +29,18 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Mask secrets
+        env:
+          SA_PROD: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          SA_DEV: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+          TOKEN_PROD: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          TOKEN_DEV: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
+          SM_PROD: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
+        run: |
+          for v in "$SA_PROD" "$SA_DEV" "$TOKEN_PROD" "$TOKEN_DEV" "$SM_PROD"; do
+            [ -n "$v" ] && echo "::add-mask::$v" || true
+          done
 
       - uses: ./.github/actions/setup-terraform
         with:

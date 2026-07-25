@@ -1,4 +1,4 @@
-name: "TF: Infra + Cloudflare"
+name: "[M] TF: Infra + Cloudflare"
 
 on:
   workflow_dispatch:
@@ -40,6 +40,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Mask secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HETZ_PROD: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          HETZ_DEV: ${{ secrets.HCLOUD_TOKEN }}
+          SSH_KEY: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
+        run: |
+          for v in "$CF_TOKEN" "$HETZ_PROD" "$HETZ_DEV" "$SSH_KEY"; do
+            [ -n "$v" ] && echo "::add-mask::$v" || true
+          done
+
       - uses: ./.github/actions/setup-terraform
 
       - name: Record start time

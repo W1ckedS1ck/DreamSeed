@@ -1,4 +1,4 @@
-name: Weekly Server Update
+name: "[B] Security Update"
 
 on:
   schedule:
@@ -34,6 +34,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Mask secrets
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT: ${{ secrets.VAULT_PASSWORD }}
+        run: |
+          for v in "$TG_TOKEN" "$TG_CHAT_ID" "$TG_THREAD_ID" "$SSH_KEY" "$VAULT"; do
+            [ -n "$v" ] && echo "::add-mask::$v" || true
+          done
+
       - uses: ./.github/actions/setup-terraform
 
       - name: Record start time
