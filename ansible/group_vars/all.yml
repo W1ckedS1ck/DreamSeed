@@ -60,7 +60,7 @@ monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | defa
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.19.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
 monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.148.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
 monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.148.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.87.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
+monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.88.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 monitoring_promtail_enabled: true  # reserved for future use
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
 loki_username: "{{ lookup('env', 'LOKI_USERNAME') | default('', true) }}"
