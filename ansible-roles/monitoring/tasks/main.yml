@@ -1,0 +1,74 @@
+---
+- name: Node Exporter
+  ansible.builtin.include_tasks: node_exporter.yml
+
+- name: Apache Exporter
+  ansible.builtin.include_tasks: apache_exporter.yml
+  when: web_server == "apache"
+
+- name: Nginx Exporter
+  ansible.builtin.include_tasks: nginx_exporter.yml
+  when: web_server == "nginx"
+
+- name: Remove stale web exporter on web server switch
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  become: true
+  failed_when: false
+  loop: "{{ ['nginx_exporter'] if web_server == 'apache' else ['apache_exporter'] }}"
+
+- name: Remove stale web exporter binary and service unit on web server switch
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop: >
+    {{ ['/usr/local/bin/nginx-prometheus-exporter', '/etc/systemd/system/nginx_exporter.service']
+       if web_server == 'apache'
+       else ['/usr/local/bin/apache_exporter', '/etc/systemd/system/apache_exporter.service'] }}
+
+- name: Reload systemd after stale service cleanup
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: MySQL Exporter
+  ansible.builtin.include_tasks: mysql_exporter.yml
+  when: db_pass | default('') | length > 0
+
+- name: Redis Exporter
+  ansible.builtin.include_tasks: redis_exporter.yml
+
+- name: VictoriaMetrics
+  ansible.builtin.include_tasks: victoria.yml
+
+- name: Vmagent (Grafana Cloud)
+  ansible.builtin.include_tasks: vmagent.yml
+
+- name: Flush handler restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Build monitoring services list
+  ansible.builtin.set_fact:
+    _monitoring_services: >-
+      {{ ['node_exporter', 'victoria-metrics', 'redis_exporter']
+         + (['nginx_exporter'] if web_server == 'nginx' else [])
+         + (['apache_exporter'] if web_server == 'apache' else [])
+         + (['mysqld_exporter'] if (db_pass | default('') | length > 0) else [])
+         + (['vmagent'] if (monitoring_vmagent_enabled and grafana_cloud_url | length > 0) else []) }}
+
+- name: Enable and start monitoring services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  become: true
+  loop: "{{ _monitoring_services }}"
+
+- name: Check site
+  ansible.builtin.include_tasks: check_site.yml
+
+- name: Check services
+  ansible.builtin.include_tasks: check_services.yml

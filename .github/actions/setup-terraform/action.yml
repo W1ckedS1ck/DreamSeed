@@ -1,0 +1,35 @@
+name: Setup Terraform
+description: Setup Terraform CLI with pinned version + optional Terraform Cloud token
+
+inputs:
+  terraform-version:
+    description: Terraform version to install
+    required: false
+    default: "1.15.8" # renovate: depName=hashicorp/terraform
+  cli-config-credentials-token:
+    description: Terraform Cloud / Enterprise API token for CLI config
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.terraform.d/plugin-cache
+        key: terraform-provider-cache-${{ runner.os }}
+        restore-keys: |
+          terraform-provider-cache-
+
+    - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        cli_config_credentials_token: ${{ inputs.cli-config-credentials-token }}
+
+    - name: Enable Terraform provider plugin cache (preserve existing credentials)
+      shell: bash
+      run: |
+        mkdir -p ~/.terraform.d/plugin-cache
+        if ! grep -q 'plugin_cache_dir' ~/.terraformrc 2>/dev/null; then
+          echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' >> ~/.terraformrc
+        fi

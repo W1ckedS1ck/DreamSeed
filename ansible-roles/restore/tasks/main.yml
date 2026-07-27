@@ -1,0 +1,309 @@
+---
+- name: Upload rclone config
+  ansible.builtin.include_tasks: rclone_config.yml
+
+- name: Check if rclone config exists on server
+  ansible.builtin.stat:
+    path: /home/ubuntu/.config/rclone/rclone.conf
+  register: rclone_config_remote
+
+# ========================
+#  Restore Project
+# ========================
+- name: Check if MODX already installed (real site, not placeholder)
+  become: true
+  ansible.builtin.stat:
+    path: "{{ web_root }}/core/config/config.inc.php"
+  register: restore_site_exists
+
+- name: Warn if site missing and no restore source
+  ansible.builtin.debug:
+    msg: >-
+      ⚠ Site not found at {{ web_root }} and no rclone.conf available.
+      Deploy will continue but site won't serve content.
+      Fix: add rclone.conf to secrets/ and re-run deploy with -i <IP>.
+  when:
+    - not restore_site_exists.stat.exists
+    - not rclone_config_remote.stat.exists
+
+# NOTE: Dev environments (dev-aws, dev-hetz) intentionally restore backups
+# from prod (gdrive:DreamSeed/backups/project/ and db/). There is no
+# separate backup pipeline for dev — dev always pulls latest prod data.
+# This is by design, not a bug. Dev environments are ephemeral testing
+# copies of prod, not independent environments with their own data.
+# If you change these paths, make sure dev still gets prod data, not
+# dev-specific backups.
+
+- name: Ensure restore cache directory exists (EBS, not tmpfs)
+  ansible.builtin.file:
+    path: /home/ubuntu/backups/.restore_cache
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0700"
+
+- name: Restore project from Google Drive
+  when:
+    - not restore_site_exists.stat.exists
+    - rclone_config_remote.stat.exists
+  block:
+    - name: Find latest project backup
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 | sort -r | head -1
+        executable: /bin/bash
+      register: restore_latest_project
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if no project backup found
+      ansible.builtin.fail:
+        msg: "No project backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_project.stdout | trim == ""
+
+    - name: Validate project backup filename
+      ansible.builtin.fail:
+        msg: "Unsafe project backup filename from rclone: '{{ restore_latest_project.stdout | trim }}'"
+      when:
+        - restore_latest_project.stdout | trim != ""
+        - not (restore_latest_project.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
+
+    - name: Download project backup to EBS cache
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive-crypt:DreamSeed/backups/project/{{ restore_latest_project.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
+        executable: /bin/bash
+      changed_when: false
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Verify project archive integrity
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          tar -tzf "/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}" > /dev/null 2>&1
+        executable: /bin/bash
+      register: restore_archive_check
+      changed_when: false
+      failed_when: restore_archive_check.rc != 0
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Validate web_root before destructive operation
+      ansible.builtin.fail:
+        msg: "Refusing to rm -rf '{{ web_root }}': path is empty, root, or /var/www"
+      when: >
+        restore_latest_project.stdout | trim != "" and
+        (web_root == '' or web_root == '/' or
+        web_root == '/var/www' or web_root == '/var/www/')
+
+    # NOTE: tmpfs handling for MODX cache.
+    # The PHP role (playbook-02) mounts tmpfs at {{ web_root }}/core/cache.
+    # We must unmount it before the mv below — otherwise mv drags the mount
+    # to the .bak.$$ path, orphans it, and leaves a regular dir in its place.
+    # After extraction, mount -a re-mounts tmpfs from the fstab entry.
+    - name: Extract project
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          _archive="/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}"
+          _web="{{ web_root }}"
+          tar -tzf "$_archive" > /dev/null 2>&1 || { echo "Corrupt archive: $_archive"; exit 1; }
+          mountpoint -q "$_web/core/cache" && umount "$_web/core/cache" || true
+          mv "$_web" "${_web}.bak.$$" 2>/dev/null || true
+          mkdir -p "$_web"
+          if ! tar -xzf "$_archive" -C "$(dirname "$_web")"; then
+            mv "${_web}.bak.$$"/* "$_web" 2>/dev/null || true
+            rm -rf "${_web}.bak.$$" 2>/dev/null || true
+            exit 1
+          fi
+          mount -a 2>/dev/null || true
+          rm -rf "${_web}.bak.$$" 2>/dev/null || true
+          chown -R www-data:www-data "$_web"
+        executable: /bin/bash
+      changed_when: false
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Verify project extraction
+      become: true
+      ansible.builtin.stat:
+        path: "{{ web_root }}/index.php"
+      register: restore_index_check
+      failed_when: restore_index_check.stat is not defined or not restore_index_check.stat.exists or restore_index_check.stat.size == 0
+      when: restore_latest_project.stdout | trim != ""
+
+    - name: Show restored project
+      ansible.builtin.debug:
+        msg: "✓ Restored project: {{ restore_latest_project.stdout | trim }}"
+
+    - name: Cleanup project archive
+      ansible.builtin.file:
+        path: "/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}"
+        state: absent
+      when: restore_latest_project.stdout | trim != ""
+
+- name: Skip restore (already exists)
+  ansible.builtin.debug:
+    msg: "⊘ Site already exists at {{ web_root }}, skipping restore"
+  when: restore_site_exists.stat.exists
+
+- name: Ensure MODX cache directory exists for tmpfs mount
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}/core/cache"
+    state: directory
+    mode: '0755'
+    owner: www-data
+    group: www-data
+
+- name: Mount tmpfs for MODX cache (fstab entry exists from PHP role)
+  become: true
+  ansible.builtin.shell:
+    cmd: mount {{ web_root }}/core/cache 2>/dev/null || true
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify tmpfs mount for MODX cache
+  become: true
+  ansible.builtin.shell:
+    cmd: awk '$2 == path {print $1, $2, $3}' path="{{ web_root }}/core/cache" /proc/mounts
+    executable: /bin/bash
+  register: restore_tmpfs_check
+  changed_when: false
+  failed_when: false
+
+# ========================
+#  Restore Database
+# ========================
+- name: Check if DB already has tables
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      mysql "{{ db_name | quote }}" -e "SHOW TABLES" 2>/dev/null | wc -l
+    executable: /bin/bash
+  register: restore_db_tables
+  changed_when: false
+  failed_when: false
+
+- name: Set db_needs_restore fact
+  ansible.builtin.set_fact:
+    restore_db_needs_restore: "{{ (restore_db_tables.stdout | default('0') | int) < 3 }}"
+
+# NOTE: See the project-restore block above — same logic applies: dev always
+# restores from prod backups. Paths are intentionally prod-only.
+# Dev environments have no independent backup pipeline by design.
+
+- name: Restore database from Google Drive
+  when:
+    - restore_db_needs_restore
+    - rclone_config_remote.stat.exists
+  block:
+    - name: Find latest DB backup
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          rclone lsf gdrive-crypt:DreamSeed/backups/db/ --max-depth 1 | sort -r | head -1
+        executable: /bin/bash
+      register: restore_latest_db
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if no DB backup found
+      ansible.builtin.fail:
+        msg: "No DB backups found on Google Drive (rclone returned empty or failed)"
+      when: restore_latest_db.stdout | trim == ""
+
+    - name: Validate DB backup filename
+      ansible.builtin.fail:
+        msg: "Unsafe DB backup filename from rclone: '{{ restore_latest_db.stdout | trim }}'"
+      when:
+        - restore_latest_db.stdout | trim != ""
+        - not (restore_latest_db.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
+
+    - name: Download DB backup to EBS cache
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive-crypt:DreamSeed/backups/db/{{ restore_latest_db.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
+        executable: /bin/bash
+      changed_when: false
+      when: restore_latest_db.stdout | trim != ""
+
+    - name: Restore database
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          gunzip -c "/home/ubuntu/backups/.restore_cache/{{ restore_latest_db.stdout | trim }}" | mysql "{{ db_name | quote }}"
+        executable: /bin/bash
+      register: restore_db_result
+      changed_when: false
+      failed_when: restore_db_result.rc != 0
+      when: restore_latest_db.stdout | trim != ""
+
+    - name: Verify database restore (expect 50+ tables)
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          mysql "{{ db_name | quote }}" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
+        executable: /bin/bash
+      register: restore_db_table_count
+      changed_when: false
+      failed_when: (restore_db_table_count.stdout | int) < db_min_tables
+      when: restore_latest_db.stdout | trim != ""
+
+    - name: Cleanup DB archive
+      ansible.builtin.file:
+        path: "/home/ubuntu/backups/.restore_cache/{{ restore_latest_db.stdout | trim }}"
+        state: absent
+      when: restore_latest_db.stdout | trim != ""
+
+    - name: Show restored DB
+      ansible.builtin.debug:
+        msg: "✓ Restored DB: {{ restore_latest_db.stdout | trim }} ({{ restore_db_table_count.stdout | default('?') }} tables)"
+
+    - name: Configure Redis as session handler in MODX
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          mysql "{{ db_name | quote }}" -e "UPDATE {{ db_prefix | default('modx_') }}system_settings SET value='' WHERE key='session_handler_class'" 2>/dev/null || true
+        executable: /bin/bash
+      changed_when: false
+      when: restore_latest_db.stdout | trim != ""
+
+    - name: Clear MODX system settings cache and restart FPM to apply Redis session handler
+      become: true
+      when: restore_latest_db.stdout | trim != ""
+      block:
+        - name: Remove system settings cache
+          ansible.builtin.file:
+            path: "{{ web_root }}/core/cache/system_settings/"
+            state: absent
+
+        # NOTE: Keep tmpfs mount intact. With state: absent on a mount point
+        # Ansible would fail (EBUSY). Instead, clear contents with find -exec.
+        - name: Clear all MODX cache (keep tmpfs mount intact)
+          ansible.builtin.shell:
+            cmd: find {{ web_root }}/core/cache -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+          changed_when: false
+
+        - name: Ensure cache directory exists
+          ansible.builtin.file:
+            path: "{{ web_root }}/core/cache/"
+            state: directory
+            owner: "{{ web_user | default('www-data') }}"
+            group: "{{ web_group | default('www-data') }}"
+            mode: "0755"
+
+        - name: Restart PHP-FPM to clear OPcache
+          ansible.builtin.systemd:
+            name: php{{ php_version | default('8.3') }}-fpm
+            state: restarted
+            daemon_reload: true
+
+- name: Skip DB restore (already has data)
+  ansible.builtin.debug:
+    msg: "⊘ Database already has {{ restore_db_tables.stdout | trim }} tables, skipping restore"
+  when: not restore_db_needs_restore

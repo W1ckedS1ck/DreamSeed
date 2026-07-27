@@ -1,0 +1,43 @@
+---
+- name: Install/Upgrade VictoriaMetrics
+  ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: victoria-metrics
+    monitor_bin_path: /usr/local/bin/victoria-metrics
+    monitor_version: "{{ monitoring_vm_version }}"
+    monitor_download_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vm_version }}/victoria-metrics-linux-amd64-v{{ monitoring_vm_version }}.tar.gz"
+    monitor_extracted_binary: /tmp/victoria-metrics-prod
+    monitor_extracted_dir: /tmp/victoria-metrics-prod
+
+- name: Create victoria-metrics user
+  ansible.builtin.user:
+    name: victoria-metrics
+    system: true
+    create_home: false
+    shell: /bin/false
+  become: true
+
+- name: Create VictoriaMetrics directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    mode: "0755"
+  become: true
+  loop:
+    - {path: /var/lib/victoria-metrics, owner: victoria-metrics}
+    - {path: /etc/victoria-metrics, owner: root}
+
+- name: Deploy VictoriaMetrics scrape config
+  ansible.builtin.include_tasks: _deploy_scrape.yml
+  vars:
+    _scrape_dest: /etc/victoria-metrics/scrape.yml
+    _scrape_notify: Restart VictoriaMetrics
+
+- name: Deploy VictoriaMetrics service
+  ansible.builtin.template:
+    src: victoria-metrics.service.j2
+    dest: /etc/systemd/system/victoria-metrics.service
+    mode: "0644"
+  become: true
+  notify: Restart VictoriaMetrics

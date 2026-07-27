@@ -1,0 +1,102 @@
+# Custom Fail2ban jails for DreamSeed
+# Web jails are ENABLED — nginx sees real visitor IPs via Cloudflare
+# CF-Connecting-IP + ngx_http_realip_module, so iptables/nftables bans work.
+# See: ansible-roles/security/templates/cloudflare-realip.conf.j2
+
+# ============================================================
+# SSH
+# ============================================================
+[sshd]
+enabled  = true
+port     = ssh
+backend  = pyinotify
+logpath  = /var/log/auth.log
+maxretry = 5
+bantime  = 1h
+filter = sshd[publickey=any]
+
+# ============================================================
+# MODX Admin Panel brute-force
+# ============================================================
+[modx-admin]
+enabled     = true
+port        = http,https
+filter      = modx-admin
+backend     = pyinotify
+{% if web_server == "nginx" %}
+logpath  = /var/log/nginx/{{ domain }}-ssl-access.log
+{% else %}
+logpath  = /var/log/apache2/{{ domain }}-ssl-access.log
+{% endif %}
+maxretry = 25
+findtime = 600
+bantime  = 3600
+
+{% if web_server == "nginx" %}
+# ============================================================
+# Vulnerability scanner detection (nginx access log format)
+# ============================================================
+[dreamseed-botsearch]
+enabled     = true
+port        = http,https
+filter      = dreamseed-botsearch
+backend     = pyinotify
+logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
+maxretry    = 2
+findtime    = 600
+bantime     = 12h
+
+[dreamseed-bad-request]
+enabled     = true
+port        = http,https
+filter      = dreamseed-bad-request
+backend     = pyinotify
+logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
+maxretry    = 6
+findtime    = 600
+bantime     = 1h
+
+[nginx-http-auth]
+enabled  = false
+port     = http,https
+logpath  = /var/log/nginx/error.log
+
+{% else %}
+[apache-auth]
+enabled  = false
+port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-error.log
+maxretry = 5
+bantime  = 1h
+
+[apache-shellshock]
+enabled  = false
+port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-error.log
+maxretry = 1
+bantime  = 1d
+
+[apache-badbots]
+enabled  = false
+port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-access.log
+maxretry = 2
+bantime  = 12h
+
+[apache-noscript]
+enabled  = false
+port     = http,https
+logpath  = /var/log/apache2/{{ domain }}-error.log
+maxretry = 6
+bantime  = 1h
+{% endif %}
+
+# ============================================================
+# Recidive — extends bans for repeat offenders
+# ============================================================
+[recidive]
+enabled  = true
+logpath  = /var/log/fail2ban.log
+maxretry = 3
+findtime = 86400
+bantime  = 604800

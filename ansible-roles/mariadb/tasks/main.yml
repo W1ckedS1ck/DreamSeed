@@ -1,0 +1,117 @@
+---
+- name: Install MariaDB server
+  become: true
+  ansible.builtin.apt:
+    name: mariadb-server
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Deploy optimized my.cnf
+  become: true
+  ansible.builtin.template:
+    src: 99-optimizations.cnf.j2
+    dest: /etc/mysql/conf.d/99-optimizations.cnf
+    mode: "0644"
+  notify: Restart MariaDB
+
+- name: Create MySQL log directory
+  become: true
+  ansible.builtin.file:
+    path: /var/log/mysql
+    owner: mysql
+    group: mysql
+    mode: "0750"
+    state: directory
+
+- name: Ensure MariaDB is running
+  become: true
+  ansible.builtin.systemd:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Remove anonymous users
+  become: true
+  ansible.mysql.mysql_user:
+    name: ""
+    host_all: true
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Remove test database
+  become: true
+  ansible.mysql.mysql_db:
+    name: test
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Remove remote root access
+  become: true
+  ansible.mysql.mysql_user:
+    name: root
+    host: "127.0.0.1"
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Remove IPv6 root access
+  become: true
+  ansible.mysql.mysql_user:
+    name: root
+    host: "::1"
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Flush handlers (apply config, restart MariaDB)
+  ansible.builtin.meta: flush_handlers
+
+- name: Create database
+  become: true
+  ansible.mysql.mysql_db:
+    name: "{{ db_name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_unicode_ci
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Create database user
+  become: true
+  ansible.mysql.mysql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_pass }}"
+    priv: "{{ db_name }}.*:ALL"
+    host: localhost
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  no_log: true
+
+- name: Deploy .my.cnf for ubuntu user
+  ansible.builtin.template:
+    src: my.cnf.j2
+    dest: "/home/ubuntu/.my.cnf"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  no_log: true
+
+- name: Create monitoring user for MySQL exporter (localhost)
+  become: true
+  ansible.mysql.mysql_user:
+    name: monitoring
+    host: localhost
+    password: "{{ db_pass }}"
+    priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  no_log: true
+
+- name: Create monitoring user for MySQL exporter (127.0.0.1)
+  become: true
+  ansible.mysql.mysql_user:
+    name: monitoring
+    host: "127.0.0.1"
+    password: "{{ db_pass }}"
+    priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  no_log: true

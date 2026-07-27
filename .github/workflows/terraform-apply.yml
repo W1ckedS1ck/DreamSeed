@@ -1,0 +1,191 @@
+name: "[M] TF: Infra + Cloudflare"
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Cloud provider'
+        required: true
+        type: choice
+        options: [aws, hetzner, cloudflare]
+      workspace:
+        description: 'Terraform workspace'
+        required: true
+        type: choice
+        options: [dev-aws, prod, dev-hetz, prod-hetz, cloudflare, cloudflare-prod]
+      mode:
+        description: 'Apply mode'
+        required: true
+        type: choice
+        options: [apply, refresh-only]
+        default: apply
+
+concurrency:
+  group: tf-${{ inputs.workspace }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  apply:
+    name: TF ${{ inputs.mode }} ${{ inputs.workspace }} (${{ inputs.provider }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: 🚀 Start
+        run: echo "Terraform apply started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: Mask secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HETZ_PROD: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          HETZ_DEV: ${{ secrets.HCLOUD_TOKEN }}
+          SSH_KEY: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
+        run: |
+          for v in "$CF_TOKEN" "$HETZ_PROD" "$HETZ_DEV" "$SSH_KEY"; do
+            [ -n "$v" ] && echo "::add-mask::$v" || true
+          done
+
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Set provider env vars
+        run: |
+          echo "TF_DIR=terraform/${{ inputs.provider }}" >> "$GITHUB_ENV"
+          echo "TF_WORKSPACE=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          case "${{ inputs.workspace }}" in
+            prod*)
+              IS_PROD=true
+              ;;
+            *)
+              IS_PROD=false
+              ;;
+          esac
+          if [ "${{ inputs.provider }}" = "aws" ]; then
+            if [ "$IS_PROD" = "true" ]; then
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.PROD_EIP }}" >> "$GITHUB_ENV"
+            else
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" >> "$GITHUB_ENV"
+            fi
+            echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          fi
+          if [ "${{ inputs.provider }}" = "cloudflare" ]; then
+            echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+            case "${{ inputs.workspace }}" in
+              cloudflare-prod) echo "TF_VAR_domain=dreamseed.online" >> "$GITHUB_ENV" ;;
+              *)              echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV" ;;
+            esac
+          fi
+          if [ "${{ inputs.provider }}" = "hetzner" ]; then
+            if [ "$IS_PROD" = "true" ]; then
+              echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx43" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+              echo "TF_VAR_enable_primary_ip=true" >> "$GITHUB_ENV"
+            else
+              echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+            fi
+            echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -input=false
+
+      - name: Remove stale resources from state
+        if: inputs.mode == 'refresh-only' && inputs.provider == 'hetzner'
+        working-directory: ${{ env.TF_DIR }}
+        continue-on-error: true
+        run: |
+          terraform state rm hcloud_primary_ip.main 2>/dev/null || true
+          terraform state rm hcloud_ssh_key.ci_key 2>/dev/null || true
+          terraform state rm hcloud_ssh_key.ci_key[0] 2>/dev/null || true
+          echo "Stale resources removed from state"
+
+      - name: Delete existing Cloudflare rate limit ruleset (prevents 'already exists' error)
+        if: inputs.provider == 'cloudflare' && inputs.mode == 'apply'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          DOMAIN="${TF_VAR_domain}"
+          ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['result'][0]['id'])" 2>/dev/null || true)
+          RULESET_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+            python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          for rs in d.get('result', []):
+              if rs.get('phase') == 'http_ratelimit':
+                  print(rs['id'])
+          " 2>/dev/null)
+          if [[ -n "$RULESET_ID" ]]; then
+            echo "Deleting existing rate limit ruleset: $RULESET_ID"
+            curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/$RULESET_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
+              python3 -c "import json,sys; d=json.load(sys.stdin); print('Result:', 'OK' if d.get('success') else 'FAIL')" 2>/dev/null || true
+          else
+            echo "No existing rate limit ruleset — nothing to delete"
+          fi
+
+      - name: Terraform ${{ inputs.mode }}
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          MODE_FLAG=""
+          [ "${{ inputs.mode }}" = "refresh-only" ] && MODE_FLAG="-refresh-only"
+          if [ "${{ inputs.provider }}" = "aws" ]; then
+            case "${{ inputs.workspace }}" in
+              prod)    SSH_KEY_SECRET="${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ;;
+              dev-aws) SSH_KEY_SECRET="${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ;;
+              *)       echo "::error::Unknown workspace ${{ inputs.workspace }} for AWS provider"; exit 1 ;;
+            esac
+            echo "$SSH_KEY_SECRET" > /tmp/key.pub
+            terraform apply -auto-approve -input=false $MODE_FLAG \
+              -var="ssh_public_key_path=/tmp/key.pub" \
+              -var="environment=${{ inputs.workspace }}"
+          elif [ "${{ inputs.provider }}" = "cloudflare" ]; then
+            terraform apply -auto-approve -input=false $MODE_FLAG
+          else
+            terraform apply -auto-approve -input=false $MODE_FLAG \
+              -var="environment=${{ inputs.workspace }}"
+          fi
+
+      - name: Write job summary
+        if: always()
+        run: |
+          MODE="${{ inputs.mode }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Terraform ${MODE} ${RESULT}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Provider** | ${{ inputs.provider }} |" >> "$M"
+          echo "| **Workspace** | ${{ inputs.workspace }} |" >> "$M"
+          echo "| **Mode** | ${MODE} |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"

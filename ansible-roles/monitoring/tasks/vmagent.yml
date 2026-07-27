@@ -1,0 +1,96 @@
+---
+- name: Check if vmagent is enabled (has Grafana Cloud credentials)
+  ansible.builtin.set_fact:
+    _vmagent_enabled: "{{ monitoring_vmagent_enabled and grafana_cloud_url | length > 0 }}"
+
+- name: Install/Upgrade vmagent
+  ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: vmagent
+    monitor_bin_path: /usr/local/bin/vmagent
+    monitor_version: "{{ monitoring_vmagent_version }}"
+    monitor_download_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}.tar.gz"
+    monitor_extracted_binary: /tmp/vmagent-prod
+    monitor_extracted_dir: /tmp/vmagent-prod
+  when: _vmagent_enabled
+
+- name: Create vmagent user
+  ansible.builtin.user:
+    name: vmagent
+    system: true
+    create_home: false
+    shell: /bin/false
+  become: true
+  when: _vmagent_enabled
+
+- name: Create vmagent directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: vmagent
+    group: vmagent
+    mode: "0755"
+  become: true
+  loop:
+    - /etc/vmagent
+    - /var/lib/vmagent
+  when: _vmagent_enabled
+
+- name: Deploy vmagent credentials file
+  ansible.builtin.copy:
+    dest: /etc/vmagent/credentials.env
+    content: |
+      VM_CLOUD_URL={{ grafana_cloud_url }}/api/prom/push
+      VM_CLOUD_USER={{ grafana_cloud_username }}
+      VM_CLOUD_PASS={{ grafana_cloud_token }}
+    owner: vmagent
+    group: vmagent
+    mode: "0600"
+  become: true
+  no_log: true
+  notify: Restart vmagent
+  when: _vmagent_enabled
+
+- name: Deploy vmagent password file (hidden from /proc)
+  ansible.builtin.copy:
+    dest: /etc/vmagent/password.txt
+    content: "{{ grafana_cloud_token }}"
+    owner: vmagent
+    group: vmagent
+    mode: "0600"
+  become: true
+  no_log: true
+  notify: Restart vmagent
+  when: _vmagent_enabled
+
+- name: Deploy vmagent scrape config
+  ansible.builtin.include_tasks: _deploy_scrape.yml
+  vars:
+    _scrape_dest: /etc/vmagent/scrape.yml
+    _scrape_notify: Restart vmagent
+    _scrape_interval: "{{ monitoring_scrape_interval }}"
+  when: _vmagent_enabled
+
+- name: Deploy vmagent systemd service
+  ansible.builtin.template:
+    src: vmagent.service.j2
+    dest: /etc/systemd/system/vmagent.service
+    mode: "0644"
+  become: true
+  notify: Restart vmagent
+  when: _vmagent_enabled
+
+- name: Check if vmagent binary exists (was installed previously)
+  ansible.builtin.stat:
+    path: /usr/local/bin/vmagent
+  register: _vmagent_binary
+  when: not _vmagent_enabled
+
+- name: Stop and disable vmagent if disabled
+  ansible.builtin.systemd:
+    name: vmagent
+    state: stopped
+    enabled: false
+  become: true
+  failed_when: false
+  when: not _vmagent_enabled and _vmagent_binary is defined and _vmagent_binary.stat.exists

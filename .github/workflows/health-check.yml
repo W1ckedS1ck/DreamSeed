@@ -1,0 +1,274 @@
+name: "[B] Security Update"
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [prod, prod-hetz, dev-hetz, dev-aws]
+        default: prod
+
+concurrency:
+  group: health-check-${{ github.event_name == 'schedule' && 'prod-hetz' || inputs.target }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  update:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ github.event_name == 'schedule' && fromJSON('["prod-hetz"]') || fromJSON(format('["{0}"]', inputs.target)) }}
+    name: Update ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: 🚀 Start
+        run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: Mask secrets
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT: ${{ secrets.VAULT_PASSWORD }}
+        run: |
+          for v in "$TG_TOKEN" "$TG_CHAT_ID" "$TG_THREAD_ID" "$SSH_KEY" "$VAULT"; do
+            [ -n "$v" ] && echo "::add-mask::$v" || true
+          done
+
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/setup-secrets
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+
+      - name: Resolve server IP
+        id: server-ip
+        run: |
+          ENV="${{ matrix.target }}"
+          case "$ENV" in
+            prod)
+              IP="${{ secrets.PROD_EIP }}"
+              if [[ "$IP" == eipalloc-* ]]; then
+                export AWS_ACCESS_KEY_ID="${{ secrets.PROD_ACCESS_KEY }}"
+                export AWS_SECRET_ACCESS_KEY="${{ secrets.PROD_SECRET_KEY }}"
+                export AWS_DEFAULT_REGION="${{ secrets.PROD_REGION }}"
+                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
+                     --query 'Addresses[0].PublicIp' --output text)
+              fi
+              DOMAIN="dreamseed.online"
+              ;;
+            prod-hetz)
+              export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_WORKSPACE="prod-hetz"
+              cd terraform/hetzner
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
+              DOMAIN="dreamseed.online"
+              ;;
+            dev-hetz)
+              export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_WORKSPACE="dev-hetz"
+              cd terraform/hetzner
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
+              DOMAIN="hetz.vitalikuts.online"
+              ;;
+            dev-aws)
+              IP="${{ secrets.DEV_AWS_EIP }}"
+              if [[ "$IP" == eipalloc-* ]]; then
+                export AWS_ACCESS_KEY_ID="${{ secrets.DEV_AWS_ACCESS_KEY }}"
+                export AWS_SECRET_ACCESS_KEY="${{ secrets.DEV_AWS_SECRET_KEY }}"
+                export AWS_DEFAULT_REGION="${{ secrets.DEV_AWS_REGION }}"
+                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
+                     --query 'Addresses[0].PublicIp' --output text)
+              fi
+              DOMAIN="aws.vitalikuts.online"
+              ;;
+          esac
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+
+      - name: Update all packages
+        id: update
+        run: |
+          set +e
+          IP="${{ steps.server-ip.outputs.ip }}"
+          SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
+
+          $SSH "true" 2>/dev/null
+          if [ $? -ne 0 ]; then
+            echo "::notice::SSH unreachable"
+            echo "status=unreachable" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "=== Before: available updates ==="
+          BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
+          TOTAL=$(echo "$BEFORE" | grep -c .)
+          SECURITY=$($SSH "apt list --upgradable 2>/dev/null | grep -c '\-security' || true")
+          echo "Total: $TOTAL ($SECURITY security)"
+
+          echo "=== Running apt upgrade ==="
+          RESULT=$($SSH "DEBIAN_FRONTEND=noninteractive sudo apt-get update -qq && DEBIAN_FRONTEND=noninteractive sudo apt upgrade -y 2>&1")
+          echo "$RESULT" | grep -E "^(Setting up|Preparing to unpack|Unpacking|^[0-9]+ upgraded)"
+          UPGRADED=$(echo "$RESULT" | grep -oP '^(\d+) upgraded' || echo "0 upgraded")
+          echo "$UPGRADED"
+
+          echo "=== After: remaining updates ==="
+          AFTER=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
+          AFTER_COUNT=$(echo "$AFTER" | grep -c .)
+          echo "Remaining: $AFTER_COUNT"
+
+          echo "=== Reboot required ==="
+          if $SSH "test -f /var/run/reboot-required" 2>/dev/null; then
+            REBOOT_LIST=$($SSH "cat /var/run/reboot-required.pkgs 2>/dev/null")
+            echo "REBOOT REQUIRED"
+            echo "$REBOOT_LIST" | sed 's/^/- /'
+            echo "reboot=yes" >> "$GITHUB_OUTPUT"
+            echo "reboot_list<<EOF" >> "$GITHUB_ENV"
+            echo "$REBOOT_LIST" >> "$GITHUB_ENV"
+            echo "EOF" >> "$GITHUB_ENV"
+          else
+            echo "No reboot needed"
+            echo "reboot=no" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "=== Services check ==="
+          for svc in nginx apache2 php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
+            if $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active; then
+              echo "[OK] $svc"
+              [ "$svc" = "nginx" ] || [ "$svc" = "apache2" ] && WEB_OK=1
+            fi
+          done
+          [ -n "$WEB_OK" ] || echo "[FAIL] web server (neither nginx nor apache2 active)"
+
+          UPDATED_NUM=$(echo "$UPGRADED" | grep -oP '^\d+' || echo "0")
+          UPDATED_LIST=$(echo "$RESULT" | grep "^Setting up " | sed 's/Setting up //;s/ (.*\.\.\.)//')
+
+          echo "status=ok" >> "$GITHUB_OUTPUT"
+          echo "before=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "security=$SECURITY" >> "$GITHUB_OUTPUT"
+          echo "updated=$UPDATED_NUM" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER_COUNT" >> "$GITHUB_OUTPUT"
+          if [ -n "$UPDATED_LIST" ]; then
+            echo "UPDATED_LIST<<EOF" >> "$GITHUB_ENV"
+            echo "$UPDATED_LIST" >> "$GITHUB_ENV"
+            echo "EOF" >> "$GITHUB_ENV"
+          fi
+
+      - name: Update Cloudflare real IP ranges
+        run: |
+          IP="${{ steps.server-ip.outputs.ip }}"
+          SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
+          RESULT=$($SSH "sudo /usr/local/bin/update_cloudflare_ips.sh" 2>&1 || true)
+          echo "$RESULT"
+          if echo "$RESULT" | grep -q "updated"; then
+            echo "cloudflare_ips=updated" >> "$GITHUB_OUTPUT"
+          else
+            echo "cloudflare_ips=unchanged" >> "$GITHUB_OUTPUT"
+          fi
+        id: cfips
+
+      - name: Notify
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+        run: |
+          STATUS="${{ steps.update.outputs.status }}"
+          DOMAIN="${{ steps.server-ip.outputs.domain }}"
+          U="${{ steps.update.outputs.updated }}"
+          AFTER="${{ steps.update.outputs.after }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+
+          N=$'\n'
+          REBOOT="${{ steps.update.outputs.reboot }}"
+          if [ "$REBOOT" = "yes" ]; then
+            TG_REBOOT="${N}⚠️ Reboot required"
+          else
+            TG_REBOOT=""
+          fi
+
+          if [ "$STATUS" = "unreachable" ]; then
+            MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
+          elif [ "$U" = "0" ] && [ "$AFTER" = "0" ]; then
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
+          else
+            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
+          fi
+
+          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+          curl -s -X POST "$TG_URL" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=Markdown" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          DOMAIN="${{ steps.server-ip.outputs.domain }}"
+          IP="${{ steps.server-ip.outputs.ip }}"
+          STATUS="${{ steps.update.outputs.status }}"
+          BEFORE="${{ steps.update.outputs.before }}"
+          AFTER="${{ steps.update.outputs.after }}"
+          SECURITY="${{ steps.update.outputs.security }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Weekly Server Update — ${{ matrix.target }}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Domain** | ${DOMAIN} |" >> "$M"
+          echo "| **Server** | ${IP} |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Status** | ${STATUS} |" >> "$M"
+          echo "| **Updated** | ${{ steps.update.outputs.updated }} packages |" >> "$M"
+          echo "| **Security** | ${SECURITY:-?} |" >> "$M"
+          echo "| **Remaining** | ${AFTER:-?} |" >> "$M"
+          echo "| **Reboot** | ${{ steps.update.outputs.reboot }} |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+          echo "" >> "$M"
+          if [ -n "$UPDATED_LIST" ]; then
+            echo "### Updated packages" >> "$M"
+            echo '```' >> "$M"
+            echo "$UPDATED_LIST" >> "$M"
+            echo '```' >> "$M"
+          fi
+          if [ -n "$REBOOT_LIST" ]; then
+            echo "### Reboot required" >> "$M"
+            echo '```' >> "$M"
+            echo "$REBOOT_LIST" >> "$M"
+            echo '```' >> "$M"
+          fi
+
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          rm -f ~/.ssh/deploy_key.pub

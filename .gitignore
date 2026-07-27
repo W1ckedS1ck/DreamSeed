@@ -1,0 +1,52 @@
+# ─── Secrets & credentials ───────────────────────────────────────────
+secrets/
+.env
+.env.local
+*.pem
+*.key
+
+# ─── Terraform ────────────────────────────────────────────────────────
+*.tfstate*
+*.tfplan
+*.tfplan.json
+.terraform/
+crash.log
+override.tf
+override.tf.json
+terraform/*/terraform.tfvars*
+
+# ─── Ansible ──────────────────────────────────────────────────────────
+*.retry
+ansible/inventory/hosts-*.yml
+.ansible/
+
+# ─── Agent / tool local state ─────────────────────────────────────────
+.claude/
+.opencode/
+.codemie/
+
+# ─── Logs ─────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ─── Editors & OS ─────────────────────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+*.sw?
+*~
+*.service
+
+# ─── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+.ruff_cache/
+venv/
+.venv/
+
+# ─── Internal docs & audit ───────────────────────────────────────────
+CLAUDE.md
+docs/private/
+AUDIT_*
+vanilla/
+secrets/ssl/

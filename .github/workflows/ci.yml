@@ -1,0 +1,228 @@
+name: "⚡ CI"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, dev]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+env:
+  TFLINT_VERSION: "v0.64.0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  ARTIFACT_RETENTION_DAYS: 30
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: 🚀 Start
+        run: echo "ShellCheck started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          scandir: '.'
+          severity: error
+          ignore_paths: >-
+            .git
+
+  ansible-lint:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: 🚀 Start
+        run: echo "Ansible Lint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.x'
+          cache: pip
+          cache-dependency-path: ansible/requirements-deploy.txt
+      - name: Run ansible-lint
+        run: |
+          pip install -r ansible/requirements-deploy.txt --quiet
+          bash scripts/lint.sh --ci --ansible-lint
+
+  j2lint:
+    name: Jinja2 Templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: 🚀 Start
+        run: echo "Jinja2 Lint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.x'
+
+      - name: Lint Jinja2 templates
+        run: |
+          pip install j2lint==1.2.0 --quiet
+          bash scripts/lint.sh --ci --j2lint
+
+  terraform-checks:
+    name: Terraform Lint + Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: 🚀 Start
+        run: echo "Terraform checks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - uses: ./.github/actions/setup-terraform
+      - uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+          cache: true
+      - name: Check terraform formatting
+        run: terraform fmt -check -recursive terraform/
+      - name: Run tflint
+        run: bash scripts/lint.sh --ci --tflint
+      - name: Validate all providers
+        run: bash scripts/lint.sh --ci --validate-terraform
+
+  checkov:
+    name: IaC Compliance (Checkov)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: 🚀 Start
+        run: echo "Checkov started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@7b972723c44fb3d256283fac96fae5d7c1894bb7 # v12.3114.0
+        with:
+          directory: terraform
+          framework: terraform
+          quiet: true
+          soft_fail: false
+          skip_check: CKV_AWS_260,CKV2_AWS_41
+
+  trivy:
+    name: Terraform Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: 🚀 Start
+        run: echo "Trivy started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/trivy
+          key: trivy-${{ runner.os }}-${{ hashFiles('terraform/**/*.tf', 'terraform/**/*.hcl', 'terraform/**/*.tftpl') }}
+          restore-keys: trivy-${{ runner.os }}-
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: terraform
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+
+  gitleaks:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: 🚀 Start
+        run: echo "Gitleaks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
+            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
+             sudo tar -xz -C /usr/local/bin gitleaks)
+      - name: Secret Scan (full history)
+        run: bash scripts/lint.sh --ci --gitleaks-full-history
+
+  actionlint:
+    name: GitHub Actions Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: 🚀 Start
+        run: echo "Actionlint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Run actionlint
+        uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
+        with:
+          args: -shellcheck=
+
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: 🚀 Start
+        run: echo "Pre-commit started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.x'
+          cache: pip
+          cache-dependency-path: ansible/requirements-deploy.txt
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.npm
+          key: npm-renovate-${{ runner.os }}-${{ hashFiles('renovate.json') }}
+          restore-keys: npm-renovate-${{ runner.os }}-
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/pre-commit
+          key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: precommit-${{ runner.os }}-
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
+            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
+             sudo tar -xz -C /usr/local/bin gitleaks)
+      - name: Install pre-commit system deps
+        run: |
+          # actionlint
+          curl -sL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | \
+            sudo tar -xz -C /usr/local/bin actionlint
+
+          # j2lint
+          pip install j2lint --quiet
+
+          # Terraform (v1.15.5 — matching CI env)
+          curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_amd64.zip"
+          sudo unzip -o /tmp/terraform.zip -d /usr/local/bin > /dev/null 2>&1
+
+          # tflint (v0.63.1 — matching CI env)
+          curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.63.1/tflint_linux_amd64.zip"
+          sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
+          tflint --init --config .tflint.hcl 2>/dev/null || true
+
+          # ansible-lint
+          pip install ansible-core ansible-lint --quiet
+      - name: Run pre-commit hooks (changed files only)
+        run: |
+          pip install pre-commit
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            REF="origin/${{ github.base_ref }}"
+          else
+            REF="HEAD~1"
+          fi
+          if git rev-parse "$REF" &>/dev/null; then
+            pre-commit run --from-ref "$REF" --to-ref HEAD --show-diff-on-failure
+          else
+            pre-commit run --all-files --show-diff-on-failure
+          fi
+      - name: Validate Renovate config
+        run: npx --yes --package renovate -- renovate-config-validator

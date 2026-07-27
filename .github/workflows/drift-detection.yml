@@ -1,0 +1,197 @@
+name: "[B] Drift Detection"
+
+on:
+  push:
+    branches: [main, dev/**]
+  schedule:
+    - cron: '5 7 * * *'  # 07:05 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: drift-detection-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  detect-drift:
+    name: Detect drift — ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: ${{ matrix.provider == 'dev' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: prod-hetz
+            tf_dir: terraform/hetzner
+            tf_workspace: prod-hetz
+            environment: prod-hetz
+            provider: prod
+          - target: dev-aws
+            tf_dir: terraform/aws
+            tf_workspace: dev-aws
+            environment: dev-aws
+            provider: dev
+          - target: dev-hetz
+            tf_dir: terraform/hetzner
+            tf_workspace: dev-hetz
+            environment: dev-hetz
+            provider: dev
+          - target: cloudflare
+            tf_dir: terraform/cloudflare
+            tf_workspace: cloudflare
+            environment: cloudflare
+            provider: prod
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      TF_WORKSPACE: ${{ matrix.tf_workspace }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: 🚀 Start
+        run: echo "Drift detection started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: Mask secrets
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+        run: |
+          for v in "$TG_TOKEN" "$TG_CHAT_ID" "$TG_THREAD_ID"; do
+            [ -n "$v" ] && echo "::add-mask::$v" || true
+          done
+
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Set up credentials
+        run: |
+          case "${{ matrix.target }}" in
+            dev-aws)
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_aws_region=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=dev-aws" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
+              ;;
+            prod-hetz)
+              echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=prod-hetz" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx33" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:206
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+              echo "TF_VAR_enable_primary_ip=true" >> "$GITHUB_ENV"
+              ;;
+            dev-hetz)
+              echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
+              echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:169
+              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+              ;;
+            cloudflare)
+              echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_domain=dreamseed.online" >> "$GITHUB_ENV"
+              ;;
+          esac
+
+      - name: Create dummy SSH key for plan
+        if: contains(matrix.target, 'aws')
+        run: ssh-keygen -t rsa -b 4096 -f /tmp/ssh -N "" -C "drift-test" || true
+
+      - name: Terraform Init
+        working-directory: ${{ matrix.tf_dir }}
+        run: terraform init
+
+      - name: Detect Drift
+        id: plan
+        working-directory: ${{ matrix.tf_dir }}
+        run: |
+          PLAN_FILE="/tmp/${{ matrix.target }}.tfplan"
+
+          # Remote backends (Cloudflare) don't support -out; detect by checking backend type
+          if grep -q 'backend "remote"' *.tf 2>/dev/null; then
+            # For remote backends, just run plan without -out
+            terraform plan -detailed-exitcode -no-color 2>&1 | tee /tmp/plan.log
+            rc=$?
+            CHANGES=$(grep -c "^  #" /tmp/plan.log || echo "0")
+          else
+            # For local backends, save plan to file
+            terraform plan -detailed-exitcode -no-color \
+              -out="$PLAN_FILE" 2>&1 | tee /tmp/plan.log
+            rc=${PIPESTATUS[0]}
+            CHANGES=$(terraform show -json "$PLAN_FILE" | jq '[.resource_changes[] | select(.change.actions != ["no-op"])] | length' 2>/dev/null || echo "0")
+          fi
+
+          if [ "$rc" -eq 1 ]; then
+            echo "::error::Terraform plan failed for ${{ matrix.target }} — check credentials, state, or provider."
+            exit 1
+          fi
+
+          if [ "$CHANGES" -gt 0 ]; then
+            echo "has_drift=true" >> "$GITHUB_OUTPUT"
+            echo "changes=$CHANGES" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_drift=false" >> "$GITHUB_OUTPUT"
+            echo "changes=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show plan details
+        if: steps.plan.outputs.has_drift == 'true'
+        working-directory: ${{ matrix.tf_dir }}
+        run: |
+          echo "## Drift Details for ${{ matrix.target }}"
+          # For remote backends, show from log; for local, parse plan file
+          if grep -q 'backend "remote"' *.tf 2>/dev/null; then
+            cat /tmp/plan.log | grep -E "^  #|^  +" | head -20
+          else
+            terraform show -json "/tmp/${{ matrix.target }}.tfplan" | jq '.resource_changes[] | select(.change.actions != ["no-op"]) | {address: .address, actions: .change.actions}' 2>/dev/null || true
+          fi
+
+      - name: Report and notify drift (prod only)
+        if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'prod'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "::error::Infrastructure drift detected on ${{ matrix.target }}! Review the plan output above."
+          MSG="🔴 *Drift detected* — ${{ matrix.target }}
+          Changes: ${{ steps.plan.outputs.changes }}
+          🔗 $RUN_URL
+          📅 $(date '+%Y-%m-%d %H:%M')"
+          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+          curl -s -X POST "$TG_URL" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=Markdown" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+          exit 1
+
+      - name: Log drift (dev — no fail)
+        if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'dev'
+        run: |
+          echo "::notice::Drift detected on ${{ matrix.target }} (dev) — ${{ steps.plan.outputs.changes }} changes. Not failing CI."
+
+      - name: Write job summary
+        if: always()
+        run: |
+          DRIFT="${{ steps.plan.outputs.has_drift }}"
+          CHANGES="${{ steps.plan.outputs.changes }}"
+          STATUS="${DRIFT:+⚠️ Drift ($CHANGES changes)}"
+          STATUS="${STATUS:-✅ No drift}"
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Drift Detection — ${{ matrix.target }}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Status** | ${STATUS} |" >> "$M"
+          echo "| **Provider** | ${{ matrix.provider }} |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"

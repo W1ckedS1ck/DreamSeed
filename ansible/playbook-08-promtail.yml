@@ -1,0 +1,9 @@
+---
+- name: 08 Promtail
+  hosts: dreamseed
+  become: false
+  gather_facts: false
+
+  roles:
+    - role: promtail
+      when: loki_url | length > 0

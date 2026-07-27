@@ -1,0 +1,7 @@
+---
+- name: Reload systemd and restart apache
+  become: true
+  ansible.builtin.systemd:
+    name: apache2
+    state: restarted
+    daemon_reload: true

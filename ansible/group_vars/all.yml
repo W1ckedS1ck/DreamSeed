@@ -1,0 +1,126 @@
+---
+# ========================
+#  General
+# ========================
+ansible_python_interpreter: /usr/bin/python3
+domain: "{{ lookup('env', 'DEPLOY_DOMAIN') | mandatory('domain required — run via deploy.sh or pass -e domain=...') }}"
+admin_email: "hello@dreamseed.online"
+web_server: "nginx"
+
+# ========================
+#  Database
+# ========================
+db_name: "modx_db"
+db_user: "modx_user"
+db_prefix: "modx_"
+db_pass: "{{ lookup('env', 'DB_PASS') | mandatory('DB_PASS environment variable is required') }}"
+db_min_tables: 100
+
+# ========================
+#  PHP
+# ========================
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}"
+
+# ========================
+#  Redis
+# ========================
+# Redis intentionally without password: bind 127.0.0.1 only, single-server setup.
+# Password would not stop local attacker (already owns the box).
+redis_password: "{{ lookup('env', 'REDIS_PASSWORD') | default('', true) }}"
+
+# ========================
+#  Backup
+# ========================
+# DESIGN NOTE: Dev environments have NO independent backup pipeline.
+# The restore role always pulls from prod paths. Dev uploads go to
+# *-dev/ cloud paths but are never consumed by any restore flow.
+# This is intentional — dev is an ephemeral copy of prod, not a
+# standalone environment with its own data lifecycle.
+backup_cron_enabled: true
+backup_project_keep: 5
+backup_db_keep: 15
+cloud_project_keep: 10
+cloud_db_keep: 100
+
+# ========================
+#  Cloudflare
+# ========================
+cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+
+# ========================
+#  Monitoring (Grafana + VictoriaMetrics)
+# ========================
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.1.1', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
+grafana_port: 3000
+monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.12.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
+monitoring_nginx_version: "{{ lookup('env', 'MONITORING_NGINX_VERSION') | default('1.5.1', true) }}" # renovate: depName=nginxinc/nginx-prometheus-exporter datasource=github-releases
+monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | default('1.1.1', true) }}" # renovate: depName=Lusitaniae/apache_exporter datasource=github-releases
+monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.19.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
+monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.148.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.148.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.86.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
+loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
+loki_username: "{{ lookup('env', 'LOKI_USERNAME') | default('', true) }}"
+
+vm_retention: 3
+monitoring_cron_enabled: true
+monitoring_vmagent_enabled: true
+monitoring_scrape_interval: "15s"
+grafana_telegram_token: "{{ lookup('env', 'TG_TOKEN') }}"
+grafana_telegram_chat_id: "{{ lookup('env', 'TG_CHAT_ID') }}"
+grafana_telegram_thread_id: "{{ lookup('env', 'TG_THREAD_ID') | default('', true) }}"
+grafana_cloud_url: "{{ lookup('env', 'GRAFANA_CLOUD_URL') | default('', true) }}"
+grafana_cloud_username: "{{ lookup('env', 'GRAFANA_CLOUD_USERNAME') | default('', true) }}"
+# Grafana Cloud authentication token (used by monitoring and logging services)
+grafana_cloud_token: "{{ lookup('env', 'GRAFANA_CLOUD_TOKEN') | default('', true) }}"
+
+# ========================
+#  MODX cache settings
+# ========================
+modx_cache_db: "0"
+modx_cache_db_session: "1"
+
+
+# ========================
+#  Directories
+# ========================
+web_root: "/var/www/html"
+backup_dir: "/home/ubuntu/backups"
+scripts_dir_remote: "/home/ubuntu/Scripts"
+scripts_dir: "{{ playbook_dir }}/../scripts"
+secrets_dir: "{{ playbook_dir }}/../secrets"
+
+# ========================
+#  Environment
+# ========================
+deploy_env: "{{ lookup('env', 'DEPLOY_ENV') | mandatory('DEPLOY_ENV required — run via deploy.sh or pass -e deploy_env=...') }}"
+
+# ========================
+#  Hardware
+# ========================
+swap_size: "2G"
+modx_cache_tmpfs_size: "128M"
+
+# ========================
+#  Security
+# ========================
+additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per line)
+
+# ========================
+#  Frontend Observability (Faro — RUM)
+# ========================
+faro_enabled: true
+faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
+faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
+faro_sdk_version: "2.8.2"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
+
+# ========================
+#  SSL
+# ========================
+ssl_cf_dns_enabled: true  # false → skip certbot DNS-01, use self-signed (for test servers)
+
+# ========================
+#  Backup encryption (rclone crypt)
+# ========================
+rclone_crypt_password: "{{ lookup('env', 'RCLONE_CRYPT_PASSWORD') | default('', true) }}"

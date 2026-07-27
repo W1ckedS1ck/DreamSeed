@@ -1,0 +1,8 @@
+---
+- name: 05 Monitoring
+  hosts: dreamseed
+  become: false
+  gather_facts: false
+
+  roles:
+    - monitoring

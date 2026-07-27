@@ -1,0 +1,21 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "grafana-cloud-sa-token"
+description = "Grafana Cloud Service Account Token (glsa_)"
+regex = '''glsa_[A-Za-z0-9_-]{36}_[A-Za-z0-9_]{8,10}'''
+tags = ["grafana", "secret"]
+
+[[rules]]
+id = "grafana-sm-api-key"
+description = "Grafana Synthetic Monitoring API Key (JWT)"
+regex = '''eyJrIjoi[A-Za-z0-9_-]{40,}={0,2}'''
+tags = ["grafana", "secret"]
+
+[allowlist]
+paths = [
+  '''\.claude/''',
+  '''\.terraform\.lock\.hcl''',
+  '''secrets/''',
+]

@@ -1,0 +1,32 @@
+---
+- name: 02 Web Server (Nginx/Apache + PHP + SSL)
+  hosts: dreamseed
+  become: false
+  gather_facts: true
+
+  tasks:
+    - name: Configure Nginx
+      ansible.builtin.include_role:
+        name: nginx
+      when: web_server == "nginx"
+    - name: Configure Apache HTTP
+      ansible.builtin.include_role:
+        name: apache_http
+      when: web_server == "apache"
+    - name: SSL certs
+      ansible.builtin.include_role:
+        name: ssl
+    - name: Configure Nginx SSL
+      ansible.builtin.include_role:
+        name: nginx-ssl
+      when: web_server == "nginx"
+    - name: Configure Apache SSL
+      ansible.builtin.include_role:
+        name: apache_ssl
+      when: web_server == "apache"
+    - name: Redis
+      ansible.builtin.include_role:
+        name: redis
+    - name: PHP
+      ansible.builtin.include_role:
+        name: php

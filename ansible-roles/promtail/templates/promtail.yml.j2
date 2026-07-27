@@ -1,0 +1,119 @@
+server:
+  http_listen_address: 127.0.0.1
+  http_listen_port: 9080
+  grpc_listen_address: 127.0.0.1
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yml
+
+clients:
+  - url: {{ loki_url }}
+    batchwait: 2s
+    basic_auth:
+      username: ${LOKI_USERNAME}
+      password: ${LOKI_PASSWORD}
+
+scrape_configs:
+  - job_name: nginx-access
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] "(?P<method>\S+) (?P<uri>\S+)(?: \S+)?" (?P<status>\d{3}) (?P<bytes>[0-9-]+) "(?P<referrer>[^"]*)" "(?P<user_agent>[^"]*)"$
+      # Only bounded-cardinality fields go to labels.
+      # High-cardinality values (ip, uri, bytes, referrer) stay in the log line
+      # and are searchable via LogQL line filters, e.g. {job="nginx"} |= "/manager/".
+      - labels:
+          method:
+          status:
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nginx
+          instance: {{ domain }}
+          type: access
+          __path__: /var/log/nginx/{{ domain }}*access*.log
+
+  - job_name: nginx-error
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} \[(?P<level>\w+)\] .*$
+      - labels:
+          level:
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nginx
+          instance: {{ domain }}
+          type: error
+          __path__: /var/log/nginx/{{ domain }}*error*.log
+
+  - job_name: php-fpm
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\[\d{2}/\w{3}/\d{4} \d{2}:\d{2}:\d{2}\] (?P<level>\w+):.*$
+      - labels:
+          level:
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: php-fpm
+          instance: {{ domain }}
+          __path__: /var/log/php*-fpm.log
+
+  - job_name: syslog
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - regex:
+          expression: >-
+            (?:level=(?P<level>\w+)|(?P<level2>error|warn|info|debug|notice|crit|alert|emerg)[ :])
+      - labels:
+          process:
+          level:
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: system
+          instance: {{ domain }}
+          __path__: /var/log/syslog
+
+  - job_name: auth-log
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^(?P<timestamp>\w{3}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<process>[\w/-]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$
+      - regex:
+          expression: >-
+            (?:level=(?P<level>\w+)|(?P<level2>error|warn|info|debug|notice|crit|alert|emerg)[ :])
+      - labels:
+          process:
+          level:
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: system
+          instance: {{ domain }}
+          type: auth
+          __path__: /var/log/auth.log
+
+  - job_name: fail2ban
+    pipeline_stages:
+      - regex:
+          expression: >-
+            ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \S+\s*\[\d+\]: (?P<level>\S+)\s+\[(?P<jail>\S+)\]\s+(?P<action_kind>\w+)\s+(?P<ip>\S+)?.*$
+      # ip is high-cardinality — keep it in the log line, not as a label.
+      # Search with: {job="fail2ban"} |= "1.2.3.4"
+      - labels:
+          jail:
+          action_kind:
+          level:
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: fail2ban
+          instance: {{ domain }}
+          __path__: /var/log/fail2ban.log

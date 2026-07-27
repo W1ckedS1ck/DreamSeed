@@ -1,0 +1,277 @@
+---
+# --- SSH Hardening ---
+- name: Remove old 99-hardening.conf (renamed to 00-hardening.conf)
+  become: true
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/99-hardening.conf
+    state: absent
+
+- name: Deploy SSH hardening config (00 prefix = first-wins priority)
+  become: true
+  ansible.builtin.template:
+    src: sshd-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart sshd
+
+- name: Validate sshd configuration
+  become: true
+  ansible.builtin.command: sshd -t
+  changed_when: false
+
+- name: Apply SSH hardening
+  ansible.builtin.meta: flush_handlers
+
+# --- Login Banner ---
+- name: Deploy legal login banner
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: |
+      WARNING: Unauthorized access to this system is prohibited.
+      All connections are monitored and recorded.
+      Disconnect immediately if you are not an authorized user.
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/issue
+    - /etc/issue.net
+
+# --- File Permissions ---
+- name: Restrict permissions on cron and sshd config files
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /etc/crontab, mode: "0600"}
+    - {path: /etc/cron.d, mode: "0700"}
+    - {path: /etc/cron.daily, mode: "0700"}
+    - {path: /etc/cron.hourly, mode: "0700"}
+    - {path: /etc/cron.weekly, mode: "0700"}
+    - {path: /etc/cron.monthly, mode: "0700"}
+    - {path: /etc/ssh/sshd_config, mode: "0600"}
+
+
+# --- Authorized Keys ---
+- name: Add additional SSH public keys
+  become: true
+  ansible.posix.authorized_key:
+    user: ubuntu
+    state: present
+    key: "{{ item }}"
+  loop: "{{ additional_ssh_keys | default([]) }}"
+
+# --- Fail2ban ---
+- name: Deploy custom MODX admin filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-modx-admin.filter
+    dest: /etc/fail2ban/filter.d/modx-admin.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Deploy DreamSeed botsearch filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-dreamseed-botsearch.filter
+    dest: /etc/fail2ban/filter.d/dreamseed-botsearch.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Deploy DreamSeed bad-request filter
+  become: true
+  ansible.builtin.copy:
+    src: fail2ban-dreamseed-bad-request.filter
+    dest: /etc/fail2ban/filter.d/dreamseed-bad-request.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Deploy custom Fail2ban jails
+  become: true
+  ansible.builtin.template:
+    src: fail2ban-custom.jail.j2
+    dest: /etc/fail2ban/jail.d/custom.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Fail2ban
+
+- name: Test Fail2ban config
+  become: true
+  ansible.builtin.command: fail2ban-client -t
+  register: fail2ban_test
+  changed_when: false
+  failed_when: fail2ban_test.rc != 0 and "Have not found any log file" not in fail2ban_test.stderr
+
+- name: Apply Fail2ban configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable Fail2ban
+  become: true
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: started
+    enabled: true
+
+# --- Kernel Hardening ---
+- name: Deploy sysctl hardening
+  become: true
+  ansible.builtin.template:
+    src: sysctl-hardening.conf.j2
+    dest: /etc/sysctl.d/99-z-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl
+
+# --- Core Dumps ---
+- name: Disable core dumps (limits)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-disable-core.conf
+    content: "* hard core 0\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Disable core dumps (sysctl)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-disable-core.conf
+    content: "fs.suid_dumpable = 0\n"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: Set password max age (90 days)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MAX_DAYS'
+    line: "PASS_MAX_DAYS\t90"
+
+- name: Set password min age (1 day)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MIN_DAYS'
+    line: "PASS_MIN_DAYS\t1"
+
+- name: Set password warn age (14 days)
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_WARN_AGE'
+    line: "PASS_WARN_AGE\t14"
+
+# --- MODX Security ---
+- name: Check if MODX config exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ web_root }}/core/config/config.inc.php"
+  register: modx_config_file
+
+- name: Secure MODX config (hide DB passwords)
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}/core/config/config.inc.php"
+    owner: root
+    group: www-data
+    mode: "0640"
+  when: modx_config_file.stat.exists
+
+- name: Create dreamseed config directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/dreamseed
+    state: directory
+    mode: "0755"
+
+- name: Check if MODX permissions already secured
+  become: true
+  ansible.builtin.stat:
+    path: /etc/dreamseed/.modx_secured
+  register: modx_secured_marker
+
+- name: Lock core/ to root:www-data (one-time recursive)
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}/core"
+    owner: root
+    group: www-data
+    mode: "u=rwX,g=rwX,o="
+    recurse: true
+  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
+
+- name: Ensure cache/logs stay writable by www-data
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: www-data
+    group: www-data
+    mode: "u=rwX,g=rwX,o="
+    state: directory
+  loop:
+    - "{{ web_root }}/core/cache"
+    - "{{ web_root }}/core/logs"
+  when: modx_config_file.stat.exists
+
+- name: Create MODX secured marker
+  become: true
+  ansible.builtin.file:
+    path: /etc/dreamseed/.modx_secured
+    state: touch
+    mode: "0644"
+  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
+
+# --- Unattended Upgrades ---
+# Package installed in packages_common (playbook-01)
+
+- name: Configure automatic security updates
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/50-dreamseed-unattended
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable unattended-upgrades timer
+  become: true
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    state: started
+    enabled: true
+
+# --- Developer Write Permissions ---
+- name: Add ubuntu user to www-data group
+  become: true
+  ansible.builtin.user:
+    name: ubuntu
+    groups: www-data
+    append: true
+
+- name: Set setgid so new files inherit www-data group
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}"
+    state: directory
+    mode: g+s

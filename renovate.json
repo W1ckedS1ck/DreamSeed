@@ -1,0 +1,178 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "labels": ["dependencies", "renovate"],
+  "schedule": ["on sunday before 6am"],
+  "configMigration": true,
+  "osvVulnerabilityAlerts": true,
+  "major": {
+    "dependencyDashboardApproval": true
+  },
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "custom.regex"],
+  "pip_requirements": {
+    "managerFilePatterns": [
+      "/^ansible/requirements\\.txt$/",
+      "/^ansible/requirements-deploy\\.txt$/"
+    ]
+  },
+  "ansible-galaxy": {
+    "managerFilePatterns": [
+      "/^ansible/requirements\\.yml$/"
+    ]
+  },
+
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track Ansible monitoring versions via inline comments",
+      "managerFilePatterns": [
+        "/^ansible/group_vars/all\\.yml$/"
+      ],
+      "matchStrings": ["default\\('(?<currentValue>[\\w.\\-]+)'[^#]*# renovate: depName=(?<depName>\\S+)\\s+datasource=(?<datasource>\\S+)"]
+    },
+    {
+      "customType": "regex",
+      "description": "Track Grafana Faro Web SDK version (both faro-web-sdk and faro-web-tracing share this version)",
+      "managerFilePatterns": [
+        "/^ansible/group_vars/all\\.yml$/"
+      ],
+      "matchStrings": ["faro_sdk_version: \"(?<currentValue>[\\w.\\-]+)\"\\s*# renovate: depName=(?<depName>\\S+)\\s+datasource=(?<datasource>\\S+)"]
+    },
+    {
+      "customType": "regex",
+      "description": "Track gitleaks version",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track tflint plugin versions (.tflint.hcl)",
+      "managerFilePatterns": [
+        "/^\\.tflint\\.hcl$/"
+      ],
+      "matchStrings": ["version = \"(?<currentValue>v?[\\w.\\-]+)\"\\s+# renovate: depName=(?<depName>\\S+)"],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track Terraform CLI version in setup-terraform action",
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-terraform/action\\.yml$/"
+      ],
+      "matchStrings": ["default: \"(?<currentValue>[\\w.\\-]+)\"\\s+# renovate: depName=hashicorp/terraform"],
+      "depNameTemplate": "hashicorp/terraform",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track tflint version in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>.*?)\""],
+      "depNameTemplate": "terraform-linters/tflint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track j2lint version in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["pip install j2lint==(?<currentValue>[\\w.\\-]+)"],
+      "depNameTemplate": "aristanetworks/j2lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track pre-commit hooks",
+      "managerFilePatterns": [
+        "/^\\.pre-commit-config\\.yaml$/"
+      ],
+      "matchStrings": ["repo: https://github\\.com/(?<depName>[^\\s]+)\\s*\\n\\s*rev: (?<currentValue>[^\\s]+)"],
+      "datasourceTemplate": "github-tags"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Pin GitHub Actions to commit SHAs for security",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      "description": "Auto-approve actions/checkout updates",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["actions/checkout"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Group VictoriaMetrics server and vmagent — always released together",
+      "matchPackageNames": ["VictoriaMetrics/VictoriaMetrics"],
+      "matchManagers": ["custom.regex"],
+      "groupName": "VictoriaMetrics",
+      "labels": ["dependencies", "monitoring"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Group and automerge non-major Terraform provider updates",
+      "matchManagers": ["terraform"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Terraform providers",
+      "labels": ["terraform", "update"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Major Terraform updates — separate PRs with review label",
+      "matchManagers": ["terraform"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["terraform", "major-update", "needs-review"]
+    },
+    {
+      "description": "Require approval for major GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Group and automerge non-major python dependencies",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Python pip packages",
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Automerge non-major GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Group and automerge dev & monitoring tool updates (non-major)",
+      "matchManagers": ["custom.regex"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "excludePackageNames": ["VictoriaMetrics/VictoriaMetrics"],
+      "groupName": "Dev & monitoring tools",
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    }
+  ]
+}

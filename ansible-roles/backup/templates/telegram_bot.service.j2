@@ -1,0 +1,13 @@
+[Unit]
+Description=DreamSeed Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart={{ scripts_dir_remote }}/telegram_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,247 @@
+---
+- name: Upload rclone config
+  ansible.builtin.include_tasks: ../restore/tasks/rclone_config.yml
+
+- name: Create root MySQL config for cron jobs
+  ansible.builtin.copy:
+    content: |
+      [client]
+      user=root
+      password={{ db_pass }}
+
+      [mysql]
+      user=root
+      password={{ db_pass }}
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Create backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - "{{ scripts_dir_remote }}"
+    - "{{ backup_dir }}/project"
+    - "{{ backup_dir }}/db"
+
+- name: Upload backup scripts
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/{{ item }}"
+    dest: "{{ scripts_dir_remote }}/{{ item }}"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - smart_backup.sh
+    - upload_backups_to_gdrive.sh
+    - verify_backups.sh
+    - RESTORE_ALL.sh
+    - send_report.sh
+    - common_functions.sh
+    - audit_deep.sh
+    - env_loader.py
+    - telegram_bot.py
+
+- name: Deploy Telegram bot systemd service
+  ansible.builtin.template:
+    src: telegram_bot.service.j2
+    dest: /etc/systemd/system/telegram-bot.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd and restart bot
+
+- name: Render server .env (whitelist only — no cloud credentials)
+  ansible.builtin.template:
+    src: server.env.j2
+    dest: "{{ scripts_dir_remote }}/.env"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  no_log: true
+
+- name: Enable bot service
+  ansible.builtin.systemd:
+    name: telegram-bot
+    enabled: yes
+    state: started
+    daemon_reload: true
+  become: true
+
+
+- name: Validate db_prefix format
+  ansible.builtin.assert:
+    that:
+      - db_prefix is regex('^[a-z0-9_]+$')
+    fail_msg: "Invalid db_prefix: {{ db_prefix }} (must be lowercase alphanumeric + underscore)"
+
+- name: Setup hourly backup cron
+  ansible.builtin.cron:
+    name: "DreamSeed hourly backup"
+    minute: "0"
+    job: "{{ scripts_dir_remote }}/smart_backup.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+  become: true
+
+- name: Setup hourly GDrive upload cron
+  ansible.builtin.cron:
+    name: "hourly gdrive upload"
+    minute: "5"
+    job: "{{ scripts_dir_remote }}/upload_backups_to_gdrive.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+  become: true
+
+- name: Setup daily report cron
+  ansible.builtin.cron:
+    name: "DreamSeed daily report"
+    minute: "30"
+    hour: "15"
+    job: "{{ scripts_dir_remote }}/send_report.sh daily"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+  become: true
+
+- name: Setup weekly report cron
+  ansible.builtin.cron:
+    name: "DreamSeed weekly report"
+    minute: "30"
+    hour: "18"
+    weekday: "0"
+    job: "{{ scripts_dir_remote }}/send_report.sh weekly"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+  become: true
+
+- name: Remove legacy session cleanup cron (disabled — Redis handles sessions)
+  ansible.builtin.cron:
+    name: "DreamSeed session cleanup"
+    minute: "42"
+    hour: "4"
+    job: >-
+      mysql -e
+      "DELETE FROM \`{{ db_name }}\`.\`{{ db_prefix | default('modx_') }}session\`
+      WHERE access < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 7 DAY));"
+      2>&1 | logger -t session-cleanup
+    user: root
+    state: absent
+
+- name: Setup backup verification cron (daily at 4:30 AM)
+  ansible.builtin.cron:
+    name: "DreamSeed backup verification"
+    minute: "30"
+    hour: "4"
+    job: "{{ scripts_dir_remote }}/verify_backups.sh"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+  become: true
+
+- name: Validate db_prefix format
+  ansible.builtin.assert:
+    that:
+      - db_prefix is regex('^[a-z0-9_]+$')
+    fail_msg: "Invalid db_prefix: {{ db_prefix }} (must be lowercase alphanumeric + underscore)"
+
+- name: Check MODX system_settings table
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = '{{ db_prefix }}system_settings'"
+  register: modx_check
+  become: true
+  failed_when: false
+
+- name: Update MODX session_gc_maxlifetime to 24 hours
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Clear session_handler_class (force PHP native handler → Redis)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      UPDATE `{{ db_name }}`.`{{ db_prefix }}system_settings`
+      SET `value` = ''
+      WHERE `key` = 'session_handler_class'
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Truncate MODX session table on deploy (clear stale sessions)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
+  become: true
+  register: truncate_result
+  failed_when: false
+  when:
+    - clear_sessions | default(true)
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Session table truncate result
+  ansible.builtin.debug:
+    msg: "Session table truncate: {{ 'skipped' if truncate_result.failed else 'ok' }} (table may not exist if using Redis sessions)"
+  when:
+    - clear_sessions | default(true)
+    - modx_check.query_result is defined
+
+- name: Set MODX database query caching (cache_db)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('cache_db', '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Set MODX session data caching (cache_db_session)
+  ansible.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_user: root
+    query: >
+      INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
+      VALUES ('cache_db_session', '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
+  become: true
+  when:
+    - modx_check.query_result is defined
+    - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
+- name: Push initial cron heartbeat to VictoriaMetrics
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      # VM may still be starting — retry across ~30s instead of blocking 90s
+      for i in $(seq 1 15); do
+        echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
+          curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
+        sleep 2
+      done
+  changed_when: false
+  args:
+    executable: /bin/bash

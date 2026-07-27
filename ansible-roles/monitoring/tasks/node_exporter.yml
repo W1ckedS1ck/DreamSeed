@@ -1,0 +1,38 @@
+---
+- name: Install/Upgrade Node Exporter
+  ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: node_exporter
+    monitor_bin_path: /usr/local/bin/node_exporter
+    monitor_version: "{{ monitoring_node_version }}"
+    monitor_download_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ monitoring_node_version }}/node_exporter-{{ monitoring_node_version }}.linux-amd64.tar.gz"
+    monitor_extracted_binary: "/tmp/node_exporter-{{ monitoring_node_version }}.linux-amd64/node_exporter"
+
+- name: Create node_exporter user
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    create_home: false
+    shell: /bin/false
+  become: true
+
+- name: Deploy Node Exporter service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Node Exporter
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=node_exporter
+      ExecStart=/usr/local/bin/node_exporter --web.listen-address=127.0.0.1:9100
+      Restart=always
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+  become: true
+  notify: Restart Node Exporter

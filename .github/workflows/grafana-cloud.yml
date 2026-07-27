@@ -1,0 +1,152 @@
+name: "[M] Grafana Cloud"
+
+on:
+  workflow_dispatch:
+    inputs:
+      workspace:
+        description: 'Workspace (prod or dev)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - prod
+          - dev
+
+concurrency:
+  group: grafana-cloud-${{ inputs.workspace }}
+  cancel-in-progress: false
+
+env:
+
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  plan-and-apply:
+    name: Grafana Cloud — ${{ inputs.workspace == 'prod' && '🔴 PRODUCTION' || '🟢 DEV' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: 🚀 Start
+        run: echo "Grafana Cloud workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: Mask secrets
+        env:
+          SA_PROD: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          SA_DEV: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+          TOKEN_PROD: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          TOKEN_DEV: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
+          SM_PROD: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
+        run: |
+          for v in "$SA_PROD" "$SA_DEV" "$TOKEN_PROD" "$TOKEN_DEV" "$SM_PROD"; do
+            [ -n "$v" ] && echo "::add-mask::$v" || true
+          done
+
+      - uses: ./.github/actions/setup-terraform
+        with:
+          cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Set TF_WORKSPACE
+        env:
+          WORKSPACE_INPUT: ${{ inputs.workspace }}
+        run: |
+          echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
+
+      - name: Write terraform.tfvars.json
+        working-directory: terraform/grafana
+        env:
+          WORKSPACE_INPUT: ${{ inputs.workspace }}
+          PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+        run: |
+          if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
+            TOKEN="${PROD_SA_TOKEN:-$PROD_TOKEN}"
+            SM_TOKEN="${{ secrets.PROD_SM_ACCESS_TOKEN }}"
+            GRAFANA_URL="https://dreamseed.grafana.net"
+            DOMAIN="dreamseed.online"
+            SM_URL="https://synthetic-monitoring-api-us-east-0.grafana.net"
+          else
+            TOKEN="${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}"
+            SM_TOKEN="${{ secrets.DEV_SM_ACCESS_TOKEN }}"
+            GRAFANA_URL="https://vitalikuts.grafana.net"
+            DOMAIN="aws.vitalikuts.online"
+            SM_ENABLED="true"
+            SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
+          fi
+          jq -n \
+            --arg url "$GRAFANA_URL" \
+            --arg token "$TOKEN" \
+            --arg sm_token "$SM_TOKEN" \
+            --arg domain "$DOMAIN" \
+            --arg sm_url "$SM_URL" \
+            --arg sm_enabled "true" \
+            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_enabled == "true")}' \
+            > terraform.tfvars.json
+
+      - name: Terraform Init
+        working-directory: terraform/grafana
+        run: terraform init -upgrade=true
+
+      - name: Terraform Plan
+        working-directory: terraform/grafana
+        run: terraform plan
+
+      - name: Terraform Apply
+        working-directory: terraform/grafana
+        run: terraform apply -auto-approve
+
+      - name: Verify folder exists
+        run: |
+          FOLDER_UID=$(terraform output -raw folder_uid 2>/dev/null || echo "")
+          if [ -n "$FOLDER_UID" ]; then
+            echo "Folder UID from state: $FOLDER_UID"
+          else
+            echo "No folder in state — skipping verification"
+          fi
+
+      - name: Terraform State Output
+        working-directory: terraform/grafana
+        run: terraform output -json || echo "No outputs"
+
+      - name: Generate Summary
+        working-directory: terraform/grafana
+        if: always()
+        run: |
+          M="$GITHUB_STEP_SUMMARY"
+
+          if [[ "${{ inputs.workspace }}" == "prod" ]]; then
+            TARGET="PROD"
+            GRAFANA_URL="dreamseed.grafana.net"
+          else
+            TARGET="DEV"
+            GRAFANA_URL="vitalikuts.grafana.net"
+          fi
+
+          STATUS="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          echo "## Grafana Cloud Deployment ${STATUS}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Target** | \`${TARGET}\` |" >> "$M"
+          echo "| **Grafana** | ${GRAFANA_URL} |" >> "$M"
+
+          OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
+
+          echo "### 📊 Dashboards" >> "$M"
+          echo "" >> "$M"
+          echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- **\(.key | ascii_upcase)** — UID: `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
+          echo "" >> "$M"
+
+          echo "### 🔍 Synthetic Monitoring" >> "$M"
+          echo "" >> "$M"
+          echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
+          echo "" >> "$M"
+
+          echo "### 📁 Folder UID" >> "$M"
+          echo "" >> "$M"
+          FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
+          echo "\`$FOLDER\`" >> "$M"

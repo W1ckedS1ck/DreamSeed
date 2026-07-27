@@ -1,0 +1,24 @@
+---
+- name: 01 Base Packages
+  hosts: dreamseed
+  become: false
+  gather_facts: true
+
+  pre_tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 120
+
+    - name: Wait for apt locks
+      become: true
+      ansible.builtin.shell: |
+        while fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done
+      changed_when: false
+      timeout: 120
+
+  roles:
+    - packages_common
+    - role: packages_apache
+      when: web_server == "apache"
+    - role: packages_nginx
+      when: web_server == "nginx"

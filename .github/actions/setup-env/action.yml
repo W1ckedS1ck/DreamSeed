@@ -1,0 +1,281 @@
+name: Setup Environment
+description: Mask secrets and vars, then write secrets/.env
+
+inputs:
+  tg_token:
+    description: Telegram Bot Token
+    required: false
+    default: ""
+  tg_chat_id:
+    description: Telegram Chat ID
+    required: false
+    default: ""
+  tg_thread_id:
+    description: Telegram Thread ID
+    required: false
+    default: ""
+  db_pass:
+    description: Database password
+    required: false
+    default: ""
+  cloudflare_api_token:
+    description: Cloudflare API Token
+    required: false
+    default: ""
+  hcloud_token:
+    description: Hetzner Cloud Token (dev fallback)
+    required: false
+    default: ""
+  prod_hetz_hcloud_token:
+    description: Hetzner Cloud Token (prod)
+    required: false
+    default: ""
+  grafana_pass:
+    description: Grafana admin password
+    required: false
+    default: ""
+  betteruptime_api_token:
+    description: Better Stack API Token
+    required: false
+    default: ""
+  betteruptime_backup_key:
+    description: Better Stack Backup heartbeat key
+    required: false
+    default: ""
+  betteruptime_gdrive_key:
+    description: Better Stack GDrive upload heartbeat key
+    required: false
+    default: ""
+  betteruptime_report_daily_key:
+    description: Better Stack daily report heartbeat key
+    required: false
+    default: ""
+  betteruptime_report_weekly_key:
+    description: Better Stack weekly report heartbeat key
+    required: false
+    default: ""
+  betteruptime_verify_key:
+    description: Better Stack backup verify heartbeat key
+    required: false
+    default: ""
+  betteruptime_check_services_key:
+    description: Better Stack check services heartbeat key
+    required: false
+    default: ""
+  dev_grafana_cloud_url:
+    description: Grafana Cloud URL (dev)
+    required: false
+    default: ""
+  dev_grafana_cloud_username:
+    description: Grafana Cloud Username (dev)
+    required: false
+    default: ""
+  dev_grafana_cloud_token:
+    description: Grafana Cloud Token (dev)
+    required: false
+    default: ""
+  prod_grafana_cloud_url:
+    description: Grafana Cloud URL (prod)
+    required: false
+    default: ""
+  prod_grafana_cloud_username:
+    description: Grafana Cloud Username (prod)
+    required: false
+    default: ""
+  prod_grafana_cloud_token:
+    description: Grafana Cloud Token (prod)
+    required: false
+    default: ""
+  loki_url:
+    description: Loki URL
+    required: false
+    default: ""
+  loki_username:
+    description: Loki Username
+    required: false
+    default: ""
+  faro_collector_url:
+    description: Faro Collector URL
+    required: false
+    default: ""
+  dev_aws_access_key:
+    description: AWS Access Key (dev)
+    required: false
+    default: ""
+  dev_aws_secret_key:
+    description: AWS Secret Key (dev)
+    required: false
+    default: ""
+  dev_aws_region:
+    description: AWS Region (dev)
+    required: false
+    default: ""
+  dev_aws_eip:
+    description: AWS Elastic IP Allocation ID (dev)
+    required: false
+    default: ""
+  prod_access_key:
+    description: AWS Access Key (prod)
+    required: false
+    default: ""
+  prod_secret_key:
+    description: AWS Secret Key (prod)
+    required: false
+    default: ""
+  prod_region:
+    description: AWS Region (prod)
+    required: false
+    default: ""
+  prod_eip:
+    description: AWS Elastic IP Allocation ID (prod)
+    required: false
+    default: ""
+  user_ssh_public_key:
+    description: User SSH public key
+    required: false
+    default: ""
+  vitali_ssh_public_key:
+    description: Vitali SSH public key
+    required: false
+    default: ""
+  rclone_crypt_password:
+    description: rclone crypt password
+    required: false
+    default: ""
+  ubuntu_pro_token:
+    description: Ubuntu Pro token
+    required: false
+    default: ""
+  ssh_private_key:
+    description: SSH deploy key (mask only, not written to .env)
+    required: false
+    default: ""
+  vault_password:
+    description: Ansible Vault password (mask only, not written to .env)
+    required: false
+    default: ""
+  rclone_conf_base64:
+    description: rclone.conf base64 (mask only, not written to .env)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Mask secrets
+      shell: bash
+      run: |
+        for v in \
+          "${{ inputs.tg_token }}" \
+          "${{ inputs.db_pass }}" \
+          "${{ inputs.cloudflare_api_token }}" \
+          "${{ inputs.hcloud_token }}" \
+          "${{ inputs.prod_hetz_hcloud_token }}" \
+          "${{ inputs.grafana_pass }}" \
+          "${{ inputs.betteruptime_api_token }}" \
+          "${{ inputs.betteruptime_backup_key }}" \
+          "${{ inputs.betteruptime_gdrive_key }}" \
+          "${{ inputs.betteruptime_report_daily_key }}" \
+          "${{ inputs.betteruptime_report_weekly_key }}" \
+          "${{ inputs.betteruptime_verify_key }}" \
+          "${{ inputs.betteruptime_check_services_key }}" \
+          "${{ inputs.dev_grafana_cloud_token }}" \
+          "${{ inputs.prod_grafana_cloud_token }}" \
+          "${{ inputs.dev_aws_access_key }}" \
+          "${{ inputs.dev_aws_secret_key }}" \
+          "${{ inputs.prod_access_key }}" \
+          "${{ inputs.prod_secret_key }}" \
+          "${{ inputs.ubuntu_pro_token }}" \
+          "${{ inputs.loki_username }}" \
+          "${{ inputs.ssh_private_key }}" \
+          "${{ inputs.vault_password }}" \
+          "${{ inputs.rclone_conf_base64 }}"; do
+          [ -n "$v" ] && echo "::add-mask::$v" || true
+        done
+        # NOTE: only actual secrets are masked above. Non-secret vars (region, chat IDs,
+        # URLs, SSH public keys, etc.) are NOT masked — masking them causes GitHub to
+        # auto-mask any output containing those strings (e.g. IP addresses).
+
+    - name: Write secrets/.env
+      shell: bash
+      env:
+        TG_TOKEN: ${{ inputs.tg_token }}
+        TG_CHAT_ID: ${{ inputs.tg_chat_id }}
+        TG_THREAD_ID: ${{ inputs.tg_thread_id }}
+        DB_PASS: ${{ inputs.db_pass }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare_api_token }}
+        HCLOUD_TOKEN: ${{ inputs.hcloud_token }}
+        PROD_HETZ_HCLOUD_TOKEN: ${{ inputs.prod_hetz_hcloud_token }}
+        GRAFANA_PASS: ${{ inputs.grafana_pass }}
+        BETTERUPTIME_API_TOKEN: ${{ inputs.betteruptime_api_token }}
+        BETTERUPTIME_BACKUP_KEY: ${{ inputs.betteruptime_backup_key }}
+        BETTERUPTIME_GDRIVE_KEY: ${{ inputs.betteruptime_gdrive_key }}
+        BETTERUPTIME_REPORT_DAILY_KEY: ${{ inputs.betteruptime_report_daily_key }}
+        BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ inputs.betteruptime_report_weekly_key }}
+        BETTERUPTIME_VERIFY_KEY: ${{ inputs.betteruptime_verify_key }}
+        BETTERUPTIME_CHECK_SERVICES_KEY: ${{ inputs.betteruptime_check_services_key }}
+        DEV_GRAFANA_CLOUD_URL: ${{ inputs.dev_grafana_cloud_url }}
+        DEV_GRAFANA_CLOUD_USERNAME: ${{ inputs.dev_grafana_cloud_username }}
+        DEV_GRAFANA_CLOUD_TOKEN: ${{ inputs.dev_grafana_cloud_token }}
+        PROD_GRAFANA_CLOUD_URL: ${{ inputs.prod_grafana_cloud_url }}
+        PROD_GRAFANA_CLOUD_USERNAME: ${{ inputs.prod_grafana_cloud_username }}
+        PROD_GRAFANA_CLOUD_TOKEN: ${{ inputs.prod_grafana_cloud_token }}
+        LOKI_URL: ${{ inputs.loki_url }}
+        LOKI_USERNAME: ${{ inputs.loki_username }}
+        FARO_COLLECTOR_URL: ${{ inputs.faro_collector_url }}
+        DEV_AWS_ACCESS_KEY: ${{ inputs.dev_aws_access_key }}
+        DEV_AWS_SECRET_KEY: ${{ inputs.dev_aws_secret_key }}
+        DEV_AWS_REGION: ${{ inputs.dev_aws_region }}
+        DEV_AWS_EIP: ${{ inputs.dev_aws_eip }}
+        PROD_ACCESS_KEY: ${{ inputs.prod_access_key }}
+        PROD_SECRET_KEY: ${{ inputs.prod_secret_key }}
+        PROD_REGION: ${{ inputs.prod_region }}
+        PROD_EIP: ${{ inputs.prod_eip }}
+        USER_SSH_PUBLIC_KEY: ${{ inputs.user_ssh_public_key }}
+        VITALI_SSH_PUBLIC_KEY: ${{ inputs.vitali_ssh_public_key }}
+        RCLONE_CRYPT_PASSWORD: ${{ inputs.rclone_crypt_password }}
+        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
+      run: |
+        mkdir -p secrets
+        {
+          [ -n "$TG_TOKEN" ] && echo "TG_TOKEN=$TG_TOKEN"
+          [ -n "$TG_CHAT_ID" ] && echo "TG_CHAT_ID=$TG_CHAT_ID"
+          [ -n "$TG_THREAD_ID" ] && echo "TG_THREAD_ID=$TG_THREAD_ID"
+          [ -n "$DB_PASS" ] && echo "DB_PASS=$DB_PASS"
+          [ -n "$CLOUDFLARE_API_TOKEN" ] && echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
+          [ -n "$HCLOUD_TOKEN" ] && echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
+          [ -n "$PROD_HETZ_HCLOUD_TOKEN" ] && echo "PROD_HETZ_HCLOUD_TOKEN=$PROD_HETZ_HCLOUD_TOKEN"
+          [ -n "$GRAFANA_PASS" ] && echo "GRAFANA_PASS=$GRAFANA_PASS"
+          [ -n "$BETTERUPTIME_API_TOKEN" ] && echo "BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN"
+          [ -n "$BETTERUPTIME_BACKUP_KEY" ] && echo "BETTERUPTIME_BACKUP_KEY=$BETTERUPTIME_BACKUP_KEY"
+          [ -n "$BETTERUPTIME_GDRIVE_KEY" ] && echo "BETTERUPTIME_GDRIVE_KEY=$BETTERUPTIME_GDRIVE_KEY"
+          [ -n "$BETTERUPTIME_REPORT_DAILY_KEY" ] && echo "BETTERUPTIME_REPORT_DAILY_KEY=$BETTERUPTIME_REPORT_DAILY_KEY"
+          [ -n "$BETTERUPTIME_REPORT_WEEKLY_KEY" ] && echo "BETTERUPTIME_REPORT_WEEKLY_KEY=$BETTERUPTIME_REPORT_WEEKLY_KEY"
+          [ -n "$BETTERUPTIME_VERIFY_KEY" ] && echo "BETTERUPTIME_VERIFY_KEY=$BETTERUPTIME_VERIFY_KEY"
+          [ -n "$BETTERUPTIME_CHECK_SERVICES_KEY" ] && echo "BETTERUPTIME_CHECK_SERVICES_KEY=$BETTERUPTIME_CHECK_SERVICES_KEY"
+          echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
+          echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
+          if [ -n "$USER_SSH_PUBLIC_KEY" ] || [ -n "$VITALI_SSH_PUBLIC_KEY" ]; then
+            printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "${USER_SSH_PUBLIC_KEY:-}" "${VITALI_SSH_PUBLIC_KEY:-}"
+          fi
+          [ -n "$DEV_GRAFANA_CLOUD_URL" ] && echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_URL"
+          [ -n "$DEV_GRAFANA_CLOUD_USERNAME" ] && echo "DEV_GRAFANA_CLOUD_USERNAME=$DEV_GRAFANA_CLOUD_USERNAME"
+          [ -n "$DEV_GRAFANA_CLOUD_TOKEN" ] && echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
+          [ -n "$PROD_GRAFANA_CLOUD_URL" ] && echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_URL"
+          [ -n "$PROD_GRAFANA_CLOUD_USERNAME" ] && echo "PROD_GRAFANA_CLOUD_USERNAME=$PROD_GRAFANA_CLOUD_USERNAME"
+          [ -n "$PROD_GRAFANA_CLOUD_TOKEN" ] && echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
+          [ -n "$LOKI_URL" ] && echo "LOKI_URL=$LOKI_URL"
+          [ -n "$LOKI_USERNAME" ] && echo "LOKI_USERNAME=$LOKI_USERNAME"
+          [ -n "$FARO_COLLECTOR_URL" ] && echo "FARO_COLLECTOR_URL=$FARO_COLLECTOR_URL"
+          [ -n "$DEV_AWS_ACCESS_KEY" ] && echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
+          [ -n "$DEV_AWS_SECRET_KEY" ] && echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
+          [ -n "$DEV_AWS_REGION" ] && echo "DEV_AWS_REGION=$DEV_AWS_REGION"
+          [ -n "$DEV_AWS_EIP" ] && echo "DEV_AWS_EIP=$DEV_AWS_EIP"
+          [ -n "$PROD_ACCESS_KEY" ] && echo "PROD_ACCESS_KEY=$PROD_ACCESS_KEY"
+          [ -n "$PROD_SECRET_KEY" ] && echo "PROD_SECRET_KEY=$PROD_SECRET_KEY"
+          [ -n "$PROD_REGION" ] && echo "PROD_REGION=$PROD_REGION"
+          [ -n "$PROD_EIP" ] && echo "PROD_EIP=$PROD_EIP"
+          [ -n "$RCLONE_CRYPT_PASSWORD" ] && echo "RCLONE_CRYPT_PASSWORD=$RCLONE_CRYPT_PASSWORD"
+          [ -n "$UBUNTU_PRO_TOKEN" ] && echo "UBUNTU_PRO_TOKEN=$UBUNTU_PRO_TOKEN"
+        } > secrets/.env
+        chmod 600 secrets/.env

@@ -1,0 +1,53 @@
+# Managed by Ansible
+global:
+  scrape_interval: {{ _scrape_interval | default('15s') }}
+
+scrape_configs:
+  - job_name: node
+    static_configs:
+      - targets: ["localhost:9100"]
+        labels:
+          instance: "{{ domain }}"
+
+{% if web_server == "apache" %}
+  - job_name: apache
+    static_configs:
+      - targets: ["localhost:9117"]
+        labels:
+          instance: "{{ domain }}"
+{% elif web_server == "nginx" %}
+  - job_name: nginx
+    static_configs:
+      - targets: ["localhost:9113"]
+        labels:
+          instance: "{{ domain }}"
+{% endif %}
+
+{% if db_pass | default('') | length > 0 %}
+  - job_name: mysql
+    static_configs:
+      - targets: ["localhost:9104"]
+        labels:
+          instance: "{{ domain }}"
+{% endif %}
+
+  - job_name: redis
+    static_configs:
+      - targets: ["localhost:9121"]
+        labels:
+          instance: "{{ domain }}"
+
+  - job_name: victoria-metrics
+    static_configs:
+      - targets: ["localhost:8428"]
+        labels:
+          job: vm
+          instance: "{{ domain }}"
+
+{% if grafana_cloud_url is defined and grafana_cloud_url | length > 0 %}
+  - job_name: vmagent
+    static_configs:
+      - targets: ["localhost:8429"]
+        labels:
+          instance: "{{ domain }}"
+{% endif %}

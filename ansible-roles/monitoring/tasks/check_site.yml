@@ -1,0 +1,87 @@
+---
+- name: Upload check_site.sh
+  ansible.builtin.template:
+    src: check_site.sh.j2
+    dest: /usr/local/bin/check_site.sh
+    mode: "0755"
+  become: true
+
+- name: Deploy check_site systemd timer
+  ansible.builtin.template:
+    src: check-site.timer.j2
+    dest: /etc/systemd/system/check-site.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Deploy check_site systemd service
+  ansible.builtin.template:
+    src: check-site.service.j2
+    dest: /etc/systemd/system/check-site.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when: monitoring_cron_enabled | bool
+
+- name: Enable and start check_site timer
+  ansible.builtin.systemd:
+    name: check-site.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: monitoring_cron_enabled | bool
+
+- name: Clear probe marker to force fresh probes after deploy
+  ansible.builtin.file:
+    path: /tmp/.check_site_probe
+    state: absent
+  become: true
+  when: monitoring_cron_enabled | bool
+  changed_when: false
+  failed_when: false
+
+- name: Stop and disable check_site timer when disabled
+  ansible.builtin.systemd:
+    name: check-site.timer
+    state: stopped
+    enabled: false
+  become: true
+  when: not monitoring_cron_enabled | bool
+
+- name: Remove check_site unit files when disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/systemd/system/check-site.timer
+    - /etc/systemd/system/check-site.service
+  notify: Reload systemd
+  when: not monitoring_cron_enabled | bool
+
+# --- check_services.sh is uploaded for deploy.sh + periodic check-services.timer ---
+# Runs every 5 min via systemd timer; pushed metrics complement check_site.sh (1 min).
+
+- name: Ensure scripts directory exists
+  ansible.builtin.file:
+    path: "{{ scripts_dir_remote }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  become: true
+  when: monitoring_cron_enabled | bool
+
+- name: Upload check_services.sh (for deploy.sh post-deploy SSH check)
+  ansible.builtin.copy:
+    src: "{{ scripts_dir }}/check_services.sh"
+    dest: "{{ scripts_dir_remote }}/check_services.sh"
+    mode: "0755"
+  become: true
+  when: monitoring_cron_enabled | bool

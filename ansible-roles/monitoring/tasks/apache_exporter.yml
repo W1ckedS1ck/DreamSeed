@@ -1,0 +1,38 @@
+---
+- name: Install/Upgrade Apache Exporter
+  ansible.builtin.include_tasks: _install_binary.yml
+  vars:
+    monitor_bin_name: apache_exporter
+    monitor_bin_path: /usr/local/bin/apache_exporter
+    monitor_version: "{{ monitoring_apache_version }}"
+    monitor_download_url: "https://github.com/Lusitaniae/apache_exporter/releases/download/v{{ monitoring_apache_version }}/apache_exporter-{{ monitoring_apache_version }}.linux-amd64.tar.gz"
+    monitor_extracted_binary: "/tmp/apache_exporter-{{ monitoring_apache_version }}.linux-amd64/apache_exporter"
+
+- name: Create apache_exporter user
+  ansible.builtin.user:
+    name: apache_exporter
+    system: true
+    create_home: false
+    shell: /bin/false
+  become: true
+
+- name: Deploy Apache Exporter service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apache_exporter.service
+    content: |
+      [Unit]
+      Description=Apache Exporter
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=apache_exporter
+      ExecStart=/usr/local/bin/apache_exporter --web.listen-address=127.0.0.1:9117 --scrape_uri=http://127.0.0.1:80/server-status?auto
+      Restart=always
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+  become: true
+  notify: Restart Apache Exporter

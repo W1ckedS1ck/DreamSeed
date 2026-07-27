@@ -1,0 +1,130 @@
+#!/bin/bash
+# Check site and VictoriaMetrics health, push to VictoriaMetrics
+
+VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
+
+{
+    # Site check
+    _resp_time=$(curl -sfk --max-time 10 -o /dev/null -w "%{time_total}" "https://{{ domain }}" 2>/dev/null || echo "-1")
+    if [ "$_resp_time" != "-1" ]; then
+        echo "site_up{instance=\"{{ domain }}\"} 1"
+        echo "site_response_time_seconds{instance=\"{{ domain }}\"} ${_resp_time}"
+    else
+        echo "site_up{instance=\"{{ domain }}\"} 0"
+    fi
+
+    # MODX core check
+    if [ -f {{ web_root }}/manager/config.core.php ] && [ -f {{ web_root }}/core/model/modx/modx.class.php ]; then
+        echo "modx_core_ok{instance=\"{{ domain }}\"} 1"
+    else
+        echo "modx_core_ok{instance=\"{{ domain }}\"} 0"
+    fi
+
+    # MODX cache writable check (check as www-data — cache is 755 www-data:www-data)
+    if sudo -u www-data test -w "{{ web_root }}/core/cache"; then
+        echo "modx_cache_ok{instance=\"{{ domain }}\"} 1"
+    else
+        echo "modx_cache_ok{instance=\"{{ domain }}\"} 0"
+    fi
+
+    # PHP-FPM check (socket must exist + process must be running)
+    php_sock=$(ls /run/php/php*-fpm.sock 2>/dev/null | head -1)
+    if [ -n "$php_sock" ] && [ -S "$php_sock" ] && pgrep -f "php-fpm" > /dev/null 2>&1; then
+        echo "php_fpm_up{instance=\"{{ domain }}\"} 1"
+    else
+        echo "php_fpm_up{instance=\"{{ domain }}\"} 0"
+    fi
+
+    # VictoriaMetrics check
+    if curl -sf --max-time 5 "http://127.0.0.1:8428/health" | grep -q "OK"; then
+        echo "victoria_up{instance=\"localhost:8428\"} 1"
+    else
+        echo "victoria_up{instance=\"localhost:8428\"} 0"
+    fi
+    # Last-run timestamp (heartbeat — same pattern as cron_last_run_backup)
+    echo "check_site_last_run{instance=\"{{ domain }}\"} $(date +%s)"
+
+    # SSL cert expiry (days remaining)
+    # Prefer local LE cert (if present and readable) — otherwise probe the edge cert seen by users.
+    # Push nothing when both paths fail — alert noDataState=OK avoids false alarm.
+    cert="/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+    if [ -f "$cert" ]; then
+        expiry=$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)
+    fi
+    if [ -z "$expiry" ]; then
+        expiry=$(echo | timeout 5 openssl s_client -connect "{{ domain }}:443" -servername "{{ domain }}" 2>/dev/null \
+                 | openssl x509 -enddate -noout 2>/dev/null | cut -d= -f2)
+    fi
+    if [ -n "$expiry" ]; then
+        expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null || echo 0)
+        if [ "$expiry_epoch" -gt 0 ]; then
+            days_left=$(( (expiry_epoch - $(date +%s)) / 86400 ))
+            echo "ssl_days_remaining{instance=\"{{ domain }}\"} $days_left"
+        fi
+    fi
+
+    # MODX session table size (MB)
+    session_size=$(mysql --socket=/run/mysqld/mysqld.sock -se "SELECT ROUND(((data_length+index_length)/1024/1024),2) FROM information_schema.tables WHERE table_schema='{{ db_name | replace("'", "''") }}' AND table_name='{{ (db_prefix | default('modx_')) | replace("'", "''") }}session';" 2>/dev/null || echo 0)
+    echo "modx_session_size_mb{instance=\"{{ domain }}\"} ${session_size:-0}"
+
+    # Periodic probes (run every 15 min, not every minute)
+    _probe_marker="/tmp/.check_site_probe"
+    _cur_block=$(( $(date +%s) / 900 ))
+    if [ "$(cat "$_probe_marker" 2>/dev/null)" != "$_cur_block" ]; then
+        echo "$_cur_block" > "$_probe_marker"
+
+        # 1. Admin login check (/manager/ returns 200 with MODX content)
+        if curl -sk --max-time 10 "https://{{ domain }}/manager/" 2>/dev/null | grep -qi "modx\|login"; then
+            echo "admin_login_ok{instance=\"{{ domain }}\"} 1"
+        else
+            echo "admin_login_ok{instance=\"{{ domain }}\"} 0"
+        fi
+
+        # 2. miniShop2 endpoint reachable (GET probe — verifies PHP handles requests)
+        if curl -sk --max-time 10 \
+            -X GET \
+            "https://{{ domain }}/assets/components/minishop2/action.php?ms2_action=cart/get" \
+            -o /dev/null -w "%{http_code}" 2>/dev/null | grep -qE "^(200|302|404)"; then
+            echo "ms2_endpoint_ok{instance=\"{{ domain }}\"} 1"
+        else
+            echo "ms2_endpoint_ok{instance=\"{{ domain }}\"} 0"
+        fi
+
+        # 3. miniShop2 tables exist (at least 5 ms2_* tables = schema intact)
+        ms2_tables=$(mysql --socket=/run/mysqld/mysqld.sock -Nse "
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema='{{ db_name | replace("'", "''") }}' AND table_name LIKE '{{ db_prefix | replace("'", "''") }}ms2_%';" 2>/dev/null || echo 0)
+        if [ "$ms2_tables" -ge 5 ]; then
+            echo "ms2_tables_ok{instance=\"{{ domain }}\"} 1"
+        else
+            echo "ms2_tables_ok{instance=\"{{ domain }}\"} 0"
+        fi
+
+        # 4. DB write probe — INSERT test order + immediately delete
+        #    Verifies MySQL can create/delete rows. Checks ms2_tables_ok first.
+        if [ "$ms2_tables" -ge 5 ] 2>/dev/null; then
+            test_order_id=$(mysql --database={{ db_name }} --socket=/run/mysqld/mysqld.sock -Nse "
+                START TRANSACTION;
+                INSERT INTO {{ db_prefix | replace("'", "''") }}ms2_orders (context, user_id, createdon) VALUES ('test', 0, NOW());
+                SELECT @id := LAST_INSERT_ID();
+                DELETE FROM {{ db_prefix | replace("'", "''") }}ms2_orders WHERE id = @id;
+                COMMIT;
+                SELECT @id;" 2>/dev/null || echo 0)
+
+            clean_id=$(echo "$test_order_id" | tr -dc '0-9' 2>/dev/null)
+            if [ -n "$clean_id" ] && [ "$clean_id" -gt 0 ] 2>/dev/null; then
+                echo "db_write_ok{instance=\"{{ domain }}\"} 1"
+            else
+                echo "db_write_ok{instance=\"{{ domain }}\"} 0"
+            fi
+        fi
+        # db_write_ok is not pushed when ms2 schema absent — noDataState: OK on alert side
+
+        # DB table count (schema integrity check, runs every 15 min)
+        # Skip push on mysql error so noDataState: OK prevents false alert when DB is down
+        _db_tables=$(mysql --socket=/run/mysqld/mysqld.sock -Nse "
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema='{{ db_name | replace("'", "''") }}';" 2>/dev/null)
+        [ -n "$_db_tables" ] && echo "database_tables{instance=\"{{ domain }}\",database=\"{{ db_name }}\"} $_db_tables"
+    fi
+} | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1

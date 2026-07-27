@@ -1,0 +1,264 @@
+name: "[M] Rollback"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [prod, dev-aws, dev-hetz, prod-hetz]
+      confirm:
+        description: 'Prod confirmation — type "rollback prod"'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  rollback:
+    name: Rollback ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: 🚀 Start
+        run: echo "Rollback started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - uses: ./.github/actions/setup-secrets
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+
+      - uses: ./.github/actions/setup-terraform
+        with:
+          cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Get server IP
+        id: server-ip
+        env:
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
+          PROD_EIP: ${{ secrets.PROD_EIP }}
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
+        run: |
+          TF_TOKEN="${{ secrets.TF_API_TOKEN }}"
+
+          ENV="${{ inputs.environment }}"
+
+          case "$ENV" in
+            prod)
+              IP="$PROD_EIP"
+              if [[ "$IP" == eipalloc-* ]]; then
+                export AWS_ACCESS_KEY_ID="$PROD_ACCESS_KEY"
+                export AWS_SECRET_ACCESS_KEY="$PROD_SECRET_KEY"
+                export AWS_DEFAULT_REGION="$PROD_REGION"
+                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
+                     --query 'Addresses[0].PublicIp' --output text)
+              fi
+              ;;
+            dev-aws)
+              IP="$DEV_AWS_EIP"
+              if [[ "$IP" == eipalloc-* ]]; then
+                export AWS_ACCESS_KEY_ID="$DEV_AWS_ACCESS_KEY"
+                export AWS_SECRET_ACCESS_KEY="$DEV_AWS_SECRET_KEY"
+                export AWS_DEFAULT_REGION="$DEV_AWS_REGION"
+                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
+                     --query 'Addresses[0].PublicIp' --output text)
+              fi
+              if [ -z "$IP" ]; then
+                export TF_TOKEN_app_terraform_io="$TF_TOKEN"
+                export TF_WORKSPACE="$ENV"
+                cd terraform/aws
+                terraform init -upgrade=false > /dev/null
+                IP=$(terraform output -raw server_ipv4 2>/dev/null || echo "")
+                cd ../..
+              fi
+              ;;
+            dev-hetz|prod-hetz)
+              export TF_TOKEN_app_terraform_io="$TF_TOKEN"
+              export TF_WORKSPACE="$ENV"
+              cd terraform/hetzner
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
+              ;;
+          esac
+
+          if [ -z "$IP" ]; then
+            echo "ERROR: Could not find IP for environment $ENV"
+            exit 1
+          fi
+
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "Found server IP: $IP"
+
+      - name: Validate prod confirmation
+        if: inputs.environment == 'prod' || inputs.environment == 'prod-hetz'
+        run: |
+          if [[ "${{ inputs.confirm }}" != "rollback prod" ]]; then
+            echo "::error::To rollback prod you must set confirm = 'rollback prod'"
+            exit 1
+          fi
+          echo "Prod rollback confirmed"
+
+      - name: Restore latest backup
+        id: restore
+        run: |
+          SCRIPTS_DIR=$(grep -E '^scripts_dir_remote:' ansible/group_vars/all.yml | sed "s/.*: *\"//;s/\"$//")
+          SCRIPTS_DIR="${SCRIPTS_DIR:-/home/ubuntu/Scripts}"
+          OUTPUT=$(ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=10 \
+              -i ~/.ssh/deploy_key \
+              ubuntu@${{ steps.server-ip.outputs.ip }} \
+              "bash ${SCRIPTS_DIR}/RESTORE_ALL.sh --auto-latest" 2>&1)
+          echo "$OUTPUT"
+          # Parse summary lines (last occurrence of each)
+          PROJECT=$(echo "$OUTPUT" | grep "^Project:" | tail -1 | sed 's/.*: //')
+          DB=$(echo "$OUTPUT" | grep "^DB:" | tail -1 | sed 's/.*: //')
+          REDIS=$(echo "$OUTPUT" | grep "^Redis:" | tail -1 | sed 's/.*: //')
+          SITE=$(echo "$OUTPUT" | grep "^Site:" | tail -1 | sed 's/.*: //')
+          TIME=$(echo "$OUTPUT" | grep "^Time:" | tail -1 | sed 's/.*: //')
+          {
+            echo "project=$PROJECT"
+            echo "db=$DB"
+            echo "redis=$REDIS"
+            echo "site=$SITE"
+            echo "time=$TIME"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set domain
+        id: domain
+        run: |
+          ENV="${{ inputs.environment }}"
+          case "$ENV" in
+            prod)       DOMAIN="dreamseed.online" ;;
+            prod-hetz)  DOMAIN="dreamseed.online" ;;
+            dev-aws)    DOMAIN="aws.vitalikuts.online" ;;
+            dev-hetz)   DOMAIN="hetz.vitalikuts.online" ;;
+          esac
+          echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+          echo "Health check domain: $DOMAIN"
+
+      - name: Health check
+        id: health
+        run: |
+          DOMAIN="${{ steps.domain.outputs.domain }}"
+          for i in 1 2 3 4 5; do
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+              "http://$DOMAIN" || echo "000")
+            if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
+              echo "HTTP $http_code — OK"
+              break
+            fi
+            echo "Attempt $i/5: HTTP $http_code, waiting 5s..."
+            sleep 5
+            if [[ $i -eq 5 ]]; then echo "HTTP health check failed"; exit 1; fi
+          done
+          for i in 1 2 3; do
+            https_code=$(curl -sk -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+              "https://$DOMAIN" || echo "000")
+            if [[ "$https_code" =~ ^(200|301|302)$ ]]; then
+              echo "HTTPS $https_code — OK"
+              exit 0
+            fi
+            echo "HTTPS attempt $i/3: $https_code, waiting 3s..."
+            sleep 3
+          done
+          echo "HTTPS health check failed (HTTP was OK, SSL may be broken)"
+          exit 1
+
+      - name: Send completion notification
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+        run: |
+          RESTORE="${{ steps.restore.outcome }}"
+          HEALTH="${{ steps.health.outcome }}"
+          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
+            STATUS="✅ ROLLBACK OK"
+          elif [[ "$RESTORE" != "success" ]]; then
+            STATUS="❌ RESTORE FAILED"
+          else
+            STATUS="⚠️  SITE UNHEALTHY"
+          fi
+          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\n📝 Project: %s\n🗄️ DB: %s\n♻️ Redis: %s\n🌐 Site: %s\n⏱️ Time: %s\n🖥 %s %s' \
+            "$STATUS" \
+            "$(date '+%Y-%m-%d %H:%M')" \
+            "${{ steps.restore.outputs.project }}" \
+            "${{ steps.restore.outputs.db }}" \
+            "${{ steps.restore.outputs.redis }}" \
+            "${{ steps.restore.outputs.site }}" \
+            "${{ steps.restore.outputs.time }}" \
+            "${{ steps.server-ip.outputs.ip }}" \
+            "${{ inputs.environment }}")
+
+          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+          curl -s -X POST "$TG_URL" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=Markdown" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          RESTORE="${{ steps.restore.outcome }}"
+          HEALTH="${{ steps.health.outcome }}"
+          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
+            STATUS="✅ ROLLBACK OK"
+          elif [[ "$RESTORE" != "success" ]]; then
+            STATUS="❌ RESTORE FAILED"
+          else
+            STATUS="⚠️ SITE UNHEALTHY"
+          fi
+
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch || 0 }} ))
+
+          M="$GITHUB_STEP_SUMMARY"
+          echo "## Rollback Deploy — ${STATUS}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Environment** | ${{ inputs.environment }} |" >> "$M"
+          echo "| **Server** | ${{ steps.server-ip.outputs.ip }} |" >> "$M"
+          echo "| **Domain** | ${{ steps.domain.outputs.domain }} |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+          echo "" >> "$M"
+          echo "### Restore" >> "$M"
+          echo "| Metric | Value |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Project | ${{ steps.restore.outputs.project }} |" >> "$M"
+          echo "| DB | ${{ steps.restore.outputs.db }} |" >> "$M"
+          echo "| Redis | ${{ steps.restore.outputs.redis }} |" >> "$M"
+          echo "| Site | ${{ steps.restore.outputs.site }} |" >> "$M"
+          echo "| Duration | ${{ steps.restore.outputs.time }} |" >> "$M"
+
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          rm -f ~/.ssh/deploy_key.pub

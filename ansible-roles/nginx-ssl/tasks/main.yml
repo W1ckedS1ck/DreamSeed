@@ -1,0 +1,34 @@
+---
+- name: Add www-data user to ssl-cert group for certificate access
+  become: true
+  ansible.builtin.user:
+    name: www-data
+    groups: ssl-cert
+    append: true
+
+- name: Deploy Nginx SSL vhost
+  become: true
+  ansible.builtin.template:
+    src: vhost-ssl.conf.j2
+    dest: "/etc/nginx/sites-available/{{ domain }}-ssl.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Nginx
+
+- name: Enable SSL site
+  become: true
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ domain }}-ssl.conf"
+    dest: "/etc/nginx/sites-enabled/{{ domain }}-ssl.conf"
+    state: link
+    force: true
+  notify: Reload Nginx
+
+- name: Test Nginx configuration
+  become: true
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers

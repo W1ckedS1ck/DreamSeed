@@ -1,0 +1,74 @@
+---
+- name: Update apt cache
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install system packages (base OS-level)
+  become: true
+  ansible.builtin.apt:
+    name:
+      - certbot
+      - fail2ban
+      - jq
+      - rclone
+      - ssl-cert
+      - unzip
+      - bind9-dnsutils
+      - python3-pymysql
+      - debsums
+      - apt-show-versions
+      - libpam-tmpdir
+      - libpam-pwquality
+      - unattended-upgrades
+    state: present
+    update_cache: true
+  register: _apt_result
+  retries: 3
+  delay: 10
+  until: _apt_result is success
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Enable unattended-upgrades (security-only auto updates)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+    mode: "0644"
+
+- name: Ensure swap file
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail
+    if ! swapon --show | grep -q /swapfile; then
+      if [ ! -f /swapfile ]; then
+        fallocate -l {{ swap_size }} /swapfile 2>/dev/null || \
+          dd if=/dev/zero of=/swapfile bs=1M count={{ (swap_size | regex_replace('[^0-9]', '') | int) * 1024 }} status=progress
+        chmod 600 /swapfile
+      fi
+      mkswap /swapfile && swapon /swapfile
+      grep -q /swapfile /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+  args:
+    executable: /bin/bash
+  timeout: 120
+  changed_when: false
+
+- name: Setup PHP version and packages
+  ansible.builtin.include_tasks: php.yml
+
+- name: Install redis packages
+  become: true
+  ansible.builtin.apt:
+    name:
+      - "redis-server"
+      - "php{{ php_version }}-redis"
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive

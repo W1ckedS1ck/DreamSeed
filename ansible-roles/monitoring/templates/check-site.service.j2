@@ -1,0 +1,9 @@
+[Unit]
+Description=DreamSeed site health check (every minute)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/check_site.sh
+User=ubuntu
+StandardOutput=journal
+StandardError=journal

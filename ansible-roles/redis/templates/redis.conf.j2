@@ -1,0 +1,36 @@
+# Managed by Ansible — DreamSeed Redis
+bind 127.0.0.1
+port 6379
+daemonize no
+supervised systemd
+loglevel notice
+
+# Session data: 256 MB ceiling, LRU eviction
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+
+# RDB Persistence — recover sessions after crash/restart
+# Snapshot every 15 min if ≥1 key changed
+save 900 1
+dir /var/lib/redis
+dbfilename dump.rdb
+
+# NO AOF — avoid disk I/O overhead for ephemeral session data
+appendonly no
+
+# Resilience: keep accepting writes even if persistence fails
+stop-writes-on-bgsave-error no
+
+# Basic hardening
+rename-command FLUSHALL ""
+rename-command FLUSHDB ""
+rename-command CONFIG ""
+rename-command SHUTDOWN ""
+rename-command DEBUG ""
+rename-command SCRIPT ""
+
+{% if redis_password | length > 0 %}
+requirepass {{ redis_password }}
+{% endif %}
+# No password by design: bind 127.0.0.1 only, single-server setup.
+# See ansible/group_vars/all.yml (Redis section) for rationale.

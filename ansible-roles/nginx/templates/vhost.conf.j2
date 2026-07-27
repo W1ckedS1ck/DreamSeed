@@ -1,0 +1,21 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ domain }}
+    {%- if domain_www | default(false) %} www.{{ domain }}{% endif %};
+
+    location /.well-known/acme-challenge/ {
+        root {{ web_root }};
+    }
+
+    location = /nginx_status {
+        stub_status on;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}

@@ -1,0 +1,8 @@
+---
+- name: 06 Backup
+  hosts: dreamseed
+  become: false
+  gather_facts: false
+
+  roles:
+    - backup

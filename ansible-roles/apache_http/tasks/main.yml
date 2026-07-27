@@ -1,0 +1,147 @@
+---
+- name: Enable Apache modules
+  become: true
+  ansible.builtin.command: "a2enmod status ssl http2 brotli deflate headers expires proxy proxy_fcgi proxy_http proxy_wstunnel rewrite evasive"
+  register: apache_http_enmod_result
+  changed_when: true
+  failed_when: apache_http_enmod_result.rc != 0
+  notify: Restart Apache HTTP
+
+- name: Deploy correct ports.conf (Listen 443 with https protocol)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apache2/ports.conf
+    content: |
+      # Managed by Ansible — DreamSeed
+      Listen 80
+
+      <IfModule mod_ssl.c>
+          Listen 443 https
+      </IfModule>
+
+      <IfModule mod_gnutls.c>
+          Listen 443 https
+      </IfModule>
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Harden Apache — ServerTokens Prod
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apache2/conf-enabled/security.conf
+    regexp: '^#?\s*ServerTokens\s'
+    line: "ServerTokens Prod"
+  notify: Reload Apache HTTP
+
+- name: Harden Apache — ServerSignature Off
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apache2/conf-enabled/security.conf
+    regexp: '^#?\s*ServerSignature\s'
+    line: "ServerSignature Off"
+  notify: Reload Apache HTTP
+
+- name: Set global ServerName to suppress warning
+  become: true
+  ansible.builtin.copy:
+    content: "ServerName localhost\n"
+    dest: /etc/apache2/conf-enabled/servername.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Deploy HTTP vhost
+  become: true
+  ansible.builtin.template:
+    src: vhost-http.conf.j2
+    dest: "/etc/apache2/sites-available/{{ domain }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Create empty DocumentRoot for catch-all vhost
+  become: true
+  ansible.builtin.file:
+    path: /var/www/empty
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy mod_evasive config (rate limit /manager/)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apache2/mods-available/evasive.conf
+    content: |
+      <IfModule mod_evasive20.c>
+          DOSHashTableSize    3097
+          DOSPageCount        6
+          DOSSiteCount        50
+          DOSPageInterval     1
+          DOSSiteInterval     1
+          DOSBlockingPeriod   60
+          DOSWhitelist        127.0.0.1 ::1
+          DOSEmailNotify      {{ admin_email }}
+      </IfModule>
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Deploy catch-all vhost (reject IP/unknown hosts)
+  become: true
+  ansible.builtin.template:
+    src: catch-all.conf.j2
+    dest: /etc/apache2/sites-available/000-catch-all.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Enable catch-all vhost
+  become: true
+  ansible.builtin.command: a2ensite 000-catch-all.conf
+  register: apache_http_catch_all_result
+  changed_when: "'Enabling' in apache_http_catch_all_result.stdout"
+  notify: Reload Apache HTTP
+
+- name: Disable default Ubuntu site
+  become: true
+  ansible.builtin.command: a2dissite 000-default.conf
+  register: apache_http_dissite_default
+  changed_when: "'Disabling' in apache_http_dissite_default.stdout"
+  failed_when: false
+  notify: Reload Apache HTTP
+
+- name: Disable SSL site if present (will be re-enabled after certbot)
+  become: true
+  ansible.builtin.command: "a2dissite {{ domain }}-ssl.conf"
+  register: apache_http_dissite_ssl
+  changed_when: "'Disabling' in apache_http_dissite_ssl.stdout"
+  failed_when: false
+
+- name: Enable HTTP site
+  become: true
+  ansible.builtin.command: "a2ensite {{ domain }}.conf"
+  register: apache_http_ensite_result
+  changed_when: "'Enabling' in apache_http_ensite_result.stdout"
+  notify: Reload Apache HTTP
+
+- name: Validate Apache config
+  become: true
+  ansible.builtin.command: apache2ctl -t
+  changed_when: false
+
+- name: Start and enable Apache
+  become: true
+  ansible.builtin.systemd:
+    name: apache2
+    state: started
+    enabled: true
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers

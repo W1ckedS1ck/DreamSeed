@@ -1,0 +1,25 @@
+---
+- name: Deploy SSL vhost
+  become: true
+  ansible.builtin.template:
+    src: vhost-ssl.conf.j2
+    dest: "/etc/apache2/sites-available/{{ domain }}-ssl.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Apache HTTP
+
+- name: Enable SSL site
+  become: true
+  ansible.builtin.command: "a2ensite {{ domain }}-ssl.conf"
+  register: apache_ssl_ensite_result
+  changed_when: "'Enabling' in apache_ssl_ensite_result.stdout"
+  notify: Reload Apache HTTP
+
+- name: Validate Apache config
+  become: true
+  ansible.builtin.command: apache2ctl -t
+  changed_when: false
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers

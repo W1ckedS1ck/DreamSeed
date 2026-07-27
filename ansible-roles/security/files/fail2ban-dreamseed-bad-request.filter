@@ -1,0 +1,10 @@
+# Custom DreamSeed filter for nginx access log (combined format).
+# Blocks malformed / empty HTTP requests returning HTTP 400.
+# nginx sees real visitor IPs via Cloudflare CF-Connecting-IP + realip_module.
+#
+# Log format (combined): $remote_addr - $remote_user [$time_local] "$request" $status ...
+
+[Definition]
+failregex = ^<HOST> - \S+ \[.*\] "[^"]*" 400
+
+ignoreregex =

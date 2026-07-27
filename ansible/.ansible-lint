@@ -1,0 +1,8 @@
+---
+# Skip rules that are not applicable or too strict for this project
+skip_list:
+  - yaml[line-length]  # URLs must be long
+  - command-instead-of-module  # curl/wget needed for version detection
+  - yaml[new-line-at-end-of-file]  # cosmetic — editor handles
+  - yaml[empty-lines]  # cosmetic — readability blank lines
+  - yaml[truthy]  # `yes`/`no` are valid YAML 1.1 booleans

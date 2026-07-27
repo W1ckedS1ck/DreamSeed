@@ -1,0 +1,393 @@
+name: "[M] Deploy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [prod, dev-aws, dev-hetz, prod-hetz]
+      action:
+        description: 'Action'
+        required: true
+        type: choice
+        options: [deploy, destroy]
+        default: deploy
+      web_server:
+        description: 'Web server (deploy only)'
+        required: true
+        type: choice
+        options: [nginx, apache]
+        default: nginx
+      server_ip:
+        description: 'Skip Terraform — reconfigure existing server IP (deploy only)'
+        required: false
+        type: string
+      skip_dns:
+        description: 'Skip Cloudflare DNS update (default: update)'
+        required: false
+        type: boolean
+        default: false
+      confirm:
+        description: 'Destroy confirmation — type "destroy <environment>" to confirm (e.g., destroy prod, destroy dev-aws)'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  ACTIONS_RUNNER_DEBUG: false
+  ARTIFACT_RETENTION_DAYS: 30
+
+jobs:
+  deploy:
+    name: ${{ inputs.action == 'destroy' && 'Destroy' || 'Deploy' }} ${{ inputs.environment }}${{ inputs.action == 'deploy' && format(' ({0})', inputs.web_server) || '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ startsWith(inputs.environment, 'prod') && 'production' || '' }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: 🚀 Start
+        run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - uses: ./.github/actions/setup-terraform
+
+      - name: Setup Ansible
+        if: inputs.action == 'deploy'
+        uses: ./.github/actions/setup-ansible
+
+      - name: Record start time
+        id: start
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/setup-secrets
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
+      - uses: ./.github/actions/setup-env
+        with:
+          tg_token: ${{ secrets.TG_TOKEN }}
+          tg_chat_id: ${{ vars.TG_CHAT_ID }}
+          tg_thread_id: ${{ vars.TG_THREAD_ID }}
+          db_pass: ${{ secrets.DB_PASS }}
+          cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+          prod_hetz_hcloud_token: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          grafana_pass: ${{ secrets.GRAFANA_PASS }}
+          betteruptime_api_token: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          betteruptime_backup_key: ${{ secrets.BETTERUPTIME_BACKUP_KEY }}
+          betteruptime_gdrive_key: ${{ secrets.BETTERUPTIME_GDRIVE_KEY }}
+          betteruptime_report_daily_key: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
+          betteruptime_report_weekly_key: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
+          betteruptime_verify_key: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
+          betteruptime_check_services_key: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
+          dev_grafana_cloud_url: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
+          dev_grafana_cloud_username: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
+          dev_grafana_cloud_token: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
+          prod_grafana_cloud_url: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
+          prod_grafana_cloud_username: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
+          prod_grafana_cloud_token: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          loki_url: ${{ vars.LOKI_URL }}
+          loki_username: ${{ vars.LOKI_USERNAME }}
+          faro_collector_url: ${{ vars.FARO_COLLECTOR_URL }}
+          dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
+          dev_aws_eip: ${{ secrets.DEV_AWS_EIP }}
+          prod_access_key: ${{ secrets.PROD_ACCESS_KEY }}
+          prod_secret_key: ${{ secrets.PROD_SECRET_KEY }}
+          prod_region: ${{ secrets.PROD_REGION }}
+          prod_eip: ${{ secrets.PROD_EIP }}
+          user_ssh_public_key: ${{ secrets.USER_SSH_PUBLIC_KEY }}
+          vitali_ssh_public_key: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
+          rclone_crypt_password: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault_password: ${{ secrets.VAULT_PASSWORD }}
+          rclone_conf_base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
+      - name: Write target config constants
+        run: |
+          cat >> secrets/.env << 'EOF'
+          DEV_HETZ_SSH_KEY_NAME=Vitali.pub
+          DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1
+          DEV_HETZ_SERVER_TYPE=cx23
+          PROD_HETZ_SERVER_TYPE=cx43
+          PROD_HETZ_SSH_KEY_NAME=Vitali.pub
+          PROD_HETZ_PRIMARY_IP_NAME=
+          PROD_HETZ_ENABLE_PRIMARY_IP=true
+          EOF
+
+      - name: Deploy
+        if: inputs.action == 'deploy'
+        id: deploy
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          PYTHONUNBUFFERED: 1
+        run: |
+          # deploy.sh loads secrets/.env internally — no need to source here
+          ENV="${{ inputs.environment }}"
+          WEB_SRV="${{ inputs.web_server }}"
+          SERVER_IP="${{ inputs.server_ip }}"
+
+          [[ -z "$ENV" ]] && { echo "Missing environment"; exit 1; }
+
+          DEPLOY_ARGS=("$ENV")
+          [[ "$WEB_SRV" == "apache" ]] && DEPLOY_ARGS+=("-a") || DEPLOY_ARGS+=("-n")
+          [[ -n "$SERVER_IP" ]] && DEPLOY_ARGS+=("-i" "$SERVER_IP")
+          [[ "${{ inputs.skip_dns }}" == "true" ]] && DEPLOY_ARGS+=("--no-dns")
+          DEPLOY_ARGS+=("-p")
+
+          set +e
+          # script -q -c creates a PTY => commands inside see a terminal =>
+          # line-buffered by default (no stdbuf/PYTHONUNBUFFERED needed).
+          # sed -u strips \r added by PTY output processing (ONLCR).
+          # DEPLOY_ARGS are simple strings (env name, flags) — safe for sh -c.
+          script -q -c "./deploy.sh ${DEPLOY_ARGS[*]}" /dev/null 2>&1 | sed -u 's/\r$//' | tee /tmp/deploy.log
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          # Capture server IP from deploy output for job summary (no grep match = no mask issue)
+          if [[ -z "$SERVER_IP" ]]; then
+            ip=$(grep -oP '^  Server\s+\K\d+\.\d+\.\d+\.\d+' /tmp/deploy.log 2>/dev/null || true)
+            [[ -n "$ip" ]] && echo "server_ip=$ip" >> "$GITHUB_OUTPUT"
+          fi
+
+          # script -q -c may not propagate exit code on some systems
+          # (Ubuntu 24.04 PTY). Fallback: grep log for failure markers.
+          if [[ "$rc" -eq 0 ]]; then
+            if grep -qE '❌ CRITICAL|^\s*✗ |^Error:|ERROR!' /tmp/deploy.log 2>/dev/null; then
+              echo "::error::Deploy reported failures despite exit code 0"
+              rc=1
+            fi
+          fi
+
+          perl -pe 's/\e\[[\d;]*[mK]//g' /tmp/deploy.log > /tmp/deploy-summary.txt
+          exit "$rc"
+
+      - name: Screenshot
+        if: success() && inputs.action == 'deploy'
+        run: |
+          DOMAIN="${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}"
+          mkdir -p /tmp/pages-screenshot
+          google-chrome-stable --headless --disable-gpu --no-sandbox \
+            --screenshot=/tmp/pages-screenshot/${{ inputs.environment }}.png --window-size=1280,720 \
+            "https://$DOMAIN/"
+
+      - name: Upload screenshot to Pages
+        if: success() && inputs.action == 'deploy'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: /tmp/pages-screenshot
+
+      - name: Write deploy summary
+        if: always() && inputs.action == 'deploy'
+        run: |
+          ENV="${{ inputs.environment }}"
+          WEB="${{ inputs.web_server }}"
+          SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
+          SERVER_IP="${SERVER_IP:-${{ inputs.server_ip }}}"
+          SKIP_DNS="${{ inputs.skip_dns }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+
+          M="${GITHUB_STEP_SUMMARY:-}"
+          [[ -z "$M" ]] && exit 0
+          echo "## Deploy ${RESULT}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| 🌐 **Environment** | ${ENV} |" >> "$M"
+          echo "| 🖥 **Web server** | ${WEB} |" >> "$M"
+          echo "| 📡 **Server IP** | ${SERVER_IP:-new} |" >> "$M"
+          echo "| ✅ **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
+          echo "| ⏱ **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| 🔗 **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| 🔗 **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) — artifacts listed below on that page |" >> "$M"
+          echo "| 📸 **Screenshot preview** | published in a separate job below — refresh this run's summary page in ~1 min |" >> "$M"
+
+      - name: Append deploy log to job summary
+        if: always() && inputs.action == 'deploy'
+        run: |
+          LOG=/tmp/deploy-summary.txt
+          if [ -f "$LOG" ]; then
+            {
+              echo '<details><summary>📄 Deploy result</summary><pre><code>'
+              sed -n '
+                /^[[:space:]]*▸ Post-deploy checks/,/^$/{
+                  /^[[:space:]]*$/d
+                  p
+                }
+                /^[[:space:]]*Step[[:space:]]*Time/,/^[[:space:]]*Total[[:space:]]/{
+                  /^[[:space:]]*$/d
+                  p
+                }
+                /^[[:space:]]*✓ Deployment Successful/,/^[[:space:]]*Log:/{
+                  /^[[:space:]]*$/d
+                  p
+                }
+              ' "$LOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
+              echo '</code></pre></details>'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload deploy summary
+        if: always() && inputs.action == 'deploy'
+        uses: actions/upload-artifact@v7
+        with:
+          name: deploy-summary-${{ inputs.environment }}
+          path: /tmp/deploy-summary.txt
+          retention-days: 90
+
+      - name: Destroy
+        if: inputs.action == 'destroy'
+        id: destroy
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          DESTROY_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
+          export SSH_PUBLIC_KEY_PATH=~/.ssh/deploy_key.pub
+
+          ENV="${{ inputs.environment }}"
+
+          # Destroy requires exact confirmation matching environment
+          if [[ "$DESTROY_CONFIRM" != "destroy $ENV" ]]; then
+            echo "ERROR: To destroy $ENV you must set confirm = 'destroy $ENV' (exactly)"
+            exit 1
+          fi
+
+          export CI_DESTROY_CONFIRM=yes
+          set +e
+          script -q -c "./deploy.sh '${ENV}' -x" /dev/null 2>&1 | sed -u 's/\r$//' | tee /tmp/deploy.log
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          # Parse destroy output for job summary
+          if [[ "$rc" -eq 0 ]]; then
+            if grep -qE '❌ CRITICAL|^\s*✗ |^Error:|ERROR!' /tmp/deploy.log 2>/dev/null; then
+              echo "::error::Destroy reported failures despite exit code 0"
+              rc=1
+            fi
+          fi
+
+          ip=$(grep -oP '^  Server IP: \K[\d.]+' /tmp/deploy.log 2>/dev/null || true)
+          [[ -n "$ip" ]] && echo "server_ip=$ip" >> "$GITHUB_OUTPUT"
+
+          resources=$(grep -oP 'Destroy complete! Resources: \K\d+' /tmp/deploy.log 2>/dev/null || true)
+          [[ -n "$resources" ]] && echo "resources_destroyed=$resources" >> "$GITHUB_OUTPUT"
+
+          grep -q "✓ SSL certificates backed up" /tmp/deploy.log 2>/dev/null && echo "ssl_backed_up=yes" >> "$GITHUB_OUTPUT" || echo "ssl_backed_up=no" >> "$GITHUB_OUTPUT"
+          grep -q "✓ Cloudflare DNS: deleted" /tmp/deploy.log 2>/dev/null && echo "dns_cleaned=yes" >> "$GITHUB_OUTPUT" || echo "dns_cleaned=no" >> "$GITHUB_OUTPUT"
+          grep -q "✓ Ubuntu Pro detached" /tmp/deploy.log 2>/dev/null && echo "ubuntu_pro_detached=yes" >> "$GITHUB_OUTPUT" || echo "ubuntu_pro_detached=no" >> "$GITHUB_OUTPUT"
+
+          exit "$rc"
+
+      - name: Notify failure
+        if: failure()
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+        run: |
+          MSG="❌ *Deploy failed* — ${{ inputs.environment }}
+          Action: ${{ inputs.action }}
+          📅 $(date '+%Y-%m-%d %H:%M')"
+          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+          curl -s -X POST "$TG_URL" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=Markdown" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Notify success
+        if: success() && inputs.action == 'deploy'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+        run: |
+          IP="${{ steps.deploy.outputs.server_ip }}"
+          IP="${IP:-${{ inputs.server_ip }}}"
+          MSG="✅ *Deploy complete* — ${{ inputs.environment }}
+          Server: ${IP:-new}
+          🖥 ${{ inputs.web_server }}
+          📅 $(date '+%Y-%m-%d %H:%M')"
+          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+          curl -s -X POST "$TG_URL" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+            --data-urlencode "parse_mode=Markdown" \
+            --data-urlencode "text=$MSG" > /dev/null || true
+
+      - name: Write destroy summary
+        if: always() && inputs.action == 'destroy'
+        run: |
+          ENV="${{ inputs.environment }}"
+          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+          IP="${{ steps.destroy.outputs.server_ip }}"
+          RESOURCES="${{ steps.destroy.outputs.resources_destroyed }}"
+          SSL="${{ steps.destroy.outputs.ssl_backed_up }}"
+          DNS="${{ steps.destroy.outputs.dns_cleaned }}"
+          PRO="${{ steps.destroy.outputs.ubuntu_pro_detached }}"
+
+          M="${GITHUB_STEP_SUMMARY:-}"
+          [[ -z "$M" ]] && exit 0
+          echo "## Destroy ${RESULT}" >> "$M"
+          echo "" >> "$M"
+          echo "| | |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| **Environment** | ${ENV} |" >> "$M"
+          echo "| **Server IP** | ${IP:-unknown} |" >> "$M"
+          echo "| **Resources destroyed** | ${RESOURCES:-0} |" >> "$M"
+          echo "| **SSL backed up** | ${SSL} |" >> "$M"
+          echo "| **DNS cleaned** | ${DNS} |" >> "$M"
+          echo "| **Ubuntu Pro detached** | ${PRO} |" >> "$M"
+          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+
+      - name: Cleanup secrets
+        if: always()
+        run: |
+          shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
+          shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
+          shred -u secrets/.env 2>/dev/null || rm -f secrets/.env
+          rm -f ~/.ssh/deploy_key.pub
+
+  publish-preview:
+    name: Publish screenshot preview
+    needs: deploy
+    if: needs.deploy.result == 'success' && inputs.action == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy screenshot preview
+        id: pages
+        uses: actions/deploy-pages@v5
+
+      - name: Write preview summary
+        run: |
+          M="${GITHUB_STEP_SUMMARY:-}"
+          [[ -z "$M" ]] && exit 0
+          echo "### 📸 Screenshot — ${{ inputs.environment }}" >> "$M"
+          echo "" >> "$M"
+          echo "[![${{ inputs.environment }}](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})" >> "$M"

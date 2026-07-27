@@ -1,0 +1,7 @@
+# Fail2ban filter for MODX admin panel brute-force attempts
+# MODX returns HTTP 200 even on failed login (error in JSON body).
+# Tracks repeated POST requests to the login connector.
+
+[Definition]
+failregex = ^<HOST> .* "POST /connectors/index.php.*"$
+ignoreregex =
