@@ -195,22 +195,22 @@ jobs:
         run: |
           # actionlint
           curl -sL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | \
-            sudo tar -xz -C /usr/local/bin actionlint
+            sudo tar -xz -C /usr/local/bin actionlint # renovate: depName=rhysd/actionlint
 
           # j2lint
-          pip install j2lint --quiet
+          pip install j2lint==1.2.0 --quiet # renovate: depName=aristanetworks/j2lint
 
-          # Terraform (v1.15.5 — matching CI env)
-          curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_amd64.zip"
+          # Terraform (pinned via setup-terraform action default)
+          curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip" # renovate: depName=hashicorp/terraform
           sudo unzip -o /tmp/terraform.zip -d /usr/local/bin > /dev/null 2>&1
 
-          # tflint (v0.63.1 — matching CI env)
-          curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.63.1/tflint_linux_amd64.zip"
+          # tflint (pinned via TFLINT_VERSION env var)
+          curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_amd64.zip" # renovate: depName=terraform-linters/tflint
           sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
           tflint --init --config .tflint.hcl 2>/dev/null || true
 
-          # ansible-lint
-          pip install ansible-core ansible-lint --quiet
+          # ansible-lint + PyMySQL (pinned via requirements-deploy.txt)
+          pip install -r ansible/requirements-deploy.txt --quiet
       - name: Run pre-commit hooks (changed files only)
         run: |
           pip install pre-commit
