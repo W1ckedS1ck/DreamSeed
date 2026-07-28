@@ -84,16 +84,6 @@
     },
     {
       "customType": "regex",
-      "description": "Track j2lint version in CI",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
-      "matchStrings": ["pip install j2lint==(?<currentValue>[\\w.\\-]+)"],
-      "depNameTemplate": "aristanetworks/j2lint",
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
       "description": "Track Terraform CLI version in pre-commit curl URL (ci.yml)",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
