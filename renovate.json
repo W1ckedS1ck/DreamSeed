@@ -2,11 +2,13 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    ":dependencyDashboard"
+    ":dependencyDashboard",
+    "abandonments:recommended"
   ],
   "labels": ["dependencies", "renovate"],
-  "schedule": ["on sunday before 6am"],
-  "configMigration": true,
+  "schedule": ["before 6am on sunday"],
+  "platformAutomerge": true,
+  "configMigration": false,
   "osvVulnerabilityAlerts": true,
   "major": {
     "dependencyDashboardApproval": true
@@ -47,7 +49,7 @@
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
-      "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
+      "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "gitleaks/gitleaks",
       "datasourceTemplate": "github-releases"
     },
@@ -76,7 +78,7 @@
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
-      "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>.*?)\""],
+      "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "terraform-linters/tflint",
       "datasourceTemplate": "github-releases"
     },
@@ -88,6 +90,33 @@
       ],
       "matchStrings": ["pip install j2lint==(?<currentValue>[\\w.\\-]+)"],
       "depNameTemplate": "aristanetworks/j2lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track Terraform CLI version in pre-commit curl URL (ci.yml)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["hashicorp\\.com/terraform/(?<currentValue>[\\d.]+)/terraform[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track tflint version in pre-commit curl URL (ci.yml)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["terraform-linters/tflint/releases/download/v(?<currentValue>[\\d.]+)/tflint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track actionlint version in pre-commit curl URL (ci.yml)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["rhysd/actionlint/releases/download/v(?<currentValue>[\\d.]+)/actionlint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
       "datasourceTemplate": "github-releases"
     },
     {
@@ -121,6 +150,33 @@
       "groupName": "VictoriaMetrics",
       "labels": ["dependencies", "monitoring"],
       "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Group Terraform CLI — setup-terraform action + pre-commit curl in sync",
+      "matchPackageNames": ["hashicorp/terraform"],
+      "groupName": "Terraform CLI",
+      "labels": ["terraform"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Group tflint — TFLINT_VERSION env var + pre-commit curl in sync",
+      "matchPackageNames": ["terraform-linters/tflint"],
+      "groupName": "tflint",
+      "labels": ["dependencies", "linting"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Group actionlint — uses: SHA + pre-commit curl in sync",
+      "matchPackageNames": ["rhysd/actionlint"],
+      "groupName": "actionlint",
+      "labels": ["dependencies"],
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash"
