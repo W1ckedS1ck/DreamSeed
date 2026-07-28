@@ -138,7 +138,6 @@ jobs:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
           PYTHONUNBUFFERED: 1
         run: |
-          # deploy.sh loads secrets/.env internally — no need to source here
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
           SERVER_IP="${{ inputs.server_ip }}"
@@ -152,22 +151,15 @@ jobs:
           DEPLOY_ARGS+=("-p")
 
           set +e
-          # script -q -c creates a PTY => commands inside see a terminal =>
-          # line-buffered by default (no stdbuf/PYTHONUNBUFFERED needed).
-          # sed -u strips \r added by PTY output processing (ONLCR).
-          # DEPLOY_ARGS are simple strings (env name, flags) — safe for sh -c.
-          script -q -c "./deploy.sh ${DEPLOY_ARGS[*]}" /dev/null 2>&1 | sed -u 's/\r$//' | tee /tmp/deploy.log
+          stdbuf -oL ./deploy.sh "${DEPLOY_ARGS[@]}" 2>&1 | tee /tmp/deploy.log
           rc=${PIPESTATUS[0]}
           set -e
 
-          # Capture server IP from deploy output for job summary (no grep match = no mask issue)
           if [[ -z "$SERVER_IP" ]]; then
             ip=$(grep -oP '^  Server\s+\K\d+\.\d+\.\d+\.\d+' /tmp/deploy.log 2>/dev/null || true)
             [[ -n "$ip" ]] && echo "server_ip=$ip" >> "$GITHUB_OUTPUT"
           fi
 
-          # script -q -c may not propagate exit code on some systems
-          # (Ubuntu 24.04 PTY). Fallback: grep log for failure markers.
           if [[ "$rc" -eq 0 ]]; then
             if grep -qE '❌ CRITICAL|^\s*✗ |^Error:|ERROR!' /tmp/deploy.log 2>/dev/null; then
               echo "::error::Deploy reported failures despite exit code 0"
@@ -288,7 +280,6 @@ jobs:
 
           ENV="${{ inputs.environment }}"
 
-          # Destroy requires exact confirmation matching environment
           if [[ "$DESTROY_CONFIRM" != "destroy $ENV" ]]; then
             echo "ERROR: To destroy $ENV you must set confirm = 'destroy $ENV' (exactly)"
             exit 1
@@ -296,7 +287,7 @@ jobs:
 
           export CI_DESTROY_CONFIRM=yes
           set +e
-          script -q -c "./deploy.sh '${ENV}' -x" /dev/null 2>&1 | sed -u 's/\r$//' | tee /tmp/deploy.log
+          stdbuf -oL ./deploy.sh "$ENV" -x 2>&1 | tee /tmp/deploy.log
           rc=${PIPESTATUS[0]}
           set -e
 

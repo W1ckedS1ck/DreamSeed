@@ -4,8 +4,7 @@
 
 _ansible_cmd() {
     local old_opts; old_opts=$(set +o)
-    # stdbuf is NOT needed here — deploy.sh runs under script -q -c (PTY) in CI,
-    # which makes all commands inside line-buffered by default.
+    # Line buffering handled by stdbuf -oL at the pipeline level (deploy.yml).
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
     ANSIBLE_NOCOLOR=1 \
