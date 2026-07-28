@@ -17,9 +17,10 @@
   changed_when: false
   when: php_avail.stdout == "missing"
 
-- name: Set fallback php_version
+- name: Set fallback php_version (cached for subsequent playbooks)
   ansible.builtin.set_fact:
     php_version: "{{ php_fallback.stdout }}"
+    cacheable: true
   when: php_avail.stdout == "missing" and php_fallback.stdout | length > 0
 
 - name: Fail if no PHP version found

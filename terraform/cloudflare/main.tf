@@ -40,6 +40,20 @@ resource "cloudflare_ruleset" "waf" {
     description = "Block OWASP Top 10 and protocol-level attacks"
     enabled     = true
   }]
+
+  lifecycle {
+    precondition {
+      condition     = local.cf_managed_free_ruleset_id != ""
+      error_message = "Cloudflare Managed Free Ruleset not found — WAF would deploy as no-op with empty ID. Aborting."
+    }
+  }
+}
+
+check "waf_ruleset_id" {
+  assert {
+    condition     = local.cf_managed_free_ruleset_id != ""
+    error_message = "Cloudflare Managed Free Ruleset ID is empty — WAF ruleset will not protect the site."
+  }
 }
 
 resource "cloudflare_ruleset" "rate_limit" {

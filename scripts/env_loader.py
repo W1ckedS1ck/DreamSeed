@@ -1,9 +1,6 @@
 """Shared .env loader for DreamSeed Python scripts."""
 
 import os
-import sys
-
-
 import re
 
 BLOCKED_VARS = re.compile(
@@ -20,13 +17,11 @@ def load_env(env_path: str = "") -> None:
     if not env_path:
         env_path = os.path.join(os.path.dirname(__file__), ".env")
     if not os.path.isfile(env_path):
-        print(f"[ERROR] .env not found: {env_path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f".env not found: {env_path}")
     try:
         f = open(env_path)
     except PermissionError:
-        print(f"[ERROR] Permission denied: {env_path}", file=sys.stderr)
-        sys.exit(1)
+        raise PermissionError(f"Permission denied: {env_path}") from None
     with f:
         for line in f:
             line = line.strip()

@@ -43,7 +43,6 @@ permissions:
   deployments: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   ACTIONS_RUNNER_DEBUG: false
   ARTIFACT_RETENTION_DAYS: 30
 
