@@ -86,13 +86,6 @@ repos:
         files: ^ansible/
         pass_filenames: false
 
-      - id: j2lint
-        name: Jinja2 lint (templates)
-        entry: bash -c 'j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "$@" || true' --
-        language: system
-        types: [jinja]
-        pass_filenames: true
-
       - id: actionlint
         name: Actionlint (GitHub Actions)
         entry: actionlint -ignore SC2129 -ignore SC2001 -ignore SC2034 -ignore SC2181 -ignore SC2015
