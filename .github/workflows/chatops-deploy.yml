@@ -1,0 +1,128 @@
+name: "[chatops] Deploy"
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  ARTIFACT_RETENTION_DAYS: 7
+
+jobs:
+  dispatch:
+    name: Parse & dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check author permissions
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMENT_USER="${{ github.event.comment.user.login }}"
+          PERMISSION=$(gh api "/repos/${{ github.repository }}/collaborators/$COMMENT_USER/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+
+          if [[ "$PERMISSION" =~ ^(admin|write|maintain)$ ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+              -X POST -f content="-1" > /dev/null 2>&1 || true
+          fi
+
+      - name: React
+        if: steps.check.outputs.allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -X POST -f content="rocket" > /dev/null 2>&1 || true
+
+      - name: Parse command
+        id: parse
+        if: steps.check.outputs.allowed == 'true'
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          python3 .github/actions/chatops/parse.py "$COMMENT" "$GITHUB_OUTPUT"
+
+      - name: Post help
+        if: steps.parse.outputs.command == 'help'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/actions/chatops/post_help.py "${{ github.event.issue.number }}" "${{ github.repository }}"
+
+      - name: Post invalid
+        if: steps.parse.outputs.command == 'invalid'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -X POST -f content="-1" > /dev/null 2>&1 || true
+          gh issue comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Unknown command. Run /deploy help for available commands."
+          exit 1
+
+      - name: Post status
+        if: steps.parse.outputs.command == 'status'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/actions/chatops/post_status.py "${{ github.event.issue.number }}" "${{ github.repository }}"
+
+      - name: Dispatch deploy
+        if: steps.parse.outputs.command == 'deploy'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ steps.parse.outputs.target }}
+          WEB_SERVER: ${{ steps.parse.outputs.web_server }}
+          IP: ${{ steps.parse.outputs.ip }}
+          ISSUE: ${{ github.event.issue.number }}
+          USER: ${{ github.event.comment.user.login }}
+        run: |
+          FIELDS=()
+          FIELDS+=("--field" "environment=$TARGET")
+          FIELDS+=("--field" "action=deploy")
+          FIELDS+=("--field" "web_server=$WEB_SERVER")
+          [[ -n "$IP" ]] && FIELDS+=("--field" "server_ip=$IP")
+
+          gh workflow run deploy.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            "${FIELDS[@]}"
+
+          gh issue comment "$ISSUE" \
+            --repo "${{ github.repository }}" \
+            --body "Deploy **$TARGET** ($WEB_SERVER) triggered by @$USER"
+
+      - name: Dispatch destroy
+        if: steps.parse.outputs.command == 'destroy'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ steps.parse.outputs.target }}
+          ISSUE: ${{ github.event.issue.number }}
+          USER: ${{ github.event.comment.user.login }}
+        run: |
+          CONFIRM=""
+          [[ "$TARGET" =~ ^prod ]] && CONFIRM="destroy $TARGET"
+
+          gh workflow run deploy.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            --field "environment=$TARGET" \
+            --field "action=destroy" \
+            --field "confirm=$CONFIRM"
+
+          gh issue comment "$ISSUE" \
+            --repo "${{ github.repository }}" \
+            --body "Destroy **$TARGET** triggered by @$USER"
