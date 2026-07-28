@@ -16,10 +16,6 @@ concurrency:
   group: grafana-cloud-${{ inputs.workspace }}
   cancel-in-progress: false
 
-env:
-
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   plan-and-apply:
     name: Grafana Cloud — ${{ inputs.workspace == 'prod' && '🔴 PRODUCTION' || '🟢 DEV' }}

@@ -9,5 +9,15 @@ ExecStart={{ scripts_dir_remote }}/telegram_bot.py
 Restart=always
 RestartSec=10
 
+# Sandboxing
+NoNewPrivileges=yes
+MemoryMax=128M
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+
 [Install]
 WantedBy=multi-user.target

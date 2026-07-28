@@ -2,67 +2,69 @@
 
 ## Deployment Flow
 
-```
-   deploy.sh TARGET -n|-a [OPTIONS]
-       │
-       ├─ 1. Preflight checks
-       │      SSH key, .env, provider vars, TF dir
-       │
-       ├─ 2. Terraform
-       │      init → workspace → apply → output server_ipv4
-       │      backup tfstate → ssh-keygen -R
-       │
-       ├─ 3. Wait for SSH
-       │      AWS: 40×10s | Hetzner: 90×2s polling
-       │
-       ├─ 4. Wait for cloud-init
-       │      timeout 300s + 15×2s fallback
-       │
-        ├─ 5. Generate inventory + vault
-        │      hosts-<workspace>.yml, DEPLOY_VARS_TMP (0600)
-       │
-       ├─ 6. Ansible (7 playbooks)
-       │      01 Base ─── Packages, swap, PHP
-       │      02 Web ───── Nginx/Apache + SSL + PHP-FPM
-       │      03 DB ────── MariaDB tuning, users, restore
-       │      04 Security ── SSH, fail2ban, sysctl, MODX perms
-       │      05 Monitor ── Exporters + VictoriaMetrics + vmagent + promtail + check_site cron
-       │      06 Backup ─── Scripts, crons, Better Stack heartbeats, Telegram bot
-       │      07 Grafana ── Dashboards, datasources, alerts
-       │
-       └─ 7. Post-deploy checks
-               systemctl is-active (7 services + mysqld_exporter)
-               curl https://$DOMAIN/ → 200|301
-               SSL (Cloudflare/LE/self-signed), MODX index.php, DB tables
-               VictoriaMetrics health, node + mysql + nginx/apache exporters, vmagent
-                fail2ban (5 jails for nginx / 3 for apache), cron backup, MySQL write probe
-               → Push to VM: database_tables, dreamseed_health_overall
+```mermaid
+flowchart TD
+    A["deploy.sh TARGET -n|-a"] --> B[Preflight]
+    B --> C{Skip TF?}
+    C -->|no| D["Terraform init → apply"]
+    C -->|yes -i IP| E[Use existing IP]
+    D --> F["Wait SSH<br>AWS: 40×10s / Hetz: 90×2s"]
+    E --> F
+    F --> G[Wait cloud-init]
+    G --> H[Generate inventory + vars]
+
+    H --> I["Phase 1<br>Base packages<br>swap, PHP"]
+    I --> J["Phase 2<br>Web + DB"]
+    J --> K["Phase 3<br>Security"]
+    K --> L["Phase 4<br>Monitor + Backup<br>+ Grafana + Promtail"]
+
+    L --> M[Cloudflare DNS]
+    M --> N[Post-deploy checks]
+    N --> O["✅ Done<br>https://DOMAIN"]
+
+    style A fill:#4a9,color:#fff
+    style I fill:#6af,color:#fff
+    style J fill:#6af,color:#fff
+    style K fill:#6af,color:#fff
+    style L fill:#6af,color:#fff
+    style O fill:#4a9,color:#fff
 ```
 
 ---
 
 ## Infrastructure Layers
 
-```
-Internet
-   │
-   ▼
-Cloudflare Proxy (Full SSL)
-   │
-   ├─ dreamseed.online ───→ Nginx :443 → PHP-FPM → MariaDB
-   │                        Nginx :80  → redirect to :443
-   │
-   ├─ dreamseed.online/grafana/ ───→ Grafana :3000 (behind Nginx proxy_pass)
-   │
-   ├─ dreamseed.online/manager/ → MODX admin panel
-   │
-   └─ Monitoring backplane (127.0.0.1 only)
-         Node Exporter   :9100
-          Nginx Exporter  :9113 / Apache Exporter :9117
-          MySQLd Exporter :9104
-          Redis Exporter  :9121
-          VictoriaMetrics :8428
-          vmagent         :8429 ──remote write──→ Grafana Cloud
+```mermaid
+flowchart LR
+    U[Internet] --> CF[Cloudflare<br>Full SSL]
+    CF --> NX["Nginx :443<br>(or Apache)"]
+    NX --> PHP[PHP-FPM]
+    PHP --> DB[(MariaDB<br>:3306)]
+    PHP --> RE[(Redis<br>:6379)]
+
+    NX --> GR["Grafana :3000<br>/grafana/"]
+    NX --> MODX["MODX /manager/"]
+
+    subgraph monitoring ["127.0.0.1 backplane"]
+        NE[Node Exporter :9100]
+        ME[MySQLd Exp :9104]
+        RE2[Redis Exp :9121]
+        WE[Nginx Exp :9113<br>Apache Exp :9117]
+        VM[VictoriaMetrics :8428]
+        VA[vmagent :8429]
+    end
+
+    VA -->|remote write| GC[Grafana Cloud]
+    NE --> VM
+    ME --> VM
+    RE2 --> VM
+    WE --> VM
+
+    style U fill:#eee,color:#333
+    style CF fill:#f80,color:#fff
+    style NX fill:#06f,color:#fff
+    style GC fill:#f6c,color:#fff
+    style monitoring fill:#f0f0f0,color:#333,stroke:#999
 ```
 
 ---

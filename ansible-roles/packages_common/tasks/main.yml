@@ -19,6 +19,7 @@
       - python3-pymysql
       - debsums
       - apt-show-versions
+      - python3-pip
       - libpam-tmpdir
       - libpam-pwquality
       - unattended-upgrades

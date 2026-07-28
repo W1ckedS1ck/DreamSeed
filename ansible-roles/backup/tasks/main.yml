@@ -49,6 +49,13 @@
     - env_loader.py
     - telegram_bot.py
 
+- name: Install python-telegram-bot for async bot
+  become: true
+  ansible.builtin.pip:
+    name: python-telegram-bot
+    state: present
+    extra_args: --break-system-packages
+
 - name: Deploy Telegram bot systemd service
   ansible.builtin.template:
     src: telegram_bot.service.j2
