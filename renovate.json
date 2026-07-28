@@ -15,14 +15,14 @@
   },
   "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "custom.regex"],
   "pip_requirements": {
-    "fileMatch": [
-      "/^ansible/requirements\\.txt$/",
-      "/^ansible/requirements-deploy\\.txt$/"
+    "managerFilePatterns": [
+      "//^ansible/requirements\\.txt$//",
+      "//^ansible/requirements-deploy\\.txt$//"
     ]
   },
   "ansible-galaxy": {
-    "fileMatch": [
-      "/^ansible/requirements\\.yml$/"
+    "managerFilePatterns": [
+      "//^ansible/requirements\\.yml$//"
     ]
   },
 
@@ -30,24 +30,24 @@
     {
       "customType": "regex",
       "description": "Track Ansible monitoring versions via inline comments",
-      "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+      "managerFilePatterns": [
+        "//^ansible/group_vars/all\\.yml$//"
       ],
       "matchStrings": ["default\\('(?<currentValue>[\\w.\\-]+)'[^#]*# renovate: depName=(?<depName>\\S+)\\s+datasource=(?<datasource>\\S+)"]
     },
     {
       "customType": "regex",
       "description": "Track Grafana Faro Web SDK version (both faro-web-sdk and faro-web-tracing share this version)",
-      "fileMatch": [
-        "/^ansible/group_vars/all\\.yml$/"
+      "managerFilePatterns": [
+        "//^ansible/group_vars/all\\.yml$//"
       ],
       "matchStrings": ["faro_sdk_version: \"(?<currentValue>[\\w.\\-]+)\"\\s*# renovate: depName=(?<depName>\\S+)\\s+datasource=(?<datasource>\\S+)"]
     },
     {
       "customType": "regex",
       "description": "Track gitleaks version",
-      "fileMatch": [
-        "/^\\.github/workflows/ci\\.yml$/"
+      "managerFilePatterns": [
+        "//^\\.github/workflows/ci\\.yml$//"
       ],
       "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "gitleaks/gitleaks",
@@ -56,8 +56,8 @@
     {
       "customType": "regex",
       "description": "Track tflint plugin versions (.tflint.hcl)",
-      "fileMatch": [
-        "/^\\.tflint\\.hcl$/"
+      "managerFilePatterns": [
+        "//^\\.tflint\\.hcl$//"
       ],
       "matchStrings": ["version = \"(?<currentValue>v?[\\w.\\-]+)\"\\s+# renovate: depName=(?<depName>\\S+)"],
       "datasourceTemplate": "github-releases"
@@ -65,8 +65,8 @@
     {
       "customType": "regex",
       "description": "Track Terraform CLI version in setup-terraform action",
-      "fileMatch": [
-        "/^\\.github/actions/setup-terraform/action\\.yml$/"
+      "managerFilePatterns": [
+        "//^\\.github/actions/setup-terraform/action\\.yml$//"
       ],
       "matchStrings": ["default: \"(?<currentValue>[\\w.\\-]+)\"\\s+# renovate: depName=hashicorp/terraform"],
       "depNameTemplate": "hashicorp/terraform",
@@ -75,8 +75,8 @@
     {
       "customType": "regex",
       "description": "Track tflint version in CI",
-      "fileMatch": [
-        "/^\\.github/workflows/ci\\.yml$/"
+      "managerFilePatterns": [
+        "//^\\.github/workflows/ci\\.yml$//"
       ],
       "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "terraform-linters/tflint",
@@ -85,8 +85,8 @@
     {
       "customType": "regex",
       "description": "Track j2lint version in CI",
-      "fileMatch": [
-        "/^\\.github/workflows/ci\\.yml$/"
+      "managerFilePatterns": [
+        "//^\\.github/workflows/ci\\.yml$//"
       ],
       "matchStrings": ["pip install j2lint==(?<currentValue>[\\w.\\-]+)"],
       "depNameTemplate": "aristanetworks/j2lint",
@@ -95,8 +95,8 @@
     {
       "customType": "regex",
       "description": "Track Terraform CLI version in pre-commit curl URL (ci.yml)",
-      "fileMatch": [
-        "/^\\.github/workflows/ci\\.yml$/"
+      "managerFilePatterns": [
+        "//^\\.github/workflows/ci\\.yml$//"
       ],
       "matchStrings": ["hashicorp\\.com/terraform/(?<currentValue>[\\d.]+)/terraform[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
       "datasourceTemplate": "github-releases"
@@ -104,8 +104,8 @@
     {
       "customType": "regex",
       "description": "Track tflint version in pre-commit curl URL (ci.yml)",
-      "fileMatch": [
-        "/^\\.github/workflows/ci\\.yml$/"
+      "managerFilePatterns": [
+        "//^\\.github/workflows/ci\\.yml$//"
       ],
       "matchStrings": ["terraform-linters/tflint/releases/download/v(?<currentValue>[\\d.]+)/tflint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
       "datasourceTemplate": "github-releases"
@@ -113,8 +113,8 @@
     {
       "customType": "regex",
       "description": "Track actionlint version in pre-commit curl URL (ci.yml)",
-      "fileMatch": [
-        "/^\\.github/workflows/ci\\.yml$/"
+      "managerFilePatterns": [
+        "//^\\.github/workflows/ci\\.yml$//"
       ],
       "matchStrings": ["rhysd/actionlint/releases/download/v(?<currentValue>[\\d.]+)/actionlint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
       "datasourceTemplate": "github-releases"
@@ -122,8 +122,8 @@
     {
       "customType": "regex",
       "description": "Track pre-commit hooks",
-      "fileMatch": [
-        "/^\\.pre-commit-config\\.yaml$/"
+      "managerFilePatterns": [
+        "//^\\.pre-commit-config\\.yaml$//"
       ],
       "matchStrings": ["repo: https://github\\.com/(?<depName>[^\\s]+)\\s*\\n\\s*rev: (?<currentValue>[^\\s]+)"],
       "datasourceTemplate": "github-tags"
@@ -224,11 +224,13 @@
       "description": "Group and automerge dev & monitoring tool updates (non-major)",
       "matchManagers": ["custom.regex"],
       "matchUpdateTypes": ["minor", "patch"],
-      "excludePackageNames": ["VictoriaMetrics/VictoriaMetrics"],
       "groupName": "Dev & monitoring tools",
       "automerge": true,
       "automergeType": "pr",
-      "automergeStrategy": "squash"
+      "automergeStrategy": "squash",
+      "matchPackageNames": [
+        "!VictoriaMetrics/VictoriaMetrics"
+      ]
     }
   ]
 }
