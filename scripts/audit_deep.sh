@@ -495,9 +495,11 @@ for _p in 9100 9113 9121 9104; do
   fi
 done
 
-# Custom metrics
-_custom=$(curl -s 'http://127.0.0.1:9100/metrics' 2>/dev/null | grep -c 'backup_last_success\|upload_last_success' || true)
-echo "    Custom node metrics: $_custom"
+# Custom metrics (pushed directly to VictoriaMetrics, not via node_exporter)
+_backup_metric=$(curl -s --max-time 5 'http://127.0.0.1:8428/api/v1/query?query=backup_last_success_timestamp' 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['data']['result']))" 2>/dev/null || echo "0")
+_upload_metric=$(curl -s --max-time 5 'http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp' 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['data']['result']))" 2>/dev/null || echo "0")
+echo "    Backup metric in VictoriaMetrics: $_backup_metric"
+echo "    Upload metric in VictoriaMetrics: $_upload_metric"
 
 # ── 12. Grafana ────────────────────────────────────────────────────────────────
 

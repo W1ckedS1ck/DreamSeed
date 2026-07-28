@@ -60,18 +60,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: 🚀 Start
-        run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-
       - uses: ./.github/actions/setup-terraform
 
       - name: Setup Ansible
         if: inputs.action == 'deploy'
         uses: ./.github/actions/setup-ansible
 
-      - name: Record start time
+      - name: Prepare
         id: start
-        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup-secrets
         with:
@@ -120,7 +119,7 @@ jobs:
           vault_password: ${{ secrets.VAULT_PASSWORD }}
           rclone_conf_base64: ${{ secrets.RCLONE_CONF_BASE64 }}
 
-      - name: Write target config constants
+      - name: Target config
         run: |
           cat >> secrets/.env << 'EOF'
           DEV_HETZ_SSH_KEY_NAME=Vitali.pub
@@ -179,50 +178,54 @@ jobs:
           perl -pe 's/\e\[[\d;]*[mK]//g' /tmp/deploy.log > /tmp/deploy-summary.txt
           exit "$rc"
 
-      - name: Screenshot
-        if: success() && inputs.action == 'deploy'
-        run: |
-          DOMAIN="${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}"
-          mkdir -p /tmp/pages-screenshot
-          google-chrome-stable --headless --disable-gpu --no-sandbox \
-            --screenshot=/tmp/pages-screenshot/${{ inputs.environment }}.png --window-size=1280,720 \
-            "https://$DOMAIN/"
-
-      - name: Upload screenshot to Pages
-        if: success() && inputs.action == 'deploy'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: /tmp/pages-screenshot
-
-      - name: Write deploy summary
+      - name: Post-deploy
         if: always() && inputs.action == 'deploy'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
         run: |
           ENV="${{ inputs.environment }}"
           WEB="${{ inputs.web_server }}"
-          SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
-          SERVER_IP="${SERVER_IP:-${{ inputs.server_ip }}}"
           SKIP_DNS="${{ inputs.skip_dns }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
-          RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
+          DEPLOY_STATUS="${{ steps.deploy.outcome }}"
+
+          # --- Screenshot (only on success) ---
+          if [ "$DEPLOY_STATUS" = "success" ]; then
+            DOMAIN="${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}"
+            mkdir -p /tmp/pages-screenshot
+            google-chrome-stable --headless --disable-gpu --no-sandbox \
+              --screenshot=/tmp/pages-screenshot/${ENV}.png --window-size=1280,720 \
+              "https://$DOMAIN/"
+          fi
+
+          # --- Deploy summary ---
+          SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
+          SERVER_IP="${SERVER_IP:-${{ inputs.server_ip }}}"
+          if [ "$DEPLOY_STATUS" = "success" ]; then
+            RESULT="✅"
+          else
+            RESULT="❌"
+          fi
 
           M="${GITHUB_STEP_SUMMARY:-}"
-          [[ -z "$M" ]] && exit 0
-          echo "## Deploy ${RESULT}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| 🌐 **Environment** | ${ENV} |" >> "$M"
-          echo "| 🖥 **Web server** | ${WEB} |" >> "$M"
-          echo "| 📡 **Server IP** | ${SERVER_IP:-new} |" >> "$M"
-          echo "| ✅ **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
-          echo "| ⏱ **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-          echo "| 🔗 **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| 🔗 **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) — artifacts listed below on that page |" >> "$M"
-          echo "| 📸 **Screenshot preview** | published in a separate job below — refresh this run's summary page in ~1 min |" >> "$M"
+          if [ -n "$M" ]; then
+            echo "## Deploy ${RESULT}" >> "$M"
+            echo "" >> "$M"
+            echo "| | |" >> "$M"
+            echo "|---|---|" >> "$M"
+            echo "| 🌐 **Environment** | ${ENV} |" >> "$M"
+            echo "| 🖥 **Web server** | ${WEB} |" >> "$M"
+            echo "| 📡 **Server IP** | ${SERVER_IP:-new} |" >> "$M"
+            echo "| ✅ **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
+            echo "| ⏱ **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
+            echo "| 🔗 **Commit** | ${{ github.sha }} |" >> "$M"
+            echo "| 🔗 **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+            echo "| 📸 **Screenshot preview** | published in a separate job below — refresh in ~1 min |" >> "$M"
+          fi
 
-      - name: Append deploy log to job summary
-        if: always() && inputs.action == 'deploy'
-        run: |
+          # --- Append deploy log ---
           LOG=/tmp/deploy-summary.txt
           if [ -f "$LOG" ]; then
             {
@@ -244,6 +247,26 @@ jobs:
               echo '</code></pre></details>'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+          # --- Telegram notification (only on success) ---
+          if [ "$DEPLOY_STATUS" = "success" ]; then
+            MSG="✅ *Deploy complete* — ${ENV}
+            Server: ${SERVER_IP:-new}
+            🖥 ${WEB}
+            📅 $(date '+%Y-%m-%d %H:%M')"
+            TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+            curl -s -X POST "$TG_URL" \
+              -d "chat_id=${TG_CHAT_ID}" \
+              ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+              --data-urlencode "parse_mode=Markdown" \
+              --data-urlencode "text=$MSG" > /dev/null || true
+          fi
+
+      - name: Upload screenshot to Pages
+        if: success() && inputs.action == 'deploy'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: /tmp/pages-screenshot
 
       - name: Upload deploy summary
         if: always() && inputs.action == 'deploy'
@@ -306,26 +329,6 @@ jobs:
         run: |
           MSG="❌ *Deploy failed* — ${{ inputs.environment }}
           Action: ${{ inputs.action }}
-          📅 $(date '+%Y-%m-%d %H:%M')"
-          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-          curl -s -X POST "$TG_URL" \
-            -d "chat_id=${TG_CHAT_ID}" \
-            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
-            --data-urlencode "parse_mode=Markdown" \
-            --data-urlencode "text=$MSG" > /dev/null || true
-
-      - name: Notify success
-        if: success() && inputs.action == 'deploy'
-        env:
-          TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
-          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
-        run: |
-          IP="${{ steps.deploy.outputs.server_ip }}"
-          IP="${IP:-${{ inputs.server_ip }}}"
-          MSG="✅ *Deploy complete* — ${{ inputs.environment }}
-          Server: ${IP:-new}
-          🖥 ${{ inputs.web_server }}
           📅 $(date '+%Y-%m-%d %H:%M')"
           TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
           curl -s -X POST "$TG_URL" \

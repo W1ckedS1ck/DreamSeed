@@ -39,14 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: 🚀 Start
-        run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-
       - uses: ./.github/actions/setup-terraform
 
       - name: Record start time
-        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
         id: start_time
+        run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup-secrets
         with:
@@ -78,6 +75,9 @@ jobs:
           prod_grafana_cloud_username: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
           prod_grafana_cloud_token: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
           rclone_crypt_password: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
+          loki_url: ${{ vars.LOKI_URL }}
+          loki_username: ${{ vars.LOKI_USERNAME }}
+          faro_collector_url: ${{ vars.FARO_COLLECTOR_URL }}
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
           dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
@@ -93,22 +93,16 @@ jobs:
           vault_password: ${{ secrets.VAULT_PASSWORD }}
           rclone_conf_base64: ${{ secrets.RCLONE_CONF_BASE64 }}
 
-      - name: Write target config constants
+      - name: Setup config
         run: |
           cat >> secrets/.env << 'EOF'
           HETZNER_SSH_KEY_NAME=Vitali.pub
           HETZNER_PRIMARY_IP_NAME=primary_ip-1
           EOF
-
-      - name: Setup SSH config
-        run: |
           echo "Host *" > ~/.ssh/config
           echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
           echo "  IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
-
-      - name: Load secrets and export TF vars
-        run: |
           source secrets/.env
           python3 << 'PYEOF'
           import json, os, re
@@ -217,6 +211,32 @@ jobs:
             echo "SSH: ssh -i ~/.ssh/deploy_key ubuntu@$(terraform output -raw server_ipv4)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update DNS (test.dreamseed.online)
+        id: dns
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          ZONE_ID="${{ steps.cf_zone.outputs.zone_id }}"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$ZONE_ID" ]; then
+            echo "dns_updated=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          RESP=$(curl -s --retry 3 --retry-delay 5 -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"A\",\"name\":\"test.dreamseed.online\",\"content\":\"$IP\",\"ttl\":120,\"proxied\":true}")
+          if echo "$RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
+            RECORD_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['id'])" 2>/dev/null || echo "")
+            echo "dns_updated=true" >> "$GITHUB_OUTPUT"
+            echo "dns_record_id=$RECORD_ID" >> "$GITHUB_OUTPUT"
+            echo "DNS record created: test.dreamseed.online → $IP"
+          else
+            echo "dns_updated=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::DNS record creation failed"
+          fi
 
       - name: Capture server SSH host key
         run: |
@@ -365,6 +385,9 @@ jobs:
           secrets_dir: "${PWD}/secrets"
           ssh_public_key_path: "${HOME}/.ssh/deploy_key.pub"
           rclone_crypt_password: "${RCLONE_CRYPT_PASSWORD}"
+          loki_url: "${LOKI_URL}"
+          loki_username: "${LOKI_USERNAME}"
+          faro_collector_url: "${FARO_COLLECTOR_URL}"
           EOF
           )
 
@@ -418,6 +441,13 @@ jobs:
             sleep 2
           done
           sleep 5
+
+      - name: Screenshot — post-deploy
+        run: |
+          mkdir -p /tmp/pages-screenshot
+          google-chrome-stable --headless --disable-gpu --no-sandbox \
+            --screenshot=/tmp/pages-screenshot/test-deploy.png --window-size=1280,720 \
+            "https://test.dreamseed.online/" || echo "Screenshot failed (site may not be ready)"
 
       - name: Record initial content count
         id: initial_content
@@ -513,24 +543,6 @@ jobs:
           echo "=== Running verify_backups.sh ==="
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/verify_backups.sh" 2>&1 || true
 
-      - name: Check Grafana proxy
-        run: |
-          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
-          SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
-          echo "=== Checking Grafana via nginx proxy ==="
-          # shellcheck disable=SC2029
-          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:127.0.0.1 --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
-          if [ "$GRAFANA_OK" -lt 1 ]; then
-            # shellcheck disable=SC2029
-            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:$SERVER_IP --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
-          fi
-          if [ "$GRAFANA_OK" -ge 1 ]; then
-            echo "[PASS] Grafana reachable via nginx proxy"
-          else
-            echo "[WARN] Grafana via nginx proxy: not reachable"
-          fi
-
       - name: Record artifact hashes
         id: artifact_hash
         run: |
@@ -597,6 +609,13 @@ jobs:
           # shellcheck disable=SC2029
           command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" ubuntu@"$SERVER_IP" \
             "sudo systemctl restart fail2ban"
+
+      - name: Screenshot — post-restore
+        run: |
+          mkdir -p /tmp/pages-screenshot
+          google-chrome-stable --headless --disable-gpu --no-sandbox \
+            --screenshot=/tmp/pages-screenshot/test-restore.png --window-size=1280,720 \
+            "https://test.dreamseed.online/" || echo "Screenshot failed (site may not be ready)"
 
       - name: Verify restored content
         id: verify_content
@@ -736,13 +755,18 @@ jobs:
           echo "Cache entries: $CACHE_DIRS"
 
       - name: Check Faro RUM + Promtail
+        id: checks
         run: |
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           SERVER_IP="${{ steps.terraform.outputs.server_ipv4 }}"
+          FARO="❌"
+          PROMTAIL="❌"
+          GRAFANA="❌"
 
           echo "=== Faro RUM ==="
           if ssh ubuntu@"$SERVER_IP" "curl -skS 'https://test.dreamseed.online/' | grep -q 'faro-web-sdk'"; then
             echo "[PASS] Faro RUM injected"
+            FARO="✅"
           else
             echo "[INFO] Faro RUM not found (not configured in CI)"
           fi
@@ -750,6 +774,7 @@ jobs:
           echo "=== Promtail ==="
           if ssh ubuntu@"$SERVER_IP" "systemctl is-active promtail &>/dev/null"; then
             echo "[PASS] Promtail active"
+            PROMTAIL="✅"
           else
             echo "[INFO] Promtail not running (not configured in CI)"
           fi
@@ -769,6 +794,23 @@ jobs:
             echo "[WARN] Promtail: $ERRORS errors in last 50 lines"
             ssh ubuntu@"$SERVER_IP" "journalctl -u promtail --no-pager -n 50 2>/dev/null | grep error | head -5" 2>&1 || true
           fi
+
+          echo "=== Grafana health ==="
+          GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:127.0.0.1 --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+          if [ "$GRAFANA_OK" -lt 1 ]; then
+            # shellcheck disable=SC2029
+            GRAFANA_OK=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve test.dreamseed.online:443:$SERVER_IP --max-time 5 https://test.dreamseed.online/grafana/api/health 2>/dev/null | grep -c '\"database\": \"ok\"' || true")
+          fi
+          if [ "$GRAFANA_OK" -ge 1 ]; then
+            GRAFANA="✅"
+            echo "[PASS] Grafana reachable via nginx proxy"
+          else
+            echo "[WARN] Grafana via nginx proxy: not reachable"
+          fi
+
+          echo "faro=$FARO" >> "$GITHUB_OUTPUT"
+          echo "promtail=$PROMTAIL" >> "$GITHUB_OUTPUT"
+          echo "grafana=$GRAFANA" >> "$GITHUB_OUTPUT"
 
           echo "=== PHP-FPM log permissions ==="
           PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a %G' /var/log/php*-fpm.log 2>/dev/null")
@@ -1009,21 +1051,32 @@ jobs:
           rm -f /tmp/test_vault.yml ansible/inventory/hosts-test.yml
           echo "Temp files cleaned"
 
-          RECORD_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?type=A&name=test.dreamseed.online" \
+          RECORDS=$(curl -s "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?name=test.dreamseed.online&per_page=50" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
-          if [ -n "$RECORD_ID" ]; then
-            DEL_RESP=$(curl -s --retry 3 --retry-delay 5 -X DELETE \
-              "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-            if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
-              echo "DNS record deleted"
-            else
-              echo "::warning::DNS record deletion failed"
-            fi
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; [print(rec['id'], rec['type']) for rec in r]" 2>/dev/null || true)
+          if [ -n "$RECORDS" ]; then
+            echo "$RECORDS" | while read -r RID RTYPE; do
+              DEL_RESP=$(curl -s --retry 3 --retry-delay 5 -X DELETE \
+                "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RID" \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+              if echo "$DEL_RESP" | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)" 2>/dev/null; then
+                echo "DNS $RTYPE record deleted"
+              else
+                echo "::warning::DNS $RTYPE record deletion failed"
+              fi
+            done
           else
-            echo "No DNS record found to delete"
+            echo "No DNS records found to delete"
           fi
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots-${{ env.PROVIDER }}
+          path: /tmp/pages-screenshot/*.png
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Write job summary
         if: always()
@@ -1077,4 +1130,14 @@ jobs:
           echo "| HTTP code | ${HTTP_CODE} |" >> "$M"
           echo "| Duration | ${RESTORE_TIME} |" >> "$M"
           echo "" >> "$M"
+          echo "### Monitoring" >> "$M"
+          echo "| Component | Status |" >> "$M"
+          echo "|---|---|" >> "$M"
+          echo "| Grafana | ${{ steps.checks.outputs.grafana }} |" >> "$M"
+          echo "| Faro RUM | ${{ steps.checks.outputs.faro }} |" >> "$M"
+          echo "| Promtail → Loki | ${{ steps.checks.outputs.promtail }} |" >> "$M"
+          echo "" >> "$M"
+
           echo "### Service Tests: ${SUMMARY} ${FAIL_LINE}" >> "$M"
+          echo "" >> "$M"
+          echo "📸 [Download screenshots](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)" >> "$M"

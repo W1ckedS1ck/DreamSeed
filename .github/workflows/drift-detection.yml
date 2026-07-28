@@ -46,6 +46,11 @@ jobs:
             tf_dir: terraform/cloudflare
             tf_workspace: cloudflare
             environment: cloudflare
+            provider: dev
+          - target: cloudflare-prod
+            tf_dir: terraform/cloudflare
+            tf_workspace: cloudflare-prod
+            environment: cloudflare-prod
             provider: prod
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
@@ -95,6 +100,10 @@ jobs:
               ;;
             cloudflare)
               echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV"
+              ;;
+            cloudflare-prod)
+              echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
               echo "TF_VAR_domain=dreamseed.online" >> "$GITHUB_ENV"
               ;;
           esac
@@ -114,11 +123,11 @@ jobs:
           PLAN_FILE="/tmp/${{ matrix.target }}.tfplan"
 
           # Remote backends (Cloudflare) don't support -out; detect by checking backend type
-          if grep -q 'backend "remote"' *.tf 2>/dev/null; then
+          if grep -q 'backend "remote"' ./*.tf 2>/dev/null; then
             # For remote backends, just run plan without -out
             terraform plan -detailed-exitcode -no-color 2>&1 | tee /tmp/plan.log
             rc=$?
-            CHANGES=$(grep -c "^  #" /tmp/plan.log || echo "0")
+            CHANGES=$(grep -c '^  #' /tmp/plan.log || echo "0")
           else
             # For local backends, save plan to file
             terraform plan -detailed-exitcode -no-color \
@@ -146,8 +155,8 @@ jobs:
         run: |
           echo "## Drift Details for ${{ matrix.target }}"
           # For remote backends, show from log; for local, parse plan file
-          if grep -q 'backend "remote"' *.tf 2>/dev/null; then
-            cat /tmp/plan.log | grep -E "^  #|^  +" | head -20
+          if grep -q 'backend "remote"' ./*.tf 2>/dev/null; then
+            grep -E "^  #|^  +" /tmp/plan.log | head -20
           else
             terraform show -json "/tmp/${{ matrix.target }}.tfplan" | jq '.resource_changes[] | select(.change.actions != ["no-op"]) | {address: .address, actions: .change.actions}' 2>/dev/null || true
           fi
@@ -183,15 +192,17 @@ jobs:
         run: |
           DRIFT="${{ steps.plan.outputs.has_drift }}"
           CHANGES="${{ steps.plan.outputs.changes }}"
-          STATUS="${DRIFT:+⚠️ Drift ($CHANGES changes)}"
-          STATUS="${STATUS:-✅ No drift}"
+          if [ "$DRIFT" = "true" ]; then
+            STATUS="⚠️ Drift ($CHANGES changes)"
+          else
+            STATUS="✅ No drift"
+          fi
 
-          M="$GITHUB_STEP_SUMMARY"
-          echo "## Drift Detection — ${{ matrix.target }}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Status** | ${STATUS} |" >> "$M"
-          echo "| **Provider** | ${{ matrix.provider }} |" >> "$M"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+          echo "## Drift Detection — ${{ matrix.target }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Status** | ${STATUS} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Provider** | ${{ matrix.provider }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$GITHUB_STEP_SUMMARY"
