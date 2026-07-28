@@ -15,8 +15,8 @@ flowchart TD
 
     H --> I["Phase 1<br>Base packages<br>swap, PHP"]
     I --> J["Phase 2<br>Web + DB"]
-    J --> K["Phase 3<br>Security"]
-    K --> L["Phase 4<br>Monitor + Backup<br>+ Grafana + Promtail"]
+    J --> K["Phase 2.5<br>Security"]
+    K --> L["Phase 3<br>Monitor + Backup<br>+ Grafana + Promtail"]
 
     L --> M[Cloudflare DNS]
     M --> N[Post-deploy checks]
@@ -251,10 +251,10 @@ Layer 5 — Secrets:
 ```
 Trigger            Workflow              Jobs
 ───────            ────────              ────
-Push / PR          CI                    ShellCheck, ansible-lint, j2lint,
+Push / PR          CI                    ShellCheck, ansible-lint, actionlint,
                                            Terraform checks (tflint+validate+fmt),
                                           Trivy, gitleaks, pre-commit
-                    ────────── 9 parallel ──────────
+                     ────────── 8 parallel ──────────
 
 Manual dispatch    Deploy                Setup → secrets → deploy.sh / destroy
                    Rollback              Get IP → confirm → RESTORE_ALL.sh
@@ -271,6 +271,9 @@ Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
                                           → Destroy → Telegram report (P/F/W summary)
 
 Bot events         Renovate              Dependency updates (auto PRs)
+
+Issue comment      ChatOps Deploy        Deploy via chat command
+Push / manual      Docs to Wiki          Sync docs/ to GitHub Wiki
 
 ```
 
@@ -291,7 +294,7 @@ DreamSeed/
 │   │   └── setup-secrets/    # Composite: SSH deploy key, vault password, rclone config
 │   ├── scripts/
 │   │   └── test-restored-server.sh  # Post-restore verification suite
-│   └── workflows/           # 8 workflows (see CI/CD section)
+│   └── workflows/           # 10 workflows (see CI/CD section)
 ├── scripts/
 │   ├── audit_deep.sh        # Full server audit — covers all AUDIT_CHECKLIST sections
 │   ├── smart_backup.sh      # Local backup (project, DB, Redis)
@@ -301,7 +304,8 @@ DreamSeed/
 ├── terraform/
 │   ├── aws/               # EC2 + SG + key_pair + optional EIP
 │   ├── hetzner/           # Server + firewall + primary IP
-│   └── grafana/           # Grafana Cloud dashboard provisioning via Terraform
+│   ├── grafana/           # Grafana Cloud dashboard provisioning via Terraform
+│   ├── cloudflare/        # WAF rulesets, cache rules, rate limiting
 ├── ansible/
 │   ├── playbook-01-base.yml     # System packages, swap
 │   ├── playbook-02-web.yml      # Nginx + PHP-FPM + Redis + SSL

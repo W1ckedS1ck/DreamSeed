@@ -155,7 +155,7 @@ GitHub Actions receives the private key via `SSH_PRIVATE_KEY` secret.
 
 ---
 
-## Better Uptime (heartbeats)
+## Better Stack (heartbeats)
 
 Each backup/upload/report script pings a unique heartbeat URL on success:
 
@@ -220,7 +220,7 @@ Password is the same Access Policy token as vmagent (`grafana_cloud_token`).
 
 ## EIP (Elastic IP)
 
-Optional. Currently not used (dynamic IPs). Kept for future use.
+Used for prod (AWS) and dev-aws to attach pre-allocated Elastic IP.
 
 ```
 # PROD_EIP="eipalloc-xxx"     # Real allocation ID = attach this EIP

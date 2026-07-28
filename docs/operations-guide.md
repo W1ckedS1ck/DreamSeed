@@ -88,7 +88,7 @@ Re-run from last success:
 ```bash
 # After fixing the cause, re-deploy config only:
 ./deploy.sh <target> -n -i <ip>
-# This skips Terraform + cloud-init, re-runs all 7 playbooks
+# This skips Terraform + cloud-init, re-runs all 8 playbooks
 ```
 
 ---

@@ -1037,6 +1037,35 @@ jobs:
             --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
 
+      - name: Send SRE summary
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: |
+          SUMMARY=$(python3 .github/actions/chatops/restore_summary.py \
+            status="${{ job.status }}" \
+            restore_duration="${{ steps.restore.outputs.restore_duration }}" \
+            content_rows="${{ steps.verify_content.outputs.restore_content_rows }}" \
+            table_count="${{ steps.verify_content.outputs.restore_table_count }}" \
+            http_code="${{ steps.verify_content.outputs.restore_http_code }}" \
+            backup_project="${{ steps.verify_backup.outputs.project_count }}" \
+            backup_db="${{ steps.verify_backup.outputs.db_count }}" \
+            gdrive="${{ steps.gdrive_upload.outputs.gdrive_status }}" \
+            disk_usage="${{ steps.disk.outputs.disk_usage }}" \
+            memory_pct="${{ steps.service_tests.outputs.memory_pct }}" \
+            ssl_status="${{ steps.ssl.outputs.ssl_status }}" \
+            session_handler="${{ steps.service_tests.outputs.session_handler_ok }}" \
+            exporters="${{ steps.service_tests.outputs.test_summary }}" \
+            hash_match="${{ steps.validate_hash.outputs.project_hash_match }}" \
+            run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+
+          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+          curl -s -X POST "$TG_URL" \
+            -d "chat_id=${{ vars.TG_CHAT_ID }}" \
+            ${{ vars.TG_THREAD_ID && format('-d "message_thread_id={0}"', vars.TG_THREAD_ID) || '' }} \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=$SUMMARY" > /dev/null || true
+
       - name: Cleanup temp files and DNS
         if: always()
         run: |

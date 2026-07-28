@@ -221,6 +221,14 @@
       "matchPackageNames": [
         "!VictoriaMetrics/VictoriaMetrics"
       ]
+    },
+    {
+      "description": "Automerge pinDigests for GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["pinDigest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
     }
   ]
 }
