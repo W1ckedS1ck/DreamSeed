@@ -96,7 +96,6 @@
       "customType": "regex",
       "description": "Track Terraform CLI version in pre-commit curl URL (ci.yml)",
       "managerFilePatterns": [
-      "fileMatch": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
       "matchStrings": ["hashicorp\\.com/terraform/(?<currentValue>[\\d.]+)/terraform[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
@@ -106,7 +105,6 @@
       "customType": "regex",
       "description": "Track tflint version in pre-commit curl URL (ci.yml)",
       "managerFilePatterns": [
-      "fileMatch": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
       "matchStrings": ["terraform-linters/tflint/releases/download/v(?<currentValue>[\\d.]+)/tflint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
@@ -116,7 +114,6 @@
       "customType": "regex",
       "description": "Track actionlint version in pre-commit curl URL (ci.yml)",
       "managerFilePatterns": [
-      "fileMatch": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
       "matchStrings": ["rhysd/actionlint/releases/download/v(?<currentValue>[\\d.]+)/actionlint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
