@@ -8,7 +8,7 @@
   "labels": ["dependencies", "renovate"],
   "schedule": ["before 6am on sunday"],
   "platformAutomerge": true,
-  "configMigration": false,
+  "configMigration": true,
   "osvVulnerabilityAlerts": true,
   "major": {
     "dependencyDashboardApproval": true
