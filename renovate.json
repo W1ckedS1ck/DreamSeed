@@ -6,7 +6,8 @@
     "abandonments:recommended"
   ],
   "labels": ["dependencies", "renovate"],
-  "schedule": ["on sunday before 6am"],
+  "schedule": ["before 6am on sunday"],
+  "platformAutomerge": true,
   "configMigration": true,
   "osvVulnerabilityAlerts": true,
   "major": {
@@ -48,7 +49,7 @@
       "fileMatch": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
-      "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>.*?)\""],
+      "matchStrings": ["GITLEAKS_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "gitleaks/gitleaks",
       "datasourceTemplate": "github-releases"
     },
@@ -77,7 +78,7 @@
       "fileMatch": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
-      "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>.*?)\""],
+      "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "terraform-linters/tflint",
       "datasourceTemplate": "github-releases"
     },
