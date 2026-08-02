@@ -15,13 +15,13 @@
   },
   "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "custom.regex"],
   "pip_requirements": {
-    "fileMatch": [
+    "managerFilePatterns": [
       "/^ansible/requirements\\.txt$/",
       "/^ansible/requirements-deploy\\.txt$/"
     ]
   },
   "ansible-galaxy": {
-    "fileMatch": [
+    "managerFilePatterns": [
       "/^ansible/requirements\\.yml$/"
     ]
   },
