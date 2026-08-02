@@ -202,18 +202,20 @@ jobs:
 
           M="${GITHUB_STEP_SUMMARY:-}"
           if [ -n "$M" ]; then
-            echo "## Deploy ${RESULT}" >> "$M"
-            echo "" >> "$M"
-            echo "| | |" >> "$M"
-            echo "|---|---|" >> "$M"
-            echo "| 🌐 **Environment** | ${ENV} |" >> "$M"
-            echo "| 🖥 **Web server** | ${WEB} |" >> "$M"
-            echo "| 📡 **Server IP** | ${SERVER_IP:-new} |" >> "$M"
-            echo "| ✅ **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |" >> "$M"
-            echo "| ⏱ **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-            echo "| 🔗 **Commit** | ${{ github.sha }} |" >> "$M"
-            echo "| 🔗 **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
-            echo "| 📸 **Screenshot preview** | published in a separate job below — refresh in ~1 min |" >> "$M"
+            {
+              echo "## Deploy ${RESULT}"
+              echo ""
+              echo "| | |"
+              echo "|---|---|"
+              echo "| 🌐 **Environment** | ${ENV} |"
+              echo "| 🖥 **Web server** | ${WEB} |"
+              echo "| 📡 **Server IP** | ${SERVER_IP:-new} |"
+              echo "| ✅ **DNS update** | $([ "${SKIP_DNS}" = "true" ] && echo "skipped" || echo "yes") |"
+              echo "| ⏱ **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
+              echo "| 🔗 **Commit** | ${{ github.sha }} |"
+              echo "| 🔗 **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+              echo "| 📸 **Screenshot preview** | published in a separate job below — refresh in ~1 min |"
+            } >> "$M"
           fi
 
           # --- Append deploy log ---
@@ -341,19 +343,21 @@ jobs:
 
           M="${GITHUB_STEP_SUMMARY:-}"
           [[ -z "$M" ]] && exit 0
-          echo "## Destroy ${RESULT}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Environment** | ${ENV} |" >> "$M"
-          echo "| **Server IP** | ${IP:-unknown} |" >> "$M"
-          echo "| **Resources destroyed** | ${RESOURCES:-0} |" >> "$M"
-          echo "| **SSL backed up** | ${SSL} |" >> "$M"
-          echo "| **DNS cleaned** | ${DNS} |" >> "$M"
-          echo "| **Ubuntu Pro detached** | ${PRO} |" >> "$M"
-          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+          {
+            echo "## Destroy ${RESULT}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Environment** | ${ENV} |"
+            echo "| **Server IP** | ${IP:-unknown} |"
+            echo "| **Resources destroyed** | ${RESOURCES:-0} |"
+            echo "| **SSL backed up** | ${SSL} |"
+            echo "| **DNS cleaned** | ${DNS} |"
+            echo "| **Ubuntu Pro detached** | ${PRO} |"
+            echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
+            echo "| **Commit** | ${{ github.sha }} |"
+            echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+          } >> "$M"
 
       - name: Cleanup secrets
         if: always()
@@ -381,6 +385,8 @@ jobs:
         run: |
           M="${GITHUB_STEP_SUMMARY:-}"
           [[ -z "$M" ]] && exit 0
-          echo "### 📸 Screenshot — ${{ inputs.environment }}" >> "$M"
-          echo "" >> "$M"
-          echo "[![${{ inputs.environment }}](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})" >> "$M"
+          {
+            echo "### 📸 Screenshot — ${{ inputs.environment }}"
+            echo ""
+            echo "[![${{ inputs.environment }}](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})"
+          } >> "$M"

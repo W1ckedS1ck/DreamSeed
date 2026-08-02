@@ -96,7 +96,9 @@ run_renovate_validate() {
     group_start "Renovate Config Validator"
     if ! tool_available npx; then print_skip "npx not installed"; group_end; return 0; fi
 
-    if npx --yes --package renovate -- renovate-config-validator 2>&1; then
+    # Pin renovate so validation is deterministic across machines/CI.
+    # managerFilePatterns in renovate.json requires renovate >= 41 (see CLAUDE.md).
+    if npx --yes --package renovate@44 -- renovate-config-validator 2>&1; then
         print_ok "renovate.json valid"; ci_annotation "Renovate" "pass"
     else
         print_fail "renovate.json invalid"; ci_annotation "Renovate" "fail"
