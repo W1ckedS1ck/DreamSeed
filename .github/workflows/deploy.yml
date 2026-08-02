@@ -255,13 +255,13 @@ jobs:
 
       - name: Upload screenshot to Pages
         if: success() && inputs.action == 'deploy'
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: /tmp/pages-screenshot
 
       - name: Upload deploy summary
         if: always() && inputs.action == 'deploy'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: deploy-summary-${{ inputs.environment }}
           path: /tmp/deploy-summary.txt
@@ -375,7 +375,7 @@ jobs:
     steps:
       - name: Deploy screenshot preview
         id: pages
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
 
       - name: Write preview summary
         run: |
