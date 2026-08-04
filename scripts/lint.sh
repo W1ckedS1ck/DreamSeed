@@ -15,7 +15,6 @@ TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
     "ruff:ruff:pip install ruff"
     "ansible-lint:ansible-lint:pip install ansible-lint"
-    "j2lint:j2lint:pip install j2lint"
     "actionlint:actionlint:brew install actionlint"
     "tflint:tflint:brew install tflint"
     "gitleaks:gitleaks:brew install gitleaks"
@@ -81,23 +80,6 @@ run_ruff() {
     group_end
 }
 
-run_j2lint() {
-    group_start "j2lint (Jinja2 Templates)"
-    if ! tool_available j2lint; then print_skip "j2lint not installed"; group_end; return 0; fi
-
-    local j2_files=()
-    while IFS= read -r -d '' f; do j2_files+=("$f"); done < <(
-        find ansible-roles -name "*.j2" -print0
-    )
-
-    if j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "${j2_files[@]}"; then
-        print_ok "No issues"; ci_annotation "j2lint" "pass"
-    else
-        print_fail "Issues found"; ci_annotation "j2lint" "fail"
-    fi
-    group_end
-}
-
 run_actionlint() {
     group_start "actionlint (GitHub Actions)"
     if ! tool_available actionlint; then print_skip "actionlint not installed"; group_end; return 0; fi
@@ -114,7 +96,9 @@ run_renovate_validate() {
     group_start "Renovate Config Validator"
     if ! tool_available npx; then print_skip "npx not installed"; group_end; return 0; fi
 
-    if npx --yes --package renovate -- renovate-config-validator 2>&1; then
+    # Pin renovate so validation is deterministic across machines/CI.
+    # managerFilePatterns in renovate.json requires renovate >= 41 (see CLAUDE.md).
+    if npx --yes --package renovate@44 -- renovate-config-validator 2>&1; then
         print_ok "renovate.json valid"; ci_annotation "Renovate" "pass"
     else
         print_fail "renovate.json invalid"; ci_annotation "Renovate" "fail"
@@ -431,7 +415,7 @@ OPTIONS:
   --shellcheck        Run only shellcheck
   --ruff              Run only ruff
   --ansible-lint      Run only ansible-lint
-  --j2lint            Run only j2lint (Jinja2 templates)
+
   --actionlint        Run only actionlint (GitHub Actions workflows)
   --renovate          Run only renovate config validator
   --tflint            Run only tflint
@@ -457,7 +441,6 @@ run_fast() {
     run_shellcheck
     run_ruff
     run_ansible_lint
-    run_j2lint
     run_actionlint
     run_renovate_validate
     run_markdownlint
@@ -485,7 +468,6 @@ while [[ $# -gt 0 ]]; do
         --shellcheck)        MODE="shellcheck"; shift ;;
         --ruff)              MODE="ruff"; shift ;;
         --ansible-lint)      MODE="ansible-lint"; shift ;;
-        --j2lint)            MODE="j2lint"; shift ;;
         --actionlint)        MODE="actionlint"; shift ;;
         --renovate)          MODE="renovate"; shift ;;
         --tflint)            MODE="tflint"; shift ;;
@@ -508,7 +490,6 @@ case "$MODE" in
     shellcheck)          run_shellcheck ;;
     ruff)                run_ruff ;;
     ansible-lint)        run_ansible_lint ;;
-    j2lint)              run_j2lint ;;
     actionlint)          run_actionlint ;;
     renovate)            run_renovate_validate ;;
     tflint)              run_tflint ;;

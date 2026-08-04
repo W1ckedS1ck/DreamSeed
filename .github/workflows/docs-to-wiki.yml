@@ -1,0 +1,48 @@
+name: "[docs] Sync to Wiki"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/*.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync docs/ to Wiki
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: repo
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+
+      - name: Sync docs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp repo/docs/*.md wiki/ 2>/dev/null || true
+          rm -f wiki/private.md wiki/.DS_Store 2>/dev/null || true
+
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "Sync docs/ from main (${{ github.sha }})"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
+          git push

@@ -9,7 +9,7 @@ These are checked by `deploy.sh` on every run:
 | Tool | Required for | Install |
 |------|-------------|---------|
 | `terraform` | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
-| `ansible-playbook` | Configure server (all 7 playbooks) | `pip install ansible==14.1.0` |
+| `ansible-playbook` | Configure server (all 8 playbooks) | `pip install ansible==14.2.0` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible` |

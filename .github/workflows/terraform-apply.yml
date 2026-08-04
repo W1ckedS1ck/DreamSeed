@@ -60,8 +60,9 @@ jobs:
 
       - name: Set provider env vars
         run: |
-          echo "TF_DIR=terraform/${{ inputs.provider }}" >> "$GITHUB_ENV"
-          echo "TF_WORKSPACE=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+          write_env() { printf '%s\n' "$1" >> "$GITHUB_ENV"; }
+          write_env "TF_DIR=terraform/${{ inputs.provider }}"
+          write_env "TF_WORKSPACE=${{ inputs.workspace }}"
           case "${{ inputs.workspace }}" in
             prod*)
               IS_PROD=true
@@ -72,37 +73,37 @@ jobs:
           esac
           if [ "${{ inputs.provider }}" = "aws" ]; then
             if [ "$IS_PROD" = "true" ]; then
-              echo "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.PROD_EIP }}" >> "$GITHUB_ENV"
+              write_env "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}"
+              write_env "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}"
+              write_env "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}"
+              write_env "TF_VAR_elastic_ip_allocation_id=${{ secrets.PROD_EIP }}"
             else
-              echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}" >> "$GITHUB_ENV"
+              write_env "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}"
+              write_env "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}"
+              write_env "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}"
+              write_env "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}"
             fi
-            echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+            write_env "TF_VAR_environment=${{ inputs.workspace }}"
           fi
           if [ "${{ inputs.provider }}" = "cloudflare" ]; then
-            echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+            write_env "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}"
             case "${{ inputs.workspace }}" in
-              cloudflare-prod) echo "TF_VAR_domain=dreamseed.online" >> "$GITHUB_ENV" ;;
-              *)              echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV" ;;
+              cloudflare-prod) write_env "TF_VAR_domain=dreamseed.online" ;;
+              *)              write_env "TF_VAR_domain=vitalikuts.online" ;;
             esac
           fi
           if [ "${{ inputs.provider }}" = "hetzner" ]; then
             if [ "$IS_PROD" = "true" ]; then
-              echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_server_type=cx43" >> "$GITHUB_ENV"
-              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
-              echo "TF_VAR_enable_primary_ip=true" >> "$GITHUB_ENV"
+              write_env "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}"
+              write_env "TF_VAR_server_type=cx43"
+              write_env "TF_VAR_ssh_key_name=Vitali.pub"
+              write_env "TF_VAR_enable_primary_ip=true"
             else
-              echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"
-              echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+              write_env "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}"
+              write_env "TF_VAR_server_type=cx23"
+              write_env "TF_VAR_ssh_key_name=Vitali.pub"
             fi
-            echo "TF_VAR_environment=${{ inputs.workspace }}" >> "$GITHUB_ENV"
+            write_env "TF_VAR_environment=${{ inputs.workspace }}"
           fi
 
       - name: Terraform Init
@@ -176,13 +177,15 @@ jobs:
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
 
           M="$GITHUB_STEP_SUMMARY"
-          echo "## Terraform ${MODE} ${RESULT}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Provider** | ${{ inputs.provider }} |" >> "$M"
-          echo "| **Workspace** | ${{ inputs.workspace }} |" >> "$M"
-          echo "| **Mode** | ${MODE} |" >> "$M"
-          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
+          {
+            echo "## Terraform ${MODE} ${RESULT}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Provider** | ${{ inputs.provider }} |"
+            echo "| **Workspace** | ${{ inputs.workspace }} |"
+            echo "| **Mode** | ${MODE} |"
+            echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
+            echo "| **Commit** | ${{ github.sha }} |"
+            echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+          } >> "$M"

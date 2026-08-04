@@ -115,7 +115,7 @@ jobs:
           SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
 
           $SSH "true" 2>/dev/null
-          if [ $? -ne 0 ]; then
+          if ! $SSH "true" 2>/dev/null; then
             echo "::notice::SSH unreachable"
             echo "status=unreachable" >> "$GITHUB_OUTPUT"
             exit 0
@@ -142,11 +142,13 @@ jobs:
           if $SSH "test -f /var/run/reboot-required" 2>/dev/null; then
             REBOOT_LIST=$($SSH "cat /var/run/reboot-required.pkgs 2>/dev/null")
             echo "REBOOT REQUIRED"
-            echo "$REBOOT_LIST" | sed 's/^/- /'
+            printf '%s\n' "$REBOOT_LIST" | sed 's/^/- /'
             echo "reboot=yes" >> "$GITHUB_OUTPUT"
-            echo "reboot_list<<EOF" >> "$GITHUB_ENV"
-            echo "$REBOOT_LIST" >> "$GITHUB_ENV"
-            echo "EOF" >> "$GITHUB_ENV"
+            {
+              echo "reboot_list<<EOF"
+              echo "$REBOOT_LIST"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
           else
             echo "No reboot needed"
             echo "reboot=no" >> "$GITHUB_OUTPUT"
@@ -164,15 +166,19 @@ jobs:
           UPDATED_NUM=$(echo "$UPGRADED" | grep -oP '^\d+' || echo "0")
           UPDATED_LIST=$(echo "$RESULT" | grep "^Setting up " | sed 's/Setting up //;s/ (.*\.\.\.)//')
 
-          echo "status=ok" >> "$GITHUB_OUTPUT"
-          echo "before=$TOTAL" >> "$GITHUB_OUTPUT"
-          echo "security=$SECURITY" >> "$GITHUB_OUTPUT"
-          echo "updated=$UPDATED_NUM" >> "$GITHUB_OUTPUT"
-          echo "after=$AFTER_COUNT" >> "$GITHUB_OUTPUT"
+          {
+            echo "status=ok"
+            echo "before=$TOTAL"
+            echo "security=$SECURITY"
+            echo "updated=$UPDATED_NUM"
+            echo "after=$AFTER_COUNT"
+          } >> "$GITHUB_OUTPUT"
           if [ -n "$UPDATED_LIST" ]; then
-            echo "UPDATED_LIST<<EOF" >> "$GITHUB_ENV"
-            echo "$UPDATED_LIST" >> "$GITHUB_ENV"
-            echo "EOF" >> "$GITHUB_ENV"
+            {
+              echo "UPDATED_LIST<<EOF"
+              echo "$UPDATED_LIST"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
           fi
 
       - name: Update Cloudflare real IP ranges
@@ -236,33 +242,36 @@ jobs:
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
 
           M="$GITHUB_STEP_SUMMARY"
-          echo "## Weekly Server Update — ${{ matrix.target }}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Domain** | ${DOMAIN} |" >> "$M"
-          echo "| **Server** | ${IP} |" >> "$M"
-          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-          echo "| **Status** | ${STATUS} |" >> "$M"
-          echo "| **Updated** | ${{ steps.update.outputs.updated }} packages |" >> "$M"
-          echo "| **Security** | ${SECURITY:-?} |" >> "$M"
-          echo "| **Remaining** | ${AFTER:-?} |" >> "$M"
-          echo "| **Reboot** | ${{ steps.update.outputs.reboot }} |" >> "$M"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$M"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$M"
-          echo "" >> "$M"
-          if [ -n "$UPDATED_LIST" ]; then
-            echo "### Updated packages" >> "$M"
-            echo '```' >> "$M"
-            echo "$UPDATED_LIST" >> "$M"
-            echo '```' >> "$M"
-          fi
-          if [ -n "$REBOOT_LIST" ]; then
-            echo "### Reboot required" >> "$M"
-            echo '```' >> "$M"
-            echo "$REBOOT_LIST" >> "$M"
-            echo '```' >> "$M"
-          fi
+          {
+            echo "## Weekly Server Update — ${{ matrix.target }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Domain** | ${DOMAIN} |"
+            echo "| **Server** | ${IP} |"
+            echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
+            echo "| **Status** | ${STATUS} |"
+            echo "| **Before** | ${BEFORE:-?} |"
+            echo "| **Updated** | ${{ steps.update.outputs.updated }} packages |"
+            echo "| **Security** | ${SECURITY:-?} |"
+            echo "| **Remaining** | ${AFTER:-?} |"
+            echo "| **Reboot** | ${{ steps.update.outputs.reboot }} |"
+            echo "| **Commit** | ${{ github.sha }} |"
+            echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo ""
+            if [ -n "$UPDATED_LIST" ]; then
+              echo "### Updated packages"
+              echo '```'
+              echo "$UPDATED_LIST"
+              echo '```'
+            fi
+            if [ -n "$REBOOT_LIST" ]; then
+              echo "### Reboot required"
+              echo '```'
+              echo "$REBOOT_LIST"
+              echo '```'
+            fi
+          } >> "$M"
 
       - name: Cleanup secrets
         if: always()

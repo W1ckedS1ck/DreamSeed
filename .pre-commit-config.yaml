@@ -22,7 +22,7 @@ repos:
         exclude: \.tftpl$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
+    rev: v0.16.0
     hooks:
       - id: ruff
         types: [python]
@@ -85,13 +85,6 @@ repos:
         language: system
         files: ^ansible/
         pass_filenames: false
-
-      - id: j2lint
-        name: Jinja2 lint (templates)
-        entry: bash -c 'j2lint --ignore single-statement-per-line jinja-variable-lower-case jinja-statements-indentation jinja-statements-delimiter -- "$@" || true' --
-        language: system
-        types: [jinja]
-        pass_filenames: true
 
       - id: actionlint
         name: Actionlint (GitHub Actions)

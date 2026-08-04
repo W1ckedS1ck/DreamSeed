@@ -5,12 +5,11 @@ import logging
 import os
 import socket
 import sys
-from datetime import datetime
-
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from datetime import datetime, timezone
 
 from env_loader import load_env
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,9 +45,7 @@ def _chat_allowed(update: Update) -> bool:
         log.warning("Ignored message from unauthorized chat: %s", chat_id)
         return False
     msg = update.message
-    if msg and msg.reply_to_message and msg.reply_to_message.from_user.is_bot:
-        return False
-    return True
+    return not (msg and msg.reply_to_message and msg.reply_to_message.from_user.is_bot)
 
 
 def get_env() -> str:
@@ -75,7 +72,7 @@ def get_size(filepath_or_bytes):
         else:
             size = int(filepath_or_bytes)
         return f"{size // 1048576}MB" if size > 1048576 else f"{size // 1024}KB"
-    except Exception:
+    except (OSError, ValueError):
         return "-"
 
 
@@ -84,7 +81,7 @@ def _local_backups(subdir: str, prefix: str) -> list:
     try:
         files = [f for f in os.listdir(path) if f.startswith(prefix)]
         return sorted(files, key=lambda x: os.path.getmtime(os.path.join(path, x)), reverse=True)
-    except Exception:
+    except OSError:
         return []
 
 
@@ -98,7 +95,7 @@ async def _rclone_lsf(path: str) -> list:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
         lines = [line.split(";", 2) for line in out.decode().strip().split("\n") if line]
         return sorted(lines, key=lambda x: x[1], reverse=True) if lines else []
-    except Exception:
+    except (OSError, asyncio.TimeoutError, UnicodeDecodeError):
         return []
 
 
@@ -126,7 +123,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         msg += f"  🖥 {format_backup_name(line[1])} ({get_size(line[2])})\n"
     for line in cloud_db[:2]:
         msg += f"  🗄 {format_backup_name(line[1], DB_PREFIX)} ({get_size(line[2])})\n"
-    msg += f"\n⏰ Last check: {datetime.now().strftime('%d.%m %H:%M')}"
+    msg += f"\n⏰ Last check: {datetime.now(timezone.utc).strftime('%d.%m %H:%M')}"
 
     await update.message.reply_text(msg, parse_mode="HTML")
 

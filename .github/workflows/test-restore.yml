@@ -807,9 +807,11 @@ jobs:
             echo "[WARN] Grafana via nginx proxy: not reachable"
           fi
 
-          echo "faro=$FARO" >> "$GITHUB_OUTPUT"
-          echo "promtail=$PROMTAIL" >> "$GITHUB_OUTPUT"
-          echo "grafana=$GRAFANA" >> "$GITHUB_OUTPUT"
+          {
+            echo "faro=$FARO"
+            echo "promtail=$PROMTAIL"
+            echo "grafana=$GRAFANA"
+          } >> "$GITHUB_OUTPUT"
 
           echo "=== PHP-FPM log permissions ==="
           PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a %G' /var/log/php*-fpm.log 2>/dev/null")
@@ -1037,6 +1039,35 @@ jobs:
             --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
 
+      - name: Send SRE summary
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: |
+          SUMMARY=$(python3 .github/actions/chatops/restore_summary.py \
+            status="${{ job.status }}" \
+            restore_duration="${{ steps.restore.outputs.restore_duration }}" \
+            content_rows="${{ steps.verify_content.outputs.restore_content_rows }}" \
+            table_count="${{ steps.verify_content.outputs.restore_table_count }}" \
+            http_code="${{ steps.verify_content.outputs.restore_http_code }}" \
+            backup_project="${{ steps.verify_backup.outputs.project_count }}" \
+            backup_db="${{ steps.verify_backup.outputs.db_count }}" \
+            gdrive="${{ steps.gdrive_upload.outputs.gdrive_status }}" \
+            disk_usage="${{ steps.disk.outputs.disk_usage }}" \
+            memory_pct="${{ steps.service_tests.outputs.memory_pct }}" \
+            ssl_status="${{ steps.ssl.outputs.ssl_status }}" \
+            session_handler="${{ steps.service_tests.outputs.session_handler_ok }}" \
+            exporters="${{ steps.service_tests.outputs.test_summary }}" \
+            hash_match="${{ steps.validate_hash.outputs.project_hash_match }}" \
+            run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+
+          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+          curl -s -X POST "$TG_URL" \
+            -d "chat_id=${{ vars.TG_CHAT_ID }}" \
+            ${{ vars.TG_THREAD_ID && format('-d "message_thread_id={0}"', vars.TG_THREAD_ID) || '' }} \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=$SUMMARY" > /dev/null || true
+
       - name: Cleanup temp files and DNS
         if: always()
         run: |
@@ -1070,7 +1101,7 @@ jobs:
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: screenshots-${{ env.PROVIDER }}
           path: /tmp/pages-screenshot/*.png
@@ -1102,41 +1133,42 @@ jobs:
           [ -n "$FAILS" ] && [ "$FAILS" != "none" ] && FAIL_LINE="⚠️ **${FAILS}**" || FAIL_LINE=""
 
           M="$GITHUB_STEP_SUMMARY"
-          echo "## Restore Test ${{ job.status == 'success' && '✅' || '❌' }}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Provider** | ${{ env.PROVIDER }} |" >> "$M"
-          echo "| **Commit** | \`${COMMIT_SHA}\` on \`${HEAD_REF}\` |" >> "$M"
-          echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |" >> "$M"
-          echo "| **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |" >> "$M"
-          echo "| **SSL** | ${SSL_STATUS} |" >> "$M"
-          echo "| **Disk** | ${DISK_USAGE}% |" >> "$M"
-          echo "" >> "$M"
-          echo "### Backup" >> "$M"
-          echo "| Metric | Status |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| Local files | ${BACKUP_FILES} |" >> "$M"
-          echo "| GDrive | ${{ steps.gdrive_upload.outputs.gdrive_status }} |" >> "$M"
-          echo "| Hash match | $(ok_yn "$PROJ_HASH_OK") $(ok_yn "$DB_HASH_OK") project/DB |" >> "$M"
-          echo "" >> "$M"
-          echo "### Restore" >> "$M"
-          echo "| Metric | Value |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| Result | ${RESTORE_OK} |" >> "$M"
-          echo "| Content rows | ${ROWS} |" >> "$M"
-          echo "| DB tables | ${TABLES} |" >> "$M"
-          echo "| HTTP code | ${HTTP_CODE} |" >> "$M"
-          echo "| Duration | ${RESTORE_TIME} |" >> "$M"
-          echo "" >> "$M"
-          echo "### Monitoring" >> "$M"
-          echo "| Component | Status |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| Grafana | ${{ steps.checks.outputs.grafana }} |" >> "$M"
-          echo "| Faro RUM | ${{ steps.checks.outputs.faro }} |" >> "$M"
-          echo "| Promtail → Loki | ${{ steps.checks.outputs.promtail }} |" >> "$M"
-          echo "" >> "$M"
-
-          echo "### Service Tests: ${SUMMARY} ${FAIL_LINE}" >> "$M"
-          echo "" >> "$M"
-          echo "📸 [Download screenshots](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)" >> "$M"
+          {
+            echo "## Restore Test ${{ job.status == 'success' && '✅' || '❌' }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Provider** | ${{ env.PROVIDER }} |"
+            echo "| **Commit** | \`${COMMIT_SHA}\` on \`${HEAD_REF}\` |"
+            echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
+            echo "| **Server** | ${{ steps.terraform.outputs.server_ipv4 }} |"
+            echo "| **SSL** | ${SSL_STATUS} |"
+            echo "| **Disk** | ${DISK_USAGE}% |"
+            echo ""
+            echo "### Backup"
+            echo "| Metric | Status |"
+            echo "|---|---|"
+            echo "| Local files | ${BACKUP_FILES} |"
+            echo "| GDrive | ${{ steps.gdrive_upload.outputs.gdrive_status }} |"
+            echo "| Hash match | $(ok_yn "$PROJ_HASH_OK") $(ok_yn "$DB_HASH_OK") project/DB |"
+            echo ""
+            echo "### Restore"
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Result | ${RESTORE_OK} |"
+            echo "| Content rows | ${ROWS} |"
+            echo "| DB tables | ${TABLES} |"
+            echo "| HTTP code | ${HTTP_CODE} |"
+            echo "| Duration | ${RESTORE_TIME} |"
+            echo ""
+            echo "### Monitoring"
+            echo "| Component | Status |"
+            echo "|---|---|"
+            echo "| Grafana | ${{ steps.checks.outputs.grafana }} |"
+            echo "| Faro RUM | ${{ steps.checks.outputs.faro }} |"
+            echo "| Promtail → Loki | ${{ steps.checks.outputs.promtail }} |"
+            echo ""
+            echo "### Service Tests: ${SUMMARY} ${FAIL_LINE}"
+            echo ""
+            echo "📸 [Download screenshots](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)"
+          } >> "$M"

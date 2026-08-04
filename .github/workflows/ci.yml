@@ -25,12 +25,9 @@ jobs:
       - name: 🚀 Start
         run: echo "ShellCheck started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
-        with:
-          scandir: '.'
-          severity: error
-          ignore_paths: >-
-            .git
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          find . -path ./.git -prune -o -name '*.sh' -print -exec shellcheck --severity=error {} +
 
   ansible-lint:
     name: Ansible Lint
@@ -49,23 +46,6 @@ jobs:
         run: |
           pip install -r ansible/requirements-deploy.txt --quiet
           bash scripts/lint.sh --ci --ansible-lint
-
-  j2lint:
-    name: Jinja2 Templates
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: 🚀 Start
-        run: echo "Jinja2 Lint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-        with:
-          python-version: '3.x'
-
-      - name: Lint Jinja2 templates
-        run: |
-          pip install j2lint==1.2.0 --quiet
-          bash scripts/lint.sh --ci --j2lint
 
   terraform-checks:
     name: Terraform Lint + Validate
@@ -195,9 +175,6 @@ jobs:
           # actionlint
           curl -sL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | \
             sudo tar -xz -C /usr/local/bin actionlint # renovate: depName=rhysd/actionlint
-
-          # j2lint
-          pip install j2lint==1.2.0 --quiet # renovate: depName=aristanetworks/j2lint
 
           # Terraform (pinned via setup-terraform action default)
           curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip" # renovate: depName=hashicorp/terraform

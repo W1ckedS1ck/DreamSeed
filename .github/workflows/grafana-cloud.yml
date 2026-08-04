@@ -69,7 +69,6 @@ jobs:
             SM_TOKEN="${{ secrets.DEV_SM_ACCESS_TOKEN }}"
             GRAFANA_URL="https://vitalikuts.grafana.net"
             DOMAIN="aws.vitalikuts.online"
-            SM_ENABLED="true"
             SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
           fi
           jq -n \
@@ -123,26 +122,31 @@ jobs:
 
           STATUS="${{ job.status == 'success' && '✅' || '❌' }}"
 
-          echo "## Grafana Cloud Deployment ${STATUS}" >> "$M"
-          echo "" >> "$M"
-          echo "| | |" >> "$M"
-          echo "|---|---|" >> "$M"
-          echo "| **Target** | \`${TARGET}\` |" >> "$M"
-          echo "| **Grafana** | ${GRAFANA_URL} |" >> "$M"
+          {
+            echo "## Grafana Cloud Deployment ${STATUS}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Target** | \`${TARGET}\` |"
+            echo "| **Grafana** | ${GRAFANA_URL} |"
+          } >> "$M"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
 
-          echo "### 📊 Dashboards" >> "$M"
-          echo "" >> "$M"
-          echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- **\(.key | ascii_upcase)** — UID: `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
-          echo "" >> "$M"
+          {
+            echo "### 📊 Dashboards"
+            echo ""
+            echo "$OUTPUT" | jq -r '.dashboard_uids.value | to_entries[] | "- **\(.key | ascii_upcase)** — UID: `\(.value)`"' 2>/dev/null || echo "(none)"
+            echo ""
+            echo "### 🔍 Synthetic Monitoring"
+            echo ""
+            echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' 2>/dev/null || echo "(none)"
+            echo ""
+          } >> "$M"
 
-          echo "### 🔍 Synthetic Monitoring" >> "$M"
-          echo "" >> "$M"
-          echo "$OUTPUT" | jq -r '.sm_check_ids.value | to_entries[] | "- \(.key): `\(.value)`"' >> "$M" 2>/dev/null || echo "(none)" >> "$M"
-          echo "" >> "$M"
-
-          echo "### 📁 Folder UID" >> "$M"
-          echo "" >> "$M"
-          FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
-          echo "\`$FOLDER\`" >> "$M"
+          {
+            echo "### 📁 Folder UID"
+            echo ""
+            FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
+            echo "\`$FOLDER\`"
+          } >> "$M"

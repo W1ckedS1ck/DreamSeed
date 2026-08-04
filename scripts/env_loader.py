@@ -19,23 +19,21 @@ def load_env(env_path: str = "") -> None:
     if not os.path.isfile(env_path):
         raise FileNotFoundError(f".env not found: {env_path}")
     try:
-        f = open(env_path)
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                line = line.removeprefix("export ")
+                key, _, value = line.partition("=")
+                key = key.strip()
+                if BLOCKED_VARS.match(key):
+                    continue
+                value = value.strip()
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                    value = value[1:-1]
+                if '$(' in value or '`' in value:
+                    raise ValueError(f"Shell injection pattern detected in {key}")
+                os.environ[key] = value
     except PermissionError:
         raise PermissionError(f"Permission denied: {env_path}") from None
-    with f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            if line.startswith("export "):
-                line = line[7:]
-            key, _, value = line.partition("=")
-            key = key.strip()
-            if BLOCKED_VARS.match(key):
-                continue
-            value = value.strip()
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-                value = value[1:-1]
-            if '$(' in value or '`' in value:
-                raise ValueError(f"Shell injection pattern detected in {key}")
-            os.environ[key] = value

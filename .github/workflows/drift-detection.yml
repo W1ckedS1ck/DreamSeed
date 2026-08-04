@@ -195,11 +195,13 @@ jobs:
             STATUS="✅ No drift"
           fi
 
-          echo "## Drift Detection — ${{ matrix.target }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Status** | ${STATUS} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Provider** | ${{ matrix.provider }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Commit** | ${{ github.sha }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Drift Detection — ${{ matrix.target }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Status** | ${STATUS} |"
+            echo "| **Provider** | ${{ matrix.provider }} |"
+            echo "| **Commit** | ${{ github.sha }} |"
+            echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+          } >> "$GITHUB_STEP_SUMMARY"
