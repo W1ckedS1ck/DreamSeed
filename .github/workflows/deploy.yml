@@ -124,7 +124,7 @@ jobs:
           DEV_HETZ_SSH_KEY_NAME=Vitali.pub
           DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1
           DEV_HETZ_SERVER_TYPE=cx23
-          PROD_HETZ_SERVER_TYPE=cx43
+          PROD_HETZ_SERVER_TYPE=cx33
           PROD_HETZ_SSH_KEY_NAME=Vitali.pub
           PROD_HETZ_PRIMARY_IP_NAME=
           PROD_HETZ_ENABLE_PRIMARY_IP=true

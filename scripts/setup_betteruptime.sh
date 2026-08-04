@@ -81,10 +81,10 @@ write_key_to_env() {
     ansible-vault view "$ENV_FILE" > "$tmpfile" 2>/dev/null || { rm -f "$tmpfile"; return 1; }
 
     if grep -qP "^${var_name}=" "$tmpfile"; then
-        sed -i "s|^${var_name}=.*$|${var_name}=\"${value}\"|" "$tmpfile"
-    else
-        echo "${var_name}=\"${value}\"" >> "$tmpfile"
+        grep -vP "^${var_name}=" "$tmpfile" > "$tmpfile.new"
+        mv "$tmpfile.new" "$tmpfile"
     fi
+    echo "${var_name}=\"${value}\"" >> "$tmpfile"
 
     ansible-vault encrypt "$tmpfile" --vault-password-file "${HOME}/.vault_pass_dreamseed" --output="$ENV_FILE" \
         || { rm -f "$tmpfile"; echo "Error: failed to encrypt secrets/.env" >&2; return 1; }
@@ -161,8 +161,7 @@ for item in data.get('data', []):
 
 for spec in \
     "https://${DOMAIN}/|Main site|The Dreamers|180" \
-    "https://${DOMAIN}/grafana|Grafana|Grafana|180" \
-    "https://${DOMAIN}/bot-health|Telegram Bot|OK|180"; do
+    "https://${DOMAIN}/grafana|Grafana|Grafana|180"; do
 
     IFS='|' read -r url name keyword freq <<< "$spec"
 
@@ -224,8 +223,7 @@ for r in json.load(sys.stdin).get('data', []):
 
 for spec in \
     "Monitor|🌐 ${DOMAIN}|https://${DOMAIN}/|0" \
-    "Monitor|📊 Grafana|https://${DOMAIN}/grafana|1" \
-    "Monitor|🤖 Telegram Bot|https://${DOMAIN}/bot-health|2" ; do
+    "Monitor|📊 Grafana|https://${DOMAIN}/grafana|1" ; do
 
     IFS='|' read -r rtype name url pos <<< "$spec"
 

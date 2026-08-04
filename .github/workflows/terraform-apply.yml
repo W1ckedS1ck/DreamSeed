@@ -95,7 +95,7 @@ jobs:
           if [ "${{ inputs.provider }}" = "hetzner" ]; then
             if [ "$IS_PROD" = "true" ]; then
               write_env "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}"
-              write_env "TF_VAR_server_type=cx43"
+              write_env "TF_VAR_server_type=cx33"
               write_env "TF_VAR_ssh_key_name=Vitali.pub"
               write_env "TF_VAR_enable_primary_ip=true"
             else

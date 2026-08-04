@@ -69,7 +69,7 @@ load_env() {
 detect_env() {
     if [[ -f "$SCRIPT_DIR/.env" ]]; then
         local env_val
-        env_val=$(grep '^ENV=' "$SCRIPT_DIR/.env" 2>/dev/null | head -1 | sed 's/^ENV=//; s/^"//; s/"$//')
+        env_val=$(grep '^ENV=' "$SCRIPT_DIR/.env" 2>/dev/null | head -1 | sed 's/^ENV=//; s/^"//; s/"$//' || true)
         if [[ "$env_val" == prod* ]]; then
             echo ""
         elif [[ -n "$env_val" ]]; then

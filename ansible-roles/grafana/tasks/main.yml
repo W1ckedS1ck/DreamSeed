@@ -209,6 +209,18 @@
   delay: 5
   changed_when: false
 
+- name: Verify Grafana admin password (login probe)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ grafana_port }}/api/login"
+    method: POST
+    body: "user=admin&password={{ grafana_admin_password }}"
+    body_format: form-urlencoded
+    status_code: [200, 401]
+  register: grafana_login_check
+  changed_when: false
+  no_log: true
+  when: grafana_admin_password | default('') | length > 0
+
 - name: Reset Grafana admin password via CLI
   ansible.builtin.command:
     cmd: grafana cli --homepath /usr/share/grafana admin reset-admin-password --password-from-stdin
@@ -216,13 +228,6 @@
   become: true
   no_log: true
   changed_when: false
-  when: grafana_admin_password | default('') | length > 0
-
-- name: Create Grafana admin password marker
-  ansible.builtin.file:
-    path: /etc/grafana/.admin_password_set
-    state: touch
-    owner: root
-    group: grafana
-    mode: "0640"
-  become: true
+  when:
+    - grafana_admin_password | default('') | length > 0
+    - grafana_login_check.status != 200

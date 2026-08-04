@@ -115,7 +115,7 @@ update_cloudflare_dns() {
 
     local existing
     existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "$base?type=$type&name=$domain" 2>/dev/null)
+        "$base?type=$type&name=$domain" 2>/dev/null || true)
 
     # Single Python pass: parse existing records → count, id, old_ip
     IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
@@ -170,7 +170,7 @@ delete_cloudflare_dns() {
 
     local existing
     existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "$base?type=A&name=$domain" 2>/dev/null)
+        "$base?type=A&name=$domain" 2>/dev/null || true)
 
     local record_id
     record_id=$(echo "$existing" | python3 -c "
@@ -204,7 +204,7 @@ update_cloudflare_dns_direct() {
     local ttl="${CLOUDFLARE_DNS_TTL:-120}"
 
     local existing
-    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?type=A&name=$subdomain" 2>/dev/null)
+    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?type=A&name=$subdomain" 2>/dev/null || true)
 
     IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
 import json, sys
