@@ -4,9 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - docs/codemap/**
-      - docs/*.md
-      - .github/workflows/pages.yml
+      - 'terraform/**'
+      - 'ansible/**'
+      - 'scripts/**'
+      - '.github/**'
+      - 'lib/**'
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +30,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Regenerate code map
+        run: python3 docs/codemap/gen_codemap.py
+
+      - name: Warn if committed copy is stale
+        run: |
+          if ! git diff --quiet -- docs/codemap/codemap.html docs/codemap/codemap.json docs/codemap/codemap.lock; then
+            M="${GITHUB_STEP_SUMMARY:-}"
+            if [ -n "$M" ]; then
+              echo "> The committed \`codemap.*\` copy is older than this run. To keep the repo in sync, run \`python3 docs/codemap/gen_codemap.py\` locally and commit the result." >> "$M"
+            fi
+          fi
 
       - name: Build site
         run: |

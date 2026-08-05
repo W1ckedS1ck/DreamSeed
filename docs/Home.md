@@ -33,6 +33,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 | Uptime | Better Stack (3 monitors, 6 heartbeats) |
 | Backup | Local + rclone → Google Drive (AES-256 encrypted) |
 | Secret Storage | Ansible Vault at rest, GitHub Secrets in CI |
+| Docs Generator | Python (gen_codemap.py) — machine-verified flows and relationships |
 
 ## Key Architecture Decisions
 
