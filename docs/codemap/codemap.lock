@@ -1,7 +1,7 @@
 {
-  "commit": "43e705e2184a9fec22d014fda5e91557ecc3eeb1",
-  "working_tree_changed": true,
-  "generated_at": "2026-08-05T06:04:18Z",
+  "commit": "c644abdaf545364f2e1d9e682b534e7575ebe7ec",
+  "working_tree_changed": false,
+  "generated_at": "2026-08-05T07:11:35Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,8 +33,8 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "b907df0229fd292564e4620cc5248d9fdfafb8e8a57c8a7916e17748b1bb815f",
-      "files": 20,
+      "fingerprint": "348adf5589e07fd7463ed3f543c9b18bd0987b0bafa6788619bd5f31705d7a4e",
+      "files": 21,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "ansible": {
@@ -48,8 +48,8 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "docs": {
-      "fingerprint": "eb419588f81f17a2640eabd5659ed19c29471e8dccdb3a68a20fddef1e82db4a",
-      "files": 8,
+      "fingerprint": "2e47e060b5e5053834152fcf97b052469cfce179378527a749c7fca81f716064",
+      "files": 11,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "lib": {
@@ -63,8 +63,8 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "scripts": {
-      "fingerprint": "d200ce0579217cab11bf6e836922b8428475f29f4a83d6e2b65a324f0967ebc5",
-      "files": 15,
+      "fingerprint": "5615052fe3253a5174aa4221a1a517f46b97b83c38906b6cd982f3afe27b8be1",
+      "files": 14,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "terraform": {

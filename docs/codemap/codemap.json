@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-05T06:04:18Z",
-  "generated_from_commit": "43e705e2184a9fec22d014fda5e91557ecc3eeb1",
+  "generated_at": "2026-08-05T07:11:35Z",
+  "generated_from_commit": "c644abdaf545364f2e1d9e682b534e7575ebe7ec",
   "scope": [
     ".github",
     "ansible",
@@ -628,7 +628,6 @@
       "path": "scripts/lint.sh",
       "includes": [
         "scripts/lint.sh",
-        "scripts/smoke_orchestration.sh",
         "renovate.json",
         ".pre-commit-config.yaml",
         ".gitleaks.toml",
@@ -637,10 +636,9 @@
         ".markdownlint.yml",
         ".editorconfig"
       ],
-      "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), orchestration smoke test, plus Renovate/pre-commit/gitleaks/tflint config.",
+      "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), plus Renovate/pre-commit/gitleaks/tflint config.",
       "entrypoints": [
-        "scripts/lint.sh",
-        "scripts/smoke_orchestration.sh"
+        "scripts/lint.sh"
       ],
       "tests": [
         "scripts/smoke_orchestration.sh",

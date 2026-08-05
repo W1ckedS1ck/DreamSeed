@@ -68,7 +68,7 @@ button:hover{border-color:var(--accent);color:#fff}
 <header>
   <div class="brand">
     <span class="name">DreamSeed — Interactive Code Map</span>
-    <span class="meta">generated: 2026-08-05T06:04:18Z &nbsp;·&nbsp; commit: <code>43e705e2184a9fec22d014fda5e91557ecc3eeb1</code></span>
+    <span class="meta">generated: 2026-08-05T07:11:35Z &nbsp;·&nbsp; commit: <code>c644abdaf545364f2e1d9e682b534e7575ebe7ec</code></span>
   </div>
   <div class="controls">
     <input type="text" id="search" placeholder="Search nodes…" autocomplete="off">
@@ -103,8 +103,8 @@ button:hover{border-color:var(--accent);color:#fff}
 </div>
 <script>
 const DATA = {
- "generated_at": "2026-08-05T06:04:18Z",
- "generated_from_commit": "43e705e2184a9fec22d014fda5e91557ecc3eeb1",
+ "generated_at": "2026-08-05T07:11:35Z",
+ "generated_from_commit": "c644abdaf545364f2e1d9e682b534e7575ebe7ec",
  "scope": [
   ".github",
   "ansible",
@@ -732,7 +732,6 @@ const DATA = {
    "path": "scripts/lint.sh",
    "includes": [
     "scripts/lint.sh",
-    "scripts/smoke_orchestration.sh",
     "renovate.json",
     ".pre-commit-config.yaml",
     ".gitleaks.toml",
@@ -741,10 +740,9 @@ const DATA = {
     ".markdownlint.yml",
     ".editorconfig"
    ],
-   "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), orchestration smoke test, plus Renovate/pre-commit/gitleaks/tflint config.",
+   "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), plus Renovate/pre-commit/gitleaks/tflint config.",
    "entrypoints": [
-    "scripts/lint.sh",
-    "scripts/smoke_orchestration.sh"
+    "scripts/lint.sh"
    ],
    "tests": [
     "scripts/smoke_orchestration.sh",
@@ -1693,7 +1691,7 @@ for (const f of DATA.flows) {
   const div = document.createElement('div'); div.className = 'fitem'; div.dataset.id = f.id;
   let note = '';
   if (f.choice_groups && f.choice_groups.length) {
-    note = f.choice_groups.map(g => `⚠ выбирается один из: ${g.join(' | ')}`).join('<br>');
+    note = f.choice_groups.map(g => `⚠ one of: ${g.join(' | ')}`).join('<br>');
   }
   div.innerHTML = `<div class="fname">${f.name}</div><div class="fmeta">${f.trigger}</div>` +
     (note ? `<div class="fnote">${note}</div>` : '') +

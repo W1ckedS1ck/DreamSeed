@@ -1,6 +1,12 @@
 name: "[B] Drift Detection"
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+      - '.github/workflows/drift-detection.yml'
   schedule:
     - cron: '5 7 * * *'  # 07:05 UTC daily
   workflow_dispatch:
