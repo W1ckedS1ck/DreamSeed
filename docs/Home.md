@@ -13,6 +13,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 | [Environment Guide](env-guide) | Every env var — where to get it, where it's used |
 | [Secrets Reference](secrets-reference) | Complete secret inventory, scope, and rotation |
 | [Linters](linters) | Local and CI linting tools and configuration |
+| [Code Map](https://w1ckeds1ck.github.io/DreamSeed/) | Interactive map of the codebase — modules, edges, flows |
 
 ## Tech Stack
 

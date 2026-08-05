@@ -255,6 +255,15 @@ jobs:
               --data-urlencode "text=$MSG" > /dev/null || true
           fi
 
+      - name: Add code map to Pages artifact
+        if: success() && inputs.action == 'deploy'
+        run: |
+          if [ -f docs/codemap/codemap.html ]; then
+            mkdir -p /tmp/pages-screenshot
+            cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
+            cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
+          fi
+
       - name: Upload screenshot to Pages
         if: success() && inputs.action == 'deploy'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
@@ -373,6 +382,9 @@ jobs:
     if: needs.deploy.result == 'success' && inputs.action == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
