@@ -1,5 +1,6 @@
-import sys
+#!/usr/bin/env python3
 import subprocess
+import sys
 
 
 def main():

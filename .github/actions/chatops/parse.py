@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import re
 import sys
 
@@ -38,8 +39,7 @@ def main():
 
     if output:
         with open(output, 'a') as f:
-            for k, v in keys.items():
-                f.write(f'{k}={v}\n')
+            f.writelines(f'{k}={v}\n' for k, v in keys.items())
     else:
         for k, v in keys.items():
             print(f'{k}={v}')
