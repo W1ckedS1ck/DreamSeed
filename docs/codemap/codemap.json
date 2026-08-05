@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-05T07:11:35Z",
-  "generated_from_commit": "c644abdaf545364f2e1d9e682b534e7575ebe7ec",
+  "generated_at": "2026-08-05T11:13:43Z",
+  "generated_from_commit": "d8d8bbc6bcb61ad1d662250a26171568a1b4511e",
   "scope": [
     ".github",
     "ansible",

@@ -1,0 +1,1044 @@
+#!/usr/bin/env python3
+"""DreamSeed codemap generator — produces codemap.json, codemap.lock, codemap.html together.
+
+Writes exclusively under docs/codemap/. Never modifies product code.
+Run from anywhere: python3 docs/codemap/gen_codemap.py
+"""
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(HERE))
+OUT = os.path.join(REPO, "docs", "codemap")
+
+EXCLUDED_DIRS = [
+    "secrets", "logs", "vendor", "dist", "build", "cache", "node_modules",
+    "__pycache__", ".terraform", ".ruff_cache",
+]
+EXCLUDED_FILES = ["*.pyc", "*.tfstate*", "*.tfplan*", ".DS_Store"]
+
+SCOPE = [".github", "ansible", "ansible-roles", "docs", "lib", "scripts", "terraform", "root"]
+
+
+def run(cmd, cwd=REPO):
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True).stdout
+
+
+def tracked_files():
+    out = run(["git", "ls-files", "-z"])
+    return [p for p in out.split("\0") if p]
+
+
+def module_files():
+    files = tracked_files()
+    mods = {m: [] for m in SCOPE}
+    for f in files:
+        parts = f.split("/")
+        mod = parts[0] if len(parts) > 1 else "root"
+        mods.setdefault(mod, []).append(f)
+    return mods
+
+
+def module_fingerprints():
+    """Deterministic per-module fingerprint = sha256 over sorted 'relpath<TAB>blobsha' lines."""
+    mods = module_files()
+    fps = {}
+    for mod, files in sorted(mods.items()):
+        lines = []
+        for f in sorted(files):
+            sha = run(["git", "rev-parse", f"HEAD:{f}"]).strip()
+            lines.append(f"{f}\t{sha}")
+        digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+        fps[mod] = {"fingerprint": digest, "files": len(files), "algorithm": "sha256(sorted 'relpath\\tblobsha')"}
+    return fps
+
+
+def working_tree_clean():
+    out = run(["git", "status", "--porcelain", "-z"])
+    for item in out.split("\0"):
+        if not item:
+            continue
+        path = item[3:]
+        if path.startswith("docs/codemap/") or path == "docs/codemap":
+            continue
+        return False
+    return True
+
+
+def commit():
+    return run(["git", "rev-parse", "HEAD"]).strip()
+
+
+# ---------------------------------------------------------------------------
+# Data model
+# ---------------------------------------------------------------------------
+
+NODES = [
+    # --- deploy machinery ---
+    {"id": "deploy", "type": "orchestrator", "path": "deploy.sh",
+         "includes": ["deploy.sh"],
+         "role": "Top-level deploy orchestrator (bash). Parses target/web-server args, resolves provider+domain per target, then delegates: Terraform via lib/terraform.sh, Ansible via lib/ansible.sh, DNS via lib/helpers.sh. Runs post-deploy checks and records the deployed commit.",
+         "entrypoints": ["deploy.sh:154 main", "deploy.sh:125 resolve_target", "deploy.sh:80 parse_args"],
+         "tests": ["scripts/smoke_orchestration.sh", ".github/workflows/ci.yml"],
+         "constraints": ["Prod destroy requires interactive 3-step confirm or CI_DESTROY_CONFIRM=yes (lib/terraform.sh:45)", "Per-target flock lock prevents concurrent deploys (deploy.sh:159)", "Playbooks run in phases: 01 -> 02+03 -> 04 -> 05+06+07+08 (deploy.sh:421)", "Sources lib/*.sh at startup — never exec'd directly (deploy.sh:41-45)"],
+         "evidence": [{"path": "deploy.sh", "symbol": "main"}, {"path": "deploy.sh", "symbol": "resolve_target"},
+                   {"path": "deploy.sh", "symbol": "run_lint"}, {"path": "deploy.sh", "symbol": "parse_args"},
+                   {"path": "deploy.sh", "symbol": "source \"$SCRIPT_DIR/lib/helpers.sh\""}]},
+    {"id": "lib", "type": "orchestrator", "path": "lib",
+         "includes": ["lib/helpers.sh", "lib/env.sh", "lib/preflight.sh", "lib/terraform.sh", "lib/ansible.sh", "lib/gen_vars.py"],
+         "role": "Deploy support libraries, sourced by deploy.sh. env.sh (vault decryption + var mapping), preflight.sh (prereq + secret sanity checks), terraform.sh (init/apply/destroy, SSL+Ubuntu-Pro teardown), ansible.sh (playbook + parallel execution, check_services), helpers.sh (Cloudflare DNS API, logging, summary), gen_vars.py (extra-vars JSON).",
+         "entrypoints": ["lib/terraform.sh:45 terraform_destroy", "lib/ansible.sh:18 run_ansible", "lib/preflight.sh:15 preflight_checks",
+                      "lib/env.sh:88 export_tf_env", "lib/helpers.sh:107 update_cloudflare_dns", "lib/gen_vars.py:25 main"],
+         "tests": ["scripts/smoke_orchestration.sh", ".github/workflows/ci.yml"],
+         "constraints": ["Sourced by deploy.sh — never executed directly (lib/terraform.sh:3)", "Tech debt: inline python3 -c used instead of jq (lib/helpers.sh:2, lib/env.sh:2)", "TFC destroy may exit 1 even on success — grep 'Destroy complete' as fallback (lib/terraform.sh:161-163)", "gen_vars.py warns when extra-vars contain Jinja2 delimiters (lib/gen_vars.py:16)"],
+         "evidence": [{"path": "lib/terraform.sh", "symbol": "terraform_destroy"},
+                   {"path": "lib/terraform.sh", "symbol": "_tf"},
+                   {"path": "lib/ansible.sh", "symbol": "_ansible_cmd"},
+                   {"path": "lib/preflight.sh", "symbol": "preflight_checks"},
+                   {"path": "lib/env.sh", "symbol": "export_tf_env"},
+                   {"path": "lib/helpers.sh", "symbol": "update_cloudflare_dns"},
+                   {"path": "lib/gen_vars.py", "symbol": "main"}]},
+    # --- iac ---
+    {"id": "terraform-aws", "type": "iac", "path": "terraform/aws",
+         "includes": ["terraform/aws/main.tf", "terraform/aws/variables.tf", "terraform/aws/provider.tf",
+                   "terraform/aws/outputs.tf", "terraform/aws/cloud-init.tftpl"],
+         "role": "AWS IaC. Ubuntu 24.04 AMI lookup, deploy key pair, security group (SSH/HTTP/HTTPS in; restricted egress 80/443/53/123/587), EC2 instance with encrypted gp3 root volume and cloud-init user-data. Remote state on Terraform Cloud. Outputs server_ipv4 + instance_id.",
+         "entrypoints": ["terraform/aws/main.tf"],
+         "tests": ["scripts/lint.sh", ".github/workflows/ci.yml", ".github/workflows/drift-detection.yml"],
+         "constraints": ["Egress intentionally restricted to known ports — do not open 0.0.0.0/0 all-ports (aws/main.tf:66-102)", "prod has disable_api_termination=true (aws/main.tf:145)", "environment must be prod|dev-aws|test (aws/main.tf:163)", "user_data in ignore_changes — template edits do not recreate (aws/main.tf:150-156)"],
+         "evidence": [{"path": "terraform/aws/main.tf", "symbol": "aws_instance"},
+                   {"path": "terraform/aws/main.tf", "symbol": "aws_security_group"},
+                   {"path": "terraform/aws/main.tf", "symbol": "aws_key_pair"},
+                   {"path": "terraform/aws/main.tf", "symbol": "data.aws_ami"},
+                   {"path": "terraform/aws/outputs.tf", "symbol": "server_ipv4"}]},
+    {"id": "terraform-hetzner", "type": "iac", "path": "terraform/hetzner",
+         "includes": ["terraform/hetzner/main.tf", "terraform/hetzner/variables.tf", "terraform/hetzner/provider.tf",
+                   "terraform/hetzner/outputs.tf", "terraform/hetzner/cloud-init.tftpl"],
+         "role": "Hetzner Cloud IaC. Server (ubuntu-24.04), firewall (22/80/443 in; 80/443/53/123/587 out), primary IP (existing or auto-created), SSH keys (existing or CI-generated). prod-hetz has delete+rebuild protection. Outputs server_ipv4, server_id, primary_ip_id.",
+         "entrypoints": ["terraform/hetzner/main.tf"],
+         "tests": ["scripts/lint.sh", ".github/workflows/ci.yml", ".github/workflows/drift-detection.yml"],
+         "constraints": ["delete_protection + rebuild_protection on prod-hetz (hetzner/main.tf:101,119)", "ssh_keys and user_data in ignore_changes to avoid server recreate (hetzner/main.tf:139-141)", "create_before_destroy=true (hetzner/main.tf:135)", "environment must be dev-hetz|test|prod-hetz (hetzner/main.tf:146)"],
+         "evidence": [{"path": "terraform/hetzner/main.tf", "symbol": "hcloud_server"},
+                   {"path": "terraform/hetzner/main.tf", "symbol": "hcloud_firewall"},
+                   {"path": "terraform/hetzner/main.tf", "symbol": "hcloud_primary_ip"},
+                   {"path": "terraform/hetzner/outputs.tf", "symbol": "server_ipv4"}]},
+    {"id": "terraform-saas", "type": "iac", "path": "terraform/cloudflare",
+         "includes": ["terraform/cloudflare/main.tf", "terraform/cloudflare/variables.tf", "terraform/cloudflare/versions.tf",
+                   "terraform/cloudflare/outputs.tf", "terraform/grafana/main.tf", "terraform/grafana/sm.tf",
+                   "terraform/grafana/variables.tf", "terraform/grafana/provider.tf", "terraform/grafana/outputs.tf"],
+         "role": "Secondary 'apply-only' IaC for third-party SaaS (NOT invoked by deploy.sh — applied by standalone workflows). terraform/cloudflare: Managed Free WAF ruleset (OWASP), /manager/ rate limit (20 req/10s block 10s), MODX cache rules. terraform/grafana: 5 community dashboards (rewritten datasource refs) + Synthetic Monitoring HTTP checks on Grafana Cloud.",
+         "entrypoints": ["terraform/cloudflare/main.tf", "terraform/grafana/main.tf", "terraform/grafana/sm.tf"],
+         "tests": ["scripts/lint.sh", ".github/workflows/terraform-apply.yml", ".github/workflows/grafana-cloud.yml", ".github/workflows/drift-detection.yml"],
+         "constraints": ["CF precondition aborts if Managed Free Ruleset ID empty (cloudflare/main.tf:44-49)", "CF rate limit is Free-plan minimum; primary defense is fail2ban modx-admin jail (cloudflare/main.tf:82)", "SM checks budgeted ~15k/mo within 100k free tier (sm.tf:1-6)", "Grafana dashboards need glsa_* SA token — separate from vmagent glc_* metric token (CLAUDE.md)"],
+         "evidence": [{"path": "terraform/cloudflare/main.tf", "symbol": "cloudflare_ruleset"},
+                   {"path": "terraform/cloudflare/main.tf", "symbol": "data.cloudflare_rulesets"},
+                   {"path": "terraform/cloudflare/main.tf", "symbol": "cloudflare_zone"},
+                   {"path": "terraform/grafana/main.tf", "symbol": "grafana_dashboard"},
+                   {"path": "terraform/grafana/main.tf", "symbol": "grafana_folder"},
+                   {"path": "terraform/grafana/sm.tf", "symbol": "grafana_synthetic_monitoring_check"}]},
+    # --- ansible ---
+    {"id": "ansible-playbooks", "type": "ansible", "path": "ansible",
+         "includes": ["ansible/playbook-01-base.yml", "ansible/playbook-02-web.yml", "ansible/playbook-03-db.yml",
+                   "ansible/playbook-04-security.yml", "ansible/playbook-05-monitor.yml", "ansible/playbook-06-backup.yml",
+                   "ansible/playbook-07-grafana.yml", "ansible/playbook-08-promtail.yml", "ansible/group_vars/all.yml",
+                   "ansible/ansible.cfg", "ansible/requirements.yml"],
+         "role": "8 Ansible playbooks (01 base -> 02 web + 03 db -> 04 security -> 05-08 observability/backup) plus central group_vars/all.yml (defaults via lookup('env')) and ansible.cfg (roles_path=../ansible-roles).",
+         "entrypoints": ["ansible/playbook-01-base.yml", "ansible/playbook-02-web.yml", "ansible/playbook-03-db.yml",
+                      "ansible/playbook-04-security.yml", "ansible/playbook-05-monitor.yml", "ansible/playbook-06-backup.yml",
+                      "ansible/playbook-07-grafana.yml", "ansible/playbook-08-promtail.yml"],
+         "tests": ["scripts/lint.sh", ".github/workflows/test-restore.yml"],
+         "constraints": ["group_vars/all.yml uses lookup('env') with mandatory for DB_PASS/DEPLOY_DOMAIN (all.yml:6,16)", "inject_facts_as_vars=False; become=False at playbook level (CLAUDE.md)", "Redis intentionally without password — bind 127.0.0.1 only (all.yml:27-29)", "PHP version auto-detection cached in playbook-01 (CLAUDE.md)"],
+         "evidence": [{"path": "ansible/playbook-02-web.yml", "symbol": "ansible.builtin.include_role"},
+                   {"path": "ansible/playbook-03-db.yml", "symbol": "mariadb"},
+                   {"path": "ansible/playbook-06-backup.yml", "symbol": "backup"},
+                   {"path": "ansible/group_vars/all.yml", "symbol": "db_pass"},
+                   {"path": "ansible/ansible.cfg", "symbol": "ansible.cfg"}]},
+    {"id": "ansible-roles-web", "type": "ansible", "path": "ansible-roles/nginx",
+         "includes": ["ansible-roles/packages_common", "ansible-roles/packages_nginx", "ansible-roles/packages_apache",
+                   "ansible-roles/nginx", "ansible-roles/apache_http", "ansible-roles/nginx-ssl", "ansible-roles/apache_ssl",
+                   "ansible-roles/php", "ansible-roles/ssl"],
+         "role": "Web stack roles: nginx/apache package install + vhosts, PHP-FPM (opcache, limits, Redis session handler), SSL via certbot (Cloudflare DNS-01 -> webroot -> self-signed fallback).",
+         "entrypoints": ["ansible-roles/nginx/tasks/main.yml", "ansible-roles/php/tasks/main.yml", "ansible-roles/ssl/tasks/main.yml"],
+         "tests": ["scripts/lint.sh", ".github/workflows/test-restore.yml"],
+         "constraints": ["SSL priority chain: local secrets/ssl -> certbot DNS-Cloudflare -> webroot -> self-signed (CLAUDE.md)", "php_value[session.save_handler]=redis — PHP sessions live in Redis (php/templates/www.conf.j2:17-18)", "nginx + PHP-FPM have systemd Restart=always drop-ins (CLAUDE.md)"],
+         "evidence": [{"path": "ansible-roles/nginx/tasks/main.yml", "symbol": "ansible.builtin.template"},
+                   {"path": "ansible-roles/php/templates/www.conf.j2", "symbol": "session.save_handler"},
+                   {"path": "ansible-roles/ssl/tasks/main.yml", "symbol": "Install CloudFlare DNS certbot plugin"},
+                   {"path": "ansible-roles/ssl/tasks/main.yml", "symbol": "Obtain SSL certificate via DNS CloudFlare"}]},
+    {"id": "ansible-roles-db", "type": "ansible", "path": "ansible-roles/mariadb",
+         "includes": ["ansible-roles/mariadb", "ansible-roles/redis", "ansible-roles/restore"],
+         "role": "Data layer roles: MariaDB install + MODX db/user creation, Redis cache/sessions config, and the restore role that pulls latest prod backups from GDrive via rclone and restores project/DB/Redis (used for dev provisioning + DR).",
+         "entrypoints": ["ansible-roles/mariadb/tasks/main.yml", "ansible-roles/redis/tasks/main.yml", "ansible-roles/restore/tasks/main.yml"],
+         "tests": [".github/workflows/test-restore.yml"],
+         "constraints": ["restore always pulls prod paths even on dev (group_vars/all.yml:34-38)", "Restore pipeline: find-latest -> download -> verify archive -> extract (restore/tasks/main.yml:50-141)", "MariaDB db modx_db/user modx_user with ansible.mysql collection (mariadb/tasks/main.yml:36-63)"],
+         "evidence": [{"path": "ansible-roles/mariadb/tasks/main.yml", "symbol": "ansible.mysql.mysql_user"},
+                   {"path": "ansible-roles/mariadb/tasks/main.yml", "symbol": "ansible.mysql.mysql_db"},
+                   {"path": "ansible-roles/redis/tasks/main.yml", "symbol": "ansible.builtin.template"},
+                   {"path": "ansible-roles/restore/tasks/main.yml", "symbol": "Download project backup to EBS cache"},
+                   {"path": "ansible-roles/restore/tasks/main.yml", "symbol": "Upload rclone config"}]},
+    {"id": "ansible-roles-security", "type": "ansible", "path": "ansible-roles/security",
+         "includes": ["ansible-roles/security"],
+         "role": "Security hardening: sshd hardening + sshd -t validation, fail2ban jails (modx-admin 25 failures -> 1h ban, botsearch, bad-request), sysctl hardening, restrictive cron/sshd file permissions.",
+         "entrypoints": ["ansible-roles/security/tasks/main.yml"],
+         "tests": ["scripts/lint.sh"],
+         "constraints": ["fail2ban modx-admin jail pairs with Cloudflare /manager/ rate limit as second defense (CLAUDE.md)", "sshd config validated with sshd -t before reload; test tolerates missing log files (security/tasks/main.yml:19-24,111-114)"],
+         "evidence": [{"path": "ansible-roles/security/tasks/main.yml", "symbol": "Validate sshd configuration"},
+                   {"path": "ansible-roles/security/tasks/main.yml", "symbol": "Deploy sysctl hardening"},
+                   {"path": "ansible-roles/security/files/fail2ban-modx-admin.filter", "symbol": "fail2ban-modx-admin.filter"}]},
+    {"id": "ansible-roles-observability", "type": "ansible", "path": "ansible-roles/monitoring",
+         "includes": ["ansible-roles/monitoring", "ansible-roles/promtail", "ansible-roles/grafana"],
+         "role": "Observability roles: node/mysql/nginx/apache/redis exporters, VictoriaMetrics TSDB + vmagent (remote-write to Grafana Cloud), Promtail -> Loki, Grafana with provisioned datasource/dashboards/alerts (Telegram contact), check_services/check_site systemd timers.",
+         "entrypoints": ["ansible-roles/monitoring/tasks/main.yml", "ansible-roles/promtail/tasks/main.yml", "ansible-roles/grafana/tasks/main.yml"],
+         "tests": [".github/workflows/test-restore.yml"],
+         "constraints": ["GRAFANA_CLOUD_URL must be regional prometheus-* URL (lib/preflight.sh:58-68)", "vmagent metric token must be glc_* (Cloud Access Policy), not glsa_* (lib/preflight.sh:69-74)", "vm_retention=3d (group_vars/all.yml:66)", "Grafana alerts send to Telegram contact point (grafana-alerts.yaml.j2:54-61)"],
+         "evidence": [{"path": "ansible-roles/monitoring/templates/vmagent.service.j2", "symbol": "-remoteWrite.url=${VM_CLOUD_URL}"},
+                   {"path": "ansible-roles/monitoring/templates/check-services.timer.j2", "symbol": "check-services.timer.j2"},
+                   {"path": "ansible-roles/promtail/templates/promtail.yml.j2", "symbol": "- url: {{ loki_url }}"},
+                   {"path": "ansible-roles/grafana/tasks/main.yml", "symbol": "Deploy Grafana alerts"}]},
+    {"id": "ansible-roles-backup", "type": "ansible", "path": "ansible-roles/backup",
+         "includes": ["ansible-roles/backup"],
+         "role": "Backup role: uploads all server scripts (common_functions, smart_backup, upload_backups_to_gdrive, verify_backups, send_report, RESTORE_ALL, telegram_bot, audit_deep), installs cron jobs (hourly backup+upload, daily verify, daily/weekly reports), deploys Telegram bot systemd service and writes server.env.",
+         "entrypoints": ["ansible-roles/backup/tasks/main.yml"],
+         "tests": [".github/workflows/test-restore.yml"],
+         "constraints": ["backup_cron_enabled + cloud keep counts configured in group_vars (all.yml:39-43)", "Backup script deployment happens via ansible.builtin.copy of scripts/ dir (backup/tasks/main.yml:35)"],
+         "evidence": [{"path": "ansible-roles/backup/tasks/main.yml", "symbol": "ansible.builtin.cron"},
+                   {"path": "ansible-roles/backup/tasks/main.yml", "symbol": "ansible.builtin.copy"},
+                   {"path": "ansible-roles/backup/tasks/main.yml", "symbol": "ansible.builtin.pip"},
+                   {"path": "ansible-roles/backup/templates/telegram_bot.service.j2", "symbol": "telegram_bot.service.j2"}]},
+    # --- scripts ---
+    {"id": "scripts-server", "type": "scripts", "path": "scripts/common_functions.sh",
+         "includes": ["scripts/common_functions.sh", "scripts/env_loader.py", "scripts/smart_backup.sh",
+                   "scripts/upload_backups_to_gdrive.sh", "scripts/verify_backups.sh", "scripts/send_report.sh",
+                   "scripts/RESTORE_ALL.sh", "scripts/check_services.sh", "scripts/update_cloudflare_ips.sh",
+                   "scripts/telegram_bot.py", "scripts/audit_deep.sh"],
+         "role": "Server-side operational scripts deployed to /home/ubuntu/Scripts. Backup pipeline (smart_backup -> upload -> verify -> report), DR restore (RESTORE_ALL), health checks (check_services), Telegram bot, Cloudflare IP refresh. All share common_functions.sh (load_env, send_tg, ping_heartbeat, rclone_retry, prune_cloud_backups, export_metric).",
+         "entrypoints": ["scripts/smart_backup.sh", "scripts/upload_backups_to_gdrive.sh", "scripts/RESTORE_ALL.sh",
+                      "scripts/check_services.sh", "scripts/telegram_bot.py"],
+         "tests": ["scripts/smoke_orchestration.sh", ".github/workflows/test-restore.yml", ".github/workflows/rollback.yml"],
+         "constraints": ["Backup locked via flock $HOME/.locks/smart_backup.lock (smart_backup.sh:37-45)", "RESTORE_ALL --auto-latest forces prod cloud paths (RESTORE_ALL.sh)", "Cron scripts push metrics to local VictoriaMetrics :8428 and ping per-script Better Stack heartbeats on success", "rclone_retry uses RCLONE_CMD_TIMEOUT env var, not RCLONE_TIMEOUT (CLAUDE.md)"],
+         "evidence": [{"path": "scripts/common_functions.sh", "symbol": "send_tg"},
+                   {"path": "scripts/common_functions.sh", "symbol": "ping_heartbeat"},
+                   {"path": "scripts/common_functions.sh", "symbol": "rclone_retry"},
+                   {"path": "scripts/common_functions.sh", "symbol": "prune_cloud_backups"},
+                   {"path": "scripts/common_functions.sh", "symbol": "export_metric"},
+                   {"path": "scripts/smart_backup.sh", "symbol": "smart_backup.sh"},
+                   {"path": "scripts/RESTORE_ALL.sh", "symbol": "select_backup_cloud"},
+                   {"path": "scripts/check_services.sh", "symbol": "_check_ep"},
+                   {"path": "scripts/telegram_bot.py", "symbol": "cmd_backups"},
+                   {"path": "scripts/env_loader.py", "symbol": "load_env"}]},
+    {"id": "tooling", "type": "scripts", "path": "scripts/lint.sh",
+         "includes": ["scripts/lint.sh", "renovate.json", ".pre-commit-config.yaml",
+                   ".gitleaks.toml", ".gitleaksignore", ".tflint.hcl", ".markdownlint.yml", ".editorconfig"],
+         "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), plus Renovate/pre-commit/gitleaks/tflint config.",
+         "entrypoints": ["scripts/lint.sh"],
+         "tests": ["scripts/smoke_orchestration.sh", ".github/workflows/ci.yml"],
+         "constraints": ["lint.sh is the single source of truth for CI + local linting (CLAUDE.md)", "renovate pinned to renovate@44; managerFilePatterns must stay single-slash to avoid config-migration noise (CLAUDE.md)", "run_terraform_validate temporarily stashes vaulted terraform.tfvars (lint.sh:168-182)"],
+         "evidence": [{"path": "scripts/lint.sh", "symbol": "run_ansible_lint"},
+                   {"path": "scripts/lint.sh", "symbol": "run_renovate_validate"},
+                   {"path": "scripts/lint.sh", "symbol": "run_gitleaks"},
+                   {"path": "scripts/lint.sh", "symbol": "run_shellcheck"},
+                   {"path": "renovate.json", "symbol": "managerFilePatterns"}]},
+    # --- ci ---
+    {"id": "github-ci", "type": "ci", "path": ".github",
+         "includes": [".github/workflows", ".github/actions", ".github/scripts", ".github/CODEOWNERS"],
+         "role": "CI/CD: 10 workflows (deploy, ci, chatops-deploy, rollback, drift-detection, health-check, terraform-apply, grafana-cloud, test-restore, docs-to-wiki), 4 composite actions (setup-env, setup-secrets, setup-terraform, setup-ansible) and chatops bots. Triggers deploys/destroys/rollbacks and weekly maintenance.",
+         "entrypoints": [".github/workflows/deploy.yml", ".github/workflows/ci.yml", ".github/workflows/health-check.yml",
+                      ".github/workflows/test-restore.yml", ".github/workflows/rollback.yml"],
+         "tests": [".github/workflows/ci.yml"],
+         "constraints": ["Destroy ONLY via deploy.yml with confirm='destroy <env>' (deploy.yml:284)", "deploy.yml streams logs via stdbuf -oL | tee for real-time GitHub logs (deploy.yml:153)", "Secrets shredded in Cleanup secrets steps (deploy.yml:362-368)", "Per-environment concurrency groups prevent parallel deploys (deploy.yml:37-40)", "chatops allows only configured users to dispatch (chatops-deploy.yml:24)"],
+         "evidence": [{"path": ".github/workflows/deploy.yml", "symbol": "stdbuf -oL ./deploy.sh"},
+                   {"path": ".github/workflows/ci.yml", "symbol": "bash scripts/lint.sh --ci --ansible-lint"},
+                   {"path": ".github/workflows/health-check.yml", "symbol": "apt upgrade"},
+                   {"path": ".github/workflows/rollback.yml", "symbol": "RESTORE_ALL.sh --auto-latest"},
+                   {"path": ".github/actions/setup-secrets/action.yml", "symbol": "Setup SSH deploy key"},
+                   {"path": ".github/workflows/chatops-deploy.yml", "symbol": "gh workflow run deploy.yml"}]},
+    # --- runtime ---
+    {"id": "runtime-db-cache", "type": "runtime", "path": "ansible-roles/redis",
+         "includes": ["ansible-roles/mariadb", "ansible-roles/redis"],
+         "role": "Server-side runtime data stores: MariaDB (MODX app DB modx_db, mysqldump'd hourly) and Redis (MODX cache db0 + PHP sessions db1 via session.save_handler, dump.rdb backed up). Provisioned by ansible-roles-db, consumed by backup scripts and exporters.",
+         "entrypoints": ["ansible-roles/mariadb/tasks/main.yml", "ansible-roles/redis/tasks/main.yml"],
+         "tests": ["scripts/check_services.sh", ".github/workflows/test-restore.yml"],
+         "constraints": ["Redis single-server bind 127.0.0.1, no auth (group_vars/all.yml:27-29)", "mysqldump uses .my.cnf — no credentials on CLI (smart_backup.sh:105-112)", "MODX session table excluded from DB dump (smart_backup.sh:111)"],
+         "evidence": [{"path": "ansible-roles/mariadb/tasks/main.yml", "symbol": "ansible.mysql.mysql_db"},
+                   {"path": "ansible-roles/redis/tasks/main.yml", "symbol": "ansible.builtin.systemd"},
+                   {"path": "scripts/smart_backup.sh", "symbol": "mysqldump"},
+                   {"path": "ansible-roles/php/templates/www.conf.j2", "symbol": "session.save_path"}]},
+    # --- external ---
+    {"id": "ext-cloudflare", "type": "external", "path": "ansible-roles/nginx/files/cloudflare-realip.conf",
+         "includes": ["ansible-roles/nginx/files/cloudflare-realip.conf"],
+         "role": "External — Cloudflare edge: DNS A records, WAF managed ruleset, /manager/ rate limit, MODX cache rules, CDN/proxy. Rulesets applied via terraform apply; A records written by lib/helpers.sh during deploy; real visitor IP restored via CF-Connecting-IP + ngx_http_realip_module.",
+         "entrypoints": [],
+         "tests": ["scripts/lint.sh"],
+         "constraints": ["/manager/ rate limit 20 req/10s block 10s (cloudflare/main.tf:75-84)", "cloudflare-realip.conf refreshed by update_cloudflare_ips.sh from published IP lists"],
+         "evidence": [{"path": "lib/helpers.sh", "symbol": "update_cloudflare_dns"},
+                   {"path": "lib/helpers.sh", "symbol": "delete_cloudflare_dns"},
+                   {"path": "terraform/cloudflare/main.tf", "symbol": "cloudflare_ruleset"},
+                   {"path": "ansible-roles/nginx/files/cloudflare-realip.conf", "symbol": "cloudflare-realip.conf"}]},
+    {"id": "ext-grafana-cloud", "type": "external", "path": "ansible-roles/monitoring/templates/vmagent.service.j2",
+         "includes": ["terraform/grafana/main.tf", "terraform/grafana/sm.tf"],
+         "role": "External — Grafana Cloud SaaS: Prometheus metrics store (vmagent remote-write), provisioned dashboards, Loki (promtail), Faro RUM frontend monitoring, Synthetic Monitoring HTTP checks.",
+         "entrypoints": [],
+         "tests": [".github/workflows/grafana-cloud.yml"],
+         "constraints": ["remote_write requires regional prometheus-* URL (lib/preflight.sh:58-68)", "vmagent metric token must be glc_* CAP token, not glsa_* SA token (lib/preflight.sh:69-74)", "Instance URLs hardcoded in grafana-cloud.yml differ for Terraform vs vmagent (CLAUDE.md)"],
+         "evidence": [{"path": "ansible-roles/monitoring/templates/vmagent.service.j2", "symbol": "-remoteWrite.url=${VM_CLOUD_URL}"},
+                   {"path": "terraform/grafana/main.tf", "symbol": "grafana_dashboard"},
+                   {"path": "terraform/grafana/sm.tf", "symbol": "grafana_synthetic_monitoring_check"},
+                   {"path": ".github/workflows/grafana-cloud.yml", "symbol": "terraform apply -auto-approve"}]},
+    {"id": "ext-telegram", "type": "external", "path": "ansible-roles/grafana/templates/grafana-alerts.yaml.j2",
+         "includes": [],
+         "role": "External — Telegram Bot API. Deploy/rollback/health/maintenance notifications from CI; backup-failure alerts from server scripts; Grafana alert contact point; interactive bot (/status, /backups) runs as systemd service.",
+         "entrypoints": [],
+         "tests": [],
+         "constraints": ["TG_TOKEN/TG_CHAT_ID/TG_THREAD_ID consumed across workflows + scripts; masked in CI", "telegram_bot.py only responds to allowed chat, ignores bot replies (telegram_bot.py:39)"],
+         "evidence": [{"path": "scripts/common_functions.sh", "symbol": "send_tg"},
+                   {"path": ".github/workflows/deploy.yml", "symbol": "api.telegram.org/bot"},
+                   {"path": "scripts/telegram_bot.py", "symbol": "main"},
+                   {"path": "ansible-roles/grafana/templates/grafana-alerts.yaml.j2", "symbol": "type: telegram"}]},
+    {"id": "ext-betterstack", "type": "external", "path": "scripts/setup_betteruptime.sh",
+         "includes": ["scripts/setup_betteruptime.sh", "scripts/list_betteruptime.sh"],
+         "role": "External — Better Stack uptime: per-script heartbeats (backup, gdrive, verify, daily/weekly report, check_services) + HTTP monitors + status page + Telegram webhooks. Replaced healthchecks.io; cron scripts ping heartbeats on success. Bootstrap/audit tooling: setup_betteruptime.sh (idempotent create) + list_betteruptime.sh (read-only inventory).",
+         "entrypoints": ["scripts/setup_betteruptime.sh"],
+         "tests": [],
+         "constraints": ["Each cron script pings its own heartbeat key on success only (smart_backup.sh:168-176)", "Heartbeats/monitors auto-created via setup_betteruptime.sh --write-env (lib/preflight.sh:33)", "setup_betteruptime.sh re-encrypts secrets/.env with ansible-vault when --write-env (setup_betteruptime.sh:75)"],
+         "evidence": [{"path": "scripts/common_functions.sh", "symbol": "ping_heartbeat"},
+                   {"path": "scripts/setup_betteruptime.sh", "symbol": "heartbeat_exists"},
+                   {"path": "scripts/setup_betteruptime.sh", "symbol": "write_key_to_env"},
+                   {"path": "scripts/list_betteruptime.sh", "symbol": "fetch_and_format"}]},
+    {"id": "ext-gdrive", "type": "external", "path": "scripts/upload_backups_to_gdrive.sh",
+         "includes": ["scripts/upload_backups_to_gdrive.sh", "scripts/RESTORE_ALL.sh"],
+         "role": "External — Google Drive backup storage via rclone crypt remote (gdrive-crypt:, AES-encrypted). Hourly upload, cloud rotation/prune, trash cleanup. Restore always pulls prod paths; dev uploads go to *-dev paths.",
+         "entrypoints": [],
+         "tests": [".github/workflows/test-restore.yml"],
+         "constraints": ["rclone.conf injected into secrets/ by setup-secrets composite action in CI", "gdrive-crypt: fails hard if remote missing (upload_backups_to_gdrive.sh:39-43)", "prune uses grep -c || true to survive empty listings (CLAUDE.md)"],
+         "evidence": [{"path": "scripts/upload_backups_to_gdrive.sh", "symbol": "rclone_retry"},
+                   {"path": "scripts/common_functions.sh", "symbol": "prune_cloud_backups"},
+                   {"path": "ansible-roles/restore/tasks/main.yml", "symbol": "Upload rclone config"}]},
+]
+
+NODE_TYPES = {
+    "orchestrator": {"label": "Orchestrator", "color": "#f5a623"},
+    "iac": {"label": "Terraform / IaC", "color": "#b388ff"},
+    "ansible": {"label": "Ansible roles", "color": "#26c6da"},
+    "scripts": {"label": "Scripts", "color": "#66bb6a"},
+    "ci": {"label": "CI/CD", "color": "#42a5f5"},
+    "runtime": {"label": "Runtime (DB/cache)", "color": "#ef5350"},
+    "external": {"label": "External service", "color": "#8e9eab"},
+}
+
+EDGES = [
+    # --- orchestration ---
+    {"from_id": "github-ci", "to": "deploy", "type": "calls",
+         "evidence": [{"path": ".github/workflows/deploy.yml", "symbol": "stdbuf -oL ./deploy.sh"},
+                   {"path": ".github/workflows/chatops-deploy.yml", "symbol": "gh workflow run deploy.yml"}],
+         "note": "Workflow dispatch runs ./deploy.sh with target + web-server args; chatops /deploy command dispatches the same workflow."},
+    {"from_id": "github-ci", "to": "ansible-playbooks", "type": "calls",
+         "evidence": [{"path": ".github/workflows/test-restore.yml", "symbol": "ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml"}],
+         "note": "test-restore.yml provisions a test server by invoking playbooks directly."},
+    {"from_id": "deploy", "to": "lib", "type": "imports",
+         "evidence": [{"path": "deploy.sh", "symbol": "source \"$SCRIPT_DIR/lib/helpers.sh\""},
+                   {"path": "deploy.sh", "symbol": "source \"$SCRIPT_DIR/lib/ansible.sh\""}],
+         "note": "deploy.sh sources lib/helpers.sh, lib/env.sh, lib/preflight.sh, lib/terraform.sh, lib/ansible.sh at startup (deploy.sh:41-45)."},
+    {"from_id": "lib", "to": "terraform-aws", "type": "calls",
+         "evidence": [{"path": "lib/terraform.sh", "symbol": "_tf"},
+                   {"path": "lib/terraform.sh", "symbol": "terraform_init_if_needed"}],
+         "note": "_tf() runs terraform inside terraform/aws (TF_DIR); deploy.sh triggers init/validate/apply + state backup."},
+    {"from_id": "lib", "to": "terraform-hetzner", "type": "calls",
+         "evidence": [{"path": "lib/terraform.sh", "symbol": "_tf"},
+                   {"path": "deploy.sh", "symbol": "resolve_target"}],
+         "note": "Same _tf() path — TF_DIR=terraform/hetzner when TARGET is hetzner-based."},
+    {"from_id": "lib", "to": "ansible-playbooks", "type": "calls",
+         "evidence": [{"path": "lib/ansible.sh", "symbol": "_ansible_cmd"},
+                   {"path": "deploy.sh", "symbol": "run_parallel"}],
+         "note": "_ansible_cmd runs ansible-playbook -i inventory -e @vars.json for each playbook; run_parallel executes 02+03 and 05+06+07+08 concurrently."},
+    {"from_id": "deploy", "to": "tooling", "type": "calls",
+         "evidence": [{"path": "deploy.sh", "symbol": "run_lint"}],
+         "note": "deploy.sh delegates pre-deploy linting to scripts/lint.sh --fast."},
+    {"from_id": "lib", "to": "ext-cloudflare", "type": "publishes",
+         "evidence": [{"path": "lib/helpers.sh", "symbol": "update_cloudflare_dns"},
+                   {"path": "lib/helpers.sh", "symbol": "update_cloudflare_dns_direct"}],
+         "note": "deploy.sh (via lib/helpers.sh) updates A record for the domain (and grey-cloud SSH record on dev) after SSL, before checks."},
+    # --- CI -> infra modules ---
+    {"from_id": "github-ci", "to": "terraform-aws", "type": "calls",
+         "evidence": [{"path": ".github/workflows/drift-detection.yml", "symbol": "tf_dir: terraform/aws"},
+                   {"path": ".github/workflows/terraform-apply.yml", "symbol": "terraform apply -auto-approve"}],
+         "note": "drift-detection and terraform-apply run terraform in terraform/aws."},
+    {"from_id": "github-ci", "to": "terraform-hetzner", "type": "calls",
+         "evidence": [{"path": ".github/workflows/drift-detection.yml", "symbol": "tf_dir: terraform/hetzner"},
+                   {"path": ".github/workflows/terraform-apply.yml", "symbol": "terraform apply -auto-approve"}],
+         "note": "drift-detection and terraform-apply run terraform in terraform/hetzner."},
+    {"from_id": "github-ci", "to": "terraform-saas", "type": "calls",
+         "evidence": [{"path": ".github/workflows/drift-detection.yml", "symbol": "tf_dir: terraform/cloudflare"},
+                   {"path": ".github/workflows/terraform-apply.yml", "symbol": "Delete existing Cloudflare rate limit ruleset"},
+                   {"path": ".github/workflows/grafana-cloud.yml", "symbol": "terraform apply -auto-approve"}],
+         "note": "drift-detection + terraform-apply manage Cloudflare rulesets; grafana-cloud.yml inits/applies terraform/grafana with tfvars.json from secrets."},
+    {"from_id": "github-ci", "to": "scripts-server", "type": "calls",
+         "evidence": [{"path": ".github/workflows/rollback.yml", "symbol": "RESTORE_ALL.sh --auto-latest"},
+                   {"path": ".github/workflows/test-restore.yml", "symbol": "bash /home/ubuntu/Scripts/smart_backup.sh"}],
+         "note": "Workflows SSH into the server and execute deployed scripts (rollback, DR test, health checks)."},
+    {"from_id": "github-ci", "to": "ext-telegram", "type": "publishes",
+         "evidence": [{"path": ".github/workflows/deploy.yml", "symbol": "api.telegram.org/bot"},
+                   {"path": ".github/workflows/health-check.yml", "symbol": "api.telegram.org/bot"}],
+         "note": "Deploy/rollback/health-check notify Telegram with status summaries."},
+    # --- terraform -> external ---
+    {"from_id": "terraform-saas", "to": "ext-cloudflare", "type": "writes",
+         "evidence": [{"path": "terraform/cloudflare/main.tf", "symbol": "cloudflare_ruleset"}],
+         "note": "terraform apply provisions WAF/rate-limit/cache rulesets on the Cloudflare zone."},
+    {"from_id": "terraform-saas", "to": "ext-grafana-cloud", "type": "writes",
+         "evidence": [{"path": "terraform/grafana/main.tf", "symbol": "grafana_dashboard"},
+                   {"path": "terraform/grafana/sm.tf", "symbol": "grafana_synthetic_monitoring_check"}],
+         "note": "terraform apply provisions dashboards + synthetic monitoring checks on Grafana Cloud."},
+    # --- playbooks -> roles ---
+    {"from_id": "ansible-playbooks", "to": "ansible-roles-web", "type": "calls",
+         "evidence": [{"path": "ansible/playbook-02-web.yml", "symbol": "ansible.builtin.include_role"}],
+         "note": "playbook-02-web.yml includes nginx/apache_http/ssl/nginx-ssl/apache_ssl/redis/php roles."},
+    {"from_id": "ansible-playbooks", "to": "ansible-roles-db", "type": "calls",
+         "evidence": [{"path": "ansible/playbook-03-db.yml", "symbol": "mariadb"},
+                   {"path": "ansible/playbook-03-db.yml", "symbol": "restore"}],
+         "note": "playbook-03-db.yml applies mariadb + restore roles."},
+    {"from_id": "ansible-playbooks", "to": "ansible-roles-security", "type": "calls",
+         "evidence": [{"path": "ansible/playbook-04-security.yml", "symbol": "security"}],
+         "note": "playbook-04-security.yml applies the security role."},
+    {"from_id": "ansible-playbooks", "to": "ansible-roles-observability", "type": "calls",
+         "evidence": [{"path": "ansible/playbook-05-monitor.yml", "symbol": "monitoring"},
+                   {"path": "ansible/playbook-07-grafana.yml", "symbol": "grafana"},
+                   {"path": "ansible/playbook-08-promtail.yml", "symbol": "promtail"}],
+         "note": "Playbooks 05/07/08 apply monitoring, grafana and promtail roles."},
+    {"from_id": "ansible-playbooks", "to": "ansible-roles-backup", "type": "calls",
+         "evidence": [{"path": "ansible/playbook-06-backup.yml", "symbol": "backup"}],
+         "note": "playbook-06-backup.yml applies the backup role."},
+    # --- roles -> runtime / scripts ---
+    {"from_id": "ansible-roles-db", "to": "runtime-db-cache", "type": "writes",
+         "evidence": [{"path": "ansible-roles/mariadb/tasks/main.yml", "symbol": "ansible.mysql.mysql_db"},
+                   {"path": "ansible-roles/redis/tasks/main.yml", "symbol": "ansible.builtin.template"}],
+         "note": "mariadb/redis roles install + configure the running MariaDB and Redis services."},
+    {"from_id": "ansible-roles-web", "to": "runtime-db-cache", "type": "reads",
+         "evidence": [{"path": "ansible-roles/php/templates/www.conf.j2", "symbol": "session.save_handler"},
+                   {"path": "ansible-roles/php/templates/www.conf.j2", "symbol": "session.save_path"}],
+         "note": "PHP-FPM is configured to store sessions in Redis (tcp://127.0.0.1:6379); MODX app reads/writes MariaDB + Redis."},
+    {"from_id": "ansible-roles-backup", "to": "scripts-server", "type": "writes",
+         "evidence": [{"path": "ansible-roles/backup/tasks/main.yml", "symbol": "ansible.builtin.copy"},
+                   {"path": "ansible-roles/backup/tasks/main.yml", "symbol": "ansible.builtin.cron"}],
+         "note": "backup role uploads scripts/ to the server and installs cron jobs."},
+    {"from_id": "ansible-roles-observability", "to": "scripts-server", "type": "writes",
+         "evidence": [{"path": "ansible-roles/monitoring/tasks/check_site.yml", "symbol": "check_services.sh"}],
+         "note": "monitoring role uploads check_services.sh and deploys the 5-min check-services timer."},
+    {"from_id": "ansible-roles-db", "to": "ext-gdrive", "type": "reads",
+         "evidence": [{"path": "ansible-roles/restore/tasks/main.yml", "symbol": "Upload rclone config"},
+                   {"path": "ansible-roles/restore/tasks/main.yml", "symbol": "Download project backup to EBS cache"}],
+         "note": "restore role pulls latest prod backups from GDrive via rclone when provisioning dev / DR."},
+    # --- scripts flow ---
+    {"from_id": "scripts-server", "to": "runtime-db-cache", "type": "reads",
+         "evidence": [{"path": "scripts/smart_backup.sh", "symbol": "mysqldump"},
+                   {"path": "scripts/check_services.sh", "symbol": "redis-cli"}],
+         "note": "smart_backup mysqldump's MariaDB and copies Redis dump.rdb; check_services probes both via redis-cli/mysqladmin."},
+    {"from_id": "scripts-server", "to": "ext-gdrive", "type": "writes",
+         "evidence": [{"path": "scripts/upload_backups_to_gdrive.sh", "symbol": "rclone_retry"}],
+         "note": "upload_backups_to_gdrive.sh copies project/db/redis backups to gdrive-crypt: remote and prunes old ones."},
+    {"from_id": "scripts-server", "to": "ext-telegram", "type": "publishes",
+         "evidence": [{"path": "scripts/common_functions.sh", "symbol": "send_tg"}],
+         "note": "send_tg posts failure alerts (and reports) to Telegram from backup/restore/health scripts."},
+    {"from_id": "scripts-server", "to": "ext-betterstack", "type": "publishes",
+         "evidence": [{"path": "scripts/common_functions.sh", "symbol": "ping_heartbeat"}],
+         "note": "Cron scripts ping their per-script Better Stack heartbeats on success."},
+    {"from_id": "scripts-server", "to": "ext-cloudflare", "type": "reads",
+         "evidence": [{"path": "scripts/update_cloudflare_ips.sh", "symbol": "ips-v4"}],
+         "note": "update_cloudflare_ips.sh fetches Cloudflare published IP lists and regenerates nginx realip conf."},
+    {"from_id": "scripts-server", "to": "ansible-roles-observability", "type": "publishes",
+         "evidence": [{"path": "scripts/common_functions.sh", "symbol": "export_metric"}],
+         "note": "export_metric pushes cron-last-run metrics to local VictoriaMetrics at 127.0.0.1:8428."},
+    {"from_id": "ansible-roles-observability", "to": "ext-grafana-cloud", "type": "publishes",
+         "evidence": [{"path": "ansible-roles/monitoring/templates/vmagent.service.j2", "symbol": "-remoteWrite.url=${VM_CLOUD_URL}"},
+                   {"path": "ansible-roles/promtail/templates/promtail.yml.j2", "symbol": "- url: {{ loki_url }}"}],
+         "note": "vmagent remote-writes metrics and promtail ships logs to Grafana Cloud."},
+    {"from_id": "ansible-roles-observability", "to": "runtime-db-cache", "type": "reads",
+         "evidence": [{"path": "ansible-roles/monitoring/tasks/mysql_exporter.yml", "symbol": "mysqld_exporter"},
+                   {"path": "ansible-roles/monitoring/tasks/redis_exporter.yml", "symbol": "redis_exporter"}],
+         "note": "mysqld_exporter and redis_exporter scrape MariaDB/Redis for metrics."},
+    {"from_id": "ansible-roles-observability", "to": "ext-telegram", "type": "publishes",
+         "evidence": [{"path": "ansible-roles/grafana/templates/grafana-alerts.yaml.j2", "symbol": "type: telegram"}],
+         "note": "Grafana alerting contact point posts to Telegram (chatid + bottoken)."},
+    {"from_id": "ansible-roles-web", "to": "ext-cloudflare", "type": "reads",
+         "evidence": [{"path": "ansible-roles/ssl/tasks/main.yml", "symbol": "Install CloudFlare DNS certbot plugin"},
+                   {"path": "ansible-roles/ssl/tasks/main.yml", "symbol": "Deploy CloudFlare credentials file"}],
+         "note": "certbot DNS-01 uses the Cloudflare API token to issue SSL certificates."},
+]
+
+FLOWS = [
+    {"id": "flow-deploy", "name": "Deploy environment (provision -> configure -> go-live)",
+         "trigger": "GitHub Actions deploy.yml (workflow_dispatch) or /deploy chatops command -> job 'deploy'",
+         "steps": ["github-ci", "deploy", "lib", "terraform-aws", "terraform-hetzner", "ext-cloudflare",
+                "ansible-playbooks", "ansible-roles-web", "ansible-roles-db", "ansible-roles-security",
+                "ansible-roles-observability", "ansible-roles-backup", "ext-telegram"],
+         "choice_groups": [["terraform-aws", "terraform-hetzner"]],
+         "outcome": "Server provisioned on AWS/Hetzner, configured by 8 playbooks, DNS A record points domain -> server, check_services passes, Telegram 'Deploy complete' notification."},
+    {"id": "flow-backup", "name": "Hourly backup -> encrypted cloud upload",
+         "trigger": "Server cron (backup role): smart_backup.sh hourly :00, upload_backups_to_gdrive.sh hourly :05",
+         "steps": ["ansible-roles-backup", "scripts-server", "runtime-db-cache", "ext-gdrive", "ext-betterstack", "ext-telegram", "ansible-roles-observability"],
+         "outcome": "Project tar + mysqldump + Redis dump saved locally; archives uploaded to gdrive-crypt:; success heartbeats ping Better Stack; failures alert Telegram; metrics pushed to VictoriaMetrics."},
+    {"id": "flow-monitoring", "name": "Monitoring & alerting pipeline",
+         "trigger": "vmagent scrape every 15s + check-services.timer every 5 min + Grafana alert rules",
+         "steps": ["ansible-roles-observability", "runtime-db-cache", "ext-grafana-cloud", "terraform-saas", "scripts-server", "ext-betterstack", "ext-telegram"],
+         "outcome": "Metrics flow exporters -> VictoriaMetrics -> vmagent -> Grafana Cloud; dashboards provisioned by terraform-saas; alerts page Telegram; heartbeats confirm liveness."},
+    {"id": "flow-restore", "name": "Disaster recovery / rollback",
+         "trigger": "rollback.yml workflow_dispatch (or weekly test-restore.yml schedule cron '0 10 * * 1')",
+         "steps": ["github-ci", "scripts-server", "ext-gdrive", "runtime-db-cache", "ansible-roles-db", "ext-telegram"],
+         "choice_groups": [["scripts-server", "ansible-roles-db"]],
+         "outcome": "Latest backup pulled from GDrive, project/DB/Redis restored, services restarted, HTTP+HTTPS health check passed, Telegram rollback summary sent."},
+    {"id": "flow-maintenance", "name": "Weekly security maintenance",
+         "trigger": "health-check.yml schedule cron '0 5 * * 1' (matrix target prod-hetz)",
+         "steps": ["github-ci", "scripts-server", "ext-cloudflare", "ext-telegram"],
+         "outcome": "apt upgrade applied, reboot flagged if needed, Cloudflare real IP ranges refreshed, Telegram update summary sent."},
+]
+
+# ---------------------------------------------------------------------------
+# Build JSON document
+# ---------------------------------------------------------------------------
+
+
+def build():
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    commit_sha = commit()
+    fps = module_fingerprints()
+    dirty = not working_tree_clean()
+
+    doc = {
+        "generated_at": now,
+        "generated_from_commit": commit_sha,
+        "scope": SCOPE,
+        "nodes": NODES,
+        "edges": EDGES,
+        "flows": FLOWS,
+    }
+
+    lock = {
+        "commit": commit_sha,
+        "working_tree_changed": dirty,
+        "generated_at": now,
+        "scanned_scope": SCOPE,
+        "excluded_directories": EXCLUDED_DIRS,
+        "excluded_files": EXCLUDED_FILES,
+        "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
+        "modules": fps,
+    }
+    return doc, lock
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+def validate(doc):
+    problems = []
+    ids = {n["id"] for n in doc["nodes"]}
+    if len(ids) != len(doc["nodes"]):
+        problems.append("duplicate node ids")
+    if len(ids) > 20:
+        problems.append(f"too many nodes ({len(ids)} > 20)")
+
+    paths = [n["path"] for n in doc["nodes"]]
+    if len(set(paths)) != len(paths):
+        dup = {p for p in paths if paths.count(p) > 1}
+        problems.append(f"non-unique node path anchors: {dup}")
+
+    {n["id"]: n for n in doc["nodes"]}
+
+    def exists(p):
+        return os.path.exists(os.path.join(REPO, p))
+
+    def symbol_findable(path, symbol):
+        full = os.path.join(REPO, path)
+        if not os.path.exists(full):
+            return False
+        if os.path.basename(path) == symbol:
+            return True
+        try:
+            if os.path.isdir(full):
+                return False
+            with open(full, "r", errors="ignore") as fh:
+                return symbol in fh.read()
+        except OSError:
+            return False
+
+    for n in doc["nodes"]:
+        if not exists(n["path"]):
+            problems.append(f"node {n['id']}: path does not exist: {n['path']}")
+        for inc in n.get("includes", []):
+            if not exists(inc):
+                problems.append(f"node {n['id']}: include path does not exist: {inc}")
+        for e in n["evidence"]:
+            if not exists(e["path"]):
+                problems.append(f"node {n['id']}: evidence path does not exist: {e['path']}")
+            elif not symbol_findable(e["path"], e["symbol"]):
+                problems.append(f"node {n['id']}: evidence symbol not found in {e['path']}: {e['symbol']!r}")
+
+    for ed in doc["edges"]:
+        if ed["from_id"] not in ids:
+            problems.append(f"edge {ed['from_id']}->{ed['to']}: from node unknown")
+        if ed["to"] not in ids:
+            problems.append(f"edge {ed['from_id']}->{ed['to']}: to node unknown")
+        if ed["type"] not in ("imports", "calls", "reads", "writes", "publishes", "subscribes"):
+            problems.append(f"edge {ed['from_id']}->{ed['to']}: bad type {ed['type']}")
+        for e in ed["evidence"]:
+            if not exists(e["path"]):
+                problems.append(f"edge {ed['from_id']}->{ed['to']}: evidence path does not exist: {e['path']}")
+            elif not symbol_findable(e["path"], e["symbol"]):
+                problems.append(f"edge {ed['from_id']}->{ed['to']}: evidence symbol not found in {e['path']}: {e['symbol']!r}")
+
+    for f in doc["flows"]:
+        for s in f["steps"]:
+            if s not in ids:
+                problems.append(f"flow {f['id']}: step node unknown: {s}")
+        for grp in f.get("choice_groups", []):
+            for g in grp:
+                if g not in ids:
+                    problems.append(f"flow {f['id']}: choice node unknown: {g}")
+
+    return problems
+
+
+# ---------------------------------------------------------------------------
+# HTML
+# ---------------------------------------------------------------------------
+
+HTML_TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DreamSeed — Code Map</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--border:#2d3744;--text:#c9d1d9;--muted:#8b949e;--accent:#58a6ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100vh}
+header{flex:0 0 auto;display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.brand{display:flex;flex-direction:column}
+.brand .name{font-weight:700;font-size:16px;letter-spacing:.3px}
+.brand .meta{color:var(--muted);font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.controls{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
+input[type=text],select{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px}
+input[type=text]:focus,select:focus{outline:1px solid var(--accent)}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px}
+button:hover{border-color:var(--accent);color:#fff}
+.btn-group{display:flex;gap:4px}
+#legend{flex:0 0 auto;display:flex;gap:14px;flex-wrap:wrap;padding:6px 16px;background:var(--panel);border-bottom:1px solid var(--border);color:var(--muted);font-size:12px}
+#legend .item{display:flex;align-items:center;gap:6px}
+#legend .swatch{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+#main{flex:1 1 auto;display:flex;min-height:0}
+#stage{flex:1 1 auto;position:relative;overflow:hidden}
+#stage svg{width:100%;height:100%;display:block;cursor:grab}
+#stage svg.dragging{cursor:grabbing}
+#side{flex:0 0 340px;overflow-y:auto;background:var(--panel);border-left:1px solid var(--border);padding:12px}
+#side h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+#side .block{margin-bottom:16px}
+#side .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px}
+#side pre{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin:4px 0;color:#9fd0ff}
+#side .chip{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:2px 9px;margin:2px;font-size:11px;color:var(--text)}
+#side .chip.flow{border-color:#f0a020;color:#f0a020}
+#side .chip.test{border-color:#2ea043;color:#2ea043}
+#side ul{margin:4px 0;padding-left:18px}
+#side li{font-size:12px;margin:2px 0}
+#flows .fitem{padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:12px}
+#flows .fitem:hover{border-color:var(--accent)}
+#flows .fitem.active{border-color:#f0a020;background:rgba(240,160,32,.08)}
+#flows .fname{font-weight:600;color:var(--text)}
+#flows .fmeta{color:var(--muted);font-size:11px;margin-top:2px}
+#flows .fnote{color:#f0a020;font-size:11px;margin-top:4px}
+#flows .steps{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+#flows .step{font-size:10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:1px 6px;color:var(--muted)}
+#flows .step b{color:var(--text)}
+#hint{position:absolute;left:12px;bottom:10px;color:var(--muted);font-size:11px;background:rgba(13,17,23,.75);padding:4px 10px;border-radius:6px;border:1px solid var(--border)}
+.node{fill:#1f2630;stroke-width:1.4}
+.node text{fill:var(--text);font-size:12px;font-weight:600;pointer-events:none;text-anchor:middle}
+.node .sub{fill:var(--muted);font-size:9px;font-weight:400}
+.edge{stroke:var(--border);stroke-width:1.4;fill:none;marker-end:url(#arrow)}
+.edge.dim,.node.dim{opacity:.08}
+.edge.hl{stroke:#f0a020;stroke-width:2.6}
+.edge.flow{stroke:#f0a020;stroke-width:3}
+.node.hl{fill:#3a2f1f}
+.node.flow{fill:#4a3510}
+.node.clicked{stroke:#fff}
+.node.downstream{fill:#16324f}
+.node.upstream{fill:#1f3d2a}
+.node.match{stroke:#58a6ff;stroke-width:2.2}
+.flowbar{fill:none;stroke:#f0a020;stroke-width:2;stroke-dasharray:5 4;opacity:0}
+.flowbar.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <div class="brand">
+    <span class="name">DreamSeed — Interactive Code Map</span>
+    <span class="meta">generated: __GEN_TIME__ &nbsp;·&nbsp; commit: <code>__COMMIT__</code></span>
+  </div>
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search nodes…" autocomplete="off">
+    <select id="typeFilter"><option value="">All types</option></select>
+    <select id="edgeType"><option value="">All edge types</option></select>
+    <select id="flowSel"><option value="">— Highlight flow —</option></select>
+    <div class="btn-group">
+      <button id="zoomIn" title="Zoom in">+</button>
+      <button id="zoomOut" title="Zoom out">−</button>
+      <button id="reset" title="Reset view">Reset</button>
+    </div>
+  </div>
+</header>
+<div id="legend"></div>
+<div id="main">
+  <div id="stage">
+    <svg id="svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="17" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+        </marker>
+      </defs>
+      <g id="viewport"></g>
+    </svg>
+    <div id="hint">Drag nodes · drag empty space to pan · scroll to zoom · click a node for details · hover an edge for evidence</div>
+  </div>
+  <div id="side">
+    <div id="flows" class="block"><h3>End-to-end flows</h3></div>
+    <div id="detail"><div class="block"><h3>Node</h3><p style="color:var(--muted);font-size:12px">Click a node to inspect it.</p></div></div>
+  </div>
+</div>
+</div>
+<script>
+const DATA = __DATA__;
+const COLORS = __COLORS__;
+const TYPES = __TYPES__;
+const EDGE_TYPES = ['imports','calls','reads','writes','publishes','subscribes'];
+
+// ---- legend ----
+const legend = document.getElementById('legend');
+for (const [t, info] of Object.entries(TYPES)) {
+  const el = document.createElement('span'); el.className = 'item';
+  el.innerHTML = `<span class="swatch" style="background:${info.color}"></span>${info.label}`;
+  legend.appendChild(el);
+}
+
+// ---- filters ----
+const typeFilter = document.getElementById('typeFilter');
+const edgeType = document.getElementById('edgeType');
+const flowSel = document.getElementById('flowSel');
+for (const t of Object.keys(TYPES)) {
+  const o = document.createElement('option'); o.value = t; o.textContent = TYPES[t].label;
+  typeFilter.appendChild(o);
+}
+for (const t of EDGE_TYPES) {
+  const o = document.createElement('option'); o.value = t; o.textContent = t;
+  edgeType.appendChild(o);
+}
+for (const f of DATA.flows) {
+  const o = document.createElement('option'); o.value = f.id; o.textContent = f.name;
+  flowSel.appendChild(o);
+}
+
+// ---- flows panel ----
+const flowsPanel = document.getElementById('flows');
+for (const f of DATA.flows) {
+  const div = document.createElement('div'); div.className = 'fitem'; div.dataset.id = f.id;
+  let note = '';
+  if (f.choice_groups && f.choice_groups.length) {
+    note = f.choice_groups.map(g => `⚠ one of: ${g.join(' | ')}`).join('<br>');
+  }
+  div.innerHTML = `<div class="fname">${f.name}</div><div class="fmeta">${f.trigger}</div>` +
+    (note ? `<div class="fnote">${note}</div>` : '') +
+    `<div class="steps">${f.steps.map((s,i) => `<span class="step"><b>${i+1}.</b> ${s}</span>`).join('')}</div>`;
+  div.onclick = () => setFlow(f.id);
+  flowsPanel.appendChild(div);
+}
+
+// ---- build graph ----
+const nodesById = {};
+for (const n of DATA.nodes) { n.x = Math.random()*1000; n.y = Math.random()*700; nodesById[n.id] = n; }
+const edges = DATA.edges.map(e => ({ ...e, fx: nodesById[e.from_id], tx: nodesById[e.to] }));
+
+// ---- force layout (Fruchterman–Reingold style) ----
+const W = 1400, H = 900;
+const K = 170, C = 0.02, SPRING = 0.02;
+for (let iter = 0; iter < 400; iter++) {
+  const disp = {}; for (const n of DATA.nodes) disp[n.id] = { x: 0, y: 0 };
+  for (const n of DATA.nodes) {
+    for (const m of DATA.nodes) {
+      if (n === m) continue;
+      let dx = n.x - m.x, dy = n.y - m.y;
+      let d = Math.hypot(dx, dy) || 1;
+      let f = K*K/d;
+      disp[n.id].x += (dx/d)*f; disp[n.id].y += (dy/d)*f;
+    }
+  }
+  for (const e of edges) {
+    if (!e.fx || !e.tx) continue;
+    let dx = e.tx.x - e.fx.x, dy = e.tx.y - e.fx.y;
+    let d = Math.hypot(dx, dy) || 1;
+    let f = (d - 190) * SPRING;
+    disp[e.fx.id].x += (dx/d)*f; disp[e.fx.id].y += (dy/d)*f;
+    disp[e.tx.id].x -= (dx/d)*f; disp[e.tx.id].y -= (dy/d)*f;
+  }
+  for (const n of DATA.nodes) {
+    n.x += disp[n.id].x * C; n.y += disp[n.id].y * C;
+    n.x += (W/2 - n.x) * 0.002; n.y += (H/2 - n.y) * 0.002;
+    n.x = Math.max(40, Math.min(W-40, n.x)); n.y = Math.max(40, Math.min(H-40, n.y));
+  }
+}
+// external + runtime nodes pinned to edges of the view for system-boundary clarity
+const pin = { 'ext-gdrive':[W-80,H-110], 'ext-betterstack':[W-80,H-230], 'ext-telegram':[W-80,H-350],
+              'ext-grafana-cloud':[W-110,120], 'ext-cloudflare':[80,110], 'runtime-db-cache':[W/2,H-90],
+              'lib':[W/2-180,H/2], 'deploy':[W/2,H/2] };
+for (const [id,[x,y]] of Object.entries(pin)) { const n = nodesById[id]; if (n) { n.x = x; n.y = y; } }
+
+// ---- SVG rendering ----
+const svg = document.getElementById('svg');
+const viewport = document.getElementById('viewport');
+let view = { x: 0, y: 0, k: 0.9 };
+
+function applyView() {
+  viewport.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+}
+function worldPoint(ev) {
+  const r = svg.getBoundingClientRect();
+  return { x: (ev.clientX - r.left - view.x)/view.k, y: (ev.clientY - r.top - view.y)/view.k };
+}
+
+const nodeG = {}, edgeG = {};
+for (const e of edges) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g'); g.className = 'edge';
+  g.dataset.from = e.from_id; g.dataset.to = e.to; g.dataset.type = e.type;
+  const ev = (e.evidence||[]).map(x => x.path+':'+x.symbol).slice(0,2).join('\n');
+  g.innerHTML = `<line class="el"></line><path class="flowbar"></path><title>${e.from_id} -> ${e.to} [${e.type}]\n${ev}</title>`;
+  viewport.appendChild(g); edgeG[e.from_id+'->'+e.to] = g;
+}
+for (const n of DATA.nodes) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g'); g.className = 'node';
+  g.dataset.id = n.id;
+  const c = COLORS[n.type];
+  g.innerHTML = `<circle r="30" fill="none" stroke="${c}"></circle><rect x="-30" y="-30" width="60" height="60" rx="12" fill="#1f2630" stroke="${c}"></rect><circle r="6" cx="0" cy="-24" fill="${c}"></circle><text y="4">${n.id}</text><text class="sub" y="18">${n.type}</text><title>${n.id}\n${n.role}</title>`;
+  g.style.cursor = 'pointer';
+  viewport.appendChild(g); nodeG[n.id] = g;
+}
+
+function redrawEdges() {
+  for (const e of edges) {
+    const g = edgeG[e.from_id+'->'+e.to]; if (!g || !e.fx || !e.tx) continue;
+    const l = g.querySelector('line'); const fb = g.querySelector('path');
+    const x1 = e.fx.x, y1 = e.fx.y, x2 = e.tx.x, y2 = e.tx.y;
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    fb.setAttribute('d', `M ${x1} ${y1} L ${x2} ${y2}`);
+  }
+}
+function redrawNodes() {
+  for (const n of DATA.nodes) {
+    const g = nodeG[n.id];
+    g.setAttribute('transform', `translate(${n.x},${n.y})`);
+  }
+}
+applyView(); redrawEdges(); redrawNodes();
+
+// ---- zoom & pan ----
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const p = worldPoint(e);
+  const f = e.deltaY < 0 ? 1.1 : 1/1.1;
+  const nk = Math.max(0.25, Math.min(3, view.k * f));
+  view.x = p.x - (p.x - view.x) * (nk/view.k);
+  view.y = p.y - (p.y - view.y) * (nk/view.k);
+  view.k = nk; applyView();
+}, { passive: false });
+
+let panning = false, p0 = null;
+svg.addEventListener('pointerdown', e => {
+  if (e.target.tagName === 'svg') { panning = true; p0 = { x: e.clientX, y: e.clientY }; svg.classList.add('dragging'); }
+});
+window.addEventListener('pointermove', e => {
+  if (panning) { view.x += e.clientX - p0.x; view.y += e.clientY - p0.y; p0 = { x: e.clientX, y: e.clientY }; applyView(); }
+});
+window.addEventListener('pointerup', () => { panning = false; svg.classList.remove('dragging'); });
+document.getElementById('zoomIn').onclick = () => { view.k = Math.min(3, view.k*1.25); applyView(); };
+document.getElementById('zoomOut').onclick = () => { view.k = Math.max(0.25, view.k/1.25); applyView(); };
+document.getElementById('reset').onclick = () => { view = { x: 0, y: 0, k: 0.9 }; applyView(); };
+
+// ---- drag nodes ----
+let dragN = null, dragM = null;
+window.addEventListener('pointermove', ev => {
+  if (dragN) {
+    const w = worldPoint(ev);
+    dragN.x += w.x - dragM.x; dragN.y += w.y - dragM.y;
+    dragM = w;
+    redrawEdges(); redrawNodes();
+  }
+});
+window.addEventListener('pointerup', () => { dragN = null; svg.classList.remove('dragging'); });
+
+// ---- state / highlight ----
+let selFlow = null, selNode = null, selText = '';
+const flowSets = {};
+for (const f of DATA.flows) {
+  const s = new Set(f.steps);
+  flowSets[f.id] = { nodes: s };
+  const edgeSet = new Set();
+  for (const e of edges) if (s.has(e.from_id) && s.has(e.to)) edgeSet.add(e.from_id+'->'+e.to);
+  flowSets[f.id].edges = edgeSet;
+}
+function flowOf(id) { return DATA.flows.filter(f => f.steps.includes(id)).map(f => f.id); }
+
+function setFlow(id) {
+  selFlow = (selFlow === id) ? null : id;
+  document.querySelectorAll('#flows .fitem').forEach(el => el.classList.toggle('active', el.dataset.id === selFlow));
+  flowSel.value = selFlow || '';
+  applyHighlight();
+}
+
+function renderDetail() {
+  const d = document.getElementById('detail');
+  if (!selNode) {
+    d.innerHTML = `<div class="block"><h3>Node</h3><p style="color:var(--muted);font-size:12px">Click a node to inspect it.</p></div>`;
+    return;
+  }
+  const n = selNode;
+  const up = edges.filter(e => e.to === n.id).map(e => e.from_id);
+  const down = edges.filter(e => e.from_id === n.id).map(e => e.to);
+  const flows = flowOf(n.id);
+  const inc = (n.includes||[]).map(i => i.replace(/^(ansible-roles|terraform|scripts|\.github|lib|ansible)\//, '').split('/').slice(0,2).join('/'));
+  let h = `<div class="block"><h3>${n.id} <span class="chip" style="border-color:${COLORS[n.type].color};color:${COLORS[n.type].color}">${TYPES[n.type].label}</span></h3>
+    <div class="k">role</div><p style="font-size:12px">${n.role}</p>`;
+  h += `<div class="k">path</div><pre>${n.path}</pre>`;
+  if (inc.length) h += `<div class="k">grouped files</div><pre>${inc.join('\n')}</pre>`;
+  h += `<div class="k">upstream callers</div>` + (up.length ? up.map(id => `<span class="chip">${id}</span>`).join('') : '<span style="color:var(--muted);font-size:11px">none</span>');
+  h += `<div class="k">downstream deps</div>` + (down.length ? down.map(id => `<span class="chip">${id}</span>`).join('') : '<span style="color:var(--muted);font-size:11px">none</span>');
+  h += `<div class="k">flows it belongs to</div>` + (flows.length ? flows.map(id => `<span class="chip flow">${id}</span>`).join('') : '<span style="color:var(--muted);font-size:11px">none</span>');
+  if (n.entrypoints && n.entrypoints.length) h += `<div class="k">entrypoints</div><ul>${n.entrypoints.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  if (n.tests && n.tests.length) h += `<div class="k">tests</div>` + n.tests.map(x => `<span class="chip test">${x}</span>`).join('');
+  if (n.constraints && n.constraints.length) h += `<div class="k">constraints</div><ul>${n.constraints.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  if (n.evidence && n.evidence.length) h += `<div class="k">evidence</div><pre>${n.evidence.map(e => e.path + ':' + e.symbol).join('\n')}</pre>`;
+  d.innerHTML = h;
+}
+
+function applyHighlight() {
+  const tSel = typeFilter.value, eSel = edgeType.value, q = selText.trim().toLowerCase();
+  const visible = new Set(DATA.nodes.filter(n => !tSel || n.type === tSel).map(n => n.id));
+  const matched = new Set();
+  if (q) for (const n of DATA.nodes) {
+    if ((n.id + ' ' + n.path + ' ' + n.role + ' ' + (n.includes||[]).join(' ')).toLowerCase().includes(q)) matched.add(n.id);
+  }
+  const flowActive = selFlow && flowSets[selFlow];
+  const fsNodes = flowActive ? flowSets[selFlow].nodes : new Set();
+  const fsEdges = flowActive ? flowSets[selFlow].edges : new Set();
+  const up = selNode ? new Set(edges.filter(e => e.to === selNode.id).map(e => e.from_id)) : new Set();
+  const down = selNode ? new Set(edges.filter(e => e.from_id === selNode.id).map(e => e.to)) : new Set();
+  const hasSel = !!selNode || !!flowActive || q || tSel || eSel;
+
+  for (const n of DATA.nodes) {
+    const g = nodeG[n.id];
+    if (!visible.has(n.id)) { g.style.display = 'none'; continue; }
+    g.style.display = '';
+    let dim = false;
+    if (hasSel) {
+      if (selNode && (n.id === selNode.id || up.has(n.id) || down.has(n.id))) hl = true;
+      else if (flowActive && fsNodes.has(n.id)) hl = true;
+      else if (q && matched.has(n.id)) hl = true;
+      else dim = true;
+    }
+    const hl = !!selNode && (n.id === selNode.id || up.has(n.id) || down.has(n.id));
+    g.classList.toggle('hl', !!hl && !flowActive);
+    g.classList.toggle('flow', !!hl && flowActive);
+    g.classList.toggle('dim', dim);
+    g.classList.toggle('clicked', selNode && n.id === selNode.id);
+    g.classList.toggle('upstream', selNode && up.has(n.id));
+    g.classList.toggle('downstream', selNode && down.has(n.id));
+    g.classList.toggle('match', !!q && matched.has(n.id));
+  }
+  for (const e of edges) {
+    const g = edgeG[e.from_id+'->'+e.to]; if (!g) continue;
+    const fv = visible.has(e.from_id) && visible.has(e.to);
+    const fm = !eSel || e.type === eSel;
+    if (!fv || !fm) { g.style.display = 'none'; continue; }
+    g.style.display = '';
+    let dim = false, cls = '';
+    if (hasSel) {
+      if (selNode && (e.from_id === selNode.id || e.to === selNode.id || up.has(e.from_id) || down.has(e.to))) cls = 'hl';
+      else if (flowActive && fsEdges.has(e.from_id+'->'+e.to)) cls = 'flow';
+      else if (q && (matched.has(e.from_id) || matched.has(e.to))) cls = 'hl';
+      else dim = true;
+    }
+    g.classList.toggle('hl', cls === 'hl');
+    g.classList.toggle('flow', cls === 'flow');
+    g.classList.toggle('dim', dim);
+  }
+}
+
+// ---- node click -> select + drag ----
+for (const n of DATA.nodes) {
+  nodeG[n.id].addEventListener('pointerdown', e => { e.stopPropagation(); dragN = n; dragM = worldPoint(e); svg.classList.add('dragging'); });
+  nodeG[n.id].addEventListener('click', () => {
+    selNode = (selNode === n) ? null : n;
+    renderDetail();
+    applyHighlight();
+  });
+}
+svg.addEventListener('click', () => {
+  selNode = null;
+  renderDetail();
+  applyHighlight();
+});
+
+// ---- controls ----
+document.getElementById('search').addEventListener('input', e => { selText = e.target.value; applyHighlight(); });
+typeFilter.addEventListener('change', applyHighlight);
+edgeType.addEventListener('change', applyHighlight);
+flowSel.addEventListener('change', e => setFlow(e.target.value));
+
+applyHighlight();
+</script>
+</body>
+</html>
+"""
+
+
+def main():
+    doc, lock = build()
+    problems = validate(doc)
+    os.makedirs(OUT, exist_ok=True)
+
+    if problems:
+        print("VALIDATION PROBLEMS:")
+        for p in problems:
+            print("  -", p)
+        sys.exit(1)
+
+    # --- write json ---
+    json_path = os.path.join(OUT, "codemap.json")
+    with open(json_path, "w") as fh:
+        json.dump(doc, fh, indent=2)
+        fh.write("\n")
+
+    # --- write lock ---
+    lock_path = os.path.join(OUT, "codemap.lock")
+    with open(lock_path, "w") as fh:
+        json.dump(lock, fh, indent=2)
+        fh.write("\n")
+
+    # --- write html ---
+    data_json = json.dumps(doc, indent=1)
+    data_json = data_json.replace("</", "<\\/")
+    html = (HTML_TEMPLATE
+            .replace("__GEN_TIME__", doc["generated_at"])
+            .replace("__COMMIT__", doc["generated_from_commit"])
+            .replace("__DATA__", data_json)
+            .replace("__COLORS__", json.dumps({t: v["color"] for t, v in NODE_TYPES.items()}))
+            .replace("__TYPES__", json.dumps(NODE_TYPES)))
+    html_path = os.path.join(OUT, "codemap.html")
+    with open(html_path, "w") as fh:
+        fh.write(html)
+
+    print("OK — wrote codemap.json, codemap.lock, codemap.html")
+    print(f"  nodes={len(doc['nodes'])} edges={len(doc['edges'])} flows={len(doc['flows'])}")
+    print(f"  commit={doc['generated_from_commit'][:12]} working_tree_changed={lock['working_tree_changed']}")
+
+
+if __name__ == "__main__":
+    main()
