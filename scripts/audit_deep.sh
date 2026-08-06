@@ -654,10 +654,15 @@ echo ""
 echo "── 16. Systemd Services ──"
 
 _expected_services=(
-  nginx php8.3-fpm mariadb redis-server fail2ban grafana-server promtail
+  nginx "php${PHP_VER:-8.3}-fpm" mariadb redis-server fail2ban grafana-server promtail
   node_exporter mysqld_exporter nginx_exporter redis_exporter
-  victoria-metrics vmagent telegram-bot ssh cron unattended-upgrades
+  victoria-metrics vmagent ssh cron unattended-upgrades
 )
+# telegram-bot is prod-only (long-polling singleton, one getUpdates poller per
+# token) — only required to be running on prod; never expected on a dev host.
+if [[ "${ENV:-}" == "prod" ]]; then
+  _expected_services+=( telegram-bot )
+fi
 _all_active=0
 for _s in "${_expected_services[@]}"; do
   if systemctl is-active "$_s" &>/dev/null; then
