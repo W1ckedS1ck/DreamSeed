@@ -75,11 +75,11 @@
     mode: "0600"
   no_log: true
 
-- name: Enable bot service
+- name: Ensure bot service runs on prod only (long-polling is single-instance on the shared token)
   ansible.builtin.systemd:
     name: telegram-bot
-    enabled: yes
-    state: started
+    enabled: "{{ deploy_env == 'prod' }}"
+    state: "{{ 'started' if deploy_env == 'prod' else 'stopped' }}"
     daemon_reload: true
   become: true
 

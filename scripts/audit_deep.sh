@@ -53,6 +53,7 @@ P="${GREEN}✓${NC}"; F="${RED}✗${NC}"; W="${YELLOW}⚠${NC}"
 ok()   { echo "  $P $1"; export_metric "audit_$2 1"; }
 fail() { echo "  $F $1"; export_metric "audit_$2 0"; fail_count=1; }
 warn() { echo "  $W $1"; export_metric "audit_$2 0"; }
+info() { echo "  • $1"; }
 
 echo ""
 echo "═══ DEEP AUDIT REPORT ═══"
@@ -588,8 +589,20 @@ fi
 echo ""
 echo "── 14. Telegram Bot ──"
 
+# telegram-bot is a long-polling singleton: Telegram allows ONE getUpdates
+# poller per token. It intentionally runs on prod only (see backup role);
+# "not active" on a non-prod host is expected, not a fault.
+_tg_env_prod=0
+[[ "${ENV:-}" == "prod" ]] && _tg_env_prod=1
+
 if systemctl is-active telegram-bot &>/dev/null; then
   ok "Telegram bot active" "tg_bot_active"
+  _tg_conflict=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'Conflict: terminated by other getUpdates' || true)
+  if [[ "$_tg_conflict" -eq 0 ]]; then
+    ok "Telegram bot: single poller (no Conflict)" "tg_bot_conflict"
+  else
+    warn "Telegram bot: $_tg_conflict Conflict(s) - duplicate poller detected" "tg_bot_conflict"
+  fi
   _tg_errors=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
   if [[ "$_tg_errors" -eq 0 ]]; then
     ok "Telegram bot: 0 errors" "tg_bot_errors"
@@ -597,7 +610,11 @@ if systemctl is-active telegram-bot &>/dev/null; then
     warn "Telegram bot: $_tg_errors error(s)" "tg_bot_errors"
   fi
 else
-  warn "Telegram bot not active" "tg_bot_active"
+  if [[ "$_tg_env_prod" -eq 1 ]]; then
+    warn "Telegram bot not active" "tg_bot_active"
+  else
+    info "Telegram bot not active (expected on non-prod singleton)" "tg_bot_active"
+  fi
 fi
 
 # ── 15. Security (extra) ─────────────────────────────────────────────────────
