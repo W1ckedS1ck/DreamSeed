@@ -173,8 +173,8 @@ jobs:
       - name: Install pre-commit system deps
         run: |
           # actionlint
-          curl -sL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | \
-            sudo tar -xz -C /usr/local/bin actionlint # renovate: depName=rhysd/actionlint
+          curl -sLo /tmp/actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" # renovate: depName=rhysd/actionlint
+          sudo tar -xz -C /usr/local/bin -f /tmp/actionlint.tar.gz actionlint
 
           # Terraform (pinned via setup-terraform action default)
           curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip" # renovate: depName=hashicorp/terraform
@@ -201,4 +201,6 @@ jobs:
             pre-commit run --all-files --show-diff-on-failure
           fi
       - name: Validate Renovate config
-        run: npx --yes --package renovate -- renovate-config-validator
+        env:
+          NPM_CONFIG_LOGLEVEL: error
+        run: npx --yes --package renovate@44 -- renovate-config-validator

@@ -357,6 +357,9 @@ EDGES = [
     {"from_id": "deploy", "to": "tooling", "type": "calls",
          "evidence": [{"path": "deploy.sh", "symbol": "run_lint"}],
          "note": "deploy.sh delegates pre-deploy linting to scripts/lint.sh --fast."},
+    {"from_id": "github-ci", "to": "tooling", "type": "calls",
+         "evidence": [{"path": ".github/workflows/ci.yml", "symbol": "scripts/lint.sh"}],
+         "note": "CI runs scripts/lint.sh on every push (shellcheck, ruff, ansible-lint, tflint, etc.)."},
     {"from_id": "lib", "to": "ext-cloudflare", "type": "publishes",
          "evidence": [{"path": "lib/helpers.sh", "symbol": "update_cloudflare_dns"},
                    {"path": "lib/helpers.sh", "symbol": "update_cloudflare_dns_direct"}],
@@ -505,9 +508,14 @@ def build():
     fps = module_fingerprints()
     dirty = not working_tree_clean()
 
+    topo = sorted(n["id"] for n in NODES) + sorted(f"{e['from_id']}->{e['to']}" for e in EDGES)
+    graph_hash = hashlib.sha256("\n".join(topo).encode()).hexdigest()[:16]
+
     doc = {
         "generated_at": now,
         "generated_from_commit": commit_sha,
+        "working_tree_changed": dirty,
+        "graph_hash": graph_hash,
         "scope": SCOPE,
         "nodes": NODES,
         "edges": EDGES,
@@ -619,6 +627,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:16px;padding:10px 16px;
 .brand{display:flex;flex-direction:column}
 .brand .name{font-weight:700;font-size:16px;letter-spacing:.3px}
 .brand .meta{color:var(--muted);font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.dirty-warn{color:#f5a623;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px}
 .controls{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
 input[type=text],select{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px}
 input[type=text]:focus,select:focus{outline:1px solid var(--accent)}
@@ -754,70 +763,112 @@ for (const f of DATA.flows) {
 }
 
 // ---- build graph ----
+const W = 1400, H = 900, N_NODES = DATA.nodes.length;
 const nodesById = {};
-for (const n of DATA.nodes) { n.x = Math.random()*1000; n.y = Math.random()*700; nodesById[n.id] = n; }
+for (const n of DATA.nodes) nodesById[n.id] = n;
 const edges = DATA.edges.map(e => ({ ...e, fx: nodesById[e.from_id], tx: nodesById[e.to] }));
 
-// ---- force layout (Fruchterman–Reingold style) ----
-const W = 1400, H = 900;
-const K = 170, C = 0.02, SPRING = 0.02;
-for (let iter = 0; iter < 400; iter++) {
-  const disp = {}; for (const n of DATA.nodes) disp[n.id] = { x: 0, y: 0 };
-  for (const n of DATA.nodes) {
-    for (const m of DATA.nodes) {
-      if (n === m) continue;
-      let dx = n.x - m.x, dy = n.y - m.y;
-      let d = Math.hypot(dx, dy) || 1;
-      let f = K*K/d;
-      disp[n.id].x += (dx/d)*f; disp[n.id].y += (dy/d)*f;
-    }
-  }
-  for (const e of edges) {
-    if (!e.fx || !e.tx) continue;
-    let dx = e.tx.x - e.fx.x, dy = e.tx.y - e.fx.y;
-    let d = Math.hypot(dx, dy) || 1;
-    let f = (d - 190) * SPRING;
-    disp[e.fx.id].x += (dx/d)*f; disp[e.fx.id].y += (dy/d)*f;
-    disp[e.tx.id].x -= (dx/d)*f; disp[e.tx.id].y -= (dy/d)*f;
-  }
-  for (const n of DATA.nodes) {
-    n.x += disp[n.id].x * C; n.y += disp[n.id].y * C;
-    n.x += (W/2 - n.x) * 0.002; n.y += (H/2 - n.y) * 0.002;
-    n.x = Math.max(40, Math.min(W-40, n.x)); n.y = Math.max(40, Math.min(H-40, n.y));
-  }
+// ---- seeded PRNG (xorshift32): same commit → same starting positions ----
+function seedPRNG(str) {
+  let h = 0x12345678;
+  for (let i = 0; i < str.length; i++) { h = (Math.imul(h ^ str.charCodeAt(i), 0x9e3779b9)) >>> 0; }
+  return () => { h ^= h << 13; h ^= h >> 17; h ^= h << 5; return (h >>> 0) / 4294967296; };
 }
+
+// ---- localStorage: persist positions per commit so layout survives reload ----
+const LS_KEY = 'dreamseed-codemap-' + (DATA.graph_hash || DATA.generated_from_commit || 'dev');
+function savePositions() {
+  const pos = {};
+  for (const n of DATA.nodes) pos[n.id] = { x: Math.round(n.x), y: Math.round(n.y) };
+  try { localStorage.setItem(LS_KEY, JSON.stringify(pos)); } catch(e) {}
+}
+function loadPositions() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const pos = JSON.parse(raw);
+    for (const n of DATA.nodes) { if (pos[n.id]) { n.x = pos[n.id].x; n.y = pos[n.id].y; } else return false; }
+    return true;
+  } catch(e) { return false; }
+}
+
+// ---- force layout (Fruchterman–Reingold style) — wrapped for re-use on Reset ----
+const K = 170, C = 0.02, SPRING = 0.02;
 // external + runtime nodes pinned to edges of the view for system-boundary clarity
 const pin = { 'ext-gdrive':[W-80,H-110], 'ext-betterstack':[W-80,H-230], 'ext-telegram':[W-80,H-350],
               'ext-grafana-cloud':[W-110,120], 'ext-cloudflare':[80,110], 'runtime-db-cache':[W/2,H-90],
-              'lib':[W/2-180,H/2], 'deploy':[W/2,H/2] };
+              'lib':[W/2-180,H/2], 'deploy':[W/2,H/2],
+              'ansible-playbooks':[120,640], 'ansible-roles-security':[120,790] };
 const pinnedIds = new Set(Object.keys(pin));
-for (const [id,[x,y]] of Object.entries(pin)) { const n = nodesById[id]; if (n) { n.x = x; n.y = y; } }
-
-// relax the remaining free nodes around the now-fixed pins so nothing overlaps them
-for (let iter = 0; iter < 200; iter++) {
-  const disp = {}; for (const n of DATA.nodes) disp[n.id] = { x: 0, y: 0 };
-  for (const n of DATA.nodes) {
-    for (const m of DATA.nodes) {
-      if (n === m) continue;
-      let dx = n.x - m.x, dy = n.y - m.y;
+function runLayout() {
+  const lrng = seedPRNG(DATA.generated_from_commit || 'dreamseed');
+  // pin nodes go to final positions first so free nodes start repelling from correct boundaries
+  for (const [id,[x,y]] of Object.entries(pin)) { const n = nodesById[id]; if (n) { n.x = x; n.y = y; } }
+  // interleave free nodes by type around the circle so same-type nodes don't cluster
+  const byType = {};
+  for (const n of DATA.nodes) { if (!pinnedIds.has(n.id)) (byType[n.type] = byType[n.type] || []).push(n); }
+  const groups = Object.values(byType);
+  const free = [];
+  while (groups.some(g => g.length)) { for (const g of groups) { if (g.length) free.push(g.shift()); } }
+  free.forEach((n, i) => {
+    const a = (2 * Math.PI * i) / free.length;
+    n.x = W/2 + 400 * Math.cos(a) + (lrng() - 0.5) * 20;
+    n.y = H/2 + 320 * Math.sin(a) + (lrng() - 0.5) * 20;
+  });
+  // main simulation — pinned nodes act as immovable obstacles (repel but don't move)
+  for (let iter = 0; iter < 400; iter++) {
+    const disp = {}; for (const n of DATA.nodes) disp[n.id] = { x: 0, y: 0 };
+    for (const n of DATA.nodes) {
+      for (const m of DATA.nodes) {
+        if (n === m) continue;
+        let dx = n.x - m.x, dy = n.y - m.y;
+        let d = Math.hypot(dx, dy) || 1;
+        let f = K*K/d;
+        disp[n.id].x += (dx/d)*f; disp[n.id].y += (dy/d)*f;
+      }
+    }
+    for (const e of edges) {
+      if (!e.fx || !e.tx) continue;
+      let dx = e.tx.x - e.fx.x, dy = e.tx.y - e.fx.y;
       let d = Math.hypot(dx, dy) || 1;
-      let f = K*K/d;
-      disp[n.id].x += (dx/d)*f; disp[n.id].y += (dy/d)*f;
+      let f = (d - 190) * SPRING;
+      disp[e.fx.id].x += (dx/d)*f; disp[e.fx.id].y += (dy/d)*f;
+      disp[e.tx.id].x -= (dx/d)*f; disp[e.tx.id].y -= (dy/d)*f;
+    }
+    for (const n of DATA.nodes) {
+      if (pinnedIds.has(n.id)) continue;
+      n.x += disp[n.id].x * C; n.y += disp[n.id].y * C;
+      n.x += (W/2 - n.x) * 0.002; n.y += (H/2 - n.y) * 0.002;
+      n.x = Math.max(40, Math.min(W-40, n.x)); n.y = Math.max(40, Math.min(H-40, n.y));
     }
   }
-  for (const e of edges) {
-    if (!e.fx || !e.tx) continue;
-    let dx = e.tx.x - e.fx.x, dy = e.tx.y - e.fx.y;
-    let d = Math.hypot(dx, dy) || 1;
-    let f = (d - 190) * SPRING;
-    disp[e.fx.id].x += (dx/d)*f; disp[e.fx.id].y += (dy/d)*f;
-    disp[e.tx.id].x -= (dx/d)*f; disp[e.tx.id].y -= (dy/d)*f;
-  }
-  for (const n of DATA.nodes) {
-    if (pinnedIds.has(n.id)) continue;
-    n.x += disp[n.id].x * C; n.y += disp[n.id].y * C;
-    n.x += (W/2 - n.x) * 0.002; n.y += (H/2 - n.y) * 0.002;
-    n.x = Math.max(40, Math.min(W-40, n.x)); n.y = Math.max(40, Math.min(H-40, n.y));
+  for (const [id,[x,y]] of Object.entries(pin)) { const n = nodesById[id]; if (n) { n.x = x; n.y = y; } }
+  // relax free nodes around fixed pins to resolve any remaining overlaps
+  for (let iter = 0; iter < 200; iter++) {
+    const disp = {}; for (const n of DATA.nodes) disp[n.id] = { x: 0, y: 0 };
+    for (const n of DATA.nodes) {
+      for (const m of DATA.nodes) {
+        if (n === m) continue;
+        let dx = n.x - m.x, dy = n.y - m.y;
+        let d = Math.hypot(dx, dy) || 1;
+        let f = K*K/d;
+        disp[n.id].x += (dx/d)*f; disp[n.id].y += (dy/d)*f;
+      }
+    }
+    for (const e of edges) {
+      if (!e.fx || !e.tx) continue;
+      let dx = e.tx.x - e.fx.x, dy = e.tx.y - e.fx.y;
+      let d = Math.hypot(dx, dy) || 1;
+      let f = (d - 190) * SPRING;
+      disp[e.fx.id].x += (dx/d)*f; disp[e.fx.id].y += (dy/d)*f;
+      disp[e.tx.id].x -= (dx/d)*f; disp[e.tx.id].y -= (dy/d)*f;
+    }
+    for (const n of DATA.nodes) {
+      if (pinnedIds.has(n.id)) continue;
+      n.x += disp[n.id].x * C; n.y += disp[n.id].y * C;
+      n.x += (W/2 - n.x) * 0.002; n.y += (H/2 - n.y) * 0.002;
+      n.x = Math.max(40, Math.min(W-40, n.x)); n.y = Math.max(40, Math.min(H-40, n.y));
+    }
   }
 }
 
@@ -881,7 +932,15 @@ function redrawNodes() {
     g.setAttribute('transform', `translate(${n.x},${n.y})`);
   }
 }
+if (!loadPositions()) { runLayout(); savePositions(); }
 redrawEdges(); redrawNodes(); fitView();
+if (DATA.working_tree_changed) {
+  const w = document.createElement('span');
+  w.className = 'dirty-warn';
+  w.title = 'Codemap generated with uncommitted changes — may not reflect committed code';
+  w.textContent = '⚠ uncommitted changes';
+  document.querySelector('.brand').appendChild(w);
+}
 
 // ---- zoom & pan ----
 svg.addEventListener('wheel', e => {
@@ -904,7 +963,10 @@ window.addEventListener('pointermove', e => {
 window.addEventListener('pointerup', () => { panning = false; svg.classList.remove('dragging'); });
 document.getElementById('zoomIn').onclick = () => { view.k = Math.min(3, view.k*1.25); applyView(); };
 document.getElementById('zoomOut').onclick = () => { view.k = Math.max(0.25, view.k/1.25); applyView(); };
-document.getElementById('reset').onclick = () => { fitView(); };
+document.getElementById('reset').onclick = () => {
+  try { localStorage.removeItem(LS_KEY); } catch(e) {}
+  runLayout(); savePositions(); redrawEdges(); redrawNodes(); fitView();
+};
 
 // ---- drag nodes ----
 let dragN = null, dragM = null;
@@ -916,7 +978,7 @@ window.addEventListener('pointermove', ev => {
     redrawEdges(); redrawNodes();
   }
 });
-window.addEventListener('pointerup', () => { dragN = null; svg.classList.remove('dragging'); });
+window.addEventListener('pointerup', () => { if (dragN) savePositions(); dragN = null; svg.classList.remove('dragging'); });
 
 // ---- state / highlight ----
 let selFlow = null, selNode = null, selText = '';
@@ -1003,7 +1065,7 @@ function applyHighlight() {
     g.style.display = '';
     let dim = false, cls = '';
     if (hasSel) {
-      if (selNode && (e.from_id === selNode.id || e.to === selNode.id || up.has(e.from_id) || down.has(e.to))) cls = 'hl';
+      if (selNode && (e.from_id === selNode.id || e.to === selNode.id)) cls = 'hl';
       else if (flowActive && fsEdges.has(e.from_id+'->'+e.to)) cls = 'flow';
       else if (q && (matched.has(e.from_id) || matched.has(e.to))) cls = 'hl';
       else dim = true;
@@ -1017,7 +1079,8 @@ function applyHighlight() {
 // ---- node click -> select + drag ----
 for (const n of DATA.nodes) {
   nodeG[n.id].addEventListener('pointerdown', e => { e.stopPropagation(); dragN = n; dragM = worldPoint(e); svg.classList.add('dragging'); });
-  nodeG[n.id].addEventListener('click', () => {
+  nodeG[n.id].addEventListener('click', e => {
+    e.stopPropagation();
     selNode = (selNode === n) ? null : n;
     renderDetail();
     applyHighlight();

@@ -116,6 +116,20 @@
       ],
       "matchStrings": ["repo: https://github\\.com/(?<depName>[^\\s]+)\\s*\\n\\s*rev: (?<currentValue>[^\\s]+)"],
       "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "Track PHP version (test-restore.yml input and group_vars default)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/test-restore\\.yml$/",
+        "/^ansible/group_vars/all\\.yml$/"
+      ],
+      "matchStrings": [
+        "php_version:\\s*\"(?<currentValue>[\\d.]+)\"\\s*# renovate: depName=php",
+        "default\\('(?<currentValue>[\\d.]+)'[^#]*# renovate: depName=php"
+      ],
+      "depNameTemplate": "php",
+      "datasourceTemplate": "endoflife-date"
     }
   ],
   "packageRules": [

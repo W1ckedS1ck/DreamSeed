@@ -19,7 +19,7 @@ db_min_tables: 100
 # ========================
 #  PHP
 # ========================
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}"
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}" # renovate: depName=php
 
 # ========================
 #  Redis
