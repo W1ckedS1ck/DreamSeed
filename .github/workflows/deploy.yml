@@ -136,6 +136,7 @@ jobs:
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
           PYTHONUNBUFFERED: 1
+          GIT_REF: ${{ github.ref_name }}
         run: |
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
@@ -160,7 +161,7 @@ jobs:
           fi
 
           if [[ "$rc" -eq 0 ]]; then
-            if grep -qE '❌ CRITICAL|^\s*✗ |^Error:|ERROR!' /tmp/deploy.log 2>/dev/null; then
+            if grep -qE '❌ CRITICAL|ERROR!|Traceback \(|^Error:|^✗ Error' /tmp/deploy.log 2>/dev/null; then
               echo "::error::Deploy reported failures despite exit code 0"
               rc=1
             fi

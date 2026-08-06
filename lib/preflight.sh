@@ -2,6 +2,33 @@
 # shellcheck shell=bash
 # Sourced by deploy.sh — do not execute directly.
 
+# Guard against deploying a protected ref (main/master) into a dev env.
+# A real incident shipped prod-main code to dev-aws because dispatch made no
+# branch/env pairing. Dev envs must run from dev/feature branches; prod may
+# come from main. Never blocks prod, never blocks destroy, never blocks unless
+# the ref is main/master — and ALLOW_UNPROTECTED_REF=1 overrides if ever needed.
+guard_source_ref() {
+    local refs residue
+    refs="${GIT_REF:-}"
+    if [[ -z "$refs" ]]; then
+        refs="$(git -C "${SCRIPT_DIR:-.}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+    fi
+    residue="$(basename "${refs//refs\/heads\/}")"
+    [[ "$TARGET" =~ ^dev- && "$DESTROY_MODE" == "false" ]] || return 0
+    case "$residue" in
+        main|master)
+            if [[ -n "${ALLOW_UNPROTECTED_REF:-}" ]]; then
+                echo "⚠ Warning: dev env deploying from protected ref '$residue' (allowed via ALLOW_UNPROTECTED_REF)"
+            else
+                echo "✗ Error: TARGET=$TARGET (dev) cannot deploy from ref '$refs' (main/master)."
+                echo "  Dev envs run from the dev branch; this blocks a prod ref from leaking into dev."
+                echo "  To force anyway (not recommended): ALLOW_UNPROTECTED_REF=1 ./deploy.sh ..."
+                exit 1
+            fi
+            ;;
+    esac
+}
+
 check_prerequisites() {
     local missing=()
     command -v "$ANSIBLE_PLAYBOOK" &>/dev/null || missing+=("ansible-playbook")
@@ -13,6 +40,7 @@ check_prerequisites() {
 }
 
 preflight_checks() {
+    guard_source_ref
     check_prerequisites
 
     local env_src; env_src=$(resolve_env_file "$ENV_FILE")
