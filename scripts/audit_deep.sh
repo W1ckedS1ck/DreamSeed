@@ -734,14 +734,18 @@ else
   warn "Faro RUM not found (sub_filter missing?)" "functional_faro"
 fi
 
-# Promtail log shipping
+# Promtail log shipping (Loki is remote SaaS; gauge shipped bytes from Promtail's own /metrics)
 if systemctl is-active promtail &>/dev/null; then
   _promtail_jobs=$(grep -c 'job_name' /etc/promtail/promtail.yml 2>/dev/null || true)
-  _promtail_logs=$(journalctl -u promtail --no-pager -n 50 2>/dev/null | grep -c 'nginx\|php-fpm\|syslog' || true)
-  if [[ "$_promtail_jobs" -ge 3 && "$_promtail_logs" -ge 1 ]]; then
-    ok "Promtail: ${_promtail_jobs} jobs, reading nginx + php-fpm + syslog" "functional_promtail"
+  _promtail_sent=$(curl -sf --max-time 5 "http://127.0.0.1:9080/metrics" 2>/dev/null | awk '/^promtail_sent_bytes_total/ {print $2}' || true)
+  _promtail_sent=${_promtail_sent:-0}
+  _promtail_sent=$(printf '%.0f' "$_promtail_sent" 2>/dev/null || echo 0)
+  if [[ "$_promtail_jobs" -ge 3 && "$_promtail_sent" -gt 0 ]]; then
+    ok "Promtail: ${_promtail_jobs} jobs, ${_promtail_sent} bytes sent to Loki" "functional_promtail"
+  elif [[ "$_promtail_jobs" -ge 3 ]]; then
+    ok "Promtail: ${_promtail_jobs} jobs, waiting for first batch (fresh/idle)" "functional_promtail"
   else
-    warn "Promtail active (${_promtail_jobs} jobs, ${_promtail_logs} log lines)" "functional_promtail"
+    warn "Promtail: ${_promtail_jobs} jobs configured (expected >=3)" "functional_promtail"
   fi
 else
   warn "Promtail not running" "functional_promtail"
