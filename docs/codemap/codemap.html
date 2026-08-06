@@ -68,7 +68,7 @@ button:hover{border-color:var(--accent);color:#fff}
 <header>
   <div class="brand">
     <span class="name">DreamSeed — Interactive Code Map</span>
-    <span class="meta">generated: 2026-08-05T11:15:09Z &nbsp;·&nbsp; commit: <code>6f6ca1b6bb7048023d143afd2f650126d0a2e62d</code></span>
+    <span class="meta">generated: 2026-08-06T16:51:37Z &nbsp;·&nbsp; commit: <code>9b1dee4df1b248b75fba420a554c3fc71f1415de</code></span>
   </div>
   <div class="controls">
     <input type="text" id="search" placeholder="Search nodes…" autocomplete="off">
@@ -103,8 +103,8 @@ button:hover{border-color:var(--accent);color:#fff}
 </div>
 <script>
 const DATA = {
- "generated_at": "2026-08-05T11:15:09Z",
- "generated_from_commit": "6f6ca1b6bb7048023d143afd2f650126d0a2e62d",
+ "generated_at": "2026-08-06T16:51:37Z",
+ "generated_from_commit": "9b1dee4df1b248b75fba420a554c3fc71f1415de",
  "scope": [
   ".github",
   "ansible",
@@ -1737,7 +1737,36 @@ for (let iter = 0; iter < 400; iter++) {
 const pin = { 'ext-gdrive':[W-80,H-110], 'ext-betterstack':[W-80,H-230], 'ext-telegram':[W-80,H-350],
               'ext-grafana-cloud':[W-110,120], 'ext-cloudflare':[80,110], 'runtime-db-cache':[W/2,H-90],
               'lib':[W/2-180,H/2], 'deploy':[W/2,H/2] };
+const pinnedIds = new Set(Object.keys(pin));
 for (const [id,[x,y]] of Object.entries(pin)) { const n = nodesById[id]; if (n) { n.x = x; n.y = y; } }
+
+// relax the remaining free nodes around the now-fixed pins so nothing overlaps them
+for (let iter = 0; iter < 200; iter++) {
+  const disp = {}; for (const n of DATA.nodes) disp[n.id] = { x: 0, y: 0 };
+  for (const n of DATA.nodes) {
+    for (const m of DATA.nodes) {
+      if (n === m) continue;
+      let dx = n.x - m.x, dy = n.y - m.y;
+      let d = Math.hypot(dx, dy) || 1;
+      let f = K*K/d;
+      disp[n.id].x += (dx/d)*f; disp[n.id].y += (dy/d)*f;
+    }
+  }
+  for (const e of edges) {
+    if (!e.fx || !e.tx) continue;
+    let dx = e.tx.x - e.fx.x, dy = e.tx.y - e.fx.y;
+    let d = Math.hypot(dx, dy) || 1;
+    let f = (d - 190) * SPRING;
+    disp[e.fx.id].x += (dx/d)*f; disp[e.fx.id].y += (dy/d)*f;
+    disp[e.tx.id].x -= (dx/d)*f; disp[e.tx.id].y -= (dy/d)*f;
+  }
+  for (const n of DATA.nodes) {
+    if (pinnedIds.has(n.id)) continue;
+    n.x += disp[n.id].x * C; n.y += disp[n.id].y * C;
+    n.x += (W/2 - n.x) * 0.002; n.y += (H/2 - n.y) * 0.002;
+    n.x = Math.max(40, Math.min(W-40, n.x)); n.y = Math.max(40, Math.min(H-40, n.y));
+  }
+}
 
 // ---- SVG rendering ----
 const svg = document.getElementById('svg');
@@ -1751,17 +1780,32 @@ function worldPoint(ev) {
   const r = svg.getBoundingClientRect();
   return { x: (ev.clientX - r.left - view.x)/view.k, y: (ev.clientY - r.top - view.y)/view.k };
 }
+function fitView() {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of DATA.nodes) {
+    const g = nodeG[n.id];
+    const b = g ? g.getBBox() : { x: -34, y: -34, width: 68, height: 68 };
+    minX = Math.min(minX, n.x + b.x); maxX = Math.max(maxX, n.x + b.x + b.width);
+    minY = Math.min(minY, n.y + b.y); maxY = Math.max(maxY, n.y + b.y + b.height);
+  }
+  const r = svg.getBoundingClientRect();
+  const pad = 16;
+  const k = Math.max(0.25, Math.min(1.4, Math.min((r.width - pad*2)/(maxX-minX), (r.height - pad*2)/(maxY-minY))));
+  const cx = (minX+maxX)/2, cy = (minY+maxY)/2;
+  view = { x: r.width/2 - cx*k, y: r.height/2 - cy*k, k };
+  applyView();
+}
 
 const nodeG = {}, edgeG = {};
 for (const e of edges) {
-  const g = document.createElementNS('http://www.w3.org/2000/svg','g'); g.className = 'edge';
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g'); g.setAttribute('class', 'edge');
   g.dataset.from = e.from_id; g.dataset.to = e.to; g.dataset.type = e.type;
   const ev = (e.evidence||[]).map(x => x.path+':'+x.symbol).slice(0,2).join('\n');
   g.innerHTML = `<line class="el"></line><path class="flowbar"></path><title>${e.from_id} -> ${e.to} [${e.type}]\n${ev}</title>`;
   viewport.appendChild(g); edgeG[e.from_id+'->'+e.to] = g;
 }
 for (const n of DATA.nodes) {
-  const g = document.createElementNS('http://www.w3.org/2000/svg','g'); g.className = 'node';
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g'); g.setAttribute('class', 'node');
   g.dataset.id = n.id;
   const c = COLORS[n.type];
   g.innerHTML = `<circle r="30" fill="none" stroke="${c}"></circle><rect x="-30" y="-30" width="60" height="60" rx="12" fill="#1f2630" stroke="${c}"></rect><circle r="6" cx="0" cy="-24" fill="${c}"></circle><text y="4">${n.id}</text><text class="sub" y="18">${n.type}</text><title>${n.id}\n${n.role}</title>`;
@@ -1784,7 +1828,7 @@ function redrawNodes() {
     g.setAttribute('transform', `translate(${n.x},${n.y})`);
   }
 }
-applyView(); redrawEdges(); redrawNodes();
+redrawEdges(); redrawNodes(); fitView();
 
 // ---- zoom & pan ----
 svg.addEventListener('wheel', e => {
@@ -1807,7 +1851,7 @@ window.addEventListener('pointermove', e => {
 window.addEventListener('pointerup', () => { panning = false; svg.classList.remove('dragging'); });
 document.getElementById('zoomIn').onclick = () => { view.k = Math.min(3, view.k*1.25); applyView(); };
 document.getElementById('zoomOut').onclick = () => { view.k = Math.max(0.25, view.k/1.25); applyView(); };
-document.getElementById('reset').onclick = () => { view = { x: 0, y: 0, k: 0.9 }; applyView(); };
+document.getElementById('reset').onclick = () => { fitView(); };
 
 // ---- drag nodes ----
 let dragN = null, dragM = null;
@@ -1883,14 +1927,13 @@ function applyHighlight() {
     const g = nodeG[n.id];
     if (!visible.has(n.id)) { g.style.display = 'none'; continue; }
     g.style.display = '';
-    let dim = false;
+    let dim = false, hl = false;
     if (hasSel) {
       if (selNode && (n.id === selNode.id || up.has(n.id) || down.has(n.id))) hl = true;
       else if (flowActive && fsNodes.has(n.id)) hl = true;
       else if (q && matched.has(n.id)) hl = true;
       else dim = true;
     }
-    const hl = !!selNode && (n.id === selNode.id || up.has(n.id) || down.has(n.id));
     g.classList.toggle('hl', !!hl && !flowActive);
     g.classList.toggle('flow', !!hl && flowActive);
     g.classList.toggle('dim', dim);
