@@ -5,3 +5,7 @@
     name: telegram-bot
     state: restarted
     daemon_reload: true
+  # telegram-bot is a long-polling singleton: Telegram allows ONE getUpdates
+  # poller per bot token, so only prod may run it. Dev keeps the config/unit
+  # (mirror) but must never start it (would kill the prod poller via Conflict).
+  when: deploy_env == 'prod'

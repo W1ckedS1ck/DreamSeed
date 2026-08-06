@@ -472,6 +472,25 @@ INVEOF
     STEP_NAMES+=("Post-deploy checks")
     STEP_TIMES+=($(( $(date +%s) - chk_start )))
 
+    # ----- Record deployed commit (for audit: what runs on prod) -----
+    if [[ -n "${GITHUB_SHA:-}" && "$DRY_RUN" == "false" ]]; then
+        step_start "Record deployed commit"
+        # Marker written to record the exact commit deployed, readable via:
+        #   ssh dream "cat <scripts_dir_remote>/.deployed_commit"
+        local marker_dir
+        marker_dir="$(resolve_scripts_dir_remote)"
+        if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+            -o LogLevel=ERROR \
+            -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+            "printf '%s %s %s\\n' '$GITHUB_SHA' '$DEPLOY_DOMAIN' '$(date -u +%Y-%m-%dT%H:%M:%SZ)' > '${marker_dir}/.deployed_commit'" 2>/dev/null; then
+            step_ok
+        else
+            echo "  ⚠ Could not write deploy commit marker (non-fatal)"
+            local d=$(( $(date +%s) - STEP_START ))
+            STEP_NAMES+=("$STEP_LABEL"); STEP_TIMES+=("$d")
+        fi
+    fi
+
     # ----- Summary -----
     print_summary
 

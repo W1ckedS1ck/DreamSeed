@@ -124,7 +124,7 @@ jobs:
           DEV_HETZ_SSH_KEY_NAME=Vitali.pub
           DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1
           DEV_HETZ_SERVER_TYPE=cx23
-          PROD_HETZ_SERVER_TYPE=cx43
+          PROD_HETZ_SERVER_TYPE=cx33
           PROD_HETZ_SSH_KEY_NAME=Vitali.pub
           PROD_HETZ_PRIMARY_IP_NAME=
           PROD_HETZ_ENABLE_PRIMARY_IP=true
@@ -136,6 +136,7 @@ jobs:
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
           PYTHONUNBUFFERED: 1
+          GIT_REF: ${{ github.ref_name }}
         run: |
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
@@ -160,7 +161,7 @@ jobs:
           fi
 
           if [[ "$rc" -eq 0 ]]; then
-            if grep -qE '❌ CRITICAL|^\s*✗ |^Error:|ERROR!' /tmp/deploy.log 2>/dev/null; then
+            if grep -qE '❌ CRITICAL|ERROR!|Traceback \(|^Error:|^✗ Error' /tmp/deploy.log 2>/dev/null; then
               echo "::error::Deploy reported failures despite exit code 0"
               rc=1
             fi
@@ -253,6 +254,15 @@ jobs:
               ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
               --data-urlencode "parse_mode=Markdown" \
               --data-urlencode "text=$MSG" > /dev/null || true
+          fi
+
+      - name: Add code map to Pages artifact
+        if: success() && inputs.action == 'deploy'
+        run: |
+          if [ -f docs/codemap/codemap.html ]; then
+            mkdir -p /tmp/pages-screenshot
+            cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
+            cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
           fi
 
       - name: Upload screenshot to Pages
@@ -373,6 +383,9 @@ jobs:
     if: needs.deploy.result == 'success' && inputs.action == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write

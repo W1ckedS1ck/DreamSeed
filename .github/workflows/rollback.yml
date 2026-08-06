@@ -56,8 +56,9 @@ jobs:
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
           DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
-          TF_TOKEN="${{ secrets.TF_API_TOKEN }}"
+          TF_TOKEN="$TF_API_TOKEN"
 
           ENV="${{ inputs.environment }}"
 

@@ -98,7 +98,8 @@ run_renovate_validate() {
 
     # Pin renovate so validation is deterministic across machines/CI.
     # managerFilePatterns in renovate.json requires renovate >= 41 (see CLAUDE.md).
-    if npx --yes --package renovate@44 -- renovate-config-validator 2>&1; then
+    # NPM_CONFIG_LOGLEVEL=error silences npm's engine/deprecation noise (we run on node >= renovate's engines).
+    if NPM_CONFIG_LOGLEVEL=error npx --yes --package renovate@44 -- renovate-config-validator 2>&1; then
         print_ok "renovate.json valid"; ci_annotation "Renovate" "pass"
     else
         print_fail "renovate.json invalid"; ci_annotation "Renovate" "fail"

@@ -1,5 +1,7 @@
 # Architecture
 
+> Interactive map of this codebase: [codemap.html](../codemap/codemap.html). This page is the static prose version; the map is the machine-generated visual layer (nodes, weighted edges, flows). Regenerate it with the codemap generator, never hand-edit the outputs.
+
 ## Deployment Flow
 
 ```mermaid

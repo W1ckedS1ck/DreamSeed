@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import subprocess
 import sys
 
@@ -11,8 +12,8 @@ def main():
         '--workflow', 'deploy.yml',
         '--limit', '5',
         '--json', 'conclusion,status,displayName,createdAt,htmlUrl',
-        '--jq', '.[] | "- \(.displayName)  \(.status) / \(.conclusion // "pending")  \(.htmlUrl)"',
-    ], capture_output=True, text=True)
+        '--jq', r'.[] | "- \(.displayName)  \(.status) / \(.conclusion // "pending")  \(.htmlUrl)"',
+    ], capture_output=True, text=True, check=False)
 
     lines = result.stdout.strip()
     if not lines:

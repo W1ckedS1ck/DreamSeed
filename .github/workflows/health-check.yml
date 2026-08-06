@@ -60,22 +60,32 @@ jobs:
 
       - name: Resolve server IP
         id: server-ip
+        env:
+          PROD_EIP: ${{ secrets.PROD_EIP }}
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
+          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
           ENV="${{ matrix.target }}"
           case "$ENV" in
             prod)
-              IP="${{ secrets.PROD_EIP }}"
+              IP="$PROD_EIP"
               if [[ "$IP" == eipalloc-* ]]; then
-                export AWS_ACCESS_KEY_ID="${{ secrets.PROD_ACCESS_KEY }}"
-                export AWS_SECRET_ACCESS_KEY="${{ secrets.PROD_SECRET_KEY }}"
-                export AWS_DEFAULT_REGION="${{ secrets.PROD_REGION }}"
+                export AWS_ACCESS_KEY_ID="$PROD_ACCESS_KEY"
+                export AWS_SECRET_ACCESS_KEY="$PROD_SECRET_KEY"
+                export AWS_DEFAULT_REGION="$PROD_REGION"
                 IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
                      --query 'Addresses[0].PublicIp' --output text)
               fi
               DOMAIN="dreamseed.online"
               ;;
             prod-hetz)
-              export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_TOKEN_app_terraform_io="$TF_API_TOKEN"
               export TF_WORKSPACE="prod-hetz"
               cd terraform/hetzner
               terraform init -upgrade=false > /dev/null
@@ -84,7 +94,7 @@ jobs:
               DOMAIN="dreamseed.online"
               ;;
             dev-hetz)
-              export TF_TOKEN_app_terraform_io="${{ secrets.TF_API_TOKEN }}"
+              export TF_TOKEN_app_terraform_io="$TF_API_TOKEN"
               export TF_WORKSPACE="dev-hetz"
               cd terraform/hetzner
               terraform init -upgrade=false > /dev/null
@@ -93,11 +103,11 @@ jobs:
               DOMAIN="hetz.vitalikuts.online"
               ;;
             dev-aws)
-              IP="${{ secrets.DEV_AWS_EIP }}"
+              IP="$DEV_AWS_EIP"
               if [[ "$IP" == eipalloc-* ]]; then
-                export AWS_ACCESS_KEY_ID="${{ secrets.DEV_AWS_ACCESS_KEY }}"
-                export AWS_SECRET_ACCESS_KEY="${{ secrets.DEV_AWS_SECRET_KEY }}"
-                export AWS_DEFAULT_REGION="${{ secrets.DEV_AWS_REGION }}"
+                export AWS_ACCESS_KEY_ID="$DEV_AWS_ACCESS_KEY"
+                export AWS_SECRET_ACCESS_KEY="$DEV_AWS_SECRET_KEY"
+                export AWS_DEFAULT_REGION="$DEV_AWS_REGION"
                 IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
                      --query 'Addresses[0].PublicIp' --output text)
               fi

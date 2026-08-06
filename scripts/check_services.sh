@@ -37,7 +37,7 @@ done
 fail=0
 
 # --- Services ---
-for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_exporter" "victoria-metrics" "grafana-server" "telegram-bot"; do
+for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_exporter" "victoria-metrics" "grafana-server"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"
@@ -48,6 +48,30 @@ for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_expor
         fail=1
     fi
 done
+
+# --- telegram-bot (long-polling singleton) ---
+# Telegram allows ONE getUpdates poller per token, so the bot runs on prod only.
+# On prod it must be active; on any non-prod host it must be inactive (a running
+# poller there would kill the prod instance via Conflict).
+_tbg=$(systemctl is-active telegram-bot 2>/dev/null || echo "inactive")
+if [[ "${ENV:-}" == "prod" ]]; then
+    if [[ "$_tbg" == "active" ]]; then
+        echo "  ✓ telegram-bot"
+        export_metric 'service_status{service="telegram-bot"} 1'
+    else
+        echo "  ✗ telegram-bot — $_tbg"
+        export_metric 'service_status{service="telegram-bot"} 0'
+        fail=1
+    fi
+else
+    if [[ "$_tbg" == "active" ]]; then
+        echo "  ⚠ telegram-bot active on non-prod (duplicate poller risk) — $ENV"
+        export_metric 'service_status{service="telegram-bot"} 0'
+    else
+        echo "  ✓ telegram-bot (expected inactive on non-prod)"
+        export_metric 'service_status{service="telegram-bot"} 1'
+    fi
+fi
 
 # --- Promtail (optional) ---
 if command -v promtail &>/dev/null; then

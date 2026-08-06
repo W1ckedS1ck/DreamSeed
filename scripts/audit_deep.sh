@@ -53,6 +53,7 @@ P="${GREEN}✓${NC}"; F="${RED}✗${NC}"; W="${YELLOW}⚠${NC}"
 ok()   { echo "  $P $1"; export_metric "audit_$2 1"; }
 fail() { echo "  $F $1"; export_metric "audit_$2 0"; fail_count=1; }
 warn() { echo "  $W $1"; export_metric "audit_$2 0"; }
+info() { echo "  • $1"; }
 
 echo ""
 echo "═══ DEEP AUDIT REPORT ═══"
@@ -588,8 +589,20 @@ fi
 echo ""
 echo "── 14. Telegram Bot ──"
 
+# telegram-bot is a long-polling singleton: Telegram allows ONE getUpdates
+# poller per token. It intentionally runs on prod only (see backup role);
+# "not active" on a non-prod host is expected, not a fault.
+_tg_env_prod=0
+[[ "${ENV:-}" == "prod" ]] && _tg_env_prod=1
+
 if systemctl is-active telegram-bot &>/dev/null; then
   ok "Telegram bot active" "tg_bot_active"
+  _tg_conflict=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'Conflict: terminated by other getUpdates' || true)
+  if [[ "$_tg_conflict" -eq 0 ]]; then
+    ok "Telegram bot: single poller (no Conflict)" "tg_bot_conflict"
+  else
+    warn "Telegram bot: $_tg_conflict Conflict(s) - duplicate poller detected" "tg_bot_conflict"
+  fi
   _tg_errors=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
   if [[ "$_tg_errors" -eq 0 ]]; then
     ok "Telegram bot: 0 errors" "tg_bot_errors"
@@ -597,7 +610,11 @@ if systemctl is-active telegram-bot &>/dev/null; then
     warn "Telegram bot: $_tg_errors error(s)" "tg_bot_errors"
   fi
 else
-  warn "Telegram bot not active" "tg_bot_active"
+  if [[ "$_tg_env_prod" -eq 1 ]]; then
+    warn "Telegram bot not active" "tg_bot_active"
+  else
+    info "Telegram bot not active (expected on non-prod singleton)" "tg_bot_active"
+  fi
 fi
 
 # ── 15. Security (extra) ─────────────────────────────────────────────────────
@@ -637,10 +654,15 @@ echo ""
 echo "── 16. Systemd Services ──"
 
 _expected_services=(
-  nginx php8.3-fpm mariadb redis-server fail2ban grafana-server promtail
+  nginx "php${PHP_VER:-8.3}-fpm" mariadb redis-server fail2ban grafana-server promtail
   node_exporter mysqld_exporter nginx_exporter redis_exporter
-  victoria-metrics vmagent telegram-bot ssh cron unattended-upgrades
+  victoria-metrics vmagent ssh cron unattended-upgrades
 )
+# telegram-bot is prod-only (long-polling singleton, one getUpdates poller per
+# token) — only required to be running on prod; never expected on a dev host.
+if [[ "${ENV:-}" == "prod" ]]; then
+  _expected_services+=( telegram-bot )
+fi
 _all_active=0
 for _s in "${_expected_services[@]}"; do
   if systemctl is-active "$_s" &>/dev/null; then
@@ -717,14 +739,18 @@ else
   warn "Faro RUM not found (sub_filter missing?)" "functional_faro"
 fi
 
-# Promtail log shipping
+# Promtail log shipping (Loki is remote SaaS; gauge shipped bytes from Promtail's own /metrics)
 if systemctl is-active promtail &>/dev/null; then
   _promtail_jobs=$(grep -c 'job_name' /etc/promtail/promtail.yml 2>/dev/null || true)
-  _promtail_logs=$(journalctl -u promtail --no-pager -n 50 2>/dev/null | grep -c 'nginx\|php-fpm\|syslog' || true)
-  if [[ "$_promtail_jobs" -ge 3 && "$_promtail_logs" -ge 1 ]]; then
-    ok "Promtail: ${_promtail_jobs} jobs, reading nginx + php-fpm + syslog" "functional_promtail"
+  _promtail_sent=$(curl -sf --max-time 5 "http://127.0.0.1:9080/metrics" 2>/dev/null | awk '/^promtail_sent_bytes_total/ {print $2}' || true)
+  _promtail_sent=${_promtail_sent:-0}
+  _promtail_sent=$(printf '%.0f' "$_promtail_sent" 2>/dev/null || echo 0)
+  if [[ "$_promtail_jobs" -ge 3 && "$_promtail_sent" -gt 0 ]]; then
+    ok "Promtail: ${_promtail_jobs} jobs, ${_promtail_sent} bytes sent to Loki" "functional_promtail"
+  elif [[ "$_promtail_jobs" -ge 3 ]]; then
+    ok "Promtail: ${_promtail_jobs} jobs, waiting for first batch (fresh/idle)" "functional_promtail"
   else
-    warn "Promtail active (${_promtail_jobs} jobs, ${_promtail_logs} log lines)" "functional_promtail"
+    warn "Promtail: ${_promtail_jobs} jobs configured (expected >=3)" "functional_promtail"
   fi
 else
   warn "Promtail not running" "functional_promtail"

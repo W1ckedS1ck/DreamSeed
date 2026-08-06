@@ -2,7 +2,11 @@ name: "[B] Drift Detection"
 
 on:
   push:
-    branches: [main, dev/**]
+    branches: [main]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+      - '.github/workflows/drift-detection.yml'
   schedule:
     - cron: '5 7 * * *'  # 07:05 UTC daily
   workflow_dispatch:
@@ -72,35 +76,42 @@ jobs:
       - uses: ./.github/actions/setup-terraform
 
       - name: Set up credentials
+        env:
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          PROD_HETZ_HCLOUD_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           case "${{ matrix.target }}" in
             dev-aws)
-              echo "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}" >> "$GITHUB_ENV"
-              echo "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
-              echo "TF_VAR_aws_region=${{ secrets.DEV_AWS_REGION }}" >> "$GITHUB_ENV"
+              echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=$DEV_AWS_REGION" >> "$GITHUB_ENV"
+              echo "TF_VAR_aws_region=$DEV_AWS_REGION" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=dev-aws" >> "$GITHUB_ENV"
               echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
               ;;
             prod-hetz)
-              echo "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_hcloud_token=$PROD_HETZ_HCLOUD_TOKEN" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=prod-hetz" >> "$GITHUB_ENV"
-              echo "TF_VAR_server_type=cx33" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:206
+              echo "TF_VAR_server_type=cx33" >> "$GITHUB_ENV"
               echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
               echo "TF_VAR_enable_primary_ip=true" >> "$GITHUB_ENV"
               ;;
             dev-hetz)
-              echo "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
-              echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"  # keep in sync with deploy.yml:169
+              echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"
               echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
               ;;
             cloudflare)
-              echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_cloudflare_api_token=$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
               echo "TF_VAR_domain=vitalikuts.online" >> "$GITHUB_ENV"
               ;;
             cloudflare-prod)
-              echo "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> "$GITHUB_ENV"
+              echo "TF_VAR_cloudflare_api_token=$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
               echo "TF_VAR_domain=dreamseed.online" >> "$GITHUB_ENV"
               ;;
           esac
