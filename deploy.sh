@@ -292,7 +292,6 @@ main() {
         _tf validate -no-color >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
 
         # TFC remote execution does not support -var flags; use auto.tfvars
-        local tf_args=()
         TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
         {
             printf 'environment = "%s"\n' "$TARGET"
@@ -303,12 +302,13 @@ main() {
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
         if _tf state pull > "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null && [[ -s "$bk/${TF_WORKSPACE}_pre.tfstate" ]]; then
+            chmod 600 "$bk/${TF_WORKSPACE}_pre.tfstate"  # contains state incl. any secrets → private
             echo "  ✓ Pre-apply state backed up"
         else
             rm -f "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null
         fi
 
-        if _tf apply -auto-approve -no-color "${tf_args[@]}" >> "$DEPLOY_TF_LOG" 2>&1; then
+        if _tf apply -auto-approve -no-color >> "$DEPLOY_TF_LOG" 2>&1; then
             :  # ok
         else
             tail -30 "$DEPLOY_TF_LOG"

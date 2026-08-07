@@ -1,0 +1,31 @@
+---
+# Ubuntu Pro (ESM) attachment.
+# Runs via Ansible (not cloud-init) so the token is never written into
+# Terraform state or instance user-data. Token sourced from UBUNTU_PRO_TOKEN.
+
+- name: Check Ubuntu Pro subscription status
+  become: true
+  ansible.builtin.command:
+    cmd: pro status --format json
+  register: pro_status
+  changed_when: false
+  failed_when: false
+  when: ubuntu_pro_token | length > 0
+
+- name: Attach Ubuntu Pro subscription
+  become: true
+  ansible.builtin.command:
+    cmd: pro attach {{ ubuntu_pro_token }}
+  register: pro_attach
+  no_log: true
+  changed_when: false
+  failed_when: false
+  when:
+    - ubuntu_pro_token | length > 0
+    - pro_status.rc | default(1) == 0
+    - not (pro_status.stdout | default('{}') | from_json).attached | default(false)
+
+- name: Report Ubuntu Pro attachment status
+  when: ubuntu_pro_token | length > 0
+  ansible.builtin.debug:
+    msg: "Ubuntu Pro: {{ 'attach run (rc=' ~ pro_attach.rc ~ ')' if pro_attach is defined else 'already attached / pro unavailable — skipped' }}"

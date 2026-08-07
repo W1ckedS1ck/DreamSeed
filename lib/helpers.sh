@@ -84,24 +84,28 @@ rotate_logs() {
 
 _cfcurl() { curl -s --connect-timeout 5 --max-time 15 "$@"; }
 
-# Resolve Cloudflare zone ID from domain.
-# For apex domains (dreamseed.online) use domain as-is.
-# For subdomains (aws.vitalikuts.online) strip first component.
+# Resolve Cloudflare zone ID from a (sub)domain by walking labels down to the
+# registrable zone, e.g. ssh.aws.vitalikuts.online → vitalikuts.online.
+# Works for any nesting depth; apex domains resolve on the first attempt.
 _cf_zone_id() {
     local domain="$1"
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare: CLOUDFLARE_API_TOKEN not set"; return 1; }
     local api_base="https://api.cloudflare.com/client/v4"
-    local dot_count="${domain//[^.]}"
-    local zone_lookup="$domain"
-    [[ ${#dot_count} -ge 2 ]] && zone_lookup="${domain#*.}"
-    _cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "$api_base/zones?name=$zone_lookup" | python3 -c "
+    local candidate="$domain"
+    local zone_id=""
+    while [[ "$candidate" == *.* ]]; do
+        zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$api_base/zones?name=$candidate" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 zones=d.get('result',[])
-if zones:
-    print(zones[0]['id'])
-" 2>/dev/null || { log "Cloudflare: no zone found for $domain"; return 1; }
+print(zones[0]['id'] if zones else '')
+" 2>/dev/null) || zone_id=""
+        [[ -n "$zone_id" ]] && { echo "$zone_id"; return 0; }
+        candidate="${candidate#*.}"
+    done
+    log "Cloudflare: no zone found for $domain"
+    return 1
 }
 
 update_cloudflare_dns() {

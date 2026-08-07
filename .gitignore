@@ -14,6 +14,8 @@ crash.log
 override.tf
 override.tf.json
 terraform/*/terraform.tfvars*
+# Generated per-deploy auto-loaded var file (deploy.sh → TFC remote exec)
+terraform/*/deploy.auto.tfvars
 
 # ─── Ansible ──────────────────────────────────────────────────────────
 *.retry

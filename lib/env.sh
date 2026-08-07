@@ -86,7 +86,6 @@ apply_target_vars() {
 }
 
 export_tf_env() {
-    [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && export TF_VAR_ubuntu_pro_token="$UBUNTU_PRO_TOKEN"
     [[ "$TF_PROVIDER" == "aws" ]] && {
         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
         export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"

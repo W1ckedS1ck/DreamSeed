@@ -256,8 +256,8 @@ else
 fi
 
 # 2. Grafana /api/health (LOCAL — CRITICAL for UI)
-_grafana_pass="${GRAFANA_PASS:-admin}"
-if curl -sf -u admin:"$_grafana_pass" --max-time 5 "http://127.0.0.1:3000/api/health" 2>/dev/null | grep -q '"database": "ok"'; then
+# /api/health is public (used by LB probes) — no auth, so no password in argv.
+if curl -sf --max-time 5 "http://127.0.0.1:3000/api/health" 2>/dev/null | grep -q '"database": "ok"'; then
     echo "  ✓ Grafana: healthy"
 else
     echo "  ✗ Grafana: not healthy (UI won't work)"

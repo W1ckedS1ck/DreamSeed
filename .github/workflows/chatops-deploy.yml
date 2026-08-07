@@ -8,6 +8,9 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+  # Required for `gh workflow run` (deploy/destroy dispatch). Gated below:
+  # prod targets additionally require admin collaborator permission.
+  actions: write
 
 env:
   ARTIFACT_RETENTION_DAYS: 7
@@ -37,6 +40,7 @@ jobs:
             gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
               -X POST -f content="-1" > /dev/null 2>&1 || true
           fi
+          echo "permission=$PERMISSION" >> "$GITHUB_OUTPUT"
 
       - name: React
         if: steps.check.outputs.allowed == 'true'
@@ -60,6 +64,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/actions/chatops/post_help.py "${{ github.event.issue.number }}" "${{ github.repository }}"
+
+      - name: Gate production to admins
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command != 'help' && steps.parse.outputs.command != 'status' && steps.parse.outputs.command != 'invalid'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ steps.parse.outputs.target }}
+          PERMISSION: ${{ steps.check.outputs.permission }}
+          ISSUE: ${{ github.event.issue.number }}
+          USER: ${{ github.event.comment.user.login }}
+        run: |
+          if [[ "$TARGET" =~ ^prod ]] && [[ "$PERMISSION" != "admin" ]]; then
+            gh issue comment "$ISSUE" \
+              --repo "${{ github.repository }}" \
+              --body "⛔ @$USER — production deploy/destroy requires **admin** permissions (your role: $PERMISSION)."
+            echo "::error::Production dispatch requires admin (got $PERMISSION)"
+            exit 1
+          fi
 
       - name: Post invalid
         if: steps.parse.outputs.command == 'invalid'

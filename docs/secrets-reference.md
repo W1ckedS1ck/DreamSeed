@@ -20,7 +20,7 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
 | `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml` → `rclone_config.yml` |
 | `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml` |
-| `UBUNTU_PRO_TOKEN` | Ubuntu Pro subscription token | `deploy.yml`, `terraform` (cloud-init) |
+| `UBUNTU_PRO_TOKEN` | Ubuntu Pro subscription token | `deploy.yml`, `setup-env` → Ansible (playbook-01) — not in Terraform/cloud-init |
 | `EMAIL_USER` | SMTP username for mail.privateemail.com | `deploy.yml` → server .env |
 | `EMAIL_PASS` | SMTP password | `deploy.yml` → server .env |
 | `SMTP_SERVER` | SMTP host | `deploy.yml` → server .env |

@@ -169,6 +169,9 @@ run_terraform_validate() {
         if [[ -f "$tfvars_file" ]] && head -c 16 "$tfvars_file" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
             tfvars_vaulted="$tfvars_file.vaulted"
             mv "$tfvars_file" "$tfvars_vaulted"
+            # Guarantee restore even if interrupted (SIGINT/TERM) between the
+            # move above and the restore below; re-raise INT so Ctrl-C still stops.
+            trap '[[ -n "${tfvars_vaulted:-}" && -f "$tfvars_vaulted" ]] && mv "$tfvars_vaulted" "$tfvars_file"; trap - EXIT INT TERM; kill -INT $$ 2>/dev/null || true' EXIT INT TERM
         fi
 
         if "$tf" -chdir="$dir" init -backend=false && "$tf" -chdir="$dir" validate; then
@@ -177,10 +180,11 @@ run_terraform_validate() {
             print_fail "$dir — validation failed"
         fi
 
-        # Restore vaulted tfvars if we moved it
+        # Restore vaulted tfvars if we moved it, and disarm the restore trap
         if [[ -n "$tfvars_vaulted" && -f "$tfvars_vaulted" ]]; then
             mv "$tfvars_vaulted" "$tfvars_file"
         fi
+        trap - EXIT INT TERM
     done
     ci_annotation "Terraform Validate" "$([[ $FAILED == false ]] && echo pass || echo fail)"
     group_end

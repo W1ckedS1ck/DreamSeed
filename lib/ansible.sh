@@ -3,15 +3,16 @@
 # Sourced by deploy.sh — do not execute directly.
 
 _ansible_cmd() {
-    local old_opts; old_opts=$(set +o)
     # Line buffering handled by stdbuf -oL at the pipeline level (deploy.yml).
+    # let the pipeline fail so its exit code can be captured — deploy.sh enables `set -e`.
+    set +e
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
     ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
     ANSIBLE_NOCOLOR=1 \
     "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_FILE}" \
         "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
     local rc=${PIPESTATUS[0]}
-    eval "$old_opts"
+    set -e
     return "$rc"
 }
 
@@ -67,13 +68,13 @@ check_services() {
 
     local output rc
     [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
-    local old_opts; old_opts=$(set +o)
+    set +e
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -o LogLevel=ERROR \
         -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "bash '${scripts_dir_remote}/check_services.sh'" 2>&1)
     rc=$?
-    eval "$old_opts"
+    set -e
     [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH exit code: $rc"
 
     echo "$output"

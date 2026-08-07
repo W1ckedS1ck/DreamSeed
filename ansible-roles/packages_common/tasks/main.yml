@@ -64,6 +64,9 @@
 - name: Setup PHP version and packages
   ansible.builtin.include_tasks: php.yml
 
+- name: Attach Ubuntu Pro subscription (ESM)
+  ansible.builtin.include_tasks: ubuntu-pro.yml
+
 - name: Install redis packages
   become: true
   ansible.builtin.apt:
@@ -73,3 +76,24 @@
     state: present
   environment:
     DEBIAN_FRONTEND: noninteractive
+
+# ─── Grafana apt repo (shared by grafana + promtail roles) ───────────────
+# Provisioned once in the base playbook so the two roles don't duplicate it.
+- name: Download Grafana GPG key
+  become: true
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg.key
+    dest: /etc/apt/keyrings/grafana.asc
+    mode: "0644"
+
+- name: Add Grafana repository
+  become: true
+  ansible.builtin.deb822_repository:
+    name: grafana
+    types: deb
+    uris: https://apt.grafana.com
+    suites: stable
+    components: main
+    signed_by: /etc/apt/keyrings/grafana.asc
+    install_python_debian: true
+    state: present

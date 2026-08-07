@@ -1,22 +1,6 @@
 ---
-- name: Download Grafana GPG key
-  ansible.builtin.get_url:
-    url: https://apt.grafana.com/gpg.key
-    dest: /etc/apt/keyrings/grafana.asc
-    mode: "0644"
-  become: true
-
-- name: Add Grafana repository
-  ansible.builtin.deb822_repository:
-    name: grafana
-    types: deb
-    uris: https://apt.grafana.com
-    suites: stable
-    components: main
-    signed_by: /etc/apt/keyrings/grafana.asc
-    install_python_debian: true
-    state: present
-  become: true
+# Grafana apt repo (GPG key + deb822_repository) is provisioned once in the
+# packages_common role (playbook-01). Here we only install + configure.
 
 - name: Install Promtail
   ansible.builtin.apt:
@@ -55,9 +39,10 @@
 - name: Validate credentials
   ansible.builtin.assert:
     that:
-      - grafana_cloud_username | length > 0
+      - loki_username | length > 0
       - grafana_cloud_token | length > 0
-    fail_msg: "grafana_cloud_username and grafana_cloud_token are required for Loki"
+    fail_msg: "loki_username and grafana_cloud_token are required for Loki (username = Loki
+      instance ID, password = Grafana Cloud access policy token with logs write scope)"
 
 - name: Deploy Promtail config
   ansible.builtin.template:

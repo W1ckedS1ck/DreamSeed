@@ -128,12 +128,10 @@ jobs:
               echo "AWS_DEFAULT_REGION=${DEV_AWS_REGION:-us-west-1}"
               echo "TF_VAR_environment=test"
               echo "TF_VAR_ssh_public_key_path=${HOME}/.ssh/deploy_key.pub"
-              [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && echo "TF_VAR_ubuntu_pro_token=$UBUNTU_PRO_TOKEN"
               echo "SSH_KEY=${SSH_KEY:-${HOME}/.ssh/deploy_key}"
             } >> "$GITHUB_ENV"
           else
             {
-              [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && echo "TF_VAR_ubuntu_pro_token=$UBUNTU_PRO_TOKEN"
               echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN"
               echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/deploy_key.pub)"
               echo "TF_VAR_ssh_key_name=${HETZNER_SSH_KEY_NAME:-Vitali.pub}"

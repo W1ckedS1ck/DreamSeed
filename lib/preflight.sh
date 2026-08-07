@@ -46,15 +46,14 @@ preflight_checks() {
     local env_src; env_src=$(resolve_env_file "$ENV_FILE")
     validate_env_file "$env_src"
 
-    local old_opts; old_opts=$(set +o)
     source "$env_src"
-    eval "$old_opts"
     export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
     export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY
     export TG_TOKEN TG_CHAT_ID TG_THREAD_ID
     export EMAIL_USER EMAIL_PASS SMTP_SERVER SMTP_PORT OWNER LOKI_URL LOKI_USERNAME FARO_COLLECTOR_URL FARO_APP_NAME
     export RCLONE_CRYPT_PASSWORD
+    export UBUNTU_PRO_TOKEN
 
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then

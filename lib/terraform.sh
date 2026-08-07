@@ -154,10 +154,10 @@ terraform_destroy() {
     echo "  ━━━ Destroying resources ($TARGET)"
 
     TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
-    local old_opts; old_opts=$(set +o)
+    set +e
     _tf destroy -auto-approve -no-color 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}
-    eval "$old_opts"
+    set -e
     if [[ $tf_exit -ne 0 ]]; then
         grep -q "Destroy complete" "$TF_TMP_OUT" || step_fail "Terraform destroy failed (exit $tf_exit, check $DEPLOY_TF_LOG)"
     fi
@@ -167,7 +167,11 @@ terraform_destroy() {
 
     if [[ ! "$TARGET" =~ ^prod ]]; then
         local ws_del="$TF_WORKSPACE"
+        # Switch away from the workspace being deleted first — otherwise
+        # `workspace delete` fails with "cannot delete the currently active workspace"
+        # (masked by || true below, silently leaving the workspace behind).
         ( cd "$TF_DIR" && unset TF_WORKSPACE && \
+          "$TERRAFORM" workspace select -or-create default >/dev/null 2>&1 && \
           "$TERRAFORM" workspace delete "$ws_del" 2>&1 ) >> "$DEPLOY_TF_LOG" 2>&1 || true
     fi
     echo "  ✓ Destroyed"

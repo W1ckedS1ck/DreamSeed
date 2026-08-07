@@ -1,32 +1,13 @@
 ---
-- name: Download Grafana GPG key
-  ansible.builtin.get_url:
-    url: https://apt.grafana.com/gpg.key
-    dest: /etc/apt/keyrings/grafana.asc
-    mode: "0644"
-  become: true
-
-- name: Add Grafana repository
-  ansible.builtin.deb822_repository:
-    name: grafana
-    types: deb
-    uris: https://apt.grafana.com
-    suites: stable
-    components: main
-    signed_by: /etc/apt/keyrings/grafana.asc
-    install_python_debian: true
-    state: present
-  become: true
-
-- name: Update apt cache after adding Grafana repo
-  ansible.builtin.apt:
-    update_cache: true
-  become: true
+# Grafana apt repo (GPG key + deb822_repository) is provisioned once in the
+# packages_common role (playbook-01). Here we only install + configure.
 
 - name: Install Grafana (pinned version)
   ansible.builtin.apt:
     name: grafana={{ grafana_version }}
     state: present
+    update_cache: true
+    cache_valid_time: 0
   become: true
   environment:
     DEBIAN_FRONTEND: noninteractive
