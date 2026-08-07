@@ -226,7 +226,7 @@ run_markdownlint() {
     group_start "markdownlint (Documentation)"
     if ! tool_available markdownlint-cli2; then print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"; group_end; return 0; fi
 
-    if markdownlint-cli2 --config .markdownlint.yml "docs/**/*.md" "README.md"; then
+    if markdownlint-cli2 --config markdownlint-cli2.jsonc "docs/**/*.md" "README.md"; then
         print_ok "No issues"; ci_annotation "markdownlint" "pass"
     else
         print_fail "Issues found"; ci_annotation "markdownlint" "fail"

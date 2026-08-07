@@ -408,9 +408,11 @@ jobs:
           M="${GITHUB_STEP_SUMMARY:-}"
           [[ -z "$M" ]] && exit 0
           {
-            echo "### 📸 Screenshot — ${{ inputs.environment }}"
+            echo "<details><summary>📸 Screenshot — ${{ inputs.environment }}</summary>"
             echo ""
             echo "![${{ inputs.environment }}](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})"
+            echo ""
+            echo "</details>"
             echo ""
             echo "### 🗺 Code map"
             echo ""
