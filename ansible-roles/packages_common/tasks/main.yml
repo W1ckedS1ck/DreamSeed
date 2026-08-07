@@ -1,24 +1,11 @@
 ---
-# Detect if this is a fresh deployment (no MODX installed yet)
-- name: Check if MODX already provisioned (fresh deploy detection)
-  ansible.builtin.stat:
-    path: /var/www/html/core/config/config.inc.php
-  register: _modx_config
-  changed_when: false
-
-- name: Set fact for deployment type
-  ansible.builtin.set_fact:
-    is_fresh_deploy: "{{ not _modx_config.stat.exists }}"
-    cacheable: true
-
 - name: Update apt cache
   become: true
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
-  when: is_fresh_deploy
 
-- name: Install system packages (base OS-level) — fresh deploy only
+- name: Install system packages (base OS-level)
   become: true
   ansible.builtin.apt:
     name:
@@ -42,7 +29,6 @@
   retries: 3
   delay: 10
   until: _apt_result is success
-  when: is_fresh_deploy
   environment:
     DEBIAN_FRONTEND: noninteractive
 
@@ -81,28 +67,26 @@
 - name: Attach Ubuntu Pro subscription (ESM)
   ansible.builtin.include_tasks: ubuntu-pro.yml
 
-- name: Install redis packages — fresh deploy only
+- name: Install redis packages
   become: true
   ansible.builtin.apt:
     name:
       - "redis-server"
       - "php{{ php_version }}-redis"
     state: present
-  when: is_fresh_deploy
   environment:
     DEBIAN_FRONTEND: noninteractive
 
 # ─── Grafana apt repo (shared by grafana + promtail roles) ───────────────
 # Provisioned once in the base playbook so the two roles don't duplicate it.
-- name: Download Grafana GPG key — fresh deploy only
+- name: Download Grafana GPG key
   become: true
   ansible.builtin.get_url:
     url: https://apt.grafana.com/gpg.key
     dest: /etc/apt/keyrings/grafana.asc
     mode: "0644"
-  when: is_fresh_deploy
 
-- name: Add Grafana repository — fresh deploy only
+- name: Add Grafana repository
   become: true
   ansible.builtin.deb822_repository:
     name: grafana
@@ -113,4 +97,3 @@
     signed_by: /etc/apt/keyrings/grafana.asc
     install_python_debian: true
     state: present
-  when: is_fresh_deploy
