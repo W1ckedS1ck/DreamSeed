@@ -251,6 +251,23 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          # --- Inline screenshot (base64) in summary — independent of Pages serving ---
+          # Proven approach: embeds the PNG directly so the preview never depends on
+          # a hosted URL that can 404 (Pages deployment drift, etc.).
+          if [ "$DEPLOY_STATUS" = "success" ] && [ -n "$M" ] && [ -s "/tmp/pages-screenshot/${ENV}.png" ]; then
+            _ENC=$(base64 -w0 "/tmp/pages-screenshot/${ENV}.png" 2>/dev/null) || _ENC=""
+            if [ -n "$_ENC" ]; then
+              {
+                echo ""
+                echo '<details><summary>📸 Screenshot</summary>'
+                echo ""
+                echo "![](data:image/png;base64,${_ENC})"
+                echo ''
+                echo '</details>'
+              } >> "$M"
+            fi
+          fi
+
           # --- Telegram notification (only on success) ---
           if [ "$DEPLOY_STATUS" = "success" ]; then
             MSG="✅ *Deploy complete* — ${ENV}
@@ -408,7 +425,9 @@ jobs:
           M="${GITHUB_STEP_SUMMARY:-}"
           [[ -z "$M" ]] && exit 0
           {
-            echo "### 📸 Screenshot — ${{ inputs.environment }}"
+            echo "### 🗺 Code map — ${{ inputs.environment }}"
             echo ""
-            echo "[![${{ inputs.environment }}](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})"
+            echo "[Open interactive code map](${{ steps.pages.outputs.page_url }}codemap.html?t=${{ github.run_id }})"
+            echo ""
+            echo "Screenshot is shown inline in the Deploy step summary above."
           } >> "$M"
