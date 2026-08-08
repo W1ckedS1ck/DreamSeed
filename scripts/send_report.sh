@@ -35,12 +35,22 @@ DB_FILES=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p
 PROJ_COUNT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' 2>/dev/null | wc -l)
 DB_COUNT=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' 2>/dev/null | wc -l)
 
-_proj_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort)
-_db_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort)
-CLOUD_PROJ=$(printf '%s' "$_proj_list" | grep -c '.' || true)
-CLOUD_DB=$(printf '%s' "$_db_list" | grep -c '.' || true)
-LAST_GDRIVE_PROJ=$(format_name "$(printf '%s' "$_proj_list" | tail -1)")
-LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
+# rclone exit code is captured so a failed listing is reported as "?" rather
+# than silently looking identical to "genuinely zero cloud backups" (M9).
+_rclone_err=0
+_proj_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort) || _rclone_err=1
+_db_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort) || _rclone_err=1
+if [ "$_rclone_err" -eq 1 ]; then
+    CLOUD_PROJ="?"
+    CLOUD_DB="?"
+    LAST_GDRIVE_PROJ=""
+    LAST_GDRIVE_DB=""
+else
+    CLOUD_PROJ=$(printf '%s' "$_proj_list" | grep -c '.' || true)
+    CLOUD_DB=$(printf '%s' "$_db_list" | grep -c '.' || true)
+    LAST_GDRIVE_PROJ=$(format_name "$(printf '%s' "$_proj_list" | tail -1)")
+    LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
+fi
 
 # ====== DAILY REPORT ======
 if [ "$REPORT_TYPE" = "daily" ]; then

@@ -94,7 +94,7 @@ async def _rclone_lsf(path: str) -> list:
         )
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
         lines = [line.split(";", 2) for line in out.decode().strip().split("\n") if line]
-        return sorted(lines, key=lambda x: x[1], reverse=True) if lines else []
+        return sorted(lines, key=lambda x: x[0], reverse=True) if lines else []
     except (OSError, asyncio.TimeoutError, UnicodeDecodeError):
         return []
 

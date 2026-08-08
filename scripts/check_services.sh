@@ -278,11 +278,17 @@ fi
 
 # 4. Telegram API connectivity (EXTERNAL — warn if broken)
 if [[ -n "${TG_TOKEN:-}" ]]; then
-    if curl -sf --max-time 5 "https://api.telegram.org/bot${TG_TOKEN}/getMe" 2>/dev/null | grep -q '"ok":true'; then
-        echo "  ✓ Telegram: API OK"
-    else
-        echo "  ⚠ Telegram: API unreachable (alerts won't send)"
-        _external_warn=1
+    _tg_cfg=$(mktemp) || { echo "  ⚠ Telegram: mktemp failed"; _external_warn=1; _tg_cfg=""; }
+    if [[ -n "$_tg_cfg" ]]; then
+        chmod 600 "$_tg_cfg"
+        printf 'url = "https://api.telegram.org/bot%s/getMe"\n' "$TG_TOKEN" > "$_tg_cfg"
+        if curl -sf --max-time 5 --config "$_tg_cfg" 2>/dev/null | grep -q '"ok":true'; then
+            echo "  ✓ Telegram: API OK"
+        else
+            echo "  ⚠ Telegram: API unreachable (alerts won't send)"
+            _external_warn=1
+        fi
+        rm -f "$_tg_cfg"
     fi
 else
     echo "  ⊘ Telegram: TG_TOKEN not configured (alerts disabled)"

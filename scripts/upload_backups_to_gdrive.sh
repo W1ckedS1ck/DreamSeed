@@ -60,61 +60,45 @@ MAX_REDIS_BACKUPS="${CLOUD_REDIS_KEEP:-10}"
 HAS_ERROR=0
 UPLOAD_MSG=""
 
-# ====== 1. Upload project ======
-LAST_PROJECT=$(find "$PROJECT_DIR" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-if [ -n "$LAST_PROJECT" ]; then
-    echo "  Project: $(basename "$LAST_PROJECT") ($(du -h "$LAST_PROJECT" | cut -f1))"
-    export RCLONE_CMD_TIMEOUT=1800
-    if rclone_retry copy "$LAST_PROJECT" "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV_SUFFIX}/" --no-check-dest; then
-        echo "  Project: ✅ uploaded"
-    else
-        echo "  Project: ❌ upload failed"
-        UPLOAD_MSG+="❌ Project upload error
-"
-        HAS_ERROR=1
-    fi
-else
-    echo "  Project: ⚠️ backup not found"
-    UPLOAD_MSG+="⚠️ Project backup not found
-"
-    HAS_ERROR=1
-fi
+# Upload every local backup that is not yet present in the cloud. Previously
+# only the newest file per type was uploaded — a failed upload of an older
+# file was never retried and got pruned locally, leaving a permanent gap in
+# cloud history (M16).
+upload_new_files() {
+    local local_dir="$1" glob="$2" remote_dir="$3" timeout="$4" label="$5"
+    local files base existing_present
+    files=$(find "$local_dir" -maxdepth 1 -type f -name "$glob" -printf '%f\n' 2>/dev/null | sort -r || true)
+    [ -z "$files" ] && { echo "  $label: ⚠️ no backups found"; return 0; }
 
-# ====== 2. Upload database ======
-LAST_DB=$(find "$DB_DIR" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-if [ -n "$LAST_DB" ]; then
-    echo "  DB: $(basename "$LAST_DB") ($(du -h "$LAST_DB" | cut -f1))"
-    export RCLONE_CMD_TIMEOUT=1800
-    if rclone_retry copy "$LAST_DB" "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV_SUFFIX}/" --no-check-dest; then
-        echo "  DB: ✅ uploaded"
-    else
-        echo "  DB: ❌ upload failed"
-        UPLOAD_MSG+="❌ DB upload error
-"
-        HAS_ERROR=1
-    fi
-else
-    echo "  DB: ⚠️ backup not found"
-    UPLOAD_MSG+="⚠️ DB backup not found
-"
-    HAS_ERROR=1
-fi
+    existing_present=$(rclone lsf "$RCLONE_REMOTE:$remote_dir/" --files-only 2>/dev/null | sort || true)
+    export RCLONE_CMD_TIMEOUT="$timeout"
 
-# ====== 3. Upload Redis ======
-if [[ -d "$REDIS_DIR" ]]; then
-    LAST_REDIS=$(find "$REDIS_DIR" -maxdepth 1 -name 'redis_dump_*.rdb' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-    if [ -n "$LAST_REDIS" ]; then
-        echo "  Redis: $(basename "$LAST_REDIS") ($(du -h "$LAST_REDIS" | cut -f1))"
-        export RCLONE_CMD_TIMEOUT=600
-        if rclone_retry copy "$LAST_REDIS" "$RCLONE_REMOTE:$REMOTE_BASE/redis${ENV_SUFFIX}/" --no-check-dest; then
-            echo "  Redis: ✅ uploaded"
+    while IFS= read -r base; do
+        if printf '%s\n' "$existing_present" | grep -qxF "$base"; then
+            continue
+        fi
+        local full="$local_dir/$base"
+        echo "  $label: ⏫ $base ($(du -h "$full" | cut -f1))"
+        if rclone_retry copy "$full" "$RCLONE_REMOTE:$remote_dir/" >/dev/null; then
+            echo "  $label: ✅ uploaded"
         else
-            echo "  Redis: ❌ upload failed"
-            UPLOAD_MSG+="❌ Redis upload error
+            echo "  $label: ❌ upload failed"
+            UPLOAD_MSG+="❌ $label upload error: $base
 "
             HAS_ERROR=1
         fi
-    fi
+    done <<< "$files"
+}
+
+# ====== 1. Upload project ======
+upload_new_files "$PROJECT_DIR" "DreamSeed_*.tar.gz" "$REMOTE_BASE/project${ENV_SUFFIX}/" 1800 "Project"
+
+# ====== 2. Upload database ======
+upload_new_files "$DB_DIR" "db_*.sql.gz" "$REMOTE_BASE/db${ENV_SUFFIX}/" 1800 "DB"
+
+# ====== 3. Upload Redis ======
+if [[ -d "$REDIS_DIR" ]]; then
+    upload_new_files "$REDIS_DIR" "redis_dump_*.rdb" "$REMOTE_BASE/redis${ENV_SUFFIX}/" 600 "Redis"
 fi
 
 # ====== 4. Clean old backups in cloud ======
@@ -138,7 +122,7 @@ find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
 if [[ "$HAS_ERROR" -eq 0 ]]; then
     echo "upload_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
         curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
-    [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]] && ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY"
+    [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]] && { ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY" || true; }
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All uploads successful"
 else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Upload completed with errors"

@@ -535,7 +535,12 @@ fi
 # (never exported to the shell — /etc/grafana/grafana.env is root:grafana 0600).
 _grafana_pass=$(sudo grep -oP '(?<=GF_SECURITY_ADMIN_PASSWORD=).*' /etc/grafana/grafana.env 2>/dev/null || true)
 if [[ -n "$_grafana_pass" ]]; then
-  _alerts_firing=$(curl -s -u "admin:${_grafana_pass}" 'http://127.0.0.1:3000/api/alertmanager/grafana/api/v2/alerts' 2>/dev/null | python3 -c "
+  # Credentials via netrc-file (not argv — keeps the password out of `ps aux`).
+  _grafana_netrc=$(mktemp) 2>/dev/null || _grafana_netrc=""
+  if [[ -n "$_grafana_netrc" ]]; then
+    chmod 600 "$_grafana_netrc"
+    printf 'machine 127.0.0.1 login admin password %s\n' "$_grafana_pass" > "$_grafana_netrc"
+    _alerts_firing=$(curl -s --netrc-file "$_grafana_netrc" 'http://127.0.0.1:3000/api/alertmanager/grafana/api/v2/alerts' 2>/dev/null | python3 -c "
 import sys,json
 try:
   d=json.load(sys.stdin)
@@ -543,6 +548,10 @@ try:
 except Exception:
   print('error')
 " 2>/dev/null || echo "error")
+    rm -f "$_grafana_netrc"
+  else
+    _alerts_firing="error"
+  fi
   echo "    Grafana alerts firing: $_alerts_firing"
 else
   warn "Grafana alerts firing: could not read admin password" "grafana_alerts_auth"

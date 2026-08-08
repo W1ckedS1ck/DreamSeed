@@ -240,13 +240,13 @@ run_secrets_audit() {
 
     # .gitignore check
     if [[ ! -f .gitignore ]]; then
-        print_fail ".gitignore not found"; ((issues++))
+        print_fail ".gitignore not found"; ((++issues))
     else
         if grep -q "^secrets/" .gitignore && grep -q "^\.env" .gitignore && grep -q "^\*\.service" .gitignore; then
             print_ok ".gitignore looks good (secrets/, .env, *.service excluded)"
         else
             print_fail ".gitignore missing some critical excludes (secrets/, .env, *.service)"
-            ((issues++))
+            ((++issues))
         fi
     fi
 
@@ -256,7 +256,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_secrets" ]]; then
         print_fail "secrets/ directory is tracked in git"
         echo "$tracked_secrets"
-        ((issues++))
+        ((++issues))
     else
         print_ok "secrets/ not tracked"
     fi
@@ -266,7 +266,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_env" ]]; then
         print_fail ".env files are tracked in git"
         echo "$tracked_env"
-        ((issues++))
+        ((++issues))
     else
         print_ok "No .env files tracked"
     fi
@@ -277,7 +277,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_svc" ]]; then
         print_fail ".service files are tracked in git"
         echo "$tracked_svc"
-        ((issues++))
+        ((++issues))
     else
         local tracked_svc_j2
         tracked_svc_j2=$(git ls-files 2>/dev/null | grep "\.service\.j2$") || true
@@ -294,7 +294,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_keys" ]]; then
         print_fail "Private key files tracked in git"
         echo "$tracked_keys"
-        ((issues++))
+        ((++issues))
     else
         print_ok "No private keys tracked"
     fi
@@ -302,7 +302,7 @@ run_secrets_audit() {
     # CLAUDE.md (must not be tracked — contains internal project context)
     if git ls-files 2>/dev/null | grep -q "^CLAUDE.md"; then
         print_fail "CLAUDE.md is tracked in git"
-        ((issues++))
+        ((++issues))
     else
         print_ok "CLAUDE.md not tracked"
     fi
@@ -320,12 +320,12 @@ run_secrets_audit() {
             grep -v "{{ " | \
             grep -v '\$' | \
             grep -q "." 2>/dev/null; then
-            ((found++))
+            ((++found))
         fi
     done
     if [[ $found -gt 0 ]]; then
         print_fail "Potential hardcoded secrets found ($found patterns)"
-        ((issues++))
+        ((++issues))
     else
         print_ok "No hardcoded secrets"
     fi

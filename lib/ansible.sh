@@ -37,7 +37,18 @@ run_parallel() {
         ( _ansible_cmd "$pb" ) &
         pids+=("$!")
     done
-    for pid in "${pids[@]}"; do wait "$pid" || ok=false; done
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            ok=false
+            # A sibling playbook failed: kill and reap the remaining
+            # background runners so an orphaned ansible-playbook doesn't
+            # keep mutating the server after the deploy aborts.
+            for other in "${pids[@]}"; do
+                [[ "$other" == "$pid" ]] && continue
+                kill "$other" 2>/dev/null || true
+            done
+        fi
+    done
     [[ "$TTY" == "false" ]] && echo "::endgroup::"
     $ok
 }

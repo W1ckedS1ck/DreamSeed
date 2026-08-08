@@ -19,7 +19,10 @@ source "$SCRIPT_DIR/scripts/common_functions.sh"
 
 ENV_PLAIN=$(mktemp)
 chmod 600 "$ENV_PLAIN"
-trap 'rm -f "$ENV_PLAIN"' EXIT
+# Track every temp file (incl. write_key_to_env's $tmpfile.new) so none
+# survives a failed run (M10). rm -f is safe for already-deleted entries.
+_SETUP_TMPFILES=("$ENV_PLAIN")
+trap 'for _f in "${_SETUP_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
 
 ansible-vault view "$SCRIPT_DIR/secrets/.env" > "$ENV_PLAIN" 2>/dev/null || {
     echo "Error: cannot decrypt secrets/.env" >&2
@@ -77,11 +80,13 @@ write_key_to_env() {
     local tmpfile
     tmpfile=$(mktemp)
     chmod 600 "$tmpfile"
+    _SETUP_TMPFILES+=("$tmpfile")
 
     ansible-vault view "$ENV_FILE" > "$tmpfile" 2>/dev/null || { rm -f "$tmpfile"; return 1; }
 
     if grep -qP "^${var_name}=" "$tmpfile"; then
         grep -vP "^${var_name}=" "$tmpfile" > "$tmpfile.new"
+        _SETUP_TMPFILES+=("$tmpfile.new")
         mv "$tmpfile.new" "$tmpfile"
     fi
     echo "${var_name}=\"${value}\"" >> "$tmpfile"

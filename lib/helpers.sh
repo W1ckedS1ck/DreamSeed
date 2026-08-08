@@ -53,7 +53,13 @@ cleanup() {
         fi
         rm -rf "$DEPLOY_VARS_TMP"
     fi
-    [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
+    if [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]]; then
+        if command -v shred &>/dev/null; then
+            shred -u "$ENV_DECRYPTED_TMP" 2>/dev/null || true
+        else
+            rm -f "$ENV_DECRYPTED_TMP"
+        fi
+    fi
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
     [[ -n "${TF_STATE_BACKUP_TMP:-}" && -f "${TF_STATE_BACKUP_TMP:-}" ]] && rm -f "$TF_STATE_BACKUP_TMP"
     [[ -n "${TF_VARS_FILE:-}" && -f "${TF_VARS_FILE:-}" ]] && rm -f "$TF_VARS_FILE"
@@ -113,7 +119,7 @@ update_cloudflare_dns() {
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS: skip (token not set)"; return 0; }
     local api_base="https://api.cloudflare.com/client/v4"
     local zone_id
-    zone_id=$(_cf_zone_id "$domain") || return 0
+    zone_id=$(_cf_zone_id "$domain") || return 1
     local base="$api_base/zones/$zone_id/dns_records"
     local type="A"
 
@@ -146,9 +152,11 @@ else:
             -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
             log "Cloudflare DNS: $domain $old_ip → $ip"
             echo "  ✓ Cloudflare DNS: $domain → $ip"
+            return 0
         else
             log "Cloudflare DNS: UPDATE FAILED for $domain"
             echo "  ✗ Cloudflare DNS: update failed (check token/permissions)"
+            return 1
         fi
     else
         if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
@@ -157,9 +165,11 @@ else:
             -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
             log "Cloudflare DNS: $domain → $ip (created)"
             echo "  ✓ Cloudflare DNS: $domain → $ip"
+            return 0
         else
             log "Cloudflare DNS: CREATE FAILED for $domain"
             echo "  ✗ Cloudflare DNS: create failed (check token/permissions)"
+            return 1
         fi
     fi
 }
@@ -203,7 +213,7 @@ update_cloudflare_dns_direct() {
     local subdomain="$1" ip="$2"
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare direct DNS: skip (token not set)"; return 0; }
     local zone_id
-    zone_id=$(_cf_zone_id "$subdomain") || return 0
+    zone_id=$(_cf_zone_id "$subdomain") || return 1
     local base="https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records"
     local ttl="${CLOUDFLARE_DNS_TTL:-120}"
 
@@ -231,8 +241,11 @@ else: print('0||')
             -d "$dns_body" > /dev/null 2>&1; then
             log "Cloudflare direct DNS: $subdomain → $ip"
             echo "  ✓ SSH DNS: $subdomain → $ip"
+            return 0
         else
             log "Cloudflare direct DNS: UPDATE FAILED for $subdomain"
+            echo "  ⚠ SSH DNS: update failed (check token/permissions)"
+            return 1
         fi
     else
         if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
@@ -241,8 +254,11 @@ else: print('0||')
             -d "$dns_body" > /dev/null 2>&1; then
             log "Cloudflare direct DNS: $subdomain → $ip (created)"
             echo "  ✓ SSH DNS: $subdomain → $ip"
+            return 0
         else
             log "Cloudflare direct DNS: CREATE FAILED for $subdomain"
+            echo "  ⚠ SSH DNS: $subdomain create failed (check token/permissions)"
+            return 1
         fi
     fi
 }

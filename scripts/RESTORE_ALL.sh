@@ -89,6 +89,18 @@ cleanup_trap() {
     for _d in "${RESTORE_TEMP_DIRS[@]:-}"; do
         rm -rf "$_d" 2>/dev/null || true
     done
+    # PRE_RESTORE_BACKUP_DIR is handled separately (not via RESTORE_TEMP_DIRS):
+    # it holds the only recovery snapshot, so it must survive any exit path
+    # (error, interrupt, or "manual intervention required") except a fully
+    # clean run — SNAPSHOT_SAFE_TO_DELETE is only set to 1 right before a
+    # successful exit.
+    if [ -n "${PRE_RESTORE_BACKUP_DIR:-}" ] && [ -d "$PRE_RESTORE_BACKUP_DIR" ]; then
+        if [ "${SNAPSHOT_SAFE_TO_DELETE:-0}" -eq 1 ]; then
+            rm -rf "$PRE_RESTORE_BACKUP_DIR" 2>/dev/null || true
+        else
+            echo "Preserving pre-restore snapshot for manual recovery: $PRE_RESTORE_BACKUP_DIR" >&2
+        fi
+    fi
     if [ "$SERVICES_STOPPED" -eq 1 ]; then
         if [ "$MODE" = "interactive" ]; then
             echo ""
@@ -341,18 +353,27 @@ else
         # Dev servers MUST use prod data. This is intentional — dev has no separate backup pipeline.
         # Interactive mode keeps ENV_SUFFIX="" for the same reason (line 222).
         # Do not add ENV_SUFFIX here. See detect_env() in common_functions.sh for design rationale.
+        # Each rclone exit code is captured: a failed download must NOT be
+        # silently confused with "no backups exist" and fall back on stale
+        # local files (M13).
+        _dl_err=0
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
             --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || \
-        rclone copy "gdrive:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
-            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || true
+            { rclone copy "gdrive:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
+                --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || { _dl_err=1; echo "  ✗ project download failed on GDrive too" >&2; }; }
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
             --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || \
-        rclone copy "gdrive:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
-            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || true
+            { rclone copy "gdrive:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
+                --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || { _dl_err=1; echo "  ✗ DB download failed on GDrive too" >&2; }; }
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
             --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || \
-        rclone copy "gdrive:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
-            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || true
+            { rclone copy "gdrive:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
+                --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || { _dl_err=1; echo "  ✗ Redis download failed on GDrive too" >&2; }; }
+        if [ "$_dl_err" -eq 1 ]; then
+            echo -e "${RED}✗ GDrive download failed — NOT falling back to possibly-stale local files.${NC}" >&2
+            echo "  Fix connectivity/rclone config and re-run." >&2
+            exit 1
+        fi
 
         SELECTED_PROJECT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
         SELECTED_DB=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
@@ -425,15 +446,20 @@ else
 fi
 
 PRE_RESTORE_BACKUP_DIR=$(mktemp -d "${HOME:?}/.tmp_pre_restore_XXXXXX")
-RESTORE_TEMP_DIRS+=("$PRE_RESTORE_BACKUP_DIR")
+SNAPSHOT_SAFE_TO_DELETE=0
+DB_SNAPSHOT_OK=0
+DB_SNAPSHOT_LOG="$PRE_RESTORE_BACKUP_DIR/db_snapshot_error.log"
+DB_IMPORT_LOG="$PRE_RESTORE_BACKUP_DIR/db_import_error.log"
 
 if [ -n "$SELECTED_DB" ]; then
     BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
-    if mysqldump --single-transaction "$DB_NAME" 2>/dev/null | gzip > "$BACKUP_DB_FILE"; then
+    if mysqldump --single-transaction "$DB_NAME" 2>"$DB_SNAPSHOT_LOG" | gzip > "$BACKUP_DB_FILE"; then
+        DB_SNAPSHOT_OK=1
         echo -e "${GREEN}✓ Database snapshot: $(du -h "$BACKUP_DB_FILE" | cut -f1)${NC}"
     else
         rm -f "$BACKUP_DB_FILE"
         echo -e "${YELLOW}⚠️  Database snapshot failed (continuing)${NC}"
+        [ -s "$DB_SNAPSHOT_LOG" ] && { echo -e "${YELLOW}— dump error (tail):${NC}"; tail -n 10 "$DB_SNAPSHOT_LOG"; }
     fi
 fi
 
@@ -515,8 +541,10 @@ if [ -n "$SELECTED_DB" ]; then
     COUNT_BEFORE=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
     LAST_EDIT_BEFORE=$(mysql "$DB_NAME" -se "SELECT FROM_UNIXTIME(MAX(editedon)) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || true)
 
-    # Stream DB restore directly — no temp file
-    if timeout 1800 gunzip -c "$SELECTED_DB" | mysql "$DB_NAME" 2>/dev/null; then
+    # Stream DB restore directly — no temp file; stderr goes to a log so
+    # failures are diagnosable (no 2>/dev/null masking).
+    if timeout 1800 gunzip -c "$SELECTED_DB" | mysql "$DB_NAME" 2>"$DB_IMPORT_LOG"; then
+        rm -f "$DB_IMPORT_LOG"
         mysql "$DB_NAME" -e "TRUNCATE TABLE ${MODX_TABLE_PREFIX}session;" 2>/dev/null || true
 
         COUNT_AFTER=$(mysql "$DB_NAME" -se "SELECT COUNT(*) FROM ${MODX_TABLE_PREFIX}site_content;" 2>/dev/null || echo "0")
@@ -556,6 +584,27 @@ if [ -n "$SELECTED_DB" ]; then
     else
         DB_STATUS="❌ Import error"
         echo -e "${RED}✗ Database restore failed!${NC}"
+        [ -s "$DB_IMPORT_LOG" ] && { echo -e "${YELLOW}\n— import error (tail):${NC}"; tail -n 20 "$DB_IMPORT_LOG"; }
+
+        # Auto-rollback: re-import the pre-restore snapshot so the DB is
+        # left in a known-good state instead of a half-imported one.
+        if [ "$DB_SNAPSHOT_OK" -eq 1 ] && [ -s "$BACKUP_DB_FILE" ]; then
+            echo -e "${YELLOW}\n↪ Rolling back to pre-restore snapshot...${NC}"
+            if timeout 600 gunzip -c "$BACKUP_DB_FILE" | mysql "$DB_NAME" 2>>"$DB_IMPORT_LOG"; then
+                DB_STATUS="❌ Import error — Rollback OK (snapshot restored)"
+                RESTORE_RESULT=1
+                echo -e "${GREEN}✓ Rollback to pre-restore snapshot succeeded${NC}"
+            else
+                DB_STATUS="❌ Import error + rollback failed (manual intervention required)"
+                RESTORE_RESULT=1
+                echo -e "${RED}✗ Rollback FAILED — DB may be in a broken/half-imported state.${NC}"
+                echo -e "${YELLOW}— rollback error (tail):${NC}"; tail -n 20 "$DB_IMPORT_LOG"
+            fi
+        else
+            DB_STATUS="❌ Import error (no usable snapshot for rollback). Manual intervention required."
+            RESTORE_RESULT=1
+            echo -e "${RED}✗ No pre-restore snapshot available — DB may be corrupted.${NC}"
+        fi
     fi
 else
     if [ "$MODE" = "interactive" ]; then
@@ -636,6 +685,9 @@ else
     RESTORE_RESULT=1
 fi
 echo ""
+
+# Only let cleanup_trap delete the pre-restore snapshot on a fully clean run.
+[ "${RESTORE_RESULT:-0}" -eq 0 ] && SNAPSHOT_SAFE_TO_DELETE=1
 
 # ================================================
 # Summary

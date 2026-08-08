@@ -28,18 +28,23 @@ validate_env_file() {
                 quote="'"
             fi
             if [[ "$val" == *'$('* || "$val" == *'`'* || "$val" == *'${'* ]]; then
-                echo "Error: code injection detected in $f:$n: $line" >&2
+                echo "Error: code injection detected in $f:$n (key '${line%%=*}')" >&2
                 exit 1
             fi
         else
-            echo "Invalid env format at $f:$n: $line" >&2; exit 1
+            echo "Invalid env format at $f:$n: '${line:0:24}…' (truncated)" >&2; exit 1
         fi
     done < "$f"
     return 0
 }
 
 resolve_env_file() {
+    # Sets ENV_SRC (path to source) and, for vault files, ENV_DECRYPTED_TMP
+    # (path to the decrypted temp copy). Call WITHOUT command substitution —
+    # results are propagated via globals so cleanup() in helpers.sh can find
+    # the temp file and shred it on exit.
     local f="$1"
+    ENV_SRC=""
     [[ ! -f "$f" ]] && { echo "Error: $f not found" >&2; exit 1; }
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         local pw="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
@@ -49,9 +54,9 @@ resolve_env_file() {
         ANSIBLE_VAULT_PASSWORD_FILE="$pw" ansible-vault view "$f" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
         [[ -s "$tmp" ]] || { echo "Error: vault decrypted file is empty" >&2; exit 1; }
         ENV_DECRYPTED_TMP="$tmp"
-        printf '%s' "$tmp"
+        ENV_SRC="$tmp"
     else
-        printf '%s' "$f"
+        ENV_SRC="$f"
     fi
 }
 
@@ -59,12 +64,11 @@ apply_target_vars() {
     local pfx="$TARGET_PREFIX"
     if [[ "$TF_PROVIDER" == "aws" ]]; then
         local v_key="${pfx}_ACCESS_KEY" v_sec="${pfx}_SECRET_KEY"
-        local v_reg="${pfx}_REGION" v_eip="${pfx}_EIP"
+        local v_reg="${pfx}_REGION"
         AWS_ACCESS_KEY="${!v_key:-}"
         AWS_SECRET_KEY="${!v_sec:-}"
         AWS_REGION="${!v_reg:-us-west-1}"
-        AWS_EIP_ALLOCATION_ID="${!v_eip:-}"
-        export AWS_ACCESS_KEY AWS_SECRET_KEY AWS_REGION AWS_EIP_ALLOCATION_ID
+        export AWS_ACCESS_KEY AWS_SECRET_KEY AWS_REGION
     fi
     if [[ "$TF_PROVIDER" == "hetzner" ]]; then
         local v_token="${pfx}_HCLOUD_TOKEN"
@@ -91,7 +95,6 @@ export_tf_env() {
         export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
         export AWS_DEFAULT_REGION="$AWS_REGION"
         [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
-        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_disable_auto_public_ip="true"
         # Build list of additional SSH keys from ADDITIONAL_SSH_KEYS env var
         # (CI deploy key is handled separately via aws_key_pair.deploy)
         local ssh_keys

@@ -339,6 +339,7 @@ main() {
     else
         step_start "Using existing server"
         SERVER_IP="$EXISTING_IP"
+        [[ "$SERVER_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || step_fail "Invalid IP passed to -i: $SERVER_IP"
         export SERVER_IP
         step_ok
     fi
@@ -457,10 +458,11 @@ INVEOF
     # ----- DNS update (after SSL, before checks) -----
     if [[ "$SKIP_DNS" == "false" ]]; then
         step_start "Cloudflare DNS update"
-        update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP"
+        update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP" || step_fail "Cloudflare DNS update failed"
         # Grey-cloud (no proxy) — for direct SSH without Cloudflare (dev only)
         if [[ ! "$TARGET" =~ ^prod ]]; then
-            update_cloudflare_dns_direct "ssh.${DEPLOY_DOMAIN}" "$SERVER_IP"
+            update_cloudflare_dns_direct "ssh.${DEPLOY_DOMAIN}" "$SERVER_IP" \
+                || echo "  ⚠ SSH DNS update failed (non-fatal)"
         fi
         step_ok
     else

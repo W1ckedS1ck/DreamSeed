@@ -43,7 +43,8 @@ preflight_checks() {
     guard_source_ref
     check_prerequisites
 
-    local env_src; env_src=$(resolve_env_file "$ENV_FILE")
+    resolve_env_file "$ENV_FILE"
+    local env_src="$ENV_SRC"
     validate_env_file "$env_src"
 
     source "$env_src"
@@ -58,7 +59,8 @@ preflight_checks() {
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
-            env_src=$(resolve_env_file "$ENV_FILE")
+            resolve_env_file "$ENV_FILE"
+            env_src="$ENV_SRC"
             validate_env_file "$env_src"
             source "$env_src"
         else

@@ -23,7 +23,7 @@ ALERTS=""
 PROJ_BACKUP=$(find "$BACKUP_DIR/project" -maxdepth 1 -name "DreamSeed_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
 if [[ -n "$PROJ_BACKUP" && -f "$PROJ_BACKUP" ]]; then
-    if tar -tzf "$PROJ_BACKUP" > /dev/null 2>&1; then
+    if timeout 300 tar -tzf "$PROJ_BACKUP" > /dev/null 2>&1; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Project backup OK: $(basename "$PROJ_BACKUP")" >> "$LOG_FILE"
         LOCAL_PROJ_OK=1
     else
