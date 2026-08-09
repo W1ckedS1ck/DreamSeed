@@ -19,7 +19,7 @@ db_min_tables: 100
 # ========================
 #  PHP
 # ========================
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}" # renovate: depName=php
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.5.9', true) }}" # renovate: depName=php
 
 # ========================
 #  Redis
@@ -50,7 +50,7 @@ cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 # ========================
 #  Monitoring (Grafana + VictoriaMetrics)
 # ========================
-grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.1.1', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.1.3', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.12.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
