@@ -1,4 +1,4 @@
-name: "[Docs] Publish Code Map to Pages"
+name: "[Docs] Code Map + Wiki Sync"
 
 on:
   push:
@@ -10,23 +10,20 @@ on:
       - '.github/**'
       - 'lib/**'
       - 'docs/**'
-      - '.github/workflows/pages.yml'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
-  deploy:
-    name: Publish code map
+  publish-code-map:
+    name: Publish Code Map
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -55,3 +52,41 @@ jobs:
 
       - uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
         id: deployment
+
+  sync-wiki:
+    name: Sync to Wiki
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: repo
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+
+      - name: Sync docs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp repo/docs/*.md wiki/ 2>/dev/null || true
+          rm -f wiki/private.md wiki/.DS_Store 2>/dev/null || true
+
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "Sync docs/ from main (${{ github.sha }})"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
+          git push
