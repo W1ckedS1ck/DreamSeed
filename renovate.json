@@ -2,8 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    ":dependencyDashboard",
-    "abandonments:recommended"
+    ":dependencyDashboard"
   ],
   "labels": ["dependencies", "renovate"],
   "schedule": ["before 6am on sunday"],
