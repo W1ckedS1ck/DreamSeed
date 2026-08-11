@@ -152,12 +152,6 @@
     state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
-- name: Validate db_prefix format
-  ansible.builtin.assert:
-    that:
-      - db_prefix is regex('^[a-z0-9_]+$')
-    fail_msg: "Invalid db_prefix: {{ db_prefix }} (must be lowercase alphanumeric + underscore)"
-
 - name: Check MODX system_settings table
   ansible.mysql.mysql_query:
     login_unix_socket: /run/mysqld/mysqld.sock

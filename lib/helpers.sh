@@ -1,5 +1,4 @@
 # Shared helper functions for deploy.sh
-# TODO: tech-debt — inline python3 -c (7 uses), replace with jq
 # Sourced by deploy.sh — do not execute directly.
 # shellcheck shell=bash
 
@@ -101,12 +100,7 @@ _cf_zone_id() {
     local zone_id=""
     while [[ "$candidate" == *.* ]]; do
         zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$api_base/zones?name=$candidate" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-zones=d.get('result',[])
-print(zones[0]['id'] if zones else '')
-" 2>/dev/null) || zone_id=""
+            "$api_base/zones?name=$candidate" | jq -r '.result[0].id // ""' 2>/dev/null) || zone_id=""
         [[ -n "$zone_id" ]] && { echo "$zone_id"; return 0; }
         candidate="${candidate#*.}"
     done
@@ -127,17 +121,8 @@ update_cloudflare_dns() {
     existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$base?type=$type&name=$domain" 2>/dev/null || true)
 
-    # Single Python pass: parse existing records → count, id, old_ip
-    IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-results = d.get('result', [])
-c = len(results)
-if c:
-    print(f'{c}|{results[0][\"id\"]}|{results[0][\"content\"]}')
-else:
-    print('0||')
-" 2>/dev/null) || { count=0; record_id=; old_ip=; }
+    # Single jq pass: parse existing records → count, id, old_ip
+    IFS='|' read -r count record_id old_ip < <(echo "$existing" | jq -r '.result | length as $c | "\($c)|\(. [0].id // "")|\(. [0].content // "")"' 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
     local ttl="${CLOUDFLARE_DNS_TTL:-120}"
     local dns_body
@@ -149,7 +134,7 @@ else:
         if _cfcurl --retry 1 --retry-delay 3 -X PUT "$base/$record_id" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+            -d "$dns_body" | jq -e '.success' >/dev/null 2>&1; then
             log "Cloudflare DNS: $domain $old_ip → $ip"
             echo "  ✓ Cloudflare DNS: $domain → $ip"
             return 0
@@ -162,7 +147,7 @@ else:
         if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+            -d "$dns_body" | jq -e '.success' >/dev/null 2>&1; then
             log "Cloudflare DNS: $domain → $ip (created)"
             echo "  ✓ Cloudflare DNS: $domain → $ip"
             return 0
@@ -187,19 +172,13 @@ delete_cloudflare_dns() {
         "$base?type=A&name=$domain" 2>/dev/null || true)
 
     local record_id
-    record_id=$(echo "$existing" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-results = d.get('result', [])
-if results:
-    print(results[0]['id'])
-" 2>/dev/null) || record_id=""
+    record_id=$(echo "$existing" | jq -r '.result[0].id // ""' 2>/dev/null) || record_id=""
 
     [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; return 0; }
 
     if _cfcurl --retry 1 --retry-delay 3 -X DELETE "$base/$record_id" \
         -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        -H "Content-Type: application/json" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+        -H "Content-Type: application/json" | jq -e '.success' >/dev/null 2>&1; then
         log "Cloudflare DNS: deleted A record for $domain"
         echo "  ✓ Cloudflare DNS: deleted $domain"
     else
@@ -220,14 +199,7 @@ update_cloudflare_dns_direct() {
     local existing
     existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?type=A&name=$subdomain" 2>/dev/null || true)
 
-    IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-results = d.get('result', [])
-c = len(results)
-if c: print(f'{c}|{results[0][\"id\"]}|{results[0][\"content\"]}')
-else: print('0||')
-" 2>/dev/null) || { count=0; record_id=; old_ip=; }
+    IFS='|' read -r count record_id old_ip < <(echo "$existing" | jq -r '.result | length as $c | "\($c)|\(. [0].id // "")|\(. [0].content // "")"' 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
     local dns_body
     dns_body=$(printf '{"type":"A","name":"%s","content":"%s","ttl":%s,"proxied":false}' \

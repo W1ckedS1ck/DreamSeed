@@ -1,5 +1,4 @@
 # Environment variable handling for deploy.sh
-# TODO: tech-debt — inline python3 -c (2 uses), replace with jq
 # shellcheck shell=bash
 # Sourced by deploy.sh — do not execute directly.
 
@@ -96,17 +95,16 @@ export_tf_env() {
         export AWS_DEFAULT_REGION="$AWS_REGION"
         [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
         # Build list of additional SSH keys from ADDITIONAL_SSH_KEYS env var
-        # (CI deploy key is handled separately via aws_key_pair.deploy)
         local ssh_keys
-        ssh_keys="$(python3 -c "
-import os, json
-additional = os.environ.get('ADDITIONAL_SSH_KEYS', '')
-if additional:
-    keys = [k.strip() for k in additional.strip().split('\n') if k.strip()]
-else:
-    keys = []
-print(json.dumps(keys))
-")" || { echo "Failed to build SSH keys list" >&2; exit 1; }
+        ssh_keys="$(
+          local arr=()
+          while IFS= read -r k; do [[ -n "${k// /}" ]] && arr+=("$k"); done <<< "${ADDITIONAL_SSH_KEYS:-}"
+          if [[ ${#arr[@]} -gt 0 ]]; then
+            printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
+          else
+            jq -n '[]'
+          fi
+        )" || { echo "Failed to build SSH keys list" >&2; exit 1; }
         export TF_VAR_additional_ssh_keys="$ssh_keys"
     }
     [[ "$TF_PROVIDER" == "hetzner" ]] && {
@@ -118,23 +116,28 @@ print(json.dumps(keys))
         [[ -n "${HETZNER_ENABLE_PRIMARY_IP:-}" ]] && export TF_VAR_enable_primary_ip="$HETZNER_ENABLE_PRIMARY_IP"
         # Build list of additional SSH keys: deploy key + ADDITIONAL_SSH_KEYS env var
         local ssh_keys
-        ssh_keys="$(python3 -c "
-import os, json
-keys = []
-pk_path = os.environ.get('SSH_PUBLIC_KEY_PATH', '')
-if pk_path:
-    pk_path = os.path.expanduser(pk_path)
-    if os.path.isfile(pk_path):
-        with open(pk_path) as f:
-            keys.append(f.read().strip())
-additional = os.environ.get('ADDITIONAL_SSH_KEYS', '')
-if additional:
-    for k in additional.strip().split('\n'):
-        k = k.strip()
-        if k and k not in keys:
-            keys.append(k)
-print(json.dumps(keys))
-")" || { echo "Failed to build SSH keys list" >&2; exit 1; }
+        ssh_keys="$(
+          local arr=()
+          local pk_path="${SSH_PUBLIC_KEY_PATH:-}"
+          if [[ -n "$pk_path" ]]; then
+            pk_path="${pk_path/#\~/$HOME}"
+            if [[ -r "$pk_path" ]]; then
+              arr+=("$(<"$pk_path")")
+            fi
+          fi
+          local additional="${ADDITIONAL_SSH_KEYS:-}"
+          if [[ -n "$additional" ]]; then
+            while IFS= read -r k; do
+              k="${k// /}"
+              [[ -n "$k" ]] && arr+=("$k")
+            done <<< "$additional"
+          fi
+          if [[ ${#arr[@]} -gt 0 ]]; then
+            printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
+          else
+            jq -n '[]'
+          fi
+        )" || { echo "Failed to build SSH keys list" >&2; exit 1; }
         export TF_VAR_additional_ssh_keys="$ssh_keys"
         # Also export ssh_public_key for TF to create CI key if needed
         # NOTE: TF_VAR_additional_ssh_keys is already set above (includes deploy key + ADDITIONAL_SSH_KEYS)
