@@ -138,6 +138,8 @@ jobs:
           PYTHONUNBUFFERED: 1
           GIT_REF: ${{ github.ref_name }}
         run: |
+          chmod +x deploy.sh
+
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
           SERVER_IP="${{ inputs.server_ip }}"
@@ -297,6 +299,8 @@ jobs:
         run: |
           ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
           export SSH_PUBLIC_KEY_PATH=~/.ssh/deploy_key.pub
+
+          chmod +x deploy.sh
 
           ENV="${{ inputs.environment }}"
 
