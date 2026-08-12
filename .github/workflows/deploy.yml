@@ -335,6 +335,12 @@ jobs:
 
           exit "$rc"
 
+      - name: Debug — show deploy.log
+        if: always() && inputs.action == 'destroy'
+        run: |
+          echo "=== /tmp/deploy.log contents (first 100 lines) ==="
+          head -100 /tmp/deploy.log || echo "ERROR: /tmp/deploy.log not found"
+
       - name: Notify failure
         if: failure()
         env:
