@@ -13,14 +13,14 @@ acquire_lock() {
 }
 
 print_env() {
-    [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
+    [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment" || true
     echo "  Target:     $TARGET"
     echo "  Domain:     $DEPLOY_DOMAIN"
     echo "  Provider:   $TF_PROVIDER"
-    echo "  Web server: $WEB_SERVER"
+    echo "  Web server: ${WEB_SERVER:-}"
     echo "  Mode:       $([[ "$PARALLEL_MODE" == "true" ]] && echo "parallel" || echo "sequential")"
-    [[ "$DESTROY_MODE" == "true" ]] && echo "  Action:     destroy"
-    [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::endgroup::"
+    [[ "$DESTROY_MODE" == "true" ]] && echo "  Action:     destroy" || true
+    [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::endgroup::" || true
 }
 
 validate_playbooks() {
