@@ -50,7 +50,7 @@ run_parallel() {
         fi
     done
     [[ "$TTY" == "false" ]] && echo "::endgroup::"
-    $ok
+    [[ "$ok" == "true" ]]
 }
 
 resolve_scripts_dir_remote() {
