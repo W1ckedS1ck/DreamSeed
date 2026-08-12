@@ -161,7 +161,7 @@ update_cloudflare_dns() {
 
 delete_cloudflare_dns() {
     local domain="$1"
-    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS cleanup: skip (token not set)"; return 0; }
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS cleanup: skip (token not set)"; echo "  — Cloudflare DNS: skipped (token not set)"; return 0; }
     local api_base="https://api.cloudflare.com/client/v4"
     local zone_id
     zone_id=$(_cf_zone_id "$domain") || return 0
@@ -174,7 +174,7 @@ delete_cloudflare_dns() {
     local record_id
     record_id=$(echo "$existing" | jq -r '.result[0].id // ""' 2>/dev/null) || record_id=""
 
-    [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; return 0; }
+    [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; echo "  — Cloudflare DNS: no A record found"; return 0; }
 
     if _cfcurl --retry 1 --retry-delay 3 -X DELETE "$base/$record_id" \
         -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
