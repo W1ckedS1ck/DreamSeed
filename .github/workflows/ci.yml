@@ -14,6 +14,7 @@ permissions:
 env:
   TFLINT_VERSION: "v0.64.0"
   ARTIFACT_RETENTION_DAYS: 30
+  GITLEAKS_VERSION: "8.30.1"
 
 jobs:
   shellcheck:
@@ -115,13 +116,25 @@ jobs:
           fetch-depth: 0
       - name: 🚀 Start
         run: echo "Gitleaks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Cache gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/bin/gitleaks
+          key: gitleaks-${{ runner.os }}-${{ env.GITLEAKS_VERSION }}
+          restore-keys: |
+            gitleaks-${{ runner.os }}-
       - name: Install gitleaks
-        env:
-          GITLEAKS_VERSION: "8.30.1"
         run: |
-          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
-            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
-             sudo tar -xz -C /usr/local/bin gitleaks)
+          mkdir -p ~/.cache/bin
+          if [ -f ~/.cache/bin/gitleaks ]; then
+            cp ~/.cache/bin/gitleaks /tmp/gitleaks
+            sudo cp /tmp/gitleaks /usr/local/bin/gitleaks
+          else
+            sudo apt-get install -y gitleaks -qq 2>/dev/null || \
+              (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
+               sudo tar -xz -C /usr/local/bin gitleaks)
+            sudo cp /usr/local/bin/gitleaks ~/.cache/bin/gitleaks
+          fi
       - name: Secret Scan (full history)
         run: bash scripts/lint.sh --ci --gitleaks-full-history
 
@@ -163,27 +176,63 @@ jobs:
           path: ~/.cache/pre-commit
           key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: precommit-${{ runner.os }}-
+      - name: Cache gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/bin/gitleaks
+          key: gitleaks-${{ runner.os }}-${{ env.GITLEAKS_VERSION }}
+          restore-keys: |
+            gitleaks-${{ runner.os }}-
       - name: Install gitleaks
-        env:
-          GITLEAKS_VERSION: "8.30.1"
         run: |
-          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
-            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
-             sudo tar -xz -C /usr/local/bin gitleaks)
+          mkdir -p ~/.cache/bin
+          if [ -f ~/.cache/bin/gitleaks ]; then
+            cp ~/.cache/bin/gitleaks /tmp/gitleaks
+            sudo cp /tmp/gitleaks /usr/local/bin/gitleaks
+          else
+            sudo apt-get install -y gitleaks -qq 2>/dev/null || \
+              (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
+               sudo tar -xz -C /usr/local/bin gitleaks)
+            sudo cp /usr/local/bin/gitleaks ~/.cache/bin/gitleaks
+          fi
+      - name: Cache pre-commit system deps
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/bin
+          key: sysdeps-${{ runner.os }}-terraform-1.15.8-tflint-0.64.0-actionlint-1.7.12
+          restore-keys: |
+            sysdeps-${{ runner.os }}-
       - name: Install pre-commit system deps
         run: |
+          mkdir -p ~/.cache/bin
+
           # actionlint
-          curl -sLo /tmp/actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" # renovate: depName=rhysd/actionlint
-          sudo tar -xz -C /usr/local/bin -f /tmp/actionlint.tar.gz actionlint
+          if [ -f ~/.cache/bin/actionlint ]; then
+            sudo cp ~/.cache/bin/actionlint /usr/local/bin/actionlint
+          else
+            curl -sLo /tmp/actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
+            sudo tar -xz -C /usr/local/bin -f /tmp/actionlint.tar.gz actionlint
+            sudo cp /usr/local/bin/actionlint ~/.cache/bin/actionlint
+          fi
 
           # Terraform (pinned via setup-terraform action default)
-          curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip" # renovate: depName=hashicorp/terraform
-          sudo unzip -o /tmp/terraform.zip -d /usr/local/bin > /dev/null 2>&1
+          if [ -f ~/.cache/bin/terraform ]; then
+            sudo cp ~/.cache/bin/terraform /usr/local/bin/terraform
+          else
+            curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip"
+            sudo unzip -o /tmp/terraform.zip -d /usr/local/bin > /dev/null 2>&1
+            sudo cp /usr/local/bin/terraform ~/.cache/bin/terraform
+          fi
 
           # tflint (pinned via TFLINT_VERSION env var)
-          curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_amd64.zip" # renovate: depName=terraform-linters/tflint
-          sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
-          tflint --init --config .tflint.hcl 2>/dev/null || true
+          if [ -f ~/.cache/bin/tflint ]; then
+            sudo cp ~/.cache/bin/tflint /usr/local/bin/tflint
+          else
+            curl -sLo /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_amd64.zip"
+            sudo unzip -o /tmp/tflint.zip -d /usr/local/bin > /dev/null 2>&1
+            tflint --init --config .tflint.hcl 2>/dev/null || true
+            sudo cp /usr/local/bin/tflint ~/.cache/bin/tflint
+          fi
 
           # ansible-lint + PyMySQL (pinned via requirements-deploy.txt)
           pip install -r ansible/requirements-deploy.txt --quiet
