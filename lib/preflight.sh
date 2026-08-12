@@ -107,7 +107,7 @@ preflight_checks() {
     if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
     if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
 
-    if [[ "$DESTROY_MODE" == "false" ]]; then
+    if [[ "$DESTROY_MODE" == "false" && "$CHECK_MODE" == "false" && "$DRY_RUN" == "false" ]]; then
         if [[ -z "${DB_PASS:-}" ]]; then echo "Error: DB_PASS not set"; exit 1; fi
         if [[ -z "${GRAFANA_PASS:-}" ]]; then echo "Error: GRAFANA_PASS not set"; exit 1; fi
     fi

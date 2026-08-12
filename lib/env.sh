@@ -5,7 +5,9 @@
 validate_env_file() {
     local f="$1" n=0 quote=
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
-        echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
+        echo "Error: File '$f' is ansible-vault encrypted." >&2
+        echo "  Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
+        echo "  Or for check/dry-run only: export DRY_RUN=true / CHECK_MODE=true and skip vault" >&2
         exit 1
     fi
     while IFS= read -r line || [[ -n "$line" ]]; do

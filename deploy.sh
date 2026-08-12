@@ -149,22 +149,19 @@ run_lint() {
     return $rc
 }
 
-# ----- main -----
+# ----- deploy helpers -----
 
-main() {
-    parse_args "$@"
-    resolve_target
-
-    LOCK_ACQUIRED=false
+acquire_lock() {
     if command -v flock &>/dev/null; then
-        LOCK_DIR="${HOME:-/tmp}/.locks"
-        mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
-        LOCK_FILE="$LOCK_DIR/deploy-${TARGET}.lock"
-        exec 200>"$LOCK_FILE"
+        local lock_dir="${HOME:-/tmp}/.locks"
+        mkdir -p "$lock_dir" && chmod 700 "$lock_dir"
+        local lock_file="$lock_dir/deploy-${TARGET}.lock"
+        exec 200>"$lock_file"
         flock -w 5 200 || { echo "Error: deploy already running for $TARGET (could not acquire lock)"; exit 1; }
-        LOCK_ACQUIRED=true
     fi
+}
 
+print_env() {
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::group::Environment"
     echo "  Target:     $TARGET"
     echo "  Domain:     $DEPLOY_DOMAIN"
@@ -173,25 +170,11 @@ main() {
     echo "  Mode:       $([[ "$PARALLEL_MODE" == "true" ]] && echo "parallel" || echo "sequential")"
     [[ "$DESTROY_MODE" == "true" ]] && echo "  Action:     destroy"
     [[ "$TTY" == "false" && "$DESTROY_MODE" == "false" && "$DRY_RUN" != "true" ]] && echo "::endgroup::"
+}
 
-    local web_playbook="playbook-02-web.yml:Web server (Nginx/Apache + PHP)"
-
-    local playbooks=(
-        "playbook-01-base.yml:Base packages"
-        "$web_playbook"
-        "playbook-03-db.yml:Database & Restore"
-        "playbook-04-security.yml:Security hardening"
-        "playbook-05-monitor.yml:Monitoring"
-        "playbook-06-backup.yml:Backup & Telegram bot"
-        "playbook-07-grafana.yml:Grafana"
-        "playbook-08-promtail.yml:Promtail"
-    )
-
-    preflight_checks
-
-    # ----- Validate playbooks exist (skip for destroy — no playbooks needed) -----
+validate_playbooks() {
     if [[ "$DESTROY_MODE" == "false" ]]; then
-        for entry in "${playbooks[@]}"; do
+        for entry in "${PLAYBOOK_LIST[@]}"; do
             local pb="${entry%%:*}"
             if [[ ! -f "$SCRIPT_DIR/ansible/$pb" ]]; then
                 echo "Error: playbook not found: $SCRIPT_DIR/ansible/$pb"
@@ -199,67 +182,66 @@ main() {
             fi
         done
     fi
+}
 
-    # ----- Check mode (validate only) -----
-    if [[ "$CHECK_MODE" == "true" ]]; then
-        echo ""
-        echo "  ══════════════════ CHECK ══════════════════"
-        echo "  ✓ Preflight passed"
-        echo "  ✓ All playbooks present"
-        if [[ "$SKIP_TERRAFORM" == "false" ]]; then
-            export_tf_env
-            terraform_init_if_needed || { echo "Terraform init failed"; step_fail "Terraform init failed"; }
-            if _tf validate -no-color >> "$LOG" 2>&1; then
-                echo "  ✓ Terraform config valid"
-            else
-                echo "  ✗ Terraform config invalid (see $LOG)"; exit 1
-            fi
-        fi
-        for entry in "${playbooks[@]}"; do
-            local pb="${entry%%:*}" label="${entry##*:}"
-            if "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
-                echo "  ✓ $label"
-            else
-                echo "  ✗ $label syntax error"
-                ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" 2>&1
-                exit 1
-            fi
-        done
-        echo ""
-        echo "  ✓ All checks passed"
-        echo "  ════════════════════════════════════════════════"
-        echo ""
-        exit 0
-    fi
-
-    # ----- Dry run -----
-    if [[ "$DRY_RUN" == "true" ]]; then
-        echo ""
-        echo "  ══════════════════ DRY RUN ══════════════════"
-        if [[ "$DESTROY_MODE" == "true" ]]; then
-            echo "  Action:    Destroy $TARGET"
-            echo "  Provider:  $TF_PROVIDER"
-            echo "  Would destroy: server, firewall, DNS, key pair"
+run_check_mode() {
+    echo ""
+    echo "  ══════════════════ CHECK ══════════════════"
+    echo "  ✓ Preflight passed"
+    echo "  ✓ All playbooks present"
+    if [[ "$SKIP_TERRAFORM" == "false" ]]; then
+        export_tf_env
+        terraform_init_if_needed || { echo "Terraform init failed"; step_fail "Terraform init failed"; }
+        if _tf validate -no-color >> "$LOG" 2>&1; then
+            echo "  ✓ Terraform config valid"
         else
-            echo "  Action:    Deploy $TARGET"
-            echo "  Provider:  $TF_PROVIDER"
-            echo "  Domain:    $DEPLOY_DOMAIN"
-            echo "  Provision: $([[ "$SKIP_TERRAFORM" == "true" ]] && echo "skip (IP: $EXISTING_IP)" || echo "new server")"
-            echo ""
-            echo "  Playbooks:"
-            for entry in "${playbooks[@]}"; do
-                printf "    ▶ %s\n" "${entry##*:}"
-            done
+            echo "  ✗ Terraform config invalid (see $LOG)"; exit 1
         fi
-        echo ""
-        echo "  No changes were made."
-        echo "  ════════════════════════════════════════════════"
-        echo ""
-        write_deploy_history "DRY-RUN"
-        exit 0
     fi
+    for entry in "${PLAYBOOK_LIST[@]}"; do
+        local pb="${entry%%:*}" label="${entry##*:}"
+        if "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
+            echo "  ✓ $label"
+        else
+            echo "  ✗ $label syntax error"
+            ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" 2>&1
+            exit 1
+        fi
+    done
+    echo ""
+    echo "  ✓ All checks passed"
+    echo "  ════════════════════════════════════════════════"
+    echo ""
+    exit 0
+}
 
-    # ----- Production confirmation -----
+run_dry_run() {
+    echo ""
+    echo "  ══════════════════ DRY RUN ══════════════════"
+    if [[ "$DESTROY_MODE" == "true" ]]; then
+        echo "  Action:    Destroy $TARGET"
+        echo "  Provider:  $TF_PROVIDER"
+        echo "  Would destroy: server, firewall, DNS, key pair"
+    else
+        echo "  Action:    Deploy $TARGET"
+        echo "  Provider:  $TF_PROVIDER"
+        echo "  Domain:    $DEPLOY_DOMAIN"
+        echo "  Provision: $([[ "$SKIP_TERRAFORM" == "true" ]] && echo "skip (IP: $EXISTING_IP)" || echo "new server")"
+        echo ""
+        echo "  Playbooks:"
+        for entry in "${PLAYBOOK_LIST[@]}"; do
+            printf "    ▶ %s\n" "${entry##*:}"
+        done
+    fi
+    echo ""
+    echo "  No changes were made."
+    echo "  ════════════════════════════════════════════════"
+    echo ""
+    write_deploy_history "DRY-RUN"
+    exit 0
+}
+
+confirm_production() {
     if [[ "$TARGET" =~ ^prod && "$DESTROY_MODE" == "false" ]]; then
         echo ""
         echo "  ⚠ Deploying to PRODUCTION ($DEPLOY_DOMAIN)"
@@ -270,19 +252,17 @@ main() {
             [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
         fi
     fi
+}
 
-    # ----- Destroy path -----
-    if [[ "$DESTROY_MODE" == "true" ]]; then
-        step_start "Terraform destroy ($TARGET)"
-        terraform_destroy || step_fail "Terraform destroy failed"
-        step_ok
-        write_deploy_history "DESTROYED"
-        exit 0
-    fi
+run_destroy() {
+    step_start "Terraform destroy ($TARGET)"
+    terraform_destroy || step_fail "Terraform destroy failed"
+    step_ok
+    write_deploy_history "DESTROYED"
+    exit 0
+}
 
-    rotate_logs
-
-    # ----- Terraform -----
+run_terraform() {
     if [[ "$SKIP_TERRAFORM" == "false" ]]; then
         step_start "Terraform init + apply ($TARGET)"
         export_tf_env
@@ -325,6 +305,7 @@ main() {
         export SERVER_IP
 
         # Post-apply state backup (timestamped, rotate 5)
+        local TF_STATE_BACKUP_TMP
         TF_STATE_BACKUP_TMP=$(mktemp); chmod 600 "$TF_STATE_BACKUP_TMP"
         if _tf state pull > "$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
             mv "$TF_STATE_BACKUP_TMP" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
@@ -343,7 +324,9 @@ main() {
         export SERVER_IP
         step_ok
     fi
+}
 
+wait_for_server() {
     # ----- Clear stale host key (prevents mismatch on IP reuse) -----
     ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
     ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
@@ -392,8 +375,9 @@ main() {
     ssh -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
         "while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done" 2>/dev/null || true
     step_ok
+}
 
-    # ----- Generate inventory + vault -----
+generate_inventory() {
     mkdir -p "$SCRIPT_DIR/ansible/inventory"
     INVENTORY_FILE="$SCRIPT_DIR/ansible/inventory/hosts-${TF_WORKSPACE}.yml"
     cat > "$INVENTORY_FILE" << INVEOF
@@ -417,8 +401,9 @@ INVEOF
     [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
 
     mkdir -p ~/.ansible/facts_cache
+}
 
-    # ----- Ansible playbooks -----
+run_playbooks() {
     if [[ "$PARALLEL_MODE" == "true" ]]; then
         # Phase 1: Base (sequential — prerequisite)
         step_start "Base packages"
@@ -428,7 +413,7 @@ INVEOF
         # Phase 2: Web + DB
         step_start "Phase 2: Web/DB"
         run_parallel "Web/DB" \
-            "$web_playbook" \
+            "$1" \
             "playbook-03-db.yml:Database & Restore" || step_fail "Phase 2 failed"
         step_ok
 
@@ -446,16 +431,16 @@ INVEOF
             "playbook-08-promtail.yml:Promtail" || step_fail "Phase 3 failed"
         step_ok
     else
-        for entry in "${playbooks[@]}"; do
+        for entry in "${PLAYBOOK_LIST[@]}"; do
             local pb="${entry%%:*}" label="${entry##*:}"
             step_start "$label"
             run_ansible "$pb" "$label" || step_fail "$label failed"
             step_ok
         done
     fi
+}
 
-    # ----- Post-deploy checks -----
-    # ----- DNS update (after SSL, before checks) -----
+update_dns() {
     if [[ "$SKIP_DNS" == "false" ]]; then
         step_start "Cloudflare DNS update"
         update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP" || step_fail "Cloudflare DNS update failed"
@@ -468,13 +453,9 @@ INVEOF
     else
         echo "  — Cloudflare DNS update skipped (--no-dns)"
     fi
+}
 
-    local chk_start; chk_start=$(date +%s)
-    check_services
-    STEP_NAMES+=("Post-deploy checks")
-    STEP_TIMES+=($(( $(date +%s) - chk_start )))
-
-    # ----- Record deployed commit (for audit: what runs on prod) -----
+record_deploy() {
     if [[ -n "${GITHUB_SHA:-}" && "$DRY_RUN" == "false" ]]; then
         step_start "Record deployed commit"
         # Marker written to record the exact commit deployed, readable via:
@@ -492,12 +473,11 @@ INVEOF
             STEP_NAMES+=("$STEP_LABEL"); STEP_TIMES+=("$d")
         fi
     fi
+}
 
-    # ----- Summary -----
+print_final_summary() {
     print_summary
-
     write_deploy_history "SUCCESS"
-
     local total=$(( $(date +%s) - DEPLOY_START ))
     echo ""
     echo "  ✓ Deployment Successful!"
@@ -508,6 +488,75 @@ INVEOF
     echo "  Time     $(format_time $total)"
     echo ""
     echo "  Log: $LOG"
+}
+
+# ----- main -----
+
+main() {
+    parse_args "$@"
+    resolve_target
+
+    acquire_lock
+
+    local web_playbook="playbook-02-web.yml:Web server (Nginx/Apache + PHP)"
+
+    PLAYBOOK_LIST=(
+        "playbook-01-base.yml:Base packages"
+        "$web_playbook"
+        "playbook-03-db.yml:Database & Restore"
+        "playbook-04-security.yml:Security hardening"
+        "playbook-05-monitor.yml:Monitoring"
+        "playbook-06-backup.yml:Backup & Telegram bot"
+        "playbook-07-grafana.yml:Grafana"
+        "playbook-08-promtail.yml:Promtail"
+    )
+
+    print_env
+
+    preflight_checks
+
+    validate_playbooks
+
+    # ----- Check mode (validate only) -----
+    [[ "$CHECK_MODE" == "true" ]] && run_check_mode
+
+    # ----- Dry run -----
+    [[ "$DRY_RUN" == "true" ]] && run_dry_run
+
+    # ----- Production confirmation -----
+    confirm_production
+
+    # ----- Destroy path -----
+    [[ "$DESTROY_MODE" == "true" ]] && run_destroy
+
+    rotate_logs
+
+    # ----- Terraform -----
+    run_terraform
+
+    # ----- Wait for server -----
+    wait_for_server
+
+    # ----- Generate inventory + vars -----
+    generate_inventory
+
+    # ----- Ansible playbooks -----
+    run_playbooks "$web_playbook"
+
+    # ----- DNS update -----
+    update_dns
+
+    # ----- Post-deploy checks -----
+    local chk_start; chk_start=$(date +%s)
+    check_services
+    STEP_NAMES+=("Post-deploy checks")
+    STEP_TIMES+=($(( $(date +%s) - chk_start )))
+
+    # ----- Record deployed commit -----
+    record_deploy
+
+    # ----- Final summary -----
+    print_final_summary
 }
 
 main "$@"
