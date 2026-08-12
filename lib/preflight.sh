@@ -31,11 +31,13 @@ guard_source_ref() {
 
 check_prerequisites() {
     local missing=()
-    command -v "$ANSIBLE_PLAYBOOK" &>/dev/null || missing+=("ansible-playbook")
+    [[ "$DESTROY_MODE" == "false" ]] && {
+        command -v "$ANSIBLE_PLAYBOOK" &>/dev/null || missing+=("ansible-playbook")
+        command -v ansible-vault &>/dev/null || missing+=("ansible-vault")
+    }
     command -v "$TERRAFORM" &>/dev/null || missing+=("terraform")
     command -v ssh &>/dev/null || missing+=("ssh")
     command -v ssh-keygen &>/dev/null || missing+=("ssh-keygen")
-    command -v ansible-vault &>/dev/null || missing+=("ansible-vault")
     if [[ ${#missing[@]} -gt 0 ]]; then echo "Missing: ${missing[*]}"; exit 1; fi
 }
 
