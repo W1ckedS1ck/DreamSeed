@@ -1,0 +1,32 @@
+name: Setup Gitleaks
+description: Install gitleaks binary with caching
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/bin/gitleaks
+        key: gitleaks-${{ runner.os }}-${{ inputs.gitleaks-version }}
+        restore-keys: |
+          gitleaks-${{ runner.os }}-
+
+    - name: Install gitleaks
+      shell: bash
+      run: |
+        mkdir -p ~/.cache/bin
+        if [ -f ~/.cache/bin/gitleaks ]; then
+          cp ~/.cache/bin/gitleaks /tmp/gitleaks
+          sudo cp /tmp/gitleaks /usr/local/bin/gitleaks
+        else
+          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
+            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${{ inputs.gitleaks-version }}/gitleaks_${{ inputs.gitleaks-version }}_linux_x64.tar.gz" | \
+             sudo tar -xz -C /usr/local/bin gitleaks)
+          [ -f /usr/local/bin/gitleaks ] && sudo cp /usr/local/bin/gitleaks ~/.cache/bin/gitleaks || \
+          [ -f /usr/bin/gitleaks ] && sudo cp /usr/bin/gitleaks ~/.cache/bin/gitleaks || true
+        fi
+
+inputs:
+  gitleaks-version:
+    description: Gitleaks version to install
+    required: true

@@ -17,18 +17,27 @@ load_env "$SCRIPT_DIR/.env"
 DOMAIN="${DOMAIN:-}"
 DB_NAME="${DB_NAME:-modx_db}"
 
-# All service names come from a single source of truth in common_functions.sh.
-# Auto-detects web server and PHP version from the running system.
-ALL_SERVICES=$(get_all_services)
-# Extract web server name for later use (nginx or apache2).
-WEB_SVC=$(echo "$ALL_SERVICES" | tr ' ' '\n' | grep -E '^(nginx|apache2)$' | head -1 || true)
+# Auto-detect web server
+if systemctl is-active nginx &>/dev/null; then
+    WEB_SVC="nginx"
+elif systemctl is-active apache2 &>/dev/null; then
+    WEB_SVC="apache2"
+else
+    echo "  ✗ No web server running"
+    WEB_SVC=""
+fi
+
+# Auto-detect PHP version
+PHP_VER=""
+for v in /etc/php/*/fpm/pool.d/www.conf; do
+    [[ -f "$v" ]] && PHP_VER=$(echo "$v" | sed 's|/etc/php/||; s|/fpm/pool.d/www.conf||')
+done
+[[ -z "$PHP_VER" ]] && PHP_VER="8.3"
 
 fail=0
 
-# --- Services (core subset — the ones that must be green after deploy) ---
-# Filter to the critical services check_services.sh is responsible for.
-CORE_SERVICES=$(echo "$ALL_SERVICES" | tr ' ' '\n' | grep -E '^(nginx|apache2|php.*-fpm|mariadb|redis-server|mysqld_exporter|victoria-metrics|grafana-server)$')
-for s in $CORE_SERVICES; do
+# --- Services ---
+for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_exporter" "victoria-metrics" "grafana-server"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"

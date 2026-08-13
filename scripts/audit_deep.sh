@@ -671,14 +671,18 @@ done
 echo ""
 echo "── 16. Systemd Services ──"
 
-# All expected services come from a single source of truth in common_functions.sh.
-# Auto-detects web server and PHP version from the running system.
-_all_expected=()
-while read -r svc; do
-    [[ -n "$svc" ]] && _all_expected+=("$svc")
-done < <(get_all_services)
+_expected_services=(
+  nginx "php${PHP_VER:-8.3}-fpm" mariadb redis-server fail2ban grafana-server promtail
+  node_exporter mysqld_exporter nginx_exporter redis_exporter
+  victoria-metrics vmagent ssh cron unattended-upgrades
+)
+# telegram-bot is prod-only (long-polling singleton, one getUpdates poller per
+# token) — only required to be running on prod; never expected on a dev host.
+if [[ "${ENV:-}" == "prod" ]]; then
+  _expected_services+=( telegram-bot )
+fi
 _all_active=0
-for _s in "${_all_expected[@]}"; do
+for _s in "${_expected_services[@]}"; do
   if systemctl is-active "$_s" &>/dev/null; then
     echo "    $P $_s"
     ((_all_active++)) || true
@@ -686,10 +690,10 @@ for _s in "${_all_expected[@]}"; do
     echo "    $F $_s (inactive)"
   fi
 done
-if [[ $_all_active -eq ${#_all_expected[@]} ]]; then
-  ok "All ${#_all_expected[@]} systemd services active" "systemd_services"
+if [[ $_all_active -eq ${#_expected_services[@]} ]]; then
+  ok "All ${#_expected_services[@]} systemd services active" "systemd_services"
 else
-  fail "$_all_active/${#_all_expected[@]} services active" "systemd_services"
+  fail "$_all_active/${#_expected_services[@]} services active" "systemd_services"
 fi
 
 # ── 17. Processes ────────────────────────────────────────────────────────────

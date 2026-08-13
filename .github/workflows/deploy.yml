@@ -259,19 +259,12 @@ jobs:
             Server: ${SERVER_IP:-new}
             🖥 ${WEB}
             📅 $(date '+%Y-%m-%d %H:%M')"
-            # Keep the token out of argv (ps aux) — curl reads the URL from a
-            # 0600 temp config file instead of a command-line argument.
-            local_tg_cfg=$(mktemp)
-            chmod 600 "$local_tg_cfg"
-            printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$local_tg_cfg"
-            TG_DATA=(
-              --data-urlencode "chat_id=${TG_CHAT_ID}"
-              --data-urlencode "text=$MSG"
-              --data-urlencode "parse_mode=Markdown"
-            )
-            [[ -n "${TG_THREAD_ID:-}" ]] && TG_DATA+=(--data-urlencode "message_thread_id=${TG_THREAD_ID}")
-            curl -s -m 10 -X POST --config "$local_tg_cfg" "${TG_DATA[@]}" > /dev/null || true
-            rm -f "$local_tg_cfg"
+            TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+            curl -s -X POST "$TG_URL" \
+              -d "chat_id=${TG_CHAT_ID}" \
+              ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
+              --data-urlencode "parse_mode=Markdown" \
+              --data-urlencode "text=$MSG" > /dev/null || true
           fi
 
       - name: Add code map to Pages artifact
