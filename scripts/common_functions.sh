@@ -190,3 +190,45 @@ export_metric() {
     local payload="$1"
     echo "$payload" | timeout 10 curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 }
+
+# Return all expected systemd service names as a space-separated string.
+# Auto-detects web server and PHP version from the running system.
+# Usage: for s in $(get_all_services); do ...
+#
+# This is the single source of truth for service lists across
+# check_services.sh, audit_deep.sh, and health-check.yml.
+get_all_services() {
+    # Auto-detect web server
+    local web_svc=""
+    if systemctl is-active nginx &>/dev/null; then
+        web_svc="nginx"
+    elif systemctl is-active apache2 &>/dev/null; then
+        web_svc="apache2"
+    fi
+
+    # Auto-detect PHP version from the running fpm service name,
+    # falling back to 8.3 (the MODX 2.8 required version).
+    local php_ver=""
+    if command -v systemctl &>/dev/null; then
+        # Try to match the running service: php-fpm, php8.3-fpm, php8.4-fpm, etc.
+        for svc in $(systemctl list-units --type=service --no-pager --no-legend 2>/dev/null | grep 'php.*-fpm' | awk '{print $1}' | sed 's/\.service$//'); do
+            if [[ "$svc" =~ ^php([0-9]+\.[0-9]+)-fpm$ ]]; then
+                php_ver="${BASH_REMATCH[1]}"
+                break
+            fi
+        done
+    fi
+    [[ -z "$php_ver" ]] && php_ver="8.3"
+
+    # Build service list
+    local -a services=()
+    [[ -n "$web_svc" ]] && services+=("$web_svc")
+    services+=("php${php_ver}-fpm" "mariadb" "redis-server" "fail2ban" "grafana-server" "promtail"
+               "node_exporter" "mysqld_exporter" "nginx_exporter" "redis_exporter"
+               "victoria-metrics" "vmagent" "ssh" "cron" "unattended-upgrades")
+
+    # telegram-bot is prod-only (long-polling singleton)
+    [[ "${ENV:-}" == "prod" ]] && services+=("telegram-bot")
+
+    echo "${services[*]}"
+}
