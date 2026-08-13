@@ -487,6 +487,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo "Restoring project..."
     fi
 
+    [[ "$PROJECT_DIR" == "/var/www" || "$PROJECT_DIR" == "/var/www/" ]] && { echo "ERROR: PROJECT_DIR cannot be /var/www"; exit 1; }
     [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
 
     # Backup current project

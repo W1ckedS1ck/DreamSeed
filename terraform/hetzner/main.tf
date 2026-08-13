@@ -24,10 +24,6 @@ resource "hcloud_firewall" "web" {
   name   = "dreamseed-fw-${var.environment}"
   labels = local.labels
 
-  lifecycle {
-    ignore_changes = [rule]
-  }
-
   rule {
     direction  = "in"
     protocol   = "tcp"

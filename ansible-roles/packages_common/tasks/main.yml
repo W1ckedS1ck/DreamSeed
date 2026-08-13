@@ -43,6 +43,12 @@
       APT::Periodic::Download-Upgradeable-Packages "1";
     mode: "0644"
 
+- name: Validate swap_size format
+  ansible.builtin.assert:
+    that:
+      - swap_size | regex_search('^[0-9]+G$')
+    fail_msg: "swap_size must be in GB format (e.g., '2G'), got: {{ swap_size }}"
+
 - name: Ensure swap file
   become: true
   ansible.builtin.shell: |

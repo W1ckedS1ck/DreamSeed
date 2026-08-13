@@ -1,8 +1,7 @@
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name {{ domain }}
-    {%- if domain_www | default(false) %} www.{{ domain }}{% endif %};
+    server_name {{ domain }};
 {% if faro_enabled and faro_collector_url | length > 0 %}
     sub_filter_once on;
     sub_filter '</head>' '<script>(function(){var s=document.createElement("script");s.src="https://unpkg.com/@grafana/faro-web-sdk@{{ faro_sdk_version }}/dist/bundle/faro-web-sdk.iife.js";s.onload=function(){window.GrafanaFaroWebSdk.initializeFaro({url:"/faro-collect",app:{name:"{{ faro_app_name }}",version:"1.0.0",environment:"production"},sessionTracking:{samplingRate:1,persistent:true}});var t=document.createElement("script");t.src="https://unpkg.com/@grafana/faro-web-tracing@{{ faro_sdk_version }}/dist/bundle/faro-web-tracing.iife.js";t.onload=function(){window.GrafanaFaroWebSdk.faro.instrumentations.add(new window.GrafanaFaroWebTracing.TracingInstrumentation())};document.head.appendChild(t)};document.head.appendChild(s)})();</script></head>';
@@ -10,7 +9,7 @@ server {
 
     # Block direct IP access (bypasses Cloudflare WAF)
     # localhost and IP loopbacks allowed for local monitoring and health checks
-    if ($host !~* ^({{ domain }}{% if domain_www | default(false) %}{{ "|www\\." }}{{ domain }}{% endif %}|localhost|127\.0\.0\.1|\[?::1\]?)$) {
+    if ($host !~* ^({{ domain }}|localhost|127\.0\.0\.1|\[?::1\]?)$) {
         return 444;
     }
 

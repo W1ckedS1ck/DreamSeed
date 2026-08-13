@@ -80,8 +80,7 @@
         --dns-cloudflare
         --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
         {% if ssl_staging | default(false) %}--staging{% endif %}
-        -d {{ domain }}{% if domain_www | default(false) %}
-        -d www.{{ domain }}{% endif %}
+        -d {{ domain }}
         --non-interactive
         --agree-tos
         -m {{ admin_email }}

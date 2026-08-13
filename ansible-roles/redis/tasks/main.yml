@@ -31,6 +31,7 @@
       [Service]
       Restart=always
       RestartSec=5s
+      OOMScoreAdjust=-900
     mode: "0644"
   notify: Restart Redis
 
