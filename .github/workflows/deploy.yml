@@ -187,24 +187,6 @@ jobs:
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           DEPLOY_STATUS="${{ steps.deploy.outcome }}"
 
-          # --- Screenshot (only on success; optional — a headless-chrome
-          # hiccup must never fail a successful deploy, hence guarded) ---
-          if [ "$DEPLOY_STATUS" = "success" ]; then
-            DOMAIN="${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}"
-            mkdir -p /tmp/pages-screenshot
-            if command -v google-chrome-stable &>/dev/null; then
-              if google-chrome-stable --headless --disable-gpu --no-sandbox \
-                --screenshot=/tmp/pages-screenshot/${ENV}.png --window-size=1280,720 \
-                "https://$DOMAIN/" &>/dev/null; then
-                echo "Screenshot saved: /tmp/pages-screenshot/${ENV}.png"
-              else
-                echo "::warning::Screenshot failed (non-fatal) — deploy is still successful"
-              fi
-            else
-              echo "::warning::google-chrome-stable not installed — screenshot skipped"
-            fi
-          fi
-
           # --- Deploy summary ---
           SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
           SERVER_IP="${SERVER_IP:-${{ inputs.server_ip }}}"
@@ -283,14 +265,12 @@ jobs:
             cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
           fi
 
-      - name: Add code map to Pages artifact
+      - name: Capture site screenshot
         if: success() && inputs.action == 'deploy'
-        run: |
-          if [ -f docs/codemap/codemap.html ]; then
-            mkdir -p /tmp/pages-screenshot
-            cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
-            cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
-          fi
+        uses: ./.github/actions/capture-screenshot
+        with:
+          url: "https://${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}/"
+          output: /tmp/pages-screenshot/${{ inputs.environment }}.png
 
       - name: Upload screenshot to Pages
         if: success() && inputs.action == 'deploy'

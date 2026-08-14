@@ -272,21 +272,10 @@ jobs:
       # --- Phase 3: screenshot + report ---
       - name: Capture site screenshot
         if: steps.deploy.outcome == 'success'
-        run: |
-          mkdir -p /tmp/pages-screenshot
-          if command -v google-chrome-stable &>/dev/null; then
-            google-chrome-stable --headless --disable-gpu --no-sandbox \
-              --screenshot=/tmp/pages-screenshot/test-restore-v2.png --window-size=1280,720 \
-              --virtual-time-budget=5000 "https://${{ env.DOMAIN }}/" \
-              && echo "Screenshot saved" || echo "Screenshot failed (site may not respond)"
-          elif command -v chromium-browser &>/dev/null; then
-            chromium-browser --headless --disable-gpu --no-sandbox \
-              --screenshot=/tmp/pages-screenshot/test-restore-v2.png --window-size=1280,720 \
-              --virtual-time-budget=5000 "https://${{ env.DOMAIN }}/" \
-              && echo "Screenshot saved" || echo "Screenshot failed (site may not respond)"
-          else
-            echo "::warning::No headless browser available — screenshot skipped"
-          fi
+        uses: ./.github/actions/capture-screenshot
+        with:
+          url: "https://${{ env.DOMAIN }}/"
+          output: /tmp/pages-screenshot/test-restore-v2.png
 
       - name: Upload screenshots
         if: always()
