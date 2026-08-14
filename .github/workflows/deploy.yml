@@ -139,14 +139,27 @@ jobs:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
           PYTHONUNBUFFERED: 1
           GIT_REF: ${{ github.ref_name }}
+          SERVER_IP: ${{ inputs.server_ip }}
         run: |
           chmod +x deploy.sh
 
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
-          SERVER_IP="${{ inputs.server_ip }}"
 
           [[ -z "$ENV" ]] && { echo "Missing environment"; exit 1; }
+
+          # Strict IPv4 validation — blocks shell injection and malformed values
+          if [[ -n "$SERVER_IP" ]]; then
+            [[ "$SERVER_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || {
+              echo "::error::Invalid server_ip '$SERVER_IP' — expected IPv4 address"
+              exit 1
+            }
+            IFS=. read -r _o1 _o2 _o3 _o4 <<< "$SERVER_IP"
+            if (( 10#${_o1} > 255 || 10#${_o2} > 255 || 10#${_o3} > 255 || 10#${_o4} > 255 )); then
+              echo "::error::Invalid server_ip '$SERVER_IP' — octets must be 0-255"
+              exit 1
+            fi
+          fi
 
           DEPLOY_ARGS=("$ENV")
           [[ "$WEB_SRV" == "apache" ]] && DEPLOY_ARGS+=("-a") || DEPLOY_ARGS+=("-n")
@@ -180,6 +193,7 @@ jobs:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          SERVER_IP_INPUT: ${{ inputs.server_ip }}
         run: |
           ENV="${{ inputs.environment }}"
           WEB="${{ inputs.web_server }}"
@@ -189,7 +203,7 @@ jobs:
 
           # --- Deploy summary ---
           SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
-          SERVER_IP="${SERVER_IP:-${{ inputs.server_ip }}}"
+          SERVER_IP="${SERVER_IP:-$SERVER_IP_INPUT}"
           if [ "$DEPLOY_STATUS" = "success" ]; then
             RESULT="✅"
           else

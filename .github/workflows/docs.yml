@@ -21,6 +21,9 @@ jobs:
     name: Publish Code Map
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write

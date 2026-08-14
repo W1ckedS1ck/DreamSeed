@@ -21,6 +21,8 @@ jobs:
     name: Grafana Cloud — ${{ inputs.workspace == 'prod' && '🔴 PRODUCTION' || '🟢 DEV' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: ${{ inputs.workspace == 'prod' && 'production' || '' }}
     permissions:
       contents: read
     steps:

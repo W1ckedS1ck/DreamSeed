@@ -10,6 +10,8 @@ name: "[B] Restore Test"
 # Server is destroyed afterwards regardless of outcome.
 
 on:
+  schedule:
+    - cron: "0 10 * * 1"
   workflow_dispatch:
     inputs:
       keep_server:
