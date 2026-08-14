@@ -46,7 +46,7 @@
 - name: Validate swap_size format
   ansible.builtin.assert:
     that:
-      - swap_size | regex_search('^[0-9]+G$')
+      - swap_size is match('^[0-9]+G$')
     fail_msg: "swap_size must be in GB format (e.g., '2G'), got: {{ swap_size }}"
 
 - name: Ensure swap file
