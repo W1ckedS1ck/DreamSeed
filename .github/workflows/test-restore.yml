@@ -556,8 +556,10 @@ jobs:
             "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
           echo "DB hash: $DB_HASH"
-          # Record Redis session count for comparison
-          REDIS_SESSIONS=$(ssh ubuntu@"$SERVER_IP" "redis-cli DBSIZE 2>/dev/null | awk '{print \$2}'" || echo "0")
+          # Record Redis session count for comparison. DBSIZE prints a single
+          # line "N" — awk '{print $2}' would always be empty. Count only
+          # PHPREDIS_SESSION keys so this measures real sessions, not all keys.
+          REDIS_SESSIONS=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           echo "redis_sessions_before=$REDIS_SESSIONS" >> "$GITHUB_OUTPUT"
           echo "Redis sessions before destroy: $REDIS_SESSIONS"
 
@@ -727,19 +729,26 @@ jobs:
             echo "db_hash_match=no" >> "$GITHUB_OUTPUT"
           fi
 
-          # Verify Redis sessions — should have sessions when DB modx_session is empty
-          REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" 'redis-cli DBSIZE 2>/dev/null | awk "{print \$2}"' || echo "0")
+          # Verify Redis sessions survived the restore.
+          # Sessions live in Redis only (session_handler_class is empty, DB
+          # modx_session is not used) — so the meaningful check is that Redis
+          # session keys still exist after restore. modx_session missing from
+          # the DB is EXPECTED (not a warning): COUNT(*) errors → -1.
+          REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           DB_SESSION_COUNT=$(ssh ubuntu@"$SERVER_IP" 'mysql modx_db -N -e "SELECT COUNT(*) FROM modx_session" 2>/dev/null' || echo "-1")
-          echo "Redis sessions after restore: $REDIS_AFTER"
+          REDIS_BEFORE="${{ steps.artifact_hash.outputs.redis_sessions_before }}"
+          echo "Redis sessions after restore: $REDIS_AFTER (before destroy: ${REDIS_BEFORE:-unknown})"
           echo "DB modx_session rows: $DB_SESSION_COUNT"
           echo "redis_sessions_after=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
           echo "db_session_count=$DB_SESSION_COUNT" >> "$GITHUB_OUTPUT"
-          if [ "$DB_SESSION_COUNT" = "0" ] && [ "${REDIS_AFTER:-0}" -gt 0 ]; then
-            echo "[PASS] Redis sessions active (DB sessions empty) — Redis session handler working"
-          elif [ "$DB_SESSION_COUNT" = "-1" ]; then
-            echo "[WARN] modx_session table not found"
+          if [ "${REDIS_AFTER:-0}" -gt 0 ]; then
+            echo "[PASS] Redis sessions active after restore ($REDIS_AFTER keys) — Redis session handler working"
+          elif [ "${REDIS_BEFORE:-0}" -gt 0 ]; then
+            echo "[FAIL] Redis had $REDIS_BEFORE sessions before destroy, 0 after restore — sessions lost"
+          elif [ "$DB_SESSION_COUNT" = "0" ]; then
+            echo "[PASS] No sessions in DB or Redis (empty site) — nothing to restore"
           else
-            echo "[INFO] DB sessions: $DB_SESSION_COUNT, Redis: $REDIS_AFTER"
+            echo "[FAIL] No Redis sessions after restore (DB: $DB_SESSION_COUNT)"
           fi
 
           echo "=== PHP error log (last 20 lines) ==="
