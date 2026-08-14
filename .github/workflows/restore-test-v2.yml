@@ -190,6 +190,7 @@ jobs:
           [ "$RC" -eq 0 ] || exit "$RC"
 
       - name: Verify restored content (LOCAL)
+        id: verify_local
         if: steps.restore_local.outcome == 'success'
         env:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
@@ -198,15 +199,20 @@ jobs:
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve ${{ env.DOMAIN }}:443:127.0.0.1 -o /dev/null -w '%{http_code}' --max-time 10 'https://${{ env.DOMAIN }}/'" 2>/dev/null || echo "000")
           echo "local_http=$HTTP_CODE"
+          echo "local_http=$HTTP_CODE" >> "$GITHUB_OUTPUT"
           NEW_HASH=$(ssh ubuntu@"$SERVER_IP" \
             "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "local_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }})"
+          echo "local_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           echo "local_redis_sessions=$REDIS_AFTER (before destroy: ${{ steps.artifact_hash.outputs.redis_sessions_before }})"
+          echo "local_redis_sessions=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
           if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ]; then
             echo "local_restore=pass"
+            echo "local_restore=pass" >> "$GITHUB_OUTPUT"
           else
             echo "local_restore=fail"
+            echo "local_restore=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
@@ -237,6 +243,7 @@ jobs:
           [ "$RC" -eq 0 ] || exit "$RC"
 
       - name: Verify restored content (CLOUD)
+        id: verify_cloud
         if: steps.restore_cloud.outcome == 'success'
         env:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
@@ -245,19 +252,52 @@ jobs:
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve ${{ env.DOMAIN }}:443:127.0.0.1 -o /dev/null -w '%{http_code}' --max-time 10 'https://${{ env.DOMAIN }}/'" 2>/dev/null || echo "000")
           echo "cloud_http=$HTTP_CODE"
+          echo "cloud_http=$HTTP_CODE" >> "$GITHUB_OUTPUT"
           NEW_HASH=$(ssh ubuntu@"$SERVER_IP" \
             "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "cloud_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }})"
+          echo "cloud_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           echo "cloud_redis_sessions=$REDIS_AFTER (before destroy: ${{ steps.artifact_hash.outputs.redis_sessions_before }})"
+          echo "cloud_redis_sessions=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
           if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ]; then
             echo "cloud_restore=pass"
+            echo "cloud_restore=pass" >> "$GITHUB_OUTPUT"
           else
             echo "cloud_restore=fail"
+            echo "cloud_restore=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
-      # --- Phase 3: teardown ---
+      # --- Phase 3: screenshot + report ---
+      - name: Capture site screenshot
+        if: steps.deploy.outcome == 'success'
+        run: |
+          mkdir -p /tmp/pages-screenshot
+          if command -v google-chrome-stable &>/dev/null; then
+            google-chrome-stable --headless --disable-gpu --no-sandbox \
+              --screenshot=/tmp/pages-screenshot/test-restore-v2.png --window-size=1280,720 \
+              --virtual-time-budget=5000 "https://${{ env.DOMAIN }}/" \
+              && echo "Screenshot saved" || echo "Screenshot failed (site may not respond)"
+          elif command -v chromium-browser &>/dev/null; then
+            chromium-browser --headless --disable-gpu --no-sandbox \
+              --screenshot=/tmp/pages-screenshot/test-restore-v2.png --window-size=1280,720 \
+              --virtual-time-budget=5000 "https://${{ env.DOMAIN }}/" \
+              && echo "Screenshot saved" || echo "Screenshot failed (site may not respond)"
+          else
+            echo "::warning::No headless browser available — screenshot skipped"
+          fi
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: restore-test-v2-screenshots
+          path: /tmp/pages-screenshot/*.png
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # --- Phase 4: teardown ---
       - name: Destroy test server
         if: always() && inputs.keep_server == false
         id: destroy
@@ -301,10 +341,20 @@ jobs:
             echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
             echo ""
             echo "### Restore paths"
-            echo "| Path | Status |"
+            echo "| Path | Status | HTTP | Hash match | Redis sessions |"
+            echo "|---|---|---|---|---|"
+            echo "| **Local** | ${{ steps.restore_local.outcome }} | ${{ steps.verify_local.outputs.local_http }} | ${{ steps.verify_local.outputs.local_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | ${{ steps.verify_local.outputs.local_redis_sessions }} |"
+            echo "| **Cloud (GDrive, rollback path)** | ${{ steps.restore_cloud.outcome }} | ${{ steps.verify_cloud.outputs.cloud_http }} | ${{ steps.verify_cloud.outputs.cloud_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | ${{ steps.verify_cloud.outputs.cloud_redis_sessions }} |"
+            echo ""
+            echo "### Artifacts (pre-disaster)"
+            echo "| | |"
             echo "|---|---|"
-            echo "| Local | ${{ steps.restore_local.outcome }} |"
-            echo "| Cloud (GDrive, rollback path) | ${{ steps.restore_cloud.outcome }} |"
+            echo "| **Project hash** | \`${{ steps.artifact_hash.outputs.project_hash }}\` |"
+            echo "| **DB hash** | \`${{ steps.artifact_hash.outputs.db_hash }}\` |"
+            echo "| **Redis sessions before** | ${{ steps.artifact_hash.outputs.redis_sessions_before }} |"
+            echo ""
+            echo "### Evidence"
+            echo "📸 [Download screenshot](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)"
           } >> "$M"
 
       - name: Cleanup secrets
