@@ -88,7 +88,7 @@ There are 2 layers of linting:
 
 **Type:** GitHub Actions workflow linter.
 **Catches:** incorrect `uses:` references, missing permissions, shell injection, deprecated syntax.
-**Config:** runs with `-shellcheck=` (shellcheck by actionlint is disabled — our workflows call ShellCheck separately).
+**Config:** runs with `-shellcheck=/usr/bin/shellcheck` — every inline `run:` script in workflows is also checked by shellcheck (the separate ShellCheck job covers standalone `.sh` files).
 
 ---
 
