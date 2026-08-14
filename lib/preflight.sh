@@ -31,11 +31,13 @@ guard_source_ref() {
 
 check_prerequisites() {
     local missing=()
-    command -v "$ANSIBLE_PLAYBOOK" &>/dev/null || missing+=("ansible-playbook")
+    [[ "$DESTROY_MODE" == "false" ]] && {
+        command -v "$ANSIBLE_PLAYBOOK" &>/dev/null || missing+=("ansible-playbook")
+        command -v ansible-vault &>/dev/null || missing+=("ansible-vault")
+    }
     command -v "$TERRAFORM" &>/dev/null || missing+=("terraform")
     command -v ssh &>/dev/null || missing+=("ssh")
     command -v ssh-keygen &>/dev/null || missing+=("ssh-keygen")
-    command -v ansible-vault &>/dev/null || missing+=("ansible-vault")
     if [[ ${#missing[@]} -gt 0 ]]; then echo "Missing: ${missing[*]}"; exit 1; fi
 }
 
@@ -43,25 +45,23 @@ preflight_checks() {
     guard_source_ref
     check_prerequisites
 
-    local env_src; env_src=$(resolve_env_file "$ENV_FILE")
-    validate_env_file "$env_src"
-
-    local old_opts; old_opts=$(set +o)
-    source "$env_src"
-    eval "$old_opts"
+    resolve_env_file "$ENV_FILE"
+    local env_src="$ENV_SRC"
+    parse_env_file "$env_src" || exit 1
     export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
     export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY
     export TG_TOKEN TG_CHAT_ID TG_THREAD_ID
     export EMAIL_USER EMAIL_PASS SMTP_SERVER SMTP_PORT OWNER LOKI_URL LOKI_USERNAME FARO_COLLECTOR_URL FARO_APP_NAME
     export RCLONE_CRYPT_PASSWORD
+    export UBUNTU_PRO_TOKEN
 
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
-            env_src=$(resolve_env_file "$ENV_FILE")
-            validate_env_file "$env_src"
-            source "$env_src"
+            resolve_env_file "$ENV_FILE"
+            env_src="$ENV_SRC"
+            parse_env_file "$env_src" || exit 1
         else
             echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."
             echo "  To set up manually later, run: bash scripts/setup_betteruptime.sh --write-env"
@@ -106,7 +106,7 @@ preflight_checks() {
     if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
     if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
 
-    if [[ "$DESTROY_MODE" == "false" ]]; then
+    if [[ "$DESTROY_MODE" == "false" && "$CHECK_MODE" == "false" && "$DRY_RUN" == "false" ]]; then
         if [[ -z "${DB_PASS:-}" ]]; then echo "Error: DB_PASS not set"; exit 1; fi
         if [[ -z "${GRAFANA_PASS:-}" ]]; then echo "Error: GRAFANA_PASS not set"; exit 1; fi
     fi

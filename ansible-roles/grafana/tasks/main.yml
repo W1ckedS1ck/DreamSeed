@@ -1,48 +1,40 @@
 ---
-- name: Download Grafana GPG key
-  ansible.builtin.get_url:
-    url: https://apt.grafana.com/gpg.key
-    dest: /etc/apt/keyrings/grafana.asc
-    mode: "0644"
-  become: true
+# Grafana apt repo (GPG key + deb822_repository) is provisioned once in the
+# packages_common role (playbook-01). Here we only install + configure.
 
-- name: Add Grafana repository
-  ansible.builtin.deb822_repository:
-    name: grafana
-    types: deb
-    uris: https://apt.grafana.com
-    suites: stable
-    components: main
-    signed_by: /etc/apt/keyrings/grafana.asc
-    install_python_debian: true
-    state: present
-  become: true
-
-- name: Update apt cache after adding Grafana repo
-  ansible.builtin.apt:
-    update_cache: true
-  become: true
-
+# Pinned install with a loud fallback. The pinned version is kept current by
+# Renovate, so normally this succeeds. If the pinned version is not (yet) in
+# the Grafana apt repo — Renovate may bump it before the repo syncs — fall
+# back to the repo's latest, but print an explicit warning so the drift is
+# never silent. Retries cover transient apt/network flakiness.
 - name: Install Grafana (pinned version)
-  ansible.builtin.apt:
-    name: grafana={{ grafana_version }}
-    state: present
   become: true
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-  register: grafana_install_result
-  ignore_errors: true
+  block:
+    - name: Install Grafana (pinned version)
+      ansible.builtin.apt:
+        name: grafana={{ grafana_version }}
+        state: present
+        update_cache: true
+        cache_valid_time: 0
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      register: grafana_install_result
+      retries: 3
+      delay: 5
+      until: grafana_install_result is success
+  rescue:
+    - name: Warn — pinned Grafana version unavailable
+      ansible.builtin.debug:
+        msg: "⚠ Grafana {{ grafana_version }} not available in apt repo — installing latest instead. Check group_vars/all.yml if this repeats."
 
-- name: Install Grafana (fallback — latest if pinned version unavailable)
-  ansible.builtin.apt:
-    name: grafana
-    state: present
-    update_cache: true
-    cache_valid_time: 0
-  become: true
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-  when: grafana_install_result is failed
+    - name: Install Grafana (fallback — latest if pinned version unavailable)
+      ansible.builtin.apt:
+        name: grafana
+        state: present
+        update_cache: true
+        cache_valid_time: 0
+      environment:
+        DEBIAN_FRONTEND: noninteractive
 
 - name: Configure Grafana
   ansible.builtin.template:

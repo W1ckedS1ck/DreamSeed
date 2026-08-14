@@ -497,9 +497,22 @@ for _p in 9100 9113 9121 9104; do
 done
 
 # Custom metrics (pushed directly to VictoriaMetrics, not via node_exporter)
-_backup_metric=$(curl -s --max-time 5 'http://127.0.0.1:8428/api/v1/query?query=backup_last_success_timestamp' 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['data']['result']))" 2>/dev/null || echo "0")
-_upload_metric=$(curl -s --max-time 5 'http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp' 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['data']['result']))" 2>/dev/null || echo "0")
-echo "    Backup metric in VictoriaMetrics: $_backup_metric"
+# NOTE: instant queries (api/v1/query) can NEVER see these — they're written once per
+# hour, and VM's instant query only returns samples within -search.latencyOffset (30s)
+# and -search.maxStaleness (5m). Must use query_range over the write interval (2h).
+_vm_metric() {
+  local q="$1" now
+  now=$(date +%s)
+  curl -s --max-time 5 "http://127.0.0.1:8428/api/v1/query_range?query=$q&start=$((now-7200))&end=$now&step=300" 2>/dev/null \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); n=sum(1 for r in d['data']['result'] for _ in r.get('values',[])); print(n)" 2>/dev/null || echo "0"
+}
+_backup_metric=$(_vm_metric 'backup_last_success_timestamp')
+_upload_metric=$(_vm_metric 'upload_last_success_timestamp')
+if [[ "$_backup_metric" -gt 0 ]]; then
+  ok "Backup metric in VictoriaMetrics (last 2h): $_backup_metric sample(s)" "backup_metric"
+else
+  warn "Backup metric missing in VictoriaMetrics (no successful backup in last 2h?)" "backup_metric"
+fi
 echo "    Upload metric in VictoriaMetrics: $_upload_metric"
 
 # ── 12. Grafana ────────────────────────────────────────────────────────────────
@@ -531,15 +544,32 @@ else
   fail "Grafana provisioning missing" "grafana_provisioning"
 fi
 
-_alerts_firing=$(curl -s 'http://127.0.0.1:3000/api/alertmanager/grafana/api/v2/alerts' 2>/dev/null | python3 -c "
+# Endpoint requires auth; read admin password directly from the systemd EnvironmentFile
+# (never exported to the shell — /etc/grafana/grafana.env is root:grafana 0600).
+_grafana_pass=$(sudo grep -oP '(?<=GF_SECURITY_ADMIN_PASSWORD=).*' /etc/grafana/grafana.env 2>/dev/null || true)
+if [[ -n "$_grafana_pass" ]]; then
+  # Credentials via netrc-file (not argv — keeps the password out of `ps aux`).
+  _grafana_netrc=$(mktemp) 2>/dev/null || _grafana_netrc=""
+  if [[ -n "$_grafana_netrc" ]]; then
+    chmod 600 "$_grafana_netrc"
+    printf 'machine 127.0.0.1 login admin password %s\n' "$_grafana_pass" > "$_grafana_netrc"
+    _alerts_firing=$(curl -s --netrc-file "$_grafana_netrc" 'http://127.0.0.1:3000/api/alertmanager/grafana/api/v2/alerts' 2>/dev/null | python3 -c "
 import sys,json
 try:
   d=json.load(sys.stdin)
-  print(len(d))
-except:
+  print(len(d) if isinstance(d, list) else 'error')
+except Exception:
   print('error')
 " 2>/dev/null || echo "error")
-echo "    Grafana alerts firing: $_alerts_firing"
+    rm -f "$_grafana_netrc"
+  else
+    _alerts_firing="error"
+  fi
+  echo "    Grafana alerts firing: $_alerts_firing"
+else
+  warn "Grafana alerts firing: could not read admin password" "grafana_alerts_auth"
+fi
+unset _grafana_pass
 
 _grafana_mem=$(ps aux | grep grafana-server | grep -v grep | head -1 | awk '{printf "%.1f%% (%s MB RSS)", $4, int($6/1024)}' 2>/dev/null || echo "not found")
 echo "    Grafana memory: $_grafana_mem"
@@ -597,13 +627,14 @@ _tg_env_prod=0
 
 if systemctl is-active telegram-bot &>/dev/null; then
   ok "Telegram bot active" "tg_bot_active"
-  _tg_conflict=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'Conflict: terminated by other getUpdates' || true)
+  # sudo: ubuntu user is not in adm/systemd-journal, plain journalctl silently omits entries
+  _tg_conflict=$(sudo journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'Conflict: terminated by other getUpdates' || true)
   if [[ "$_tg_conflict" -eq 0 ]]; then
     ok "Telegram bot: single poller (no Conflict)" "tg_bot_conflict"
   else
     warn "Telegram bot: $_tg_conflict Conflict(s) - duplicate poller detected" "tg_bot_conflict"
   fi
-  _tg_errors=$(journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
+  _tg_errors=$(sudo journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
   if [[ "$_tg_errors" -eq 0 ]]; then
     ok "Telegram bot: 0 errors" "tg_bot_errors"
   else
@@ -709,12 +740,13 @@ fi
 echo ""
 echo "── 19. Journal Errors (last 1h) ──"
 
-_err_count=$(journalctl --since "1 hour ago" -p err --no-pager 2>/dev/null | grep -v 'snapd\|ModemManager\|shutdown\|loop' | wc -l || true)
+# sudo: ubuntu user is not in adm/systemd-journal, plain journalctl silently omits entries
+_err_count=$(sudo journalctl --since "1 hour ago" -p err --no-pager 2>/dev/null | grep -v 'snapd\|ModemManager\|shutdown\|loop\|-- No entries --' | wc -l || true)
 if [[ "$_err_count" -eq 0 ]]; then
   ok "0 journal errors in last hour" "journal_errors"
 else
   warn "$_err_count journal error(s) in last hour" "journal_errors"
-  journalctl --since "1 hour ago" -p err --no-pager 2>/dev/null | grep -v 'snapd\|ModemManager\|shutdown\|loop' | head -5 | while read -r _l; do echo "    $_l"; done
+  sudo journalctl --since "1 hour ago" -p err --no-pager 2>/dev/null | grep -v 'snapd\|ModemManager\|shutdown\|loop\|-- No entries --' | head -5 | while read -r _l; do echo "    $_l"; done
 fi
 
 # ── 20. Functional ──────────────────────────────────────────────────────────

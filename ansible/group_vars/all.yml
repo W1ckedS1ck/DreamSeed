@@ -8,6 +8,13 @@ admin_email: "hello@dreamseed.online"
 web_server: "nginx"
 
 # ========================
+#  Ubuntu Pro (ESM)
+# ========================
+# Attached via Ansible (packages_common role) — not in cloud-init, so the token
+# never lands in Terraform state or instance user-data.
+ubuntu_pro_token: "{{ lookup('env', 'UBUNTU_PRO_TOKEN') | default('', true) }}"
+
+# ========================
 #  Database
 # ========================
 db_name: "modx_db"
@@ -19,7 +26,7 @@ db_min_tables: 100
 # ========================
 #  PHP
 # ========================
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.5.9', true) }}" # renovate: depName=php
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}" # renovate: depName=php
 
 # ========================
 #  Redis

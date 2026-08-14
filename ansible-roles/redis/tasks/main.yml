@@ -31,6 +31,7 @@
       [Service]
       Restart=always
       RestartSec=5s
+      OOMScoreAdjust=-900
     mode: "0644"
   notify: Restart Redis
 
@@ -39,7 +40,10 @@
   ansible.builtin.template:
     src: redis.conf.j2
     dest: /etc/redis/redis.conf
-    mode: "0644"
+    owner: redis
+    group: redis
+    mode: "0640"
+  no_log: true
   notify: Restart Redis
 
 - name: Ensure Redis is running

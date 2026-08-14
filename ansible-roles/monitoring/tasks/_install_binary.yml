@@ -23,18 +23,29 @@
   when: _monitor_bin.stat.exists
 
 - name: "Install or upgrade {{ monitor_bin_name }}"
+  vars:
+    # Extract the first semver triple from --version output. Token-exact
+    # matching breaks for binaries that print a "v" prefix (redis_exporter,
+    # VictoriaMetrics) — "1.88.0" != "v1.88.0" — causing a re-download on
+    # every deploy. regex_search normalizes both sides.
+    _monitor_installed_version: "{{ (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')) | regex_search('\\d+\\.\\d+\\.\\d+') | default('') }}"
   when: >
     not _monitor_bin.stat.exists or
-    monitor_version not in (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')).split()
+    _monitor_installed_version != monitor_version
   block:
-    - name: "Download and extract {{ monitor_bin_name }}"
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          curl -sL "{{ monitor_download_url }}" | tar xz -C /tmp/
-      args:
-        executable: /bin/bash
-      changed_when: true
+    - name: "Download {{ monitor_bin_name }}"
+      ansible.builtin.get_url:
+        url: "{{ monitor_download_url }}"
+        dest: "/tmp/{{ monitor_bin_name }}.tar.gz"
+        mode: "0644"
+        timeout: 60
+      register: _monitor_download
+
+    - name: "Extract {{ monitor_bin_name }}"
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ monitor_bin_name }}.tar.gz"
+        dest: /tmp/
+        remote_src: true
 
     - name: "Install binary: {{ monitor_bin_name }}"
       ansible.builtin.copy:
@@ -43,6 +54,11 @@
         mode: "0755"
         remote_src: true
       become: true
+
+    - name: "Verify binary runs: {{ monitor_bin_name }}"
+      ansible.builtin.command: "{{ monitor_bin_path }} --version"
+      changed_when: true
+      register: _monitor_new_version
 
     - name: "Restart service: {{ monitor_bin_name }}"
       ansible.builtin.systemd:

@@ -169,6 +169,9 @@ run_terraform_validate() {
         if [[ -f "$tfvars_file" ]] && head -c 16 "$tfvars_file" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
             tfvars_vaulted="$tfvars_file.vaulted"
             mv "$tfvars_file" "$tfvars_vaulted"
+            # Guarantee restore even if interrupted (SIGINT/TERM) between the
+            # move above and the restore below; re-raise INT so Ctrl-C still stops.
+            trap '[[ -n "${tfvars_vaulted:-}" && -f "$tfvars_vaulted" ]] && mv "$tfvars_vaulted" "$tfvars_file"; trap - EXIT INT TERM; kill -INT $$ 2>/dev/null || true' EXIT INT TERM
         fi
 
         if "$tf" -chdir="$dir" init -backend=false && "$tf" -chdir="$dir" validate; then
@@ -177,10 +180,11 @@ run_terraform_validate() {
             print_fail "$dir — validation failed"
         fi
 
-        # Restore vaulted tfvars if we moved it
+        # Restore vaulted tfvars if we moved it, and disarm the restore trap
         if [[ -n "$tfvars_vaulted" && -f "$tfvars_vaulted" ]]; then
             mv "$tfvars_vaulted" "$tfvars_file"
         fi
+        trap - EXIT INT TERM
     done
     ci_annotation "Terraform Validate" "$([[ $FAILED == false ]] && echo pass || echo fail)"
     group_end
@@ -222,7 +226,7 @@ run_markdownlint() {
     group_start "markdownlint (Documentation)"
     if ! tool_available markdownlint-cli2; then print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"; group_end; return 0; fi
 
-    if markdownlint-cli2 --config .markdownlint.yml "docs/**/*.md" "README.md"; then
+    if markdownlint-cli2 --config markdownlint-cli2.jsonc "docs/**/*.md" "README.md"; then
         print_ok "No issues"; ci_annotation "markdownlint" "pass"
     else
         print_fail "Issues found"; ci_annotation "markdownlint" "fail"
@@ -236,13 +240,13 @@ run_secrets_audit() {
 
     # .gitignore check
     if [[ ! -f .gitignore ]]; then
-        print_fail ".gitignore not found"; ((issues++))
+        print_fail ".gitignore not found"; ((++issues))
     else
         if grep -q "^secrets/" .gitignore && grep -q "^\.env" .gitignore && grep -q "^\*\.service" .gitignore; then
             print_ok ".gitignore looks good (secrets/, .env, *.service excluded)"
         else
             print_fail ".gitignore missing some critical excludes (secrets/, .env, *.service)"
-            ((issues++))
+            ((++issues))
         fi
     fi
 
@@ -252,7 +256,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_secrets" ]]; then
         print_fail "secrets/ directory is tracked in git"
         echo "$tracked_secrets"
-        ((issues++))
+        ((++issues))
     else
         print_ok "secrets/ not tracked"
     fi
@@ -262,7 +266,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_env" ]]; then
         print_fail ".env files are tracked in git"
         echo "$tracked_env"
-        ((issues++))
+        ((++issues))
     else
         print_ok "No .env files tracked"
     fi
@@ -273,7 +277,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_svc" ]]; then
         print_fail ".service files are tracked in git"
         echo "$tracked_svc"
-        ((issues++))
+        ((++issues))
     else
         local tracked_svc_j2
         tracked_svc_j2=$(git ls-files 2>/dev/null | grep "\.service\.j2$") || true
@@ -290,7 +294,7 @@ run_secrets_audit() {
     if [[ -n "$tracked_keys" ]]; then
         print_fail "Private key files tracked in git"
         echo "$tracked_keys"
-        ((issues++))
+        ((++issues))
     else
         print_ok "No private keys tracked"
     fi
@@ -298,7 +302,7 @@ run_secrets_audit() {
     # CLAUDE.md (must not be tracked — contains internal project context)
     if git ls-files 2>/dev/null | grep -q "^CLAUDE.md"; then
         print_fail "CLAUDE.md is tracked in git"
-        ((issues++))
+        ((++issues))
     else
         print_ok "CLAUDE.md not tracked"
     fi
@@ -316,12 +320,12 @@ run_secrets_audit() {
             grep -v "{{ " | \
             grep -v '\$' | \
             grep -q "." 2>/dev/null; then
-            ((found++))
+            ((++found))
         fi
     done
     if [[ $found -gt 0 ]]; then
         print_fail "Potential hardcoded secrets found ($found patterns)"
-        ((issues++))
+        ((++issues))
     else
         print_ok "No hardcoded secrets"
     fi

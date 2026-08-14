@@ -74,6 +74,10 @@ data "http" "dashboard" {
 
 resource "grafana_folder" "dreamseed" {
   title = "DreamSeed (${terraform.workspace})"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "grafana_dashboard" "this" {
@@ -81,4 +85,8 @@ resource "grafana_dashboard" "this" {
   config_json = local.config[each.key]
   folder      = grafana_folder.dreamseed.id
   overwrite   = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }

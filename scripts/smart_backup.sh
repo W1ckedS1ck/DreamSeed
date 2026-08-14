@@ -33,8 +33,10 @@ ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
 
+TMP_DB_BACKUP=""
+
 # ====== Lock against parallel runs ======
-trap 'exec 9>&-' EXIT
+trap 'rm -f "${TMP_DB_BACKUP:-}" 2>/dev/null || true; exec 9>&-' EXIT
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
 LOCK_FILE="$LOCK_DIR/smart_backup.lock"
@@ -52,6 +54,12 @@ echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
 if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
     echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'" >&2
+    exit 1
+fi
+
+# ====== Validate DB_NAME (used in mysqldump --ignore-table, SQL queries) ======
+if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "ERROR: DB_NAME contains invalid characters: '$DB_NAME'" >&2
     exit 1
 fi
 
@@ -105,7 +113,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
 
-TMP_DB_BACKUP="${DB_BACKUP}.tmp"
+TMP_DB_BACKUP="$(mktemp "$BACKUP_DIR/db/db_tmp_XXXXXX.sql.gz")"
 set +o pipefail
 timeout 1800 mysqldump --single-transaction --routines --events --triggers \
     --ignore-table="${DB_NAME}.${MODX_TABLE_PREFIX:-modx_}session" \
@@ -130,6 +138,10 @@ REDIS_KEEP="${BACKUP_REDIS_KEEP:-${REDIS_KEEP:-5}}"
 if sudo test -f /var/lib/redis/dump.rdb; then
     mkdir -p "$BACKUP_DIR/redis"
     REDIS_BACKUP="$BACKUP_DIR/redis/redis_dump_$DATE.rdb"
+    # Force a synchronous snapshot first so the copy reflects current data,
+    # not whatever Redis last auto-saved. SAVE blocks until the dump is on
+    # disk (BGSAVE is async and could be copied mid-flight) (M14).
+    sudo redis-cli SAVE >/dev/null 2>&1 || true
     if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null && \
        sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >> "$LOG_FILE"

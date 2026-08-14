@@ -39,13 +39,23 @@ DOMAIN=$(ssh ubuntu@"$SERVER_IP" "grep -hs 'server_name' /etc/nginx/sites-availa
 HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/'" 2>/dev/null || echo "000")
 [ "$HTTPS_CODE" = "200" ] && pass "HTTPS 200" || fail "HTTPS $HTTPS_CODE"
 
-# Nginx config syntax
-ssh ubuntu@"$SERVER_IP" "nginx -t 2>&1 | grep -q 'syntax is ok'" && pass "Nginx config syntax OK" || warn "Nginx config: syntax check failed"
+# Nginx config syntax (needs sudo — ubuntu can't read Let's Encrypt keys,
+# plain `nginx -t` fails with [emerg] Permission denied even when nginx is
+# healthy and serving 200)
+ssh ubuntu@"$SERVER_IP" "sudo nginx -t 2>&1 | grep -q 'syntax is ok'" && pass "Nginx config syntax OK" || fail "Nginx config: syntax check failed"
 
 # MODX core
 ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && pass "Config exists" || fail "Config missing"
+# Permissions come from the backup archive (chown -R www-data on restore), not
+# from a template — so 640/660 are both valid. Real requirement: NOT
+# world-readable (last octal digit 0) so other OS users can't read DB creds.
 CONFIG_PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
-[ "$CONFIG_PERMS" = "640" ] && pass "Config permissions: 640" || warn "Config permissions: ${CONFIG_PERMS:-N/A} (expected 640)"
+CONFIG_OWNER=$(ssh ubuntu@"$SERVER_IP" "stat -c '%U' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
+if [ -n "$CONFIG_PERMS" ] && [ "${CONFIG_PERMS: -1}" = "0" ]; then
+  [ "$CONFIG_OWNER" = "www-data" ] && pass "Config permissions: $CONFIG_PERMS ($CONFIG_OWNER)" || warn "Config owner: $CONFIG_OWNER (expected www-data)"
+else
+  warn "Config permissions: ${CONFIG_PERMS:-N/A} (expected 640/660, not world-readable)"
+fi
 ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && pass "Assets exists" || fail "Assets missing"
 
 # PHP error log check

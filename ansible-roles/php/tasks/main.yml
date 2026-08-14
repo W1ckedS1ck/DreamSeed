@@ -4,7 +4,10 @@
   ansible.builtin.template:
     src: www.conf.j2
     dest: "/etc/php/{{ php_version }}/fpm/pool.d/www.conf"
-    mode: "0644"
+    owner: root
+    group: www-data
+    mode: "0640"
+  no_log: true
   notify: Restart PHP-FPM
 
 - name: Configure PHP memory limits

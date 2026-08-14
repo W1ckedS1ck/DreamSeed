@@ -22,9 +22,6 @@ chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
 set -e
 hostnamectl set-hostname dreamseed-${environment}
-%{if ubuntu_pro_token != ""~}
-pro attach ${ubuntu_pro_token} 2>/dev/null || true
-%{endif~}
 
 sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 systemctl reload ssh || true

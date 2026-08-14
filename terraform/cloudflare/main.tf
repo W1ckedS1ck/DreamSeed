@@ -42,6 +42,7 @@ resource "cloudflare_ruleset" "waf" {
   }]
 
   lifecycle {
+    prevent_destroy = true
     precondition {
       condition     = local.cf_managed_free_ruleset_id != ""
       error_message = "Cloudflare Managed Free Ruleset not found — WAF would deploy as no-op with empty ID. Aborting."
@@ -82,6 +83,10 @@ resource "cloudflare_ruleset" "rate_limit" {
     description = "Rate limit /manager/ — 20 req/10s, block 10s (Free plan minimum; primary defense is fail2ban modx-admin jail: 25 failures → 1h ban)"
     enabled     = true
   }]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "cloudflare_ruleset" "cache" {
@@ -104,6 +109,10 @@ resource "cloudflare_ruleset" "cache" {
     description = "Cache: all except admin and logged-in users"
     enabled     = true
   }]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # email_obfuscation disabled manually via Cloudflare Dashboard

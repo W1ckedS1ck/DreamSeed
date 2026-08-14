@@ -40,7 +40,6 @@ No modules.
 | <a name="input_server_type"></a> [server\_type](#input\_server\_type) | Hetzner server type (cx23, cx33, etc.) | `string` | `"cx23"` | no |
 | <a name="input_ssh_key_name"></a> [ssh\_key\_name](#input\_ssh\_key\_name) | Name of an existing SSH key in Hetzner Cloud. Empty = create from ssh\_public\_key | `string` | `""` | no |
 | <a name="input_ssh_public_key"></a> [ssh\_public\_key](#input\_ssh\_public\_key) | Public key content (used when ssh\_key\_name is empty) | `string` | `""` | no |
-| <a name="input_ubuntu_pro_token"></a> [ubuntu\_pro\_token](#input\_ubuntu\_pro\_token) | Ubuntu Pro token for ESM (auto-attach on first boot) | `string` | `""` | no |
 
 ## Outputs
 

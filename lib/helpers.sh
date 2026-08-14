@@ -1,5 +1,4 @@
 # Shared helper functions for deploy.sh
-# TODO: tech-debt — inline python3 -c (7 uses), replace with jq
 # Sourced by deploy.sh — do not execute directly.
 # shellcheck shell=bash
 
@@ -53,11 +52,15 @@ cleanup() {
         fi
         rm -rf "$DEPLOY_VARS_TMP"
     fi
-    [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
-    [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
-    [[ -n "${TF_STATE_BACKUP_TMP:-}" && -f "${TF_STATE_BACKUP_TMP:-}" ]] && rm -f "$TF_STATE_BACKUP_TMP"
-    [[ -n "${TF_VARS_FILE:-}" && -f "${TF_VARS_FILE:-}" ]] && rm -f "$TF_VARS_FILE"
-    [[ -n "${LOCK_FILE:-}" && "$LOCK_ACQUIRED" == "true" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
+    if [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]]; then
+        if command -v shred &>/dev/null; then
+            shred -u "$ENV_DECRYPTED_TMP" 2>/dev/null || true
+        else
+            rm -f "$ENV_DECRYPTED_TMP"
+        fi
+    fi
+    [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT" || true
+    [[ -n "${TF_STATE_BACKUP_TMP:-}" && -f "${TF_STATE_BACKUP_TMP:-}" ]] && rm -f "$TF_STATE_BACKUP_TMP" || true
 }
 
 write_deploy_history() {
@@ -84,24 +87,23 @@ rotate_logs() {
 
 _cfcurl() { curl -s --connect-timeout 5 --max-time 15 "$@"; }
 
-# Resolve Cloudflare zone ID from domain.
-# For apex domains (dreamseed.online) use domain as-is.
-# For subdomains (aws.vitalikuts.online) strip first component.
+# Resolve Cloudflare zone ID from a (sub)domain by walking labels down to the
+# registrable zone, e.g. ssh.aws.vitalikuts.online → vitalikuts.online.
+# Works for any nesting depth; apex domains resolve on the first attempt.
 _cf_zone_id() {
     local domain="$1"
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare: CLOUDFLARE_API_TOKEN not set"; return 1; }
     local api_base="https://api.cloudflare.com/client/v4"
-    local dot_count="${domain//[^.]}"
-    local zone_lookup="$domain"
-    [[ ${#dot_count} -ge 2 ]] && zone_lookup="${domain#*.}"
-    _cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "$api_base/zones?name=$zone_lookup" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-zones=d.get('result',[])
-if zones:
-    print(zones[0]['id'])
-" 2>/dev/null || { log "Cloudflare: no zone found for $domain"; return 1; }
+    local candidate="$domain"
+    local zone_id=""
+    while [[ "$candidate" == *.* ]]; do
+        zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$api_base/zones?name=$candidate" | jq -r '.result[0].id // ""' 2>/dev/null) || zone_id=""
+        [[ -n "$zone_id" ]] && { echo "$zone_id"; return 0; }
+        candidate="${candidate#*.}"
+    done
+    log "Cloudflare: no zone found for $domain"
+    return 1
 }
 
 update_cloudflare_dns() {
@@ -109,7 +111,7 @@ update_cloudflare_dns() {
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS: skip (token not set)"; return 0; }
     local api_base="https://api.cloudflare.com/client/v4"
     local zone_id
-    zone_id=$(_cf_zone_id "$domain") || return 0
+    zone_id=$(_cf_zone_id "$domain") || return 1
     local base="$api_base/zones/$zone_id/dns_records"
     local type="A"
 
@@ -117,52 +119,54 @@ update_cloudflare_dns() {
     existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "$base?type=$type&name=$domain" 2>/dev/null || true)
 
-    # Single Python pass: parse existing records → count, id, old_ip
-    IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-results = d.get('result', [])
-c = len(results)
-if c:
-    print(f'{c}|{results[0][\"id\"]}|{results[0][\"content\"]}')
-else:
-    print('0||')
-" 2>/dev/null) || { count=0; record_id=; old_ip=; }
+    # Single jq pass: parse existing records → count, id, old_ip
+    IFS='|' read -r count record_id old_ip < <(echo "$existing" | jq -r '.result | length as $c | "\($c)|\(. [0].id // "")|\(. [0].content // "")"' 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
     local ttl="${CLOUDFLARE_DNS_TTL:-120}"
     local dns_body
-    dns_body=$(printf '{"type":"%s","name":"%s","content":"%s","ttl":%s,"proxied":true}' \
-        "$type" "$domain" "$ip" "$ttl") || dns_body=""
+    # Build JSON via jq (not printf) — escapes special chars in domain/ip and
+    # validates ttl as a number (errors out if non-numeric, preventing injection).
+    dns_body=$(jq -nc --arg type "$type" --arg name "$domain" --arg content "$ip" \
+        --argjson ttl "$ttl" --argjson proxied true \
+        '{type:$type,name:$name,content:$content,ttl:$ttl,proxied:$proxied}') || {
+        log "Cloudflare DNS: invalid ttl '$ttl' (must be a number)"
+        echo "  ✗ Cloudflare DNS: invalid ttl '$ttl' (must be a number)" >&2
+        return 1
+    }
 
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
         if _cfcurl --retry 1 --retry-delay 3 -X PUT "$base/$record_id" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+            -d "$dns_body" | jq -e '.success' >/dev/null 2>&1; then
             log "Cloudflare DNS: $domain $old_ip → $ip"
             echo "  ✓ Cloudflare DNS: $domain → $ip"
+            return 0
         else
             log "Cloudflare DNS: UPDATE FAILED for $domain"
             echo "  ✗ Cloudflare DNS: update failed (check token/permissions)"
+            return 1
         fi
     else
         if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$dns_body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+            -d "$dns_body" | jq -e '.success' >/dev/null 2>&1; then
             log "Cloudflare DNS: $domain → $ip (created)"
             echo "  ✓ Cloudflare DNS: $domain → $ip"
+            return 0
         else
             log "Cloudflare DNS: CREATE FAILED for $domain"
             echo "  ✗ Cloudflare DNS: create failed (check token/permissions)"
+            return 1
         fi
     fi
 }
 
 delete_cloudflare_dns() {
     local domain="$1"
-    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS cleanup: skip (token not set)"; return 0; }
+    [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare DNS cleanup: skip (token not set)"; echo "  — Cloudflare DNS: skipped (token not set)"; return 0; }
     local api_base="https://api.cloudflare.com/client/v4"
     local zone_id
     zone_id=$(_cf_zone_id "$domain") || return 0
@@ -173,19 +177,13 @@ delete_cloudflare_dns() {
         "$base?type=A&name=$domain" 2>/dev/null || true)
 
     local record_id
-    record_id=$(echo "$existing" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-results = d.get('result', [])
-if results:
-    print(results[0]['id'])
-" 2>/dev/null) || record_id=""
+    record_id=$(echo "$existing" | jq -r '.result[0].id // ""' 2>/dev/null) || record_id=""
 
-    [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; return 0; }
+    [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; echo "  — Cloudflare DNS: no A record found"; return 0; }
 
     if _cfcurl --retry 1 --retry-delay 3 -X DELETE "$base/$record_id" \
         -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        -H "Content-Type: application/json" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else 1)" 2>/dev/null; then
+        -H "Content-Type: application/json" | jq -e '.success' >/dev/null 2>&1; then
         log "Cloudflare DNS: deleted A record for $domain"
         echo "  ✓ Cloudflare DNS: deleted $domain"
     else
@@ -199,25 +197,25 @@ update_cloudflare_dns_direct() {
     local subdomain="$1" ip="$2"
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare direct DNS: skip (token not set)"; return 0; }
     local zone_id
-    zone_id=$(_cf_zone_id "$subdomain") || return 0
+    zone_id=$(_cf_zone_id "$subdomain") || return 1
     local base="https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records"
     local ttl="${CLOUDFLARE_DNS_TTL:-120}"
 
     local existing
     existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?type=A&name=$subdomain" 2>/dev/null || true)
 
-    IFS='|' read -r count record_id old_ip < <(echo "$existing" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-results = d.get('result', [])
-c = len(results)
-if c: print(f'{c}|{results[0][\"id\"]}|{results[0][\"content\"]}')
-else: print('0||')
-" 2>/dev/null) || { count=0; record_id=; old_ip=; }
+    IFS='|' read -r count record_id old_ip < <(echo "$existing" | jq -r '.result | length as $c | "\($c)|\(. [0].id // "")|\(. [0].content // "")"' 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
     local dns_body
-    dns_body=$(printf '{"type":"A","name":"%s","content":"%s","ttl":%s,"proxied":false}' \
-        "$subdomain" "$ip" "$ttl") || dns_body=""
+    # Build JSON via jq (not printf) — escapes special chars in subdomain/ip and
+    # validates ttl as a number (errors out if non-numeric, preventing injection).
+    dns_body=$(jq -nc --arg name "$subdomain" --arg content "$ip" \
+        --argjson ttl "$ttl" --argjson proxied false \
+        '{type:"A",name:$name,content:$content,ttl:$ttl,proxied:$proxied}') || {
+        log "Cloudflare direct DNS: invalid ttl '$ttl' (must be a number)"
+        echo "  ⚠ SSH DNS: invalid ttl '$ttl' (must be a number)" >&2
+        return 1
+    }
 
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare direct DNS: $subdomain → $ip (unchanged)"; return 0; }
@@ -227,8 +225,11 @@ else: print('0||')
             -d "$dns_body" > /dev/null 2>&1; then
             log "Cloudflare direct DNS: $subdomain → $ip"
             echo "  ✓ SSH DNS: $subdomain → $ip"
+            return 0
         else
             log "Cloudflare direct DNS: UPDATE FAILED for $subdomain"
+            echo "  ⚠ SSH DNS: update failed (check token/permissions)"
+            return 1
         fi
     else
         if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
@@ -237,8 +238,11 @@ else: print('0||')
             -d "$dns_body" > /dev/null 2>&1; then
             log "Cloudflare direct DNS: $subdomain → $ip (created)"
             echo "  ✓ SSH DNS: $subdomain → $ip"
+            return 0
         else
             log "Cloudflare direct DNS: CREATE FAILED for $subdomain"
+            echo "  ⚠ SSH DNS: $subdomain create failed (check token/permissions)"
+            return 1
         fi
     fi
 }

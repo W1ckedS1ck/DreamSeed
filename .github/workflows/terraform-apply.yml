@@ -76,12 +76,10 @@ jobs:
               write_env "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}"
               write_env "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}"
               write_env "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}"
-              write_env "TF_VAR_elastic_ip_allocation_id=${{ secrets.PROD_EIP }}"
             else
               write_env "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}"
               write_env "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}"
               write_env "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}"
-              write_env "TF_VAR_elastic_ip_allocation_id=${{ secrets.DEV_AWS_EIP }}"
             fi
             write_env "TF_VAR_environment=${{ inputs.workspace }}"
           fi
@@ -119,33 +117,6 @@ jobs:
           terraform state rm hcloud_ssh_key.ci_key 2>/dev/null || true
           terraform state rm hcloud_ssh_key.ci_key[0] 2>/dev/null || true
           echo "Stale resources removed from state"
-
-      - name: Delete existing Cloudflare rate limit ruleset (prevents 'already exists' error)
-        if: inputs.provider == 'cloudflare' && inputs.mode == 'apply'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          DOMAIN="${TF_VAR_domain}"
-          ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['result'][0]['id'])" 2>/dev/null || true)
-          RULESET_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-            python3 -c "
-          import json,sys
-          d=json.load(sys.stdin)
-          for rs in d.get('result', []):
-              if rs.get('phase') == 'http_ratelimit':
-                  print(rs['id'])
-          " 2>/dev/null)
-          if [[ -n "$RULESET_ID" ]]; then
-            echo "Deleting existing rate limit ruleset: $RULESET_ID"
-            curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/$RULESET_ID" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | \
-              python3 -c "import json,sys; d=json.load(sys.stdin); print('Result:', 'OK' if d.get('success') else 'FAIL')" 2>/dev/null || true
-          else
-            echo "No existing rate limit ruleset — nothing to delete"
-          fi
 
       - name: Terraform ${{ inputs.mode }}
         working-directory: ${{ env.TF_DIR }}

@@ -1,45 +1,135 @@
 # Environment variable handling for deploy.sh
-# TODO: tech-debt — inline python3 -c (2 uses), replace with jq
 # shellcheck shell=bash
 # Sourced by deploy.sh — do not execute directly.
 
-validate_env_file() {
-    local f="$1" n=0 quote=
+# Parse a .env file safely: validates format, strips quotes/comments,
+# expands $HOME / ${HOME} / $UPPERCASE_VAR, and exports variables —
+# WITHOUT executing the file as shell (no `source`). This prevents RCE
+# via shell metacharacters in env values (e.g. `DB_PASS=foo; rm -rf ~/`).
+#
+# Supports:
+#   - Multi-line quoted values (KEY="line1\nline2")
+#   - Inline comments after values (KEY="val"  # comment)
+#   - $HOME / ${HOME} / $UPPERCASE_VAR expansion (no RCE — indirect expansion only)
+#
+# Rejects:
+#   - Command substitution: $() and backticks (defense-in-depth)
+#   - Dangerous variable names: PATH, IFS, LD_PRELOAD, SHELL, etc.
+#   - Lines not matching KEY=VALUE format
+parse_env_file() {
+    local f="$1" n=0 quote='' line key val
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
-        echo "Error: File '$f' is ansible-vault encrypted. Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
-        exit 1
+        echo "Error: File '$f' is ansible-vault encrypted." >&2
+        echo "  Decrypt with: ansible-vault decrypt '$f' --vault-password-file ~/.vault_pass_dreamseed" >&2
+        echo "  Or for check/dry-run only: export DRY_RUN=true / CHECK_MODE=true and skip vault" >&2
+        return 1
     fi
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((n++)) || true
+        # Skip empty / comment lines
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
-        # Inside multi-line quoted value — skip until closing quote
+        # Inside multi-line quoted value — accumulate until closing quote
         if [[ -n "$quote" ]]; then
-            [[ "$line" == *"$quote" ]] && quote=
+            if [[ "$line" == *"$quote"* ]]; then
+                # Closing quote found: take everything before it, discard the rest (inline comment)
+                val+=$'\n'"${line%%"$quote"*}"
+                # Single-quoted values are literal (no $VAR expansion)
+                local no_expand=""
+                [[ "$quote" == "'" ]] && no_expand="1"
+                _env_export "$f" "$n" "$key" "$val" "$no_expand" || return 1
+                key=""; val=""; quote=""
+            else
+                val+=$'\n'"$line"
+            fi
             continue
         fi
 
-        if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-            local val="${line#*=}"
-            # Detect opening quote without matching closing quote → multi-line value
-            if [[ "$val" =~ ^\"(.*)$ ]] && [[ ! "$val" =~ ^\"(.*)\"$ ]]; then
-                quote='"'
-            elif [[ "$val" =~ ^\'(.*)$ ]] && [[ ! "$val" =~ ^\'(.*)\'$ ]]; then
-                quote="'"
-            fi
-            if [[ "$val" == *'$('* || "$val" == *'`'* || "$val" == *'${'* ]]; then
-                echo "Error: code injection detected in $f:$n: $line" >&2
-                exit 1
-            fi
-        else
-            echo "Invalid env format at $f:$n: $line" >&2; exit 1
+        # Strip optional leading "export "
+        line="${line#"export "}"
+
+        # Must be KEY=VALUE
+        if [[ ! "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            echo "Invalid env format at $f:$n: '${line:0:24}…' (truncated)" >&2
+            return 1
         fi
+        key="${BASH_REMATCH[1]}"
+        val="${BASH_REMATCH[2]}"
+
+        # Multi-line quoted value: opening quote without matching close on same line.
+        # Trailing whitespace/comments after the closing quote are allowed.
+        if [[ "$val" =~ ^\"(.*)$ && ! "$val" =~ ^\".*\"[[:space:]]*(#.*)?$ ]]; then
+            quote='"'; val="${val#\"}"
+            continue
+        elif [[ "$val" =~ ^\'(.*)$ && ! "$val" =~ ^\'.*\'[[:space:]]*(#.*)?$ ]]; then
+            quote="'"; val="${val#\'}"
+            continue
+        fi
+
+        # Single-line: strip surrounding quotes (single layer) + inline comment after closing quote.
+        # Trailing whitespace after the closing quote is allowed.
+        local no_expand=""
+        if [[ "$val" =~ ^\"(.*)\"[[:space:]]*(#.*)?$ ]]; then
+            val="${BASH_REMATCH[1]}"
+        elif [[ "$val" =~ ^\'(.*)\'[[:space:]]*(#.*)?$ ]]; then
+            val="${BASH_REMATCH[1]}"
+            no_expand="1"  # Single-quoted values are literal (no $VAR expansion)
+        else
+            # Unquoted: strip inline comment (whitespace + #, but not # without preceding whitespace)
+            val="${val%%[[:space:]]#*}"
+            # Strip trailing whitespace left after comment removal (or trailing whitespace in general)
+            val="${val%"${val##*[![:space:]]}"}"
+        fi
+
+        _env_export "$f" "$n" "$key" "$val" "$no_expand" || return 1
     done < "$f"
+
+    if [[ -n "$quote" ]]; then
+        echo "Error: unterminated quoted value for '$key' in $f (reached EOF)" >&2
+        return 1
+    fi
     return 0
 }
 
+# Export a single parsed env var with safety checks.
+# Args: file line_num key value [no_expand]
+# When no_expand is non-empty, $VAR references are kept literal (single-quoted values).
+_env_export() {
+    local f="$1" n="$2" key="$3" val="$4" no_expand="${5:-}"
+    # Block dangerous variable names that could hijack shell behavior
+    case "$key" in
+        PATH|IFS|LD_PRELOAD|LD_LIBRARY_PATH|SHELL|SHELLOPTS|BASHOPTS|BASH_ENV|ENV|PS1|PS2|PS3|PS4|TMPDIR|USER|HOME|UID|GID|SHLVL|PPID|BASH_VERSION|BASH_SUBSHELL)
+            echo "Error: blocked variable name '$key' in $f:$n" >&2
+            return 1
+            ;;
+    esac
+    # Reject command substitution patterns (defense-in-depth — export without
+    # eval is safe, but block to prevent regressions if eval is ever introduced)
+    if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
+        echo "Error: command substitution detected in $f:$n (key '$key')" >&2
+        return 1
+    fi
+    # Expand $HOME, ${HOME}, and $UPPERCASE_VAR references.
+    # Only uppercase variable names are expanded — no RCE vector (indirect expansion, not eval).
+    # Skipped for single-quoted values (no_expand=1) to match bash semantics.
+    if [[ -z "$no_expand" ]]; then
+        while [[ "$val" =~ \$\{?([A-Z_][A-Z0-9_]*)\}? ]]; do
+            local varname="${BASH_REMATCH[1]}"
+            local varval="${!varname:-}"
+            val="${val//\$\{$varname\}/$varval}"
+            val="${val//\$$varname/$varval}"
+        done
+    fi
+    export "$key=$val"
+}
+
 resolve_env_file() {
+    # Sets ENV_SRC (path to source) and, for vault files, ENV_DECRYPTED_TMP
+    # (path to the decrypted temp copy). Call WITHOUT command substitution —
+    # results are propagated via globals so cleanup() in helpers.sh can find
+    # the temp file and shred it on exit.
     local f="$1"
+    ENV_SRC=""
     [[ ! -f "$f" ]] && { echo "Error: $f not found" >&2; exit 1; }
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         local pw="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
@@ -49,9 +139,9 @@ resolve_env_file() {
         ANSIBLE_VAULT_PASSWORD_FILE="$pw" ansible-vault view "$f" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
         [[ -s "$tmp" ]] || { echo "Error: vault decrypted file is empty" >&2; exit 1; }
         ENV_DECRYPTED_TMP="$tmp"
-        printf '%s' "$tmp"
+        ENV_SRC="$tmp"
     else
-        printf '%s' "$f"
+        ENV_SRC="$f"
     fi
 }
 
@@ -59,12 +149,11 @@ apply_target_vars() {
     local pfx="$TARGET_PREFIX"
     if [[ "$TF_PROVIDER" == "aws" ]]; then
         local v_key="${pfx}_ACCESS_KEY" v_sec="${pfx}_SECRET_KEY"
-        local v_reg="${pfx}_REGION" v_eip="${pfx}_EIP"
+        local v_reg="${pfx}_REGION"
         AWS_ACCESS_KEY="${!v_key:-}"
         AWS_SECRET_KEY="${!v_sec:-}"
         AWS_REGION="${!v_reg:-us-west-1}"
-        AWS_EIP_ALLOCATION_ID="${!v_eip:-}"
-        export AWS_ACCESS_KEY AWS_SECRET_KEY AWS_REGION AWS_EIP_ALLOCATION_ID
+        export AWS_ACCESS_KEY AWS_SECRET_KEY AWS_REGION
     fi
     if [[ "$TF_PROVIDER" == "hetzner" ]]; then
         local v_token="${pfx}_HCLOUD_TOKEN"
@@ -86,25 +175,27 @@ apply_target_vars() {
 }
 
 export_tf_env() {
-    [[ -n "${UBUNTU_PRO_TOKEN:-}" ]] && export TF_VAR_ubuntu_pro_token="$UBUNTU_PRO_TOKEN"
     [[ "$TF_PROVIDER" == "aws" ]] && {
         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
         export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
         export AWS_DEFAULT_REGION="$AWS_REGION"
         [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="$AWS_REGION"
-        [[ -n "${AWS_EIP_ALLOCATION_ID:-}" ]] && export TF_VAR_disable_auto_public_ip="true"
+        # ssh_public_key_path for aws_key_pair.deploy — passed via TF_VAR_ instead
+        # of deploy.auto.tfvars to avoid shared-file race between workspaces.
+        # /dev/null fallback for destroy (file() is evaluated at plan time even
+        # for destroy; /dev/null returns empty content, safe for resource deletion).
+        export TF_VAR_ssh_public_key_path="${SSH_PUBLIC_KEY_PATH:-/dev/null}"
         # Build list of additional SSH keys from ADDITIONAL_SSH_KEYS env var
-        # (CI deploy key is handled separately via aws_key_pair.deploy)
         local ssh_keys
-        ssh_keys="$(python3 -c "
-import os, json
-additional = os.environ.get('ADDITIONAL_SSH_KEYS', '')
-if additional:
-    keys = [k.strip() for k in additional.strip().split('\n') if k.strip()]
-else:
-    keys = []
-print(json.dumps(keys))
-")" || { echo "Failed to build SSH keys list" >&2; exit 1; }
+        ssh_keys="$(
+          local arr=()
+          while IFS= read -r k; do [[ -n "${k// /}" ]] && arr+=("$k"); done <<< "${ADDITIONAL_SSH_KEYS:-}"
+          if [[ ${#arr[@]} -gt 0 ]]; then
+            printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
+          else
+            jq -n '[]'
+          fi
+        )" || { echo "Failed to build SSH keys list" >&2; exit 1; }
         export TF_VAR_additional_ssh_keys="$ssh_keys"
     }
     [[ "$TF_PROVIDER" == "hetzner" ]] && {
@@ -116,23 +207,28 @@ print(json.dumps(keys))
         [[ -n "${HETZNER_ENABLE_PRIMARY_IP:-}" ]] && export TF_VAR_enable_primary_ip="$HETZNER_ENABLE_PRIMARY_IP"
         # Build list of additional SSH keys: deploy key + ADDITIONAL_SSH_KEYS env var
         local ssh_keys
-        ssh_keys="$(python3 -c "
-import os, json
-keys = []
-pk_path = os.environ.get('SSH_PUBLIC_KEY_PATH', '')
-if pk_path:
-    pk_path = os.path.expanduser(pk_path)
-    if os.path.isfile(pk_path):
-        with open(pk_path) as f:
-            keys.append(f.read().strip())
-additional = os.environ.get('ADDITIONAL_SSH_KEYS', '')
-if additional:
-    for k in additional.strip().split('\n'):
-        k = k.strip()
-        if k and k not in keys:
-            keys.append(k)
-print(json.dumps(keys))
-")" || { echo "Failed to build SSH keys list" >&2; exit 1; }
+        ssh_keys="$(
+          local arr=()
+          local pk_path="${SSH_PUBLIC_KEY_PATH:-}"
+          if [[ -n "$pk_path" ]]; then
+            pk_path="${pk_path/#\~/$HOME}"
+            if [[ -r "$pk_path" ]]; then
+              arr+=("$(<"$pk_path")")
+            fi
+          fi
+          local additional="${ADDITIONAL_SSH_KEYS:-}"
+          if [[ -n "$additional" ]]; then
+            while IFS= read -r k; do
+              k="${k// /}"
+              [[ -n "$k" ]] && arr+=("$k")
+            done <<< "$additional"
+          fi
+          if [[ ${#arr[@]} -gt 0 ]]; then
+            printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
+          else
+            jq -n '[]'
+          fi
+        )" || { echo "Failed to build SSH keys list" >&2; exit 1; }
         export TF_VAR_additional_ssh_keys="$ssh_keys"
         # Also export ssh_public_key for TF to create CI key if needed
         # NOTE: TF_VAR_additional_ssh_keys is already set above (includes deploy key + ADDITIONAL_SSH_KEYS)

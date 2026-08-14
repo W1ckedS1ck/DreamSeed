@@ -7,7 +7,17 @@
     path: "{{ secrets_dir }}/ssl/letsencrypt/live/{{ domain }}/fullchain.pem"
   register: ssl_local_backup
 
-- name: Restore SSL certificates from local backup
+- name: Check if certificate already exists on server
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: ssl_cert_file
+
+# Restore from local backup ONLY when the server has no cert for this domain
+# (e.g. fresh server after crash). Never overwrite a live cert that certbot
+# may have re-issued since the backup was taken — that would roll the site
+# back to a stale certificate on every deploy.
+- name: Restore SSL certificates from local backup (server has no cert)
   become: true
   ansible.builtin.copy:
     src: "{{ secrets_dir }}/ssl/letsencrypt/"
@@ -16,7 +26,9 @@
     group: ssl-cert
     mode: "0640"
     directory_mode: "0750"
-  when: ssl_local_backup.stat.exists
+  when:
+    - ssl_local_backup.stat.exists
+    - not ssl_cert_file.stat.exists
 
 - name: Secure archive and live directories (traversable)
   become: true
@@ -42,15 +54,9 @@
 
 - name: Set ssl_restored fact
   ansible.builtin.set_fact:
-    ssl_restored: "{{ ssl_local_backup.stat.exists }}"
-    ssl_has_cert: "{{ ssl_local_backup.stat.exists }}"
-  when: ssl_local_backup.stat.exists
-
-- name: Check if certificate already exists
-  become: true
-  ansible.builtin.stat:
-    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
-  register: ssl_cert_file
+    ssl_restored: true
+    ssl_has_cert: true
+  when: ssl_local_backup.stat.exists and not ssl_cert_file.stat.exists
 
 # --- Certbot DNS Challenge (CloudFlare) ---
 - name: Obtain or skip Let's Encrypt certificate via DNS-01
@@ -80,8 +86,7 @@
         --dns-cloudflare
         --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
         {% if ssl_staging | default(false) %}--staging{% endif %}
-        -d {{ domain }}{% if domain_www | default(false) %}
-        -d www.{{ domain }}{% endif %}
+        -d {{ domain }}
         --non-interactive
         --agree-tos
         -m {{ admin_email }}

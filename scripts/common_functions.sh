@@ -112,17 +112,21 @@ format_name() {
 send_tg() {
     local text="$1"
     local parse_mode="${2:-HTML}"
-    local tg_url="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
+    # Keep the token out of argv (ps aux) — curl reads the URL from a
+    # 0600 temp config file instead of a command-line argument.
+    local tg_cfg tg_url tg_resp err
+    tg_cfg=$(mktemp) || return 0
+    chmod 600 "$tg_cfg"
+    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
     local data=(
         --data-urlencode "chat_id=$TG_CHAT_ID"
         --data-urlencode "text=$text"
         --data-urlencode "parse_mode=$parse_mode"
     )
     [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
-    local tg_resp
-    tg_resp=$(curl -s -m 10 -X POST "$tg_url" "${data[@]}" 2>/dev/null) || true
+    tg_resp=$(curl -s -m 10 -X POST --config "$tg_cfg" "${data[@]}" 2>/dev/null) || true
+    rm -f "$tg_cfg"
     if ! echo "$tg_resp" | jq -e '.ok == true' >/dev/null 2>&1; then
-        local err
         err=$(echo "$tg_resp" | jq -r '.description // "unknown"' 2>/dev/null || echo "unknown")
         echo "WARNING: Telegram send failed: $err" >&2
     fi
@@ -131,7 +135,12 @@ send_tg() {
 ping_heartbeat() {
     local key="${1:-}"
     [[ -z "$key" ]] && return 0
-    curl -fsS -m 10 --retry 3 "https://uptime.betterstack.com/api/v1/heartbeat/$key" > /dev/null 2>&1
+    if curl -fsS -m 10 --retry 3 -o /dev/null "https://uptime.betterstack.com/api/v1/heartbeat/$key"; then
+        return 0
+    else
+        echo "WARNING: Better Stack heartbeat failed (previous heartbeat will expire): $key" >&2
+        return 1
+    fi
 }
 
 rclone_retry() {
@@ -175,6 +184,14 @@ rotate_files() {
             rm -f "${files[i]}"
         done
     fi
+}
+
+# List files matching a glob in a dir, newest first (paths only).
+# Callers pick with `head -N` (latest, or a report list).
+# `|| true` keeps callers safe under `set -euo pipefail` when the dir is
+# missing (find exits 1) — "no backups yet" must not abort the calling script.
+list_backups() {
+    find "$1" -maxdepth 1 -name "$2" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2- || true
 }
 
 export_metric() {

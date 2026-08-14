@@ -11,12 +11,23 @@ export HOME="${HOME:?ERROR: HOME environment variable not set}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common_functions.sh
 source "$SCRIPT_DIR/scripts/common_functions.sh"
-load_env "$SCRIPT_DIR/secrets/.env"
+
+# secrets/.env is ansible-vault encrypted — decrypt to a temp file first.
+_LIST_TMPFILES=()
+trap 'for _f in "${_LIST_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
+ENV_PLAIN=$(mktemp)
+chmod 600 "$ENV_PLAIN"
+_LIST_TMPFILES+=("$ENV_PLAIN")
+ansible-vault view "$SCRIPT_DIR/secrets/.env" --vault-password-file "${HOME}/.vault_pass_dreamseed" > "$ENV_PLAIN" 2>/dev/null || {
+    echo "Error: cannot decrypt secrets/.env" >&2
+    exit 1
+}
+load_env "$ENV_PLAIN"
 
 [[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && { echo "Error: BETTERUPTIME_API_TOKEN not set in secrets/.env"; exit 1; }
 
 API="https://uptime.betterstack.com/api/v2"
-AUTH="Authorization: Bearer $BETTERUPTIME_API_TOKEN"
+bu_auth() { printf 'header = "Authorization: Bearer %s"\n' "$BETTERUPTIME_API_TOKEN"; }
 
 CYAN='\033[0;36m'; NC='\033[0m'
 
@@ -30,10 +41,11 @@ fetch_and_format() {
     local json_tmp py_tmp
     json_tmp=$(mktemp "${HOME:?}/.tmp_bs_json_XXXXXX")
     py_tmp=$(mktemp "${HOME:?}/.tmp_bs_py_XXXXXX")
-    curl -s "$API/$endpoint" -H "$AUTH" > "$json_tmp"
+    _LIST_TMPFILES+=("$json_tmp" "$py_tmp")
+    curl -s "$API/$endpoint" --config <(bu_auth) > "$json_tmp"
 
     cat > "$py_tmp" << 'PYEOF'
-import sys, json
+import sys, json, re
 with open(sys.argv[1]) as f:
     data = json.load(f)
 for item in data.get('data', []):
@@ -77,8 +89,11 @@ for item in data.get('data', []):
         if a.get('on_incident_started'): triggers.append('started')
         if a.get('on_incident_resolved'): triggers.append('resolved')
         if a.get('on_incident_acknowledged'): triggers.append('ack')
+        # Webhook URL may embed secrets (e.g. Telegram bot token) — redact any botXX:token
+        url = a['url']
+        url = re.sub(r'(bot\d+):[A-Za-z0-9_-]+', r'\1:****REDACTED****', url)
         print("  %s" % a['name'])
-        print("    URL:      %s" % a['url'])
+        print("    URL:      %s" % url)
         print("    Trigger:  %s" % a['trigger_type'])
         print("    Events:   %s" % ', '.join(triggers))
         print()
@@ -95,8 +110,6 @@ for item in data.get('data', []):
         print("    Created:  %s" % a['created_at'])
         print()
 PYEOF
-
-    trap 'rm -f "$json_tmp" "$py_tmp"' RETURN
 
     echo -e "${CYAN}${label}${NC}"
     printf "${CYAN}%*s${NC}\n" "${#label}" | tr ' ' '─'

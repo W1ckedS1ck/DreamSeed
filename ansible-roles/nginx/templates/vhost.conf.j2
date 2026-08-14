@@ -1,8 +1,7 @@
 server {
     listen 80;
     listen [::]:80;
-    server_name {{ domain }}
-    {%- if domain_www | default(false) %} www.{{ domain }}{% endif %};
+    server_name {{ domain }};
 
     location /.well-known/acme-challenge/ {
         root {{ web_root }};
