@@ -231,7 +231,10 @@
       "automergeType": "pr",
       "automergeStrategy": "squash",
       "matchPackageNames": [
-        "!VictoriaMetrics/VictoriaMetrics"
+        "!VictoriaMetrics/VictoriaMetrics",
+        "!hashicorp/terraform",
+        "!terraform-linters/tflint",
+        "!rhysd/actionlint"
       ]
     },
     {
