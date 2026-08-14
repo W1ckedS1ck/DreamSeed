@@ -11,7 +11,8 @@
 
 - name: Enable SSL site
   become: true
-  ansible.builtin.command: "a2ensite {{ domain }}-ssl.conf"
+  ansible.builtin.command:
+    argv: ["a2ensite", "{{ domain }}-ssl.conf"]
   register: apache_ssl_ensite_result
   changed_when: "'Enabling' in apache_ssl_ensite_result.stdout"
   notify: Reload Apache HTTP
