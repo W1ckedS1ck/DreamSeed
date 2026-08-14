@@ -11,10 +11,18 @@ export HOME="${HOME:?ERROR: HOME environment variable not set}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common_functions.sh
 source "$SCRIPT_DIR/scripts/common_functions.sh"
-load_env "$SCRIPT_DIR/secrets/.env"
 
+# secrets/.env is ansible-vault encrypted — decrypt to a temp file first.
 _LIST_TMPFILES=()
 trap 'for _f in "${_LIST_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
+ENV_PLAIN=$(mktemp)
+chmod 600 "$ENV_PLAIN"
+_LIST_TMPFILES+=("$ENV_PLAIN")
+ansible-vault view "$SCRIPT_DIR/secrets/.env" --vault-password-file "${HOME}/.vault_pass_dreamseed" > "$ENV_PLAIN" 2>/dev/null || {
+    echo "Error: cannot decrypt secrets/.env" >&2
+    exit 1
+}
+load_env "$ENV_PLAIN"
 
 [[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && { echo "Error: BETTERUPTIME_API_TOKEN not set in secrets/.env"; exit 1; }
 
@@ -37,7 +45,7 @@ fetch_and_format() {
     curl -s "$API/$endpoint" --config <(bu_auth) > "$json_tmp"
 
     cat > "$py_tmp" << 'PYEOF'
-import sys, json
+import sys, json, re
 with open(sys.argv[1]) as f:
     data = json.load(f)
 for item in data.get('data', []):
@@ -81,8 +89,11 @@ for item in data.get('data', []):
         if a.get('on_incident_started'): triggers.append('started')
         if a.get('on_incident_resolved'): triggers.append('resolved')
         if a.get('on_incident_acknowledged'): triggers.append('ack')
+        # Webhook URL may embed secrets (e.g. Telegram bot token) — redact any botXX:token
+        url = a['url']
+        url = re.sub(r'(bot\d+):[A-Za-z0-9_-]+', r'\1:****REDACTED****', url)
         print("  %s" % a['name'])
-        print("    URL:      %s" % a['url'])
+        print("    URL:      %s" % url)
         print("    Trigger:  %s" % a['trigger_type'])
         print("    Events:   %s" % ', '.join(triggers))
         print()
