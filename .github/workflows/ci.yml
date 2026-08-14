@@ -132,10 +132,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: 🚀 Start
         run: echo "Actionlint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Install shellcheck for inline run scripts
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
       - name: Run actionlint
         uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
         with:
-          args: -shellcheck=
+          args: -shellcheck=/usr/bin/shellcheck
 
   pre-commit:
     name: Pre-commit

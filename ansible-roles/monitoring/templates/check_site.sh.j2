@@ -14,7 +14,7 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     fi
 
     # MODX core check
-    if [ -f {{ web_root }}/manager/config.core.php ] && [ -f {{ web_root }}/core/model/modx/modx.class.php ]; then
+    if [ -f "{{ web_root }}/manager/config.core.php" ] && [ -f "{{ web_root }}/core/model/modx/modx.class.php" ]; then
         echo "modx_core_ok{instance=\"{{ domain }}\"} 1"
     else
         echo "modx_core_ok{instance=\"{{ domain }}\"} 0"
@@ -103,7 +103,7 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         # 4. DB write probe — INSERT test order + immediately delete
         #    Verifies MySQL can create/delete rows. Checks ms2_tables_ok first.
         if [ "$ms2_tables" -ge 5 ] 2>/dev/null; then
-            test_order_id=$(mysql --database={{ db_name }} --socket=/run/mysqld/mysqld.sock -Nse "
+            test_order_id=$(mysql --database='{{ db_name }}' --socket=/run/mysqld/mysqld.sock -Nse "
                 START TRANSACTION;
                 INSERT INTO {{ db_prefix | replace("'", "''") }}ms2_orders (context, user_id, createdon) VALUES ('test', 0, NOW());
                 SELECT @id := LAST_INSERT_ID();

@@ -88,7 +88,7 @@ terraform_destroy() {
         else
             # Try to remove protection from server resource if it still exists
             local server_id pip_id
-            server_id=$(_tf state show 'hcloud_server.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
+            server_id=$(_tf state show 'hcloud_server.main' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
             pip_id=$(_tf state show 'hcloud_primary_ip.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
             [[ -n "$server_id" ]] && curl -sf -X POST \
                 --config <(_bearer_auth "$hcloud_token") \
