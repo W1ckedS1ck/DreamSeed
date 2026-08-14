@@ -497,9 +497,22 @@ for _p in 9100 9113 9121 9104; do
 done
 
 # Custom metrics (pushed directly to VictoriaMetrics, not via node_exporter)
-_backup_metric=$(curl -s --max-time 5 'http://127.0.0.1:8428/api/v1/query?query=backup_last_success_timestamp' 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['data']['result']))" 2>/dev/null || echo "0")
-_upload_metric=$(curl -s --max-time 5 'http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp' 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['data']['result']))" 2>/dev/null || echo "0")
-echo "    Backup metric in VictoriaMetrics: $_backup_metric"
+# NOTE: instant queries (api/v1/query) can NEVER see these — they're written once per
+# hour, and VM's instant query only returns samples within -search.latencyOffset (30s)
+# and -search.maxStaleness (5m). Must use query_range over the write interval (2h).
+_vm_metric() {
+  local q="$1" now
+  now=$(date +%s)
+  curl -s --max-time 5 "http://127.0.0.1:8428/api/v1/query_range?query=$q&start=$((now-7200))&end=$now&step=300" 2>/dev/null \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); n=sum(1 for r in d['data']['result'] for _ in r.get('values',[])); print(n)" 2>/dev/null || echo "0"
+}
+_backup_metric=$(_vm_metric 'backup_last_success_timestamp')
+_upload_metric=$(_vm_metric 'upload_last_success_timestamp')
+if [[ "$_backup_metric" -gt 0 ]]; then
+  ok "Backup metric in VictoriaMetrics (last 2h): $_backup_metric sample(s)" "backup_metric"
+else
+  warn "Backup metric missing in VictoriaMetrics (no successful backup in last 2h?)" "backup_metric"
+fi
 echo "    Upload metric in VictoriaMetrics: $_upload_metric"
 
 # ── 12. Grafana ────────────────────────────────────────────────────────────────
