@@ -146,9 +146,9 @@ Key fields:
 
 ### Design rules (from CLAUDE.md)
 
-- **`noDataState: Alerting`** — only for critical services with always-on metrics (MySQL, Nginx, PHP-FPM, Site, VM, Backup Cron)
-- **`noDataState: OK`** — for push/probe metrics (admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify)
-- **`for:`** — scraped 15s → 2m, pushed 1m → 10m, probes 15m → 6m, backup-verify 24h → 5m
+- **`noDataState: Alerting`** — only for critical services with always-on metrics (MySQL, Nginx/Apache, PHP-FPM, Site, VM, Redis, check-services-cron)
+- **`noDataState: OK`** — for push/probe metrics (admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify, cron-backup, vmagent)
+- **`for:`** — scraped 2–5m (VM 1m), pushed 2m–1h, probes 6–15m, backup/heartbeat crons 5–10m
 - **`repeat_interval`** — critical: 1h, warning/info: 4h
 
 ### How to add a new alert
@@ -159,8 +159,8 @@ Key fields:
 4. Update the VictoriaMetrics recording rule if needed (`victoria-metrics@.service.j2`)
 5. Bump the alert count in:
    - `ansible/group_vars/all.yml` (if there's a count variable)
-   - `docs/runbook.md` (alert reference table, line ~173)
-   - `docs/architecture.md` (alert rules table, line ~175)
+   - `docs/runbook.md` (alert reference table, line ~143)
+   - `docs/architecture.md` (alert rules table, line ~180)
 6. Deploy: `./deploy.sh <target> -n -i <ip> --no-dns`
 
 ---
@@ -251,7 +251,7 @@ ansible-roles/<name>/
 ### Gotchas (from CLAUDE.md)
 
 - `inject_facts_as_vars = False` — use `{{ ansible_facts['memtotal_mb'] }}`, not `{{ ansible_memtotal_mb }}`
-- `become` is NOT set at playbook level (except 04/05/06) — opt in with `become: true` per task
+- `become` is NOT set at playbook level (all 8 playbooks declare `become: false`) — opt in with `become: true` per task
 - Use `ansible.builtin.` modules, not bare `command:` or `shell:` unless necessary
 - `no_log: true` on any task handling passwords, tokens, keys
 - No collections other than `ansible.mysql` and `ansible.posix`

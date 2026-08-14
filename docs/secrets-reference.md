@@ -16,7 +16,7 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS certbot + auto DNS update) | `deploy.yml`, `test-restore.yml` |
 | `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible) | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml` |
 | `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `test-restore.yml`, `rollback.yml` |
-| `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml` |
+| `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml`, `chatops-deploy.yml`, `docs.yml` |
 | `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
 | `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml` → `rclone_config.yml` |
 | `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml` |
@@ -48,7 +48,6 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 | `SSH_PRIVATE_KEY` | Deploy key (Ansible) | See above |
 | `USER_SSH_PUBLIC_KEY` | Developer's public key → `ADDITIONAL_SSH_KEYS` | `deploy.yml` |
 | `VITALI_SSH_PUBLIC_KEY` | Vitali's public key → `ADDITIONAL_SSH_KEYS` + AWS prod Terraform | `deploy.yml`, `terraform-apply.yml` |
-| `DEV_AWS_SSH_PUBLIC_KEY` | Public key for AWS dev Terraform | `terraform-apply.yml` |
 
 ---
 
@@ -151,3 +150,4 @@ The `gdrive-crypt` remote wraps the base `gdrive:` remote with rclone crypt (AES
 | `INFRACOST_API_KEY` | Infracost API key, not referenced in any workflow |
 | `TESTHETZ_HCLOUD_TOKEN` | Hetzner Cloud token for non-existent `test-bench.yml` |
 | `TESTHETZ_SSH_KEY` | SSH key for non-existent `test-bench.yml` |
+| `DEV_AWS_SSH_PUBLIC_KEY` | Not referenced in any workflow (AWS dev uses `VITALI_SSH_PUBLIC_KEY`) |

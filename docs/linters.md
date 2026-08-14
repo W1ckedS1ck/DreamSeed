@@ -4,7 +4,7 @@
 
 There are 2 layers of linting:
 
-- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` (fast, covers all tools)
+- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --ci` for the full suite (adds tflint, terraform validate, gitleaks, Trivy, secrets audit)
 - **CI on GitHub**: `ci.yml` (full, 8 parallel jobs)
 
 ---
@@ -76,7 +76,7 @@ There are 2 layers of linting:
 
 **Type:** Markdown linter.
 **Catches:** missing blank lines around headings/lists, multiple consecutive blank lines, inline HTML, bare URLs, inconsistent formatting.
-**Config:** `.markdownlint.yml` at repo root.
+**Config:** `markdownlint-cli2.jsonc` at repo root (used by `lint.sh`). `.markdownlint.yml` is a legacy copy kept for the pre-commit hook — keep both in sync.
 
 ### 10. Checkov (IaC Security)
 

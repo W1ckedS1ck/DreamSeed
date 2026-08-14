@@ -22,6 +22,8 @@ Used by: `deploy.sh`, Ansible role `ssl`, Terraform.
 
 ### Global API Key — for admin tasks
 
+> **Note:** manual-only. `CLOUDFLARE_EMAIL` / `CLOUDFLARE_GLOBAL_KEY` are not stored in `secrets/.env` and are not consumed by any code or workflow. Use them ad-hoc from your local shell when the dashboard is unavailable; prefer scoped API tokens in CI.
+
 ```
 CLOUDFLARE_EMAIL      →  X-Auth-Email: <email>
 CLOUDFLARE_GLOBAL_KEY →  X-Auth-Key: <key>

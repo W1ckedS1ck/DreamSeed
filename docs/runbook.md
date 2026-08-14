@@ -3,7 +3,7 @@
 > For **junior support staff**. Covers all alerts from all layers (Grafana, Better Stack, Scripts).
 > All notifications arrive in a single Telegram chat.
 >
-> Last updated: 2026-07-17
+> Last updated: 2026-08-15
 
 ---
 
@@ -230,7 +230,7 @@ sudo mysql -e "SHOW VARIABLES LIKE '%innodb_buffer_pool_size%';"
 ### G3. 🔴 Low Disk Space
 
 **Metric:** Available space on `/` < 10% for 5+ minutes
-**Severity:** Critical (can lead to MySQL crash, failed backups, site down)
+**Severity:** Warning (can lead to MySQL crash, failed backups, site down)
 **Possible causes:** Old backups not rotated, log files too large, unexpected growth
 
 **Diagnose:**
@@ -270,7 +270,7 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
 
   ```bash
   sudo du -sh /var/lib/victoria-metrics/
-  # Retention is 3 months by default
+  # Retention is 3 days by default (vm_retention: 3)
   ```
 
 - **Find unexpected large files:**
@@ -564,8 +564,8 @@ ls /var/www/html/ | head -20
   # List available backups
   ls -lt /home/ubuntu/backups/project/ | head -5
 
-  # Extract latest project backup
-  sudo tar -xzf /home/ubuntu/backups/project/DreamSeed_latest.tar.gz -C /var/www/
+  # Extract latest project backup (names are DreamSeed_<date>.tar.gz — pick the newest)
+  sudo tar -xzf "$(ls -t /home/ubuntu/backups/project/DreamSeed_*.tar.gz | head -1)" -C /var/www/
   sudo chown -R www-data:www-data /var/www/html/
   ```
 
@@ -618,7 +618,7 @@ sudo chmod -R 755 /var/www/html/core/cache/
 ### G10. 🔴 VictoriaMetrics Down
 
 **Metric:** `victoria_up` = 0 (VictoriaMetrics health check failed)
-**Severity:** High — no metrics collected, all Grafana alerts may stop working
+**Severity:** Critical — no metrics collected, all Grafana alerts may stop working
 **Possible causes:** OOM, disk full, VictoriaMetrics crashed
 
 **Diagnose:**
@@ -653,7 +653,7 @@ sudo dmesg | grep -i "oom\|victoria" | tail -5
 
 ### G11. 🔴 Backup Cron Not Running
 
-**Metric:** `cron_last_run_backup` timestamp > 120 minutes old
+**Metric:** `cron_last_run_backup` timestamp > 5 minutes old
 **Severity:** Warning — backups may have stopped
 **Possible causes:** Cron service stopped, script error, server busy, script stuck
 
@@ -735,7 +735,7 @@ curl -s http://127.0.0.1:8428/health
 ### G13. 🔴 SSL Cert Expiring Soon
 
 **Metric:** `ssl_days_remaining` < 7 days
-**Severity:** Warning — certificate about to expire
+**Severity:** Info — certificate about to expire
 **Note:** If using Cloudflare edge SSL (Full/Strict), this alert applies to the origin certificate (LetsEncrypt or self-signed), not Cloudflare's edge cert.
 
 **Diagnose:**
@@ -765,8 +765,8 @@ sudo certbot renew --preferred-challenges dns-01
 
 ### G14. 🔴 Admin Login Failed
 
-**Metric:** `admin_login_ok` = 0 (hourly probe to `/manager/` returned no MODX login page)
-**Severity:** High — admin panel may be down
+**Metric:** `admin_login_ok` = 0 (probe every 15 min to `/manager/` returned no MODX login page)
+**Severity:** Warning — admin panel may be down
 **Possible causes:** MODX core issue, PHP error, .htaccess blocking, session table corruption
 
 **Diagnose:**
@@ -799,8 +799,8 @@ sudo systemctl restart php*-fpm
 
 ### G15. 🔴 MiniShop2 Write Failed
 
-**Metric:** `db_write_ok` = 0 (hourly INSERT+DELETE probe into `modx_ms2_orders` failed)
-**Severity:** High — database write path may be broken
+**Metric:** `db_write_ok` = 0 (probe every 15 min — INSERT+DELETE into `modx_ms2_orders` — failed)
+**Severity:** Warning — database write path may be broken
 **Possible causes:** MySQL permissions changed, table corruption, disk full, foreign key constraint
 
 **Diagnose:**
@@ -868,7 +868,7 @@ sudo tail -30 /var/log/nginx/error.log
 ### G18. 🔴 Database Tables Below Threshold
 
 **Metric:** `database_tables` < 50 tables in `modx_db`
-**Severity:** CRITICAL — DB may be empty or not restored
+**Severity:** Info — DB may be empty or not restored
 **Possible causes:** Restore failed, wrong DB name, tables dropped, backup corrupted
 
 **Diagnose:**
@@ -1192,14 +1192,14 @@ curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online/
 **Diagnose:**
 
 ```bash
-ssh aws "sudo systemctl status grafana-server"
-ssh aws "curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000"
+ssh prod "sudo systemctl status grafana-server"
+ssh prod "curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000"
 ```
 
 **Fix:**
 
 ```bash
-ssh aws "sudo systemctl restart grafana-server"
+ssh prod "sudo systemctl restart grafana-server"
 ```
 
 ---
@@ -1401,7 +1401,7 @@ Look for errors:
   ssh prod "mysqldump modx_db | gzip > /tmp/test.sql.gz"
   ```
 
-**Note:** Previous backups are preserved in `/tmp/pre_restore_*` snapshots if a restore was recently run. After fixing → the next cron run will succeed automatically (hourly at 00).
+**Note:** Previous backups are preserved in `~/.tmp_pre_restore_*` snapshots (hidden dir in `$HOME`, e.g. `~/.tmp_pre_restore_XXXXXX`) if a restore was recently run. After fixing → the next cron run will succeed automatically (hourly at 00).
 
 ---
 
@@ -1492,7 +1492,7 @@ ssh prod "rclone delete gdrive-crypt:DreamSeed/backups/old_file --dry-run 2>&1"
 #    Check if state file is corrupted or locked
 ```
 
-**Note:** Non-prod environments (dev-aws, dev-hetz) also run drift detection but only notify in Telegram. Prod drift also escalates to email if not resolved within 24h.
+**Note:** Non-prod environments (dev-aws, dev-hetz, cloudflare) also run drift detection but only notify in Telegram. Prod drift fails the job and notifies Telegram; there is no separate email escalation.
 
 ---
 
@@ -1563,7 +1563,7 @@ It will:
 
 1. List all available backups from Google Drive
 2. Let you choose project, DB, or both
-3. Create pre-restore snapshots in `/tmp/pre_restore_*` (backup current state before overwrite)
+3. Create pre-restore snapshots in `~/.tmp_pre_restore_*` (backup current state before overwrite)
 4. Stop Nginx/Apache + PHP-FPM
 5. Restore files + DB
 6. Clear MODX cache

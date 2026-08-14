@@ -192,16 +192,16 @@ Better Stack (cloud)
 | MODX Cache Not Writable | warning | modx_cache_ok == 0 | pushed 1m, for: 5m |
 | VictoriaMetrics Down | critical | victoria_up == 0 | scraped 15s, for: 1m |
 | Redis Down | critical | redis_up == 0 | scraped 15s, for: 2m |
-| Backup Cron Not Running | warning | >70 min since last run | heartbeat 1h, for: 10m |
+| Backup Cron Not Running | warning | >5 min since last run | heartbeat 1h, for: 5m |
 | Site Health Check Not Running | warning | >3 min since last run | heartbeat 1m, for: 1m |
 | SSL Cert Expiring | info | <7 days remaining | pushed 1m, for: 1h |
-| Admin Login Failed | warning | admin_login_ok == 0 | probe 15m, for: 6m |
+| Admin Login Failed | warning | admin_login_ok == 0 | probe 15m, for: 15m |
 | MiniShop2 Write Failed | warning | db_write_ok == 0 | probe 15m, for: 6m |
 | Database Tables Below Threshold | info | <50 tables in modx_db | pushed 15m, for: 6m |
 | Backup Verification Failed | warning | backup_verification_ok == 0 | cron 24h, for: 5m |
-| Service Check Not Running | warning | stale >10 min | heartbeat 1m, for: 1m |
-| VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | scraped 15s, for: 2m |
-| Cloud Upload Failed | warning | upload_last_success_timestamp >2h | pushed 1h, for: 1h |
+| Service Check Not Running | warning | stale >10 min | heartbeat 1m, for: 10m |
+| VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | scraped 15s, for: 10m |
+| Cloud Upload Failed | warning | upload_last_success_timestamp >2h | pushed 1h, for: 5m |
 
 ### External Monitoring
 
@@ -263,7 +263,8 @@ Manual dispatch    Deploy                Setup → secrets → deploy.sh / destr
                                           → Telegram
 
 Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
-  daily                                  (3 targets: prod-hetz, dev-aws, dev-hetz)
+  daily                                  (6 targets: prod-hetz, prod, dev-aws,
+                                           dev-hetz, cloudflare, cloudflare-prod)
 
 Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
    manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
@@ -275,7 +276,7 @@ Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
 Bot events         Renovate              Dependency updates (auto PRs)
 
 Issue comment      ChatOps Deploy        Deploy via chat command
-Push / manual      Docs to Wiki          Sync docs/ to GitHub Wiki
+Push / manual      Docs                  Pages site (code map) + wiki sync
 
 ```
 
@@ -286,9 +287,10 @@ Push / manual      Docs to Wiki          Sync docs/ to GitHub Wiki
 ```
 DreamSeed/
 ├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
-├── lib/                   # Modules: env.sh, helpers.sh, terraform.sh, ansible.sh, gen_vars.py
-│   ├── preflight.sh         # Pre-deploy checks (env, SSH key, provider vars)
-│   └── helpers.sh          # _cf_zone_id() — shared Cloudflare zone resolver
+├── lib/                   # Modules: cli.sh, env.sh, helpers.sh, preflight.sh,
+│   │                      # terraform.sh, ansible.sh, stages.sh, provision.sh,
+│   │                      # wait.sh, inventory.sh, playbooks.sh, post.sh, gen_vars.py
+│   └── helpers.sh          # _bearer_auth() + _cf_zone_id() — shared Cloudflare helpers
 ├── .github/
 │   ├── actions/
 │   │   ├── setup-terraform/  # Composite: install tf + plugin cache

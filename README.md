@@ -11,7 +11,7 @@
 ![Ansible](https://img.shields.io/badge/Ansible-14.2.0-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Grafana](https://img.shields.io/badge/Grafana-13.1.1-F46800?logo=grafana)
+![Grafana](https://img.shields.io/badge/Grafana-13.1.3-F46800?logo=grafana)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
@@ -39,7 +39,7 @@
 | Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
 | Uptime coverage | 23 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
 | CI checks per push | 8 parallel jobs (lint → security → validate) |
-| Security score | Lynis 70+/100 (hardened Ubuntu 24.04) |
+| Security | Hardened Ubuntu 24.04 — SSH hardening, 3 fail2ban jails, sysctl/PAM hardening |
 
 ---
 
@@ -51,11 +51,11 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 17 idempotent Ansible roles across 8 playbooks (01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana → 08-promtail)
-- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 24 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 23 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check workflows
-- **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls, Lynis hardening
-- **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation
+- **CI/CD** — 8 parallel GitHub Actions jobs: ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, pre-commit. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy and docs workflows
+- **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls
+- **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires `rollback prod` confirmation, prod `terraform apply` / Grafana / deploy require environment approval
 
 ---
 
@@ -67,10 +67,10 @@ I own **everything below the application layer** — provisioning, configuration
 | **Configuration** | Ansible (17 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB · Redis |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 24 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 23 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
-| **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy · Lynis |
-| **CI/CD** | GitHub Actions (11 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy |
+| **CI/CD** | GitHub Actions (10 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -143,7 +143,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (500 lines + 6 modular lib files)
+├── deploy.sh                 # Main orchestrator (125 lines + 14 modular lib files)
 ├── .github/actions/          # Composite actions: setup-terraform, setup-ansible
 ├── terraform/
 │   ├── aws/                  # EC2 + Elastic IP + Security Group
@@ -175,7 +175,7 @@ DreamSeed/
      ├── health-check.yml      # Weekly server update (apt upgrade + reboot check)
      ├── terraform-apply.yml   # TF: Infra + Cloudflare apply
      ├── chatops-deploy.yml    # /deploy and /destroy via GitHub issue comments
-     └── pages.yml / docs.yml  # Docs site + code map publishing
+     └── docs.yml              # Docs site + code map publishing + wiki sync
  ```
 
 ---
@@ -198,7 +198,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 
 ### 📊 Full Observability — Auto-Provisioned
 
-Grafana dashboards, datasources, **and 24 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
+Grafana dashboards, datasources, **and 23 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 **Internal (Grafana + VictoriaMetrics on-server):**
 
@@ -206,7 +206,7 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 - **Nginx Prometheus Exporter** (`:9113`) / **Apache Exporter** (`:9117`) — web server health
 - **MySQLd Exporter** (`:9104`) — queries, connections, replication
 - **VictoriaMetrics** (`:8428`) — 3-month retention, 15s scrape interval
-- **Grafana** (`:3000`) — 5–6 provisioned dashboards depending on web server (Node Exporter, MySQL, VictoriaMetrics, Redis, Nginx/Apache), 24 alert rules → Telegram
+- **Grafana** (`:3000`) — 6 provisioned dashboards on Nginx (5 on Apache), 23 alert rules → Telegram
 - **check_site.sh** (cron, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
 **Grafana Cloud (hosted telemetry):**
@@ -232,27 +232,30 @@ Grafana dashboards, datasources, **and 24 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 8 Workflows + Renovate
+### 🧪 CI/CD Pipeline — 10 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
 | **CI** — 8 parallel checks | Every PR + push to main |
-| **Deploy** — single-click deploy | Manual dispatch (all targets) |
-| **Restore Test** — full backup/restore drill | Weekly Monday + manual |
-| **Drift Detection** — terraform plan on prod | Daily 07:05 UTC + push |
+| **Deploy** — single-click deploy | Manual dispatch (all targets, prod requires approval) |
+| **Restore Test** — full backup/restore drill | Weekly Monday 10:00 UTC + manual |
+| **Drift Detection** — terraform plan on 6 targets | Daily 07:05 UTC |
 | **Rollback** — emergency restore | Manual with prod confirmation |
-| **Grafana Cloud** — dashboard provisioning | Manual dispatch |
+| **Grafana Cloud** — dashboard provisioning | Manual dispatch (prod requires approval) |
 | **Health Check** — weekly server update | Weekly Monday + manual |
-| **TF: Infra + Cloudflare** — terraform apply (infra + WAF/cache) | Manual dispatch |
-| **Cloudflare Cache** — legacy (WAF/cache in TF now) | Manual dispatch |
+| **TF: Infra + Cloudflare** — terraform apply (infra + WAF/cache rulesets) | Manual dispatch (prod requires approval) |
+| **ChatOps Deploy** — `/deploy` `/destroy` via issue comments | Issue comment |
+| **Docs** — Pages site + wiki sync | Push to main + manual |
 
 CI checks (8 parallel): ShellCheck · ansible-lint · **Terraform** (tflint+validate+fmt) · **Trivy** · **Checkov** · **gitleaks** · **actionlint** · **pre-commit**. Dependencies: **Renovate** (auto-PRs).
 
 ### 🛑 Production Safeguards
 
+- **Branch protection (ruleset `Protect Main`)** — all changes land via PR: 8 CI checks required, **squash-only** merge, linear history, no direct push / force-push (even for the owner)
 - **Deploy:** manual `[y/N]` confirmation before touching production
 - **Destroy:** three-step — two `[y/N]` prompts + typing `destroy prod`
 - **Rollback:** requires typing `rollback prod` in the workflow input
+- **Prod infra mutations** (deploy / `terraform apply` / Grafana Cloud) require environment approval in GitHub Actions
 - **Terraform Cloud** isolates state files per environment
 - **CI enforces** lint, security scan, secret scan, and terraform validation before any merge
 
@@ -273,7 +276,7 @@ CI checks (8 parallel): ShellCheck · ansible-lint · **Terraform** (tflint+vali
 
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|
-| `prod` | `AWS` | [dreamseed.online](https://dreamseed.online) | Nginx/Apache + PHP 8.3 + MariaDB |
+| `prod` | `AWS` | [dreamseed.online](https://dreamseed.online) | **Dormant** — kept in Terraform state, not deployed (live domain runs on `prod-hetz`) |
 | `prod-hetz` | `Hetzner` | [dreamseed.online](https://dreamseed.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 | `dev-aws` | `AWS` | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 | `dev-hetz` | `Hetzner` | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
