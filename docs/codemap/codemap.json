@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-06T21:45:02Z",
-  "generated_from_commit": "853189b6dabcae517eaf073ed97e7fbd44ff8906",
-  "working_tree_changed": true,
+  "generated_at": "2026-08-14T21:23:02Z",
+  "generated_from_commit": "9070503077a7b7642056e9c75130bda934d16934",
+  "working_tree_changed": false,
   "graph_hash": "9abb63fdf04ba0d2",
   "scope": [
     ".github",
@@ -47,11 +47,11 @@
           "symbol": "resolve_target"
         },
         {
-          "path": "deploy.sh",
+          "path": "lib/cli.sh",
           "symbol": "run_lint"
         },
         {
-          "path": "deploy.sh",
+          "path": "lib/cli.sh",
           "symbol": "parse_args"
         },
         {
@@ -860,8 +860,8 @@
           "symbol": "send_tg"
         },
         {
-          "path": ".github/workflows/deploy.yml",
-          "symbol": "api.telegram.org/bot"
+          "path": "scripts/send_tg.sh",
+          "symbol": "api.telegram.org"
         },
         {
           "path": "scripts/telegram_bot.py",
@@ -968,7 +968,7 @@
       "evidence": [
         {
           "path": ".github/workflows/test-restore.yml",
-          "symbol": "ansible-playbook -i inventory/hosts-test.yml playbook-01-base.yml"
+          "symbol": "deploy.sh test -n -p"
         }
       ],
       "note": "test-restore.yml provisions a test server by invoking playbooks directly."
@@ -1031,7 +1031,7 @@
           "symbol": "_ansible_cmd"
         },
         {
-          "path": "deploy.sh",
+          "path": "lib/ansible.sh",
           "symbol": "run_parallel"
         }
       ],
@@ -1043,7 +1043,7 @@
       "type": "calls",
       "evidence": [
         {
-          "path": "deploy.sh",
+          "path": "lib/cli.sh",
           "symbol": "run_lint"
         }
       ],
@@ -1120,7 +1120,7 @@
         },
         {
           "path": ".github/workflows/terraform-apply.yml",
-          "symbol": "Delete existing Cloudflare rate limit ruleset"
+          "symbol": "Set provider env vars"
         },
         {
           "path": ".github/workflows/grafana-cloud.yml",
@@ -1151,12 +1151,8 @@
       "type": "publishes",
       "evidence": [
         {
-          "path": ".github/workflows/deploy.yml",
-          "symbol": "api.telegram.org/bot"
-        },
-        {
-          "path": ".github/workflows/health-check.yml",
-          "symbol": "api.telegram.org/bot"
+          "path": "scripts/send_tg.sh",
+          "symbol": "api.telegram.org"
         }
       ],
       "note": "Deploy/rollback/health-check notify Telegram with status summaries."
