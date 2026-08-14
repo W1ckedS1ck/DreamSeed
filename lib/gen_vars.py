@@ -46,6 +46,9 @@ def main():
         'secrets_dir': f'{script_dir}/secrets',
         'scripts_dir': f'{script_dir}/scripts',
     }
+    # Ephemeral test servers use a self-signed cert (no certbot DNS-01).
+    if target == 'test':
+        data['ssl_cf_dns_enabled'] = False
     ssh_key = os.environ.get('SSH_PUBLIC_KEY_PATH', '')
     if ssh_key.strip():
         data['ssh_public_key_path'] = ssh_key.strip()

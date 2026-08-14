@@ -13,6 +13,7 @@ TARGETS:
   dev-aws            AWS        aws.vitalikuts.online
   dev-hetz           Hetzner    hetz.vitalikuts.online
   prod-hetz          Hetzner    dreamseed.online
+  test               Hetzner    test.vitalikuts.online (ephemeral — restore-test only)
 
 WEB SERVER (required):
   -n                 Nginx
@@ -50,7 +51,7 @@ parse_args() {
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            prod|dev-aws|dev-hetz|prod-hetz) TARGET="$1"; shift ;;
+            prod|dev-aws|dev-hetz|prod-hetz|test) TARGET="$1"; shift ;;
             -n) WEB_SERVER="nginx"; shift ;;
             -a) WEB_SERVER="apache"; shift ;;
             -i|--ip)
@@ -88,7 +89,11 @@ resolve_target() {
                    SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
         prod-hetz) TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="dreamseed.online";      TF_WORKSPACE="prod-hetz"; TARGET_PREFIX="PROD_HETZ"
                    SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
-        *) echo "Error: unknown target '$TARGET'. Valid: prod, dev-aws, dev-hetz, prod-hetz"; exit 1 ;;
+        # test = ephemeral restore-test server (created + destroyed by the
+        # [B] Restore Test workflow). Reuses dev Hetzner creds/token.
+        test)  TF_PROVIDER="hetzner"; DEPLOY_DOMAIN="test.vitalikuts.online"; TF_WORKSPACE="test"; TARGET_PREFIX="DEV_HETZ"
+               SSH_ATTEMPTS=90; SSH_INTERVAL=2 ;;
+        *) echo "Error: unknown target '$TARGET'. Valid: prod, dev-aws, dev-hetz, prod-hetz, test"; exit 1 ;;
     esac
     TF_DIR="$SCRIPT_DIR/terraform/$TF_PROVIDER"
 }
