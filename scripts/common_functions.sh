@@ -19,40 +19,50 @@ BACKUP_DB_KEEP="${BACKUP_DB_KEEP:-15}"
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
+    # Same .env contract as lib/env.sh parse_env_file (deploy.sh): KEY=value,
+    # optional "quotes", inline comments after space+#, multi-line quoted
+    # values, $HOME / $UPPERCASE_VAR expansion (double-quoted/unquoted only).
+    # No source/eval — no RCE.
     local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|BASH_FUNC_.*)$'
-    local key="" value="" quote=""
+    local key="" value="" quote="" no_expand=""
     while IFS= read -r line; do
-        if [[ -n "$key" ]]; then
-            # Continuation of multi-line quoted value
-            local stripped="${line#export }"
-            if [[ -n "$quote" && "$stripped" == *"$quote" ]]; then
-                value+=$'\n'"${stripped%$quote}"
-                export "$key"="$value"
-                key=""; value=""; quote=""
+        line="${line#export }"
+        if [[ -n "$quote" ]]; then
+            # Multi-line quoted value — accumulate until the closing quote
+            if [[ "$line" == *"$quote" ]]; then
+                value+=$'\n'"${line%"$quote"}"
+                export "$key=$value"; key=""; value=""; quote=""
             else
-                value+=$'\n'"$stripped"
+                value+=$'\n'"$line"
             fi
             continue
         fi
-
-        line="${line#export }"
-        [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
-        local k="${line%%=*}" v="${line#*=}"
-        [[ "$k" =~ $blocked_vars ]] && continue
-
-        if [[ "$v" =~ ^\"(.*)\"$ ]] || [[ "$v" =~ ^\'(.*)\'$ ]]; then
-            # Single-line quoted value
-            v="${BASH_REMATCH[1]}"
-            export "$k"="$v"
-        elif [[ "$v" =~ ^\"(.*)$ ]]; then
-            # Opening double-quote without closing — multi-line start
-            key="$k"; value="${BASH_REMATCH[1]}"; quote='"'
-        elif [[ "$v" =~ ^\'(.*)$ ]]; then
-            # Opening single-quote without closing — multi-line start
-            key="$k"; value="${BASH_REMATCH[1]}"; quote="'"
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+        key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+        [[ "$key" =~ $blocked_vars ]] && { key=""; continue; }
+        no_expand=""
+        if [[ "$value" =~ ^\"(.*)\"[[:space:]]*(#.*)?$ ]]; then
+            value="${BASH_REMATCH[1]}"
+        elif [[ "$value" =~ ^\'(.*)\'[[:space:]]*(#.*)?$ ]]; then
+            value="${BASH_REMATCH[1]}"; no_expand="1"
+        elif [[ "$value" =~ ^\"(.*)$ || "$value" =~ ^\'(.*)$ ]]; then
+            quote="${value:0:1}"; value="${value:1}"; continue
         else
-            export "$k"="$v"
+            value="${value%%[[:space:]]#*}"                    # strip inline comment
+            value="${value%"${value##*[![:space:]]}"}"         # trim trailing whitespace
         fi
+        if [[ -z "$no_expand" ]]; then
+            while [[ "$value" =~ \$\{?([A-Z_][A-Z0-9_]*)\}? ]]; do
+                local v="${BASH_REMATCH[1]}"
+                value="${value//\$\{$v\}/${!v:-}}"
+                value="${value//\$$v/${!v:-}}"
+            done
+        fi
+        if [[ "$value" == *'$('* || "$value" == *'`'* ]]; then
+            echo "Error: command substitution in $key" >&2; exit 1
+        fi
+        export "$key=$value"; key=""; value=""
     done < "$env_file"
     OWNER="${OWNER:-}"
 }

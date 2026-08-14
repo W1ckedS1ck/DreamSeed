@@ -30,6 +30,14 @@ def load_env(env_path: str = "") -> None:
                 if BLOCKED_VARS.match(key):
                     continue
                 value = value.strip()
+                # Inline comment is only after the closing quote / for unquoted
+                # values — a # inside quotes is part of the value (same as bash).
+                if value and value[0] in ('"', "'"):
+                    q = value[0]
+                    if q in value[1:]:
+                        value = value[1:].split(q, 1)[0]
+                else:
+                    value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
                 if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
                     value = value[1:-1]
                 if '$(' in value or '`' in value:
