@@ -25,6 +25,10 @@ jobs:
     name: Rollback ${{ inputs.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment:
+      name: ${{ startsWith(inputs.environment, 'prod') && 'production' || '' }}
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -111,8 +115,10 @@ jobs:
 
       - name: Validate prod confirmation
         if: inputs.environment == 'prod' || inputs.environment == 'prod-hetz'
+        env:
+          CONFIRM: ${{ inputs.confirm }}
         run: |
-          if [[ "${{ inputs.confirm }}" != "rollback prod" ]]; then
+          if [[ "$CONFIRM" != "rollback prod" ]]; then
             echo "::error::To rollback prod you must set confirm = 'rollback prod'"
             exit 1
           fi

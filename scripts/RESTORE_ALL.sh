@@ -35,19 +35,19 @@ if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
 fi
 : "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
 
+# Parse mode (must come before log block so $MODE is available)
+MODE="${1:-interactive}"  # interactive or --auto-latest
+
 # Setup restore log
 RESTORE_LOG="/home/ubuntu/backups/restore_$(date +%Y%m%d_%H%M%S).log"
 mkdir -p "$(dirname "$RESTORE_LOG")"
 {
     echo "=== RESTORE STARTED ==="
     echo "Time: $(date)"
-    echo "Mode: $1"
+    echo "Mode: $MODE"
     echo "User: $USER"
     echo "Host: $(hostname)"
 } >> "$RESTORE_LOG"
-
-# Parse mode
-MODE="${1:-interactive}"  # interactive or --auto-latest
 
 # ====== Settings ======
 : "${RCLONE_REMOTE:=gdrive-crypt}"

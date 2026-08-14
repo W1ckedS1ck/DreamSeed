@@ -11,12 +11,6 @@ run_terraform() {
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
         _tf validate -no-color >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
 
-        TF_VARS_FILE="${TF_DIR}/deploy.auto.tfvars"
-        {
-            printf 'environment = "%s"\n' "$TARGET"
-            [[ "$TF_PROVIDER" == "aws" ]] && printf 'ssh_public_key_path = "%s"\n' "${SSH_PUBLIC_KEY_PATH:-/dev/null}"
-        } > "$TF_VARS_FILE"
-
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
         if _tf state pull > "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null && [[ -s "$bk/${TF_WORKSPACE}_pre.tfstate" ]]; then

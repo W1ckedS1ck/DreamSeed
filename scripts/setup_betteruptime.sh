@@ -37,18 +37,20 @@ WRITE_ENV=false
 [[ "${1:-}" == "--write-env" ]] && WRITE_ENV=true
 
 API="https://uptime.betterstack.com/api/v2"
-AUTH="Authorization: Bearer $BETTERUPTIME_API_TOKEN"
+# Auth header via process substitution (not argv) — token stays out of ps aux.
+# Usage: curl ... --config <(bu_auth) ...
+bu_auth() { printf 'header = "Authorization: Bearer %s"\n' "$BETTERUPTIME_API_TOKEN"; }
 
 ENV_FILE="$SCRIPT_DIR/secrets/.env"
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
 get_existing_heartbeats() {
-    curl -s -X GET "$API/heartbeats?page=1&per_page=50" -H "$AUTH" || echo '{"data":[]}'
+    curl -s -X GET "$API/heartbeats?page=1&per_page=50" --config <(bu_auth) || echo '{"data":[]}'
 }
 
 get_existing_webhooks() {
-    curl -s -X GET "$API/outgoing-webhooks" -H "$AUTH" || echo '{"data":[]}'
+    curl -s -X GET "$API/outgoing-webhooks" --config <(bu_auth) || echo '{"data":[]}'
 }
 
 heartbeat_exists() {
@@ -119,7 +121,7 @@ for spec in \
         echo -e "  ${GREEN}✓${NC} $name (already exists)"
     else
         json=$(printf '{"name":"%s","period":%s,"grace":%s,"email":true,"push":true}' "$name" "$period" "$grace")
-        resp=$(curl -s -X POST "$API/heartbeats" -H "$AUTH" -H "Content-Type: application/json" -d "$json" || echo "")
+        resp=$(curl -s -X POST "$API/heartbeats" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
         url=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['attributes']['url'])" 2>/dev/null || echo "")
         key=$(echo "$url" | awk -F/ '{print $NF}')
 
@@ -148,7 +150,7 @@ echo -e "\n${CYAN}Better Stack — HTTP monitors${NC}\n"
 # After first run, go to Better Stack → Status Pages → go-dreams
 # and set Response time for main monitor (🌐 dreamseed.online).
 
-existing_mon=$(curl -s -X GET "$API/monitors" -H "$AUTH" || echo '{"data":[]}')
+existing_mon=$(curl -s -X GET "$API/monitors" --config <(bu_auth) || echo '{"data":[]}')
 
 monitor_exists() {
     local url="$1"
@@ -190,10 +192,10 @@ print(json.dumps(payload))
 " "$url" "$name" "$keyword" "$freq")
 
     if [[ -n "$mid" ]]; then
-        curl -s -X PATCH "$API/monitors/$mid" -H "$AUTH" -H "Content-Type: application/json" -d "$json" > /dev/null
+        curl -s -X PATCH "$API/monitors/$mid" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" > /dev/null
         echo -e "  ${GREEN}✓${NC} $name ($url) — already exists"
     else
-        resp=$(curl -s -X POST "$API/monitors" -H "$AUTH" -H "Content-Type: application/json" -d "$json" || echo "")
+        resp=$(curl -s -X POST "$API/monitors" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
         id=$(echo "$resp" | grep -o '"id": *"[^"]*"' | head -1 | cut -d'"' -f4)
         if [[ -n "$id" ]]; then
             echo -e "  ${GREEN}✓${NC} $name ($url) — created"
@@ -206,12 +208,12 @@ done
 
 # ─── Status page resources ──────────────────────────────────────────────────
 
-SP_ID=$(curl -s -X GET "$API/status-pages" -H "$AUTH" | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')" 2>/dev/null)
+SP_ID=$(curl -s -X GET "$API/status-pages" --config <(bu_auth) | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')" 2>/dev/null)
 
 if [[ -n "$SP_ID" ]]; then
     echo -e "\n${CYAN}Better Stack — status page resources${NC}\n"
 
-existing_sp=$(curl -s -X GET "$API/status-pages/$SP_ID/resources" -H "$AUTH" || echo '{"data":[]}')
+existing_sp=$(curl -s -X GET "$API/status-pages/$SP_ID/resources" --config <(bu_auth) || echo '{"data":[]}')
 
 sp_resource_exists() {
     local rtype="$1" rid="$2"
@@ -241,12 +243,12 @@ for spec in \
     existing_id=$(sp_resource_exists "$rtype" "$rid")
 
     if [[ -n "$existing_id" ]]; then
-        curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" -H "$AUTH" \
+        curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" --config <(bu_auth) \
           -H "Content-Type: application/json" \
           -d "{\"public_name\":\"$name\",\"position\":$pos}" > /dev/null
         echo -e "  ${GREEN}✓${NC} $name — already on status page"
     else
-        resp=$(curl -s -X POST "$API/status-pages/$SP_ID/resources" -H "$AUTH" \
+        resp=$(curl -s -X POST "$API/status-pages/$SP_ID/resources" --config <(bu_auth) \
           -H "Content-Type: application/json" \
           -d "{\"resource_type\":\"$rtype\",\"resource_id\":$rid,\"public_name\":\"$name\",\"position\":$pos}" || echo "")
         sp_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null)
@@ -275,7 +277,7 @@ else
     ensure_webhook() {
         local name="$1" started="$2" resolved="$3" text="$4"
         local wh_json; wh_json=$(mktemp "${HOME:?}/.tmp_bs_webhook_XXXXXX.json")
-        trap 'rm -f "$wh_json"' RETURN
+        _SETUP_TMPFILES+=("$wh_json")
 
         # Check if webhook already exists by name
         existing_id=$(echo "$existing_wh" | python3 -c "
@@ -327,10 +329,10 @@ with open(out_path, "w") as f:
 PYEOF
 
         if [[ -n "$existing_id" ]]; then
-            resp=$(curl -s -X PATCH "$API/outgoing-webhooks/$existing_id" -H "$AUTH" -H "Content-Type: application/json" -d "@$wh_json" || echo "")
+            resp=$(curl -s -X PATCH "$API/outgoing-webhooks/$existing_id" --config <(bu_auth) -H "Content-Type: application/json" -d "@$wh_json" || echo "")
             echo -e "  ${GREEN}✓${NC} $name (updated, ID $existing_id)"
         else
-            resp=$(curl -s -X POST "$API/outgoing-webhooks" -H "$AUTH" -H "Content-Type: application/json" -d "@$wh_json" || echo "")
+            resp=$(curl -s -X POST "$API/outgoing-webhooks" --config <(bu_auth) -H "Content-Type: application/json" -d "@$wh_json" || echo "")
             id=$(echo "$resp" | grep -o '"id": *"[^"]*"' | head -1 | cut -d'"' -f4)
             if [[ -n "$id" ]]; then
                 echo -e "  ${GREEN}✓${NC} $name (created, ID $id)"

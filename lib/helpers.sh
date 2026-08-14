@@ -61,8 +61,6 @@ cleanup() {
     fi
     [[ -n "${TF_TMP_OUT:-}" && -f "${TF_TMP_OUT:-}" ]] && rm -f "$TF_TMP_OUT"
     [[ -n "${TF_STATE_BACKUP_TMP:-}" && -f "${TF_STATE_BACKUP_TMP:-}" ]] && rm -f "$TF_STATE_BACKUP_TMP"
-    [[ -n "${TF_VARS_FILE:-}" && -f "${TF_VARS_FILE:-}" ]] && rm -f "$TF_VARS_FILE"
-    [[ -n "${LOCK_FILE:-}" && "$LOCK_ACQUIRED" == "true" ]] && rm -f "$LOCK_FILE" 2>/dev/null || true
 }
 
 write_deploy_history() {
@@ -126,8 +124,15 @@ update_cloudflare_dns() {
 
     local ttl="${CLOUDFLARE_DNS_TTL:-120}"
     local dns_body
-    dns_body=$(printf '{"type":"%s","name":"%s","content":"%s","ttl":%s,"proxied":true}' \
-        "$type" "$domain" "$ip" "$ttl") || dns_body=""
+    # Build JSON via jq (not printf) — escapes special chars in domain/ip and
+    # validates ttl as a number (errors out if non-numeric, preventing injection).
+    dns_body=$(jq -nc --arg type "$type" --arg name "$domain" --arg content "$ip" \
+        --argjson ttl "$ttl" --argjson proxied true \
+        '{type:$type,name:$name,content:$content,ttl:$ttl,proxied:$proxied}') || {
+        log "Cloudflare DNS: invalid ttl '$ttl' (must be a number)"
+        echo "  ✗ Cloudflare DNS: invalid ttl '$ttl' (must be a number)" >&2
+        return 1
+    }
 
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
@@ -202,8 +207,15 @@ update_cloudflare_dns_direct() {
     IFS='|' read -r count record_id old_ip < <(echo "$existing" | jq -r '.result | length as $c | "\($c)|\(. [0].id // "")|\(. [0].content // "")"' 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
     local dns_body
-    dns_body=$(printf '{"type":"A","name":"%s","content":"%s","ttl":%s,"proxied":false}' \
-        "$subdomain" "$ip" "$ttl") || dns_body=""
+    # Build JSON via jq (not printf) — escapes special chars in subdomain/ip and
+    # validates ttl as a number (errors out if non-numeric, preventing injection).
+    dns_body=$(jq -nc --arg name "$subdomain" --arg content "$ip" \
+        --argjson ttl "$ttl" --argjson proxied false \
+        '{type:"A",name:$name,content:$content,ttl:$ttl,proxied:$proxied}') || {
+        log "Cloudflare direct DNS: invalid ttl '$ttl' (must be a number)"
+        echo "  ⚠ SSH DNS: invalid ttl '$ttl' (must be a number)" >&2
+        return 1
+    }
 
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare direct DNS: $subdomain → $ip (unchanged)"; return 0; }

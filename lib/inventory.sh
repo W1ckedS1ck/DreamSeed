@@ -23,7 +23,9 @@ INVEOF
     [[ -f "$DEPLOY_VARS_FILE" ]] || step_fail "gen_vars.py did not produce $DEPLOY_VARS_FILE"
 
     # Strip Better Stack keys for non-prod (prevents env leakage to Ansible/SSH child processes)
-    [[ ! "$TARGET" =~ ^prod ]] && for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
+    if [[ ! "$TARGET" =~ ^prod ]]; then
+        for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
+    fi
 
     mkdir -p ~/.ansible/facts_cache
 }

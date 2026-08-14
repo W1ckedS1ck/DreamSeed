@@ -45,7 +45,7 @@ def _chat_allowed(update: Update) -> bool:
         log.warning("Ignored message from unauthorized chat: %s", chat_id)
         return False
     msg = update.message
-    return not (msg and msg.reply_to_message and msg.reply_to_message.from_user.is_bot)
+    return not (msg and msg.reply_to_message and msg.reply_to_message.from_user and msg.reply_to_message.from_user.is_bot)
 
 
 def get_env() -> str:

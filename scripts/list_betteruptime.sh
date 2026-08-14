@@ -13,10 +13,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCRIPT_DIR/scripts/common_functions.sh"
 load_env "$SCRIPT_DIR/secrets/.env"
 
+_LIST_TMPFILES=()
+trap 'for _f in "${_LIST_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
+
 [[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && { echo "Error: BETTERUPTIME_API_TOKEN not set in secrets/.env"; exit 1; }
 
 API="https://uptime.betterstack.com/api/v2"
-AUTH="Authorization: Bearer $BETTERUPTIME_API_TOKEN"
+bu_auth() { printf 'header = "Authorization: Bearer %s"\n' "$BETTERUPTIME_API_TOKEN"; }
 
 CYAN='\033[0;36m'; NC='\033[0m'
 
@@ -30,7 +33,8 @@ fetch_and_format() {
     local json_tmp py_tmp
     json_tmp=$(mktemp "${HOME:?}/.tmp_bs_json_XXXXXX")
     py_tmp=$(mktemp "${HOME:?}/.tmp_bs_py_XXXXXX")
-    curl -s "$API/$endpoint" -H "$AUTH" > "$json_tmp"
+    _LIST_TMPFILES+=("$json_tmp" "$py_tmp")
+    curl -s "$API/$endpoint" --config <(bu_auth) > "$json_tmp"
 
     cat > "$py_tmp" << 'PYEOF'
 import sys, json
@@ -95,8 +99,6 @@ for item in data.get('data', []):
         print("    Created:  %s" % a['created_at'])
         print()
 PYEOF
-
-    trap 'rm -f "$json_tmp" "$py_tmp"' RETURN
 
     echo -e "${CYAN}${label}${NC}"
     printf "${CYAN}%*s${NC}\n" "${#label}" | tr ' ' '─'

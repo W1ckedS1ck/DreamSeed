@@ -47,9 +47,7 @@ preflight_checks() {
 
     resolve_env_file "$ENV_FILE"
     local env_src="$ENV_SRC"
-    validate_env_file "$env_src"
-
-    source "$env_src"
+    parse_env_file "$env_src" || exit 1
     export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
     export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY
@@ -63,8 +61,7 @@ preflight_checks() {
         if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
             resolve_env_file "$ENV_FILE"
             env_src="$ENV_SRC"
-            validate_env_file "$env_src"
-            source "$env_src"
+            parse_env_file "$env_src" || exit 1
         else
             echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."
             echo "  To set up manually later, run: bash scripts/setup_betteruptime.sh --write-env"

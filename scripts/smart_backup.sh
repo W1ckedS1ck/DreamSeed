@@ -57,6 +57,12 @@ if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
     exit 1
 fi
 
+# ====== Validate DB_NAME (used in mysqldump --ignore-table, SQL queries) ======
+if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "ERROR: DB_NAME contains invalid characters: '$DB_NAME'" >&2
+    exit 1
+fi
+
 # ====== Pre-flight: disk space check ======
 AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{printf "%.0f", $4/1024}')
 if [ "$AVAILABLE_MB" -lt 500 ]; then

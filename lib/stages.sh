@@ -6,9 +6,13 @@ acquire_lock() {
     if command -v flock &>/dev/null; then
         local lock_dir="${HOME:-/tmp}/.locks"
         mkdir -p "$lock_dir" && chmod 700 "$lock_dir"
-        local lock_file="$lock_dir/deploy-${TARGET}.lock"
+        # Lock by provider (not target) — prod and dev-aws share terraform/aws/
+        # (.terraform/ dir, deploy.auto.tfvars). Concurrent same-provider deploys
+        # would race on workspace selection and state. Different providers (aws
+        # vs hetzner) can run in parallel — they share nothing.
+        local lock_file="$lock_dir/deploy-${TF_PROVIDER}.lock"
         exec 200>"$lock_file"
-        flock -w 5 200 || { echo "Error: deploy already running for $TARGET (could not acquire lock)"; exit 1; }
+        flock -w 5 200 || { echo "Error: another deploy already running for provider '$TF_PROVIDER' (could not acquire lock)"; exit 1; }
     fi
 }
 

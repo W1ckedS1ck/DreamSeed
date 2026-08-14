@@ -1,4 +1,17 @@
 ---
+# Validate DB identifiers BEFORE any task uses them in SQL / shell / templates.
+# Defense-in-depth: db_prefix and db_name are hardcoded in group_vars/all.yml,
+# but a bad value (e.g. from a copy-paste error) would inject into server.env,
+# cron jobs, and SQL queries before the assert originally fired (was at line 87).
+- name: Validate db_prefix and db_name format
+  ansible.builtin.assert:
+    that:
+      - db_prefix is regex('^[a-z0-9_]+$')
+      - db_name is regex('^[A-Za-z0-9_]+$')
+    fail_msg: >-
+      Invalid db_prefix='{{ db_prefix }}' (must be lowercase alphanumeric + underscore)
+      or db_name='{{ db_name }}' (must be alphanumeric + underscore)
+
 - name: Upload rclone config
   ansible.builtin.include_tasks: ../restore/tasks/rclone_config.yml
 
@@ -83,12 +96,6 @@
     daemon_reload: true
   become: true
 
-
-- name: Validate db_prefix format
-  ansible.builtin.assert:
-    that:
-      - db_prefix is regex('^[a-z0-9_]+$')
-    fail_msg: "Invalid db_prefix: {{ db_prefix }} (must be lowercase alphanumeric + underscore)"
 
 - name: Setup hourly backup cron
   ansible.builtin.cron:

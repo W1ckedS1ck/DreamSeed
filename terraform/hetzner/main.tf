@@ -127,10 +127,9 @@ resource "hcloud_server" "main" {
   })
 
   lifecycle {
-    create_before_destroy = true
-    # ssh_keys: managed by Ansible (security role → authorized_key).
-    #   Removing from ignore_changes would trigger server recreate on key change.
-    # user_data: cloud-init runs once at first boot. Changing template has no effect.
+    # No create_before_destroy: with a bound hcloud_primary_ip, CBD would
+    # fail (IP can't be attached to two servers at once). destroy→create is safe.
+    # ssh_keys managed by Ansible; user_data runs once at first boot.
     ignore_changes = [
       ssh_keys,
       user_data,
