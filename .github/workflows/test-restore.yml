@@ -1,10 +1,9 @@
-name: "[B] Restore Test v2"
+name: "[B] Restore Test"
 
 # Full disaster-recovery drill on an ephemeral Hetzner server.
-# Difference vs the legacy [B] Restore Test: the deployment phase runs the
-# REAL deploy.sh (target "test") instead of a hand-rolled copy of its phases,
-# so every code path that ships to production is exercised. The test then
-# validates BOTH restore paths:
+# The deployment phase runs the REAL deploy.sh (target "test") instead of a
+# hand-rolled copy of its phases, so every code path that ships to production
+# is exercised. The test then validates BOTH restore paths:
 #   1. local restore (backups present on the server)
 #   2. cloud restore (local backups removed -> RESTORE_ALL pulls from GDrive,
 #      the same path [M] Rollback uses)
@@ -23,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: restore-test-v2
+  group: restore-test
   cancel-in-progress: false
 
 env:
@@ -32,7 +31,7 @@ env:
 
 jobs:
   restore-test:
-    name: Restore test v2 (Hetzner)
+    name: Restore test (Hetzner)
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -269,19 +268,28 @@ jobs:
             exit 1
           fi
 
+      - name: Run full service tests
+        id: service_tests
+        if: steps.restore_cloud.outcome == 'success'
+        env:
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+        run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          DB_NAME=modx_db .github/scripts/test-restored-server.sh "${{ steps.server-ip.outputs.ip }}" 2>&1 | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
+
       # --- Phase 3: screenshot + report ---
       - name: Capture site screenshot
         if: steps.deploy.outcome == 'success'
         uses: ./.github/actions/capture-screenshot
         with:
           url: "https://${{ env.DOMAIN }}/"
-          output: /tmp/pages-screenshot/test-restore-v2.png
+          output: /tmp/pages-screenshot/test-restore.png
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: restore-test-v2-screenshots
+          name: restore-test-screenshots
           path: /tmp/pages-screenshot/*.png
           retention-days: 30
           if-no-files-found: ignore
@@ -319,7 +327,7 @@ jobs:
           fi
           M="$GITHUB_STEP_SUMMARY"
           {
-            echo "## Restore Test v2 — ${STATUS}"
+            echo "## Restore Test — ${STATUS}"
             echo ""
             echo "| | |"
             echo "|---|---|"
@@ -341,6 +349,12 @@ jobs:
             echo "| **Project hash** | \`${{ steps.artifact_hash.outputs.project_hash }}\` |"
             echo "| **DB hash** | \`${{ steps.artifact_hash.outputs.db_hash }}\` |"
             echo "| **Redis sessions before** | ${{ steps.artifact_hash.outputs.redis_sessions_before }} |"
+            echo ""
+            echo "### Service tests (after cloud restore)"
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Summary | ${{ steps.service_tests.outputs.test_summary }} |"
+            echo "| Failures | ${{ steps.service_tests.outputs.test_fails }} |"
             echo ""
             echo "### Evidence"
             echo "📸 [Download screenshot](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)"

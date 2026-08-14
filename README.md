@@ -275,7 +275,7 @@ CI checks (9 parallel): ShellCheck · ansible-lint · j2lint · **Terraform** (t
 | `prod-hetz` | `Hetzner` | [dreamseed.online](https://dreamseed.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 | `dev-aws` | `AWS` | [aws.vitalikuts.online](https://aws.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 | `dev-hetz` | `Hetzner` | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
-| `test` | `Hetzner` | [test.dreamseed.online](https://test.dreamseed.online) | `test-restore.yml` — weekly full backup/restore drill |
+| `test` | `Hetzner` | [test.vitalikuts.online](https://test.vitalikuts.online) | `test-restore.yml` — weekly full backup/restore drill |
 
 All environments are fully monitored, backed up, and behind Cloudflare proxy (except `test` — ephemeral, destroyed after each run).
 
