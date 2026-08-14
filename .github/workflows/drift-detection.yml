@@ -198,17 +198,7 @@ jobs:
           Changes: ${{ steps.plan.outputs.changes }}
           🔗 $RUN_URL
           📅 $(date '+%Y-%m-%d %H:%M')"
-          # Keep the token out of argv (ps aux) — curl reads the URL from a
-          # 0600 temp config file instead of a command-line argument.
-          tg_cfg=$(mktemp)
-          chmod 600 "$tg_cfg"
-          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
-          curl -s -m 10 -X POST --config "$tg_cfg" \
-            -d "chat_id=${TG_CHAT_ID}" \
-            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
-            --data-urlencode "parse_mode=Markdown" \
-            --data-urlencode "text=$MSG" > /dev/null || true
-          rm -f "$tg_cfg"
+          bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
           exit 1
 
       - name: Log drift (dev — no fail)
