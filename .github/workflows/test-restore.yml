@@ -580,6 +580,9 @@ jobs:
 
       - name: Restore from backup via RESTORE_ALL.sh
         id: restore
+        # Don't abort the job here — collect diagnostics below, fail via the
+        # dedicated "Fail on restore error" step after all checks have run.
+        continue-on-error: true
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
@@ -598,6 +601,7 @@ jobs:
           if [ "$RC" -ne 0 ]; then
             echo "::error::RESTORE_ALL.sh failed (exit $RC)"
           fi
+          exit $RC
 
       - name: Restart fail2ban after restore (nginx stop/start breaks pyinotify)
         run: |
@@ -857,6 +861,12 @@ jobs:
             echo "SSL: self-signed (cloudflare disabled)"
           fi
 
+      - name: Fail on restore error
+        if: steps.restore.outputs.restore_exit_code != '0'
+        run: |
+          echo "::error::RESTORE_ALL.sh failed with exit code ${{ steps.restore.outputs.restore_exit_code }} — see diagnostics above"
+          exit 1
+
       - name: Server info on failure
         if: failure() && steps.terraform.outputs.server_ipv4 != ''
         run: |
@@ -894,12 +904,17 @@ jobs:
           🖥 ${SERVER_IP:-N/A}
           🔖 \`${BRANCH}\` @ \`${COMMIT_SHORT}\`
           See GitHub Actions for details."
-          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-          curl -s -X POST "$TG_URL" \
+          # Keep the token out of argv (ps aux) — curl reads the URL from a
+          # 0600 temp config file instead of a command-line argument.
+          tg_cfg=$(mktemp)
+          chmod 600 "$tg_cfg"
+          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+          curl -s -m 10 -X POST --config "$tg_cfg" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
+          rm -f "$tg_cfg"
 
       - name: Keep server for debugging
         if: always() && inputs.keep_server && steps.terraform.outputs.server_ipv4 != ''
@@ -1030,12 +1045,17 @@ jobs:
             "🔒 *SSL* ${SSL_ICON} ${SSL_STATUS:-?}" \
             "🗑️ *Destroy* $(ok_destroy $DESTROY)")
 
-          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-          curl -s -X POST "$TG_URL" \
+          # Keep the token out of argv (ps aux) — curl reads the URL from a
+          # 0600 temp config file instead of a command-line argument.
+          tg_cfg=$(mktemp)
+          chmod 600 "$tg_cfg"
+          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+          curl -s -m 10 -X POST --config "$tg_cfg" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
+          rm -f "$tg_cfg"
 
       - name: Send SRE summary
         if: always()
@@ -1059,12 +1079,17 @@ jobs:
             hash_match="${{ steps.validate_hash.outputs.project_hash_match }}" \
             run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
 
-          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-          curl -s -X POST "$TG_URL" \
+          # Keep the token out of argv (ps aux) — curl reads the URL from a
+          # 0600 temp config file instead of a command-line argument.
+          tg_cfg=$(mktemp)
+          chmod 600 "$tg_cfg"
+          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+          curl -s -m 10 -X POST --config "$tg_cfg" \
             -d "chat_id=${{ vars.TG_CHAT_ID }}" \
             ${{ vars.TG_THREAD_ID && format('-d "message_thread_id={0}"', vars.TG_THREAD_ID) || '' }} \
             --data-urlencode "parse_mode=HTML" \
             --data-urlencode "text=$SUMMARY" > /dev/null || true
+          rm -f "$tg_cfg"
 
       - name: Cleanup temp files and DNS
         if: always()

@@ -23,9 +23,15 @@
   when: _monitor_bin.stat.exists
 
 - name: "Install or upgrade {{ monitor_bin_name }}"
+  vars:
+    # Extract the first semver triple from --version output. Token-exact
+    # matching breaks for binaries that print a "v" prefix (redis_exporter,
+    # VictoriaMetrics) — "1.88.0" != "v1.88.0" — causing a re-download on
+    # every deploy. regex_search normalizes both sides.
+    _monitor_installed_version: "{{ (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')) | regex_search('\\d+\\.\\d+\\.\\d+') | default('') }}"
   when: >
     not _monitor_bin.stat.exists or
-    monitor_version not in (_monitor_current_version.stdout | default('') + ' ' + _monitor_current_version.stderr | default('')).split()
+    _monitor_installed_version != monitor_version
   block:
     - name: "Download {{ monitor_bin_name }}"
       ansible.builtin.get_url:

@@ -29,11 +29,11 @@ ENV_DISPLAY=$(format_env_display "$ENV")
 REMOTE_BASE="DreamSeed/backups"
 
 # Get counts and files
-PROJ_FILES=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -24 | cut -d' ' -f2-)
-DB_FILES=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -24 | cut -d' ' -f2-)
+PROJ_FILES=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -24)
+DB_FILES=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -24)
 
-PROJ_COUNT=$(find "$BACKUP_DIR/project" -maxdepth 1 -name 'DreamSeed_*.tar.gz' 2>/dev/null | wc -l)
-DB_COUNT=$(find "$BACKUP_DIR/db" -maxdepth 1 -name 'db_*.sql.gz' 2>/dev/null | wc -l)
+PROJ_COUNT=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | wc -l)
+DB_COUNT=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | wc -l)
 
 # rclone exit code is captured so a failed listing is reported as "?" rather
 # than silently looking identical to "genuinely zero cloud backups" (M9).

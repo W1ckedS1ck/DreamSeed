@@ -77,6 +77,9 @@ parse_args() {
 resolve_target() {
     ENV_FILE="$SCRIPT_DIR/secrets/.env"
     case "$TARGET" in
+        # NOTE: prod (AWS) is dormant — the live dreamseed.online runs on
+        # prod-hetz. Re-activating prod would silently move the domain off
+        # Hetzner; only do it as part of a planned migration.
         prod)    TF_PROVIDER="aws";    DEPLOY_DOMAIN="dreamseed.online";       TF_WORKSPACE="prod";    TARGET_PREFIX="PROD"
                  SSH_ATTEMPTS=40; SSH_INTERVAL=10 ;;
         dev-aws) TF_PROVIDER="aws";    DEPLOY_DOMAIN="aws.vitalikuts.online";  TF_WORKSPACE="dev-aws"; TARGET_PREFIX="DEV_AWS"

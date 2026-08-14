@@ -33,6 +33,11 @@ jobs:
             tf_workspace: prod-hetz
             environment: prod-hetz
             provider: prod
+          - target: prod
+            tf_dir: terraform/aws
+            tf_workspace: prod
+            environment: prod
+            provider: prod
           - target: dev-aws
             tf_dir: terraform/aws
             tf_workspace: dev-aws
@@ -77,6 +82,9 @@ jobs:
 
       - name: Set up credentials
         env:
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
           DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
@@ -85,6 +93,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           case "${{ matrix.target }}" in
+            prod)
+              echo "AWS_ACCESS_KEY_ID=$PROD_ACCESS_KEY" >> "$GITHUB_ENV"
+              echo "AWS_SECRET_ACCESS_KEY=$PROD_SECRET_KEY" >> "$GITHUB_ENV"
+              echo "AWS_DEFAULT_REGION=$PROD_REGION" >> "$GITHUB_ENV"
+              echo "TF_VAR_aws_region=$PROD_REGION" >> "$GITHUB_ENV"
+              echo "TF_VAR_environment=prod" >> "$GITHUB_ENV"
+              echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
+              ;;
             dev-aws)
               echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY" >> "$GITHUB_ENV"
               echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY" >> "$GITHUB_ENV"
@@ -134,7 +150,7 @@ jobs:
           if grep -q 'backend "remote"' ./*.tf 2>/dev/null; then
             # For remote backends, just run plan without -out
             terraform plan -detailed-exitcode -no-color 2>&1 | tee /tmp/plan.log
-            rc=$?
+            rc=${PIPESTATUS[0]}
             CHANGES=$(grep -c '^  #' /tmp/plan.log || echo "0")
           else
             # For local backends, save plan to file
@@ -182,12 +198,17 @@ jobs:
           Changes: ${{ steps.plan.outputs.changes }}
           🔗 $RUN_URL
           📅 $(date '+%Y-%m-%d %H:%M')"
-          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-          curl -s -X POST "$TG_URL" \
+          # Keep the token out of argv (ps aux) — curl reads the URL from a
+          # 0600 temp config file instead of a command-line argument.
+          tg_cfg=$(mktemp)
+          chmod 600 "$tg_cfg"
+          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+          curl -s -m 10 -X POST --config "$tg_cfg" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
+          rm -f "$tg_cfg"
           exit 1
 
       - name: Log drift (dev — no fail)

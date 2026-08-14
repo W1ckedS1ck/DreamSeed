@@ -186,6 +186,14 @@ rotate_files() {
     fi
 }
 
+# List files matching a glob in a dir, newest first (paths only).
+# Callers pick with `head -N` (latest, or a report list).
+# `|| true` keeps callers safe under `set -euo pipefail` when the dir is
+# missing (find exits 1) — "no backups yet" must not abort the calling script.
+list_backups() {
+    find "$1" -maxdepth 1 -name "$2" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2- || true
+}
+
 export_metric() {
     local payload="$1"
     echo "$payload" | timeout 10 curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true

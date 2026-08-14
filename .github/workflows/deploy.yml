@@ -55,6 +55,7 @@ jobs:
       name: ${{ startsWith(inputs.environment, 'prod') && 'production' || '' }}
     permissions:
       contents: read
+      deployments: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -117,6 +118,7 @@ jobs:
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault_password: ${{ secrets.VAULT_PASSWORD }}
           rclone_conf_base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+          ubuntu_pro_token: ${{ secrets.UBUNTU_PRO_TOKEN }}
 
       - name: Target config
         run: |
@@ -259,12 +261,17 @@ jobs:
             Server: ${SERVER_IP:-new}
             🖥 ${WEB}
             📅 $(date '+%Y-%m-%d %H:%M')"
-            TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-            curl -s -X POST "$TG_URL" \
+            # Keep the token out of argv (ps aux) — curl reads the URL from a
+            # 0600 temp config file instead of a command-line argument.
+            tg_cfg=$(mktemp)
+            chmod 600 "$tg_cfg"
+            printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+            curl -s -m 10 -X POST --config "$tg_cfg" \
               -d "chat_id=${TG_CHAT_ID}" \
               ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
               --data-urlencode "parse_mode=Markdown" \
               --data-urlencode "text=$MSG" > /dev/null || true
+            rm -f "$tg_cfg"
           fi
 
       - name: Add code map to Pages artifact
@@ -335,11 +342,14 @@ jobs:
 
           exit "$rc"
 
-      - name: Debug — show deploy.log
-        if: always() && inputs.action == 'destroy'
-        run: |
-          echo "=== /tmp/deploy.log contents (first 100 lines) ==="
-          head -100 /tmp/deploy.log || echo "ERROR: /tmp/deploy.log not found"
+      - name: Upload deploy log (debug)
+        if: always() && inputs.action == 'destroy' && failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: deploy-destroy-log-${{ inputs.environment }}
+          path: /tmp/deploy.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Notify failure
         if: failure()
@@ -351,12 +361,17 @@ jobs:
           MSG="❌ *Deploy failed* — ${{ inputs.environment }}
           Action: ${{ inputs.action }}
           📅 $(date '+%Y-%m-%d %H:%M')"
-          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-          curl -s -X POST "$TG_URL" \
+          # Keep the token out of argv (ps aux) — curl reads the URL from a
+          # 0600 temp config file instead of a command-line argument.
+          tg_cfg=$(mktemp)
+          chmod 600 "$tg_cfg"
+          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+          curl -s -m 10 -X POST --config "$tg_cfg" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
+          rm -f "$tg_cfg"
 
       - name: Write destroy summary
         if: always() && inputs.action == 'destroy'

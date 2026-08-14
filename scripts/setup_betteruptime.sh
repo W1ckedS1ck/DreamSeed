@@ -79,7 +79,7 @@ find_key_in_env() {
 
 write_key_to_env() {
     local var_name="$1" value="$2"
-    local tmpfile
+    local tmpfile encrypted
     tmpfile=$(mktemp)
     chmod 600 "$tmpfile"
     _SETUP_TMPFILES+=("$tmpfile")
@@ -93,8 +93,25 @@ write_key_to_env() {
     fi
     echo "${var_name}=\"${value}\"" >> "$tmpfile"
 
-    ansible-vault encrypt "$tmpfile" --vault-password-file "${HOME}/.vault_pass_dreamseed" --output="$ENV_FILE" \
-        || { rm -f "$tmpfile"; echo "Error: failed to encrypt secrets/.env" >&2; return 1; }
+    # Encrypt into a temp file, validate it, then atomically mv into place.
+    # Writing directly with --output="$ENV_FILE" would corrupt the only
+    # secrets store if encrypt fails mid-write (disk full, Ctrl-C, bad vault
+    # password). mv is atomic — the old vault survives any failure before it.
+    encrypted=$(mktemp)
+    chmod 600 "$encrypted"
+    _SETUP_TMPFILES+=("$encrypted")
+    if ! ansible-vault encrypt "$tmpfile" --vault-password-file "${HOME}/.vault_pass_dreamseed" --output="$encrypted"; then
+        rm -f "$tmpfile" "$encrypted"
+        echo "Error: failed to encrypt secrets/.env" >&2
+        return 1
+    fi
+    if ! head -c 16 "$encrypted" | grep -qF '$ANSIBLE_VAULT'; then
+        rm -f "$tmpfile" "$encrypted"
+        echo "Error: encrypted output is not a valid vault file — secrets/.env NOT touched" >&2
+        return 1
+    fi
+    [[ -s "$encrypted" ]] || { rm -f "$tmpfile" "$encrypted"; echo "Error: encrypted output empty — secrets/.env NOT touched" >&2; return 1; }
+    mv "$encrypted" "$ENV_FILE"
     rm -f "$tmpfile"
 }
 
@@ -269,7 +286,6 @@ if [[ -z "${TG_TOKEN:-}" || -z "${TG_CHAT_ID:-}" ]]; then
 else
     echo -e "\n${CYAN}Better Stack — Telegram webhooks${NC}\n"
 
-    TELEGRAM_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
     THREAD="${TG_THREAD_ID:-}"
 
     existing_wh=$(get_existing_webhooks)
@@ -291,14 +307,15 @@ for item in data.get('data', []):
 " "$name" 2>/dev/null
 )
 
-        python3 - "$name" "$TELEGRAM_URL" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" "$([[ -n "$existing_id" ]] && echo false || echo true)" "$wh_json" << 'PYEOF' > /dev/null
-import sys, json
+        TG_TOKEN="$TG_TOKEN" python3 - "$name" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" "$([[ -n "$existing_id" ]] && echo false || echo true)" "$wh_json" << 'PYEOF' > /dev/null
+import os, sys, json
 
-_, name, url, started, resolved, chat_id, thread, text, for_creation, out_path = sys.argv
+_, name, started, resolved, chat_id, thread, text, for_creation, out_path = sys.argv
 started = started.lower() == 'true'
 resolved = resolved.lower() == 'true'
 for_creation = for_creation.lower() == 'true'
 text = text.replace('\\n', '\n')
+url = "https://api.telegram.org/bot{}/sendMessage".format(os.environ["TG_TOKEN"])
 
 payload = {}
 if for_creation:

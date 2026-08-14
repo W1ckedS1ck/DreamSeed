@@ -56,7 +56,12 @@
     force: true
   notify: Reload Nginx
 
-- name: Deploy Cloudflare real IP config
+- name: Check if Cloudflare real IP config exists
+  ansible.builtin.stat:
+    path: /etc/nginx/conf.d/cloudflare-realip.conf
+  register: cf_realip_conf
+
+- name: Deploy Cloudflare real IP config (bootstrap — first boot only)
   become: true
   ansible.builtin.copy:
     src: cloudflare-realip.conf
@@ -64,6 +69,7 @@
     owner: root
     group: root
     mode: "0644"
+  when: not cf_realip_conf.stat.exists
   notify: Reload Nginx
 
 - name: Test nginx configuration

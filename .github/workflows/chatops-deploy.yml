@@ -134,8 +134,7 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           USER: ${{ github.event.comment.user.login }}
         run: |
-          CONFIRM=""
-          [[ "$TARGET" =~ ^prod ]] && CONFIRM="destroy $TARGET"
+          CONFIRM="destroy $TARGET"
 
           gh workflow run deploy.yml \
             --repo "${{ github.repository }}" \

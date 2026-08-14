@@ -270,12 +270,17 @@ jobs:
             "${{ steps.server-ip.outputs.ip }}" \
             "${{ inputs.environment }}")
 
-          TG_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-          curl -s -X POST "$TG_URL" \
+          # Keep the token out of argv (ps aux) — curl reads the URL from a
+          # 0600 temp config file instead of a command-line argument.
+          tg_cfg=$(mktemp)
+          chmod 600 "$tg_cfg"
+          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+          curl -s -m 10 -X POST --config "$tg_cfg" \
             -d "chat_id=${TG_CHAT_ID}" \
             ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
             --data-urlencode "parse_mode=Markdown" \
             --data-urlencode "text=$MSG" > /dev/null || true
+          rm -f "$tg_cfg"
 
       - name: Write job summary
         if: always()
