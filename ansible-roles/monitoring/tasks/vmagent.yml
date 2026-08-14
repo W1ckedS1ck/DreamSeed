@@ -94,3 +94,21 @@
   become: true
   failed_when: false
   when: not _vmagent_enabled and _vmagent_binary is defined and _vmagent_binary.stat.exists
+
+- name: Remove vmagent credentials, config and unit if disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/vmagent/credentials.env
+    - /etc/vmagent/password.txt
+    - /etc/vmagent/scrape.yml
+    - /etc/systemd/system/vmagent.service
+  when: not _vmagent_enabled and _vmagent_binary is defined and _vmagent_binary.stat.exists
+
+- name: Reload systemd after vmagent unit removal
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: not _vmagent_enabled and _vmagent_binary is defined and _vmagent_binary.stat.exists

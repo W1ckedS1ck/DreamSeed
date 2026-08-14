@@ -85,6 +85,11 @@
 
 # ─── Grafana apt repo (shared by grafana + promtail roles) ───────────────
 # Provisioned once in the base playbook so the two roles don't duplicate it.
+#
+# Security note (audit 2026-08): the Grafana gpg.key is fetched over HTTPS and
+# consumed via apt's signed_by. No pinned key fingerprint — accepted: apt's
+# InRelease signature checks plus TLS are adequate for this single-maintainer
+# project. Revisit if the project gains more maintainers.
 - name: Download Grafana GPG key
   become: true
   ansible.builtin.get_url:

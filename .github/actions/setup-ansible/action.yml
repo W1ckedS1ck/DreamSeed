@@ -14,6 +14,8 @@ runs:
       shell: bash
 
     # ansible.mysql and ansible.posix ship bundled with the `ansible`
-    # community pip package — kept as safety net in case ansible drops them.
-    - run: ansible-galaxy collection install ansible.mysql ansible.posix
+    # community pip package — reinstalled via requirements.yml as a safety
+    # net in case ansible drops them. Versions are pinned there; Renovate
+    # (ansible-galaxy manager) bumps them.
+    - run: ansible-galaxy collection install -r ansible/requirements.yml
       shell: bash
