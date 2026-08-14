@@ -70,23 +70,6 @@ PYEOF
     printf '%s' "$dir"
 }
 
-resolve_scripts_dir_remote() {
-    local dir
-    dir=$(python3 - "$SCRIPT_DIR/ansible/group_vars/all.yml" <<'PYEOF' 2>/dev/null
-import yaml, sys
-d = yaml.safe_load(open(sys.argv[1]))
-print(d.get('scripts_dir_remote', '/home/ubuntu/Scripts'))
-PYEOF
-)
-    dir="${dir:-/home/ubuntu/Scripts}"
-    # Validate path is safe before passing to SSH remote command
-    if [[ ! "$dir" =~ ^/[A-Za-z0-9/_-]+$ ]]; then
-        echo "  ⚠ scripts_dir_remote has unexpected chars, using default" >&2
-        dir="/home/ubuntu/Scripts"
-    fi
-    printf '%s' "$dir"
-}
-
 check_services() {
     echo ""
     echo "  ▸ Post-deploy checks"

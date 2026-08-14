@@ -113,11 +113,18 @@ _env_export() {
     # Only uppercase variable names are expanded — no RCE vector (indirect expansion, not eval).
     # Skipped for single-quoted values (no_expand=1) to match bash semantics.
     if [[ -z "$no_expand" ]]; then
+        # Bound the expansion loop — a cyclic/self-referential value (e.g.
+        # BAR='$BAR' followed by FOO=$BAR) would otherwise loop forever.
+        local i=0
         while [[ "$val" =~ \$\{?([A-Z_][A-Z0-9_]*)\}? ]]; do
             local varname="${BASH_REMATCH[1]}"
             local varval="${!varname:-}"
             val="${val//\$\{$varname\}/$varval}"
             val="${val//\$$varname/$varval}"
+            ((++i >= 10)) && {
+                echo "Error: variable expansion limit exceeded in $f:$n (key '$key')" >&2
+                return 1
+            }
         done
     fi
     export "$key=$val"

@@ -17,12 +17,11 @@ terraform_select_workspace() {
 terraform_ensure_workspace() {
     [[ -z "${TF_API_TOKEN:-}" || -z "${TF_WORKSPACE:-}" ]] && return 0
     local org="DreamSeed" ws_name="dreamseed-${TF_WORKSPACE}"
-    local auth="Authorization: Bearer $TF_API_TOKEN"
     local url="https://app.terraform.io/api/v2/organizations/$org/workspaces/$ws_name"
-    if ! curl -sf -H "$auth" "$url" >/dev/null 2>&1; then
+    if ! curl -sf --config <(_bearer_auth "$TF_API_TOKEN") "$url" >/dev/null 2>&1; then
         echo "  Creating TFC workspace: $ws_name"
         curl -sf -X POST "https://app.terraform.io/api/v2/organizations/$org/workspaces" \
-            -H "$auth" -H "Content-Type: application/vnd.api+json" \
+            --config <(_bearer_auth "$TF_API_TOKEN") -H "Content-Type: application/vnd.api+json" \
             -d "{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$ws_name\",\"execution-mode\":\"local\"}}}" >/dev/null 2>&1 && echo "  ✓ Workspace created" || echo "  ⚠ Failed to create workspace (will try 'terraform workspace new')"
     fi
 }
@@ -92,12 +91,12 @@ terraform_destroy() {
             server_id=$(_tf state show 'hcloud_server.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
             pip_id=$(_tf state show 'hcloud_primary_ip.main[0]' 2>/dev/null | grep '^    id ' | awk '{print $3}' | tr -d '"' || true)
             [[ -n "$server_id" ]] && curl -sf -X POST \
-                -H "Authorization: Bearer $hcloud_token" \
+                --config <(_bearer_auth "$hcloud_token") \
                 -H "Content-Type: application/json" \
                 "https://api.hetzner.cloud/v1/servers/$server_id/actions/change_protection" \
                 -d '{"delete":false,"rebuild":false}' >/dev/null 2>&1 || true
             [[ -n "$pip_id" ]] && curl -sf -X POST \
-                -H "Authorization: Bearer $hcloud_token" \
+                --config <(_bearer_auth "$hcloud_token") \
                 -H "Content-Type: application/json" \
                 "https://api.hetzner.cloud/v1/primary_ips/$pip_id/actions/change_protection" \
                 -d '{"delete":false}' >/dev/null 2>&1 || true

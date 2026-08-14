@@ -70,16 +70,25 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
     PROJ_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/project${ENV}"
     DB_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/db${ENV}"
 
-    PROJ_CLOUD_COUNT=$(rclone lsf "$PROJ_CLOUD_PATH" 2>/dev/null | wc -l || echo "0")
-    DB_CLOUD_COUNT=$(rclone lsf "$DB_CLOUD_PATH" 2>/dev/null | wc -l || echo "0")
+    # rclone exit code is captured so a failed listing is reported as an
+    # error, not silently mistaken for "genuinely zero cloud backups"
+    # (same pattern as send_report.sh — M9).
+    _rclone_err=0
+    PROJ_CLOUD_COUNT=$(rclone lsf "$PROJ_CLOUD_PATH" 2>/dev/null | wc -l) || _rclone_err=1
+    DB_CLOUD_COUNT=$(rclone lsf "$DB_CLOUD_PATH" 2>/dev/null | wc -l) || _rclone_err=1
 
     # Fallback to plain gdrive if crypt remote has no files (transition period)
-    if [[ "$PROJ_CLOUD_COUNT" -eq 0 && "$DB_CLOUD_COUNT" -eq 0 ]]; then
-        PROJ_CLOUD_COUNT=$(rclone lsf "gdrive:DreamSeed/backups/project${ENV}" 2>/dev/null | wc -l || echo "0")
-        DB_CLOUD_COUNT=$(rclone lsf "gdrive:DreamSeed/backups/db${ENV}" 2>/dev/null | wc -l || echo "0")
+    if [[ "$_rclone_err" -eq 0 && "$PROJ_CLOUD_COUNT" -eq 0 && "$DB_CLOUD_COUNT" -eq 0 ]]; then
+        PROJ_CLOUD_COUNT=$(rclone lsf "gdrive:DreamSeed/backups/project${ENV}" 2>/dev/null | wc -l) || _rclone_err=1
+        DB_CLOUD_COUNT=$(rclone lsf "gdrive:DreamSeed/backups/db${ENV}" 2>/dev/null | wc -l) || _rclone_err=1
     fi
 
-    if [[ "$PROJ_CLOUD_COUNT" -gt 0 && "$DB_CLOUD_COUNT" -gt 0 ]]; then
+    if [[ "$_rclone_err" -eq 1 ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Cloud backup listing failed (rclone error)" >> "$LOG_FILE"
+        ALERTS+="❌ Cloud backup listing failed (rclone error)
+"
+        CLOUD_OK=0
+    elif [[ "$PROJ_CLOUD_COUNT" -gt 0 && "$DB_CLOUD_COUNT" -gt 0 ]]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Cloud backups OK: $PROJ_CLOUD_COUNT project, $DB_CLOUD_COUNT DB" >> "$LOG_FILE"
         CLOUD_OK=1
     else

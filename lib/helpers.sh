@@ -87,6 +87,10 @@ rotate_logs() {
 
 _cfcurl() { curl -s --connect-timeout 5 --max-time 15 "$@"; }
 
+# Auth header via process substitution (not argv) — token stays out of ps aux.
+# Usage: curl ... --config <(_bearer_auth "$TOKEN") ...
+_bearer_auth() { printf 'header = "Authorization: Bearer %s"\n' "$1"; }
+
 # Resolve Cloudflare zone ID from a (sub)domain by walking labels down to the
 # registrable zone, e.g. ssh.aws.vitalikuts.online → vitalikuts.online.
 # Works for any nesting depth; apex domains resolve on the first attempt.
@@ -97,7 +101,7 @@ _cf_zone_id() {
     local candidate="$domain"
     local zone_id=""
     while [[ "$candidate" == *.* ]]; do
-        zone_id=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        zone_id=$(_cfcurl --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
             "$api_base/zones?name=$candidate" | jq -r '.result[0].id // ""' 2>/dev/null) || zone_id=""
         [[ -n "$zone_id" ]] && { echo "$zone_id"; return 0; }
         candidate="${candidate#*.}"
@@ -116,7 +120,7 @@ update_cloudflare_dns() {
     local type="A"
 
     local existing
-    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    existing=$(_cfcurl --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
         "$base?type=$type&name=$domain" 2>/dev/null || true)
 
     # Single jq pass: parse existing records → count, id, old_ip
@@ -137,7 +141,7 @@ update_cloudflare_dns() {
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare DNS: $domain → $ip (unchanged)"; return 0; }
         if _cfcurl --retry 1 --retry-delay 3 -X PUT "$base/$record_id" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
             -H "Content-Type: application/json" \
             -d "$dns_body" | jq -e '.success' >/dev/null 2>&1; then
             log "Cloudflare DNS: $domain $old_ip → $ip"
@@ -150,7 +154,7 @@ update_cloudflare_dns() {
         fi
     else
         if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
             -H "Content-Type: application/json" \
             -d "$dns_body" | jq -e '.success' >/dev/null 2>&1; then
             log "Cloudflare DNS: $domain → $ip (created)"
@@ -173,7 +177,7 @@ delete_cloudflare_dns() {
     local base="$api_base/zones/$zone_id/dns_records"
 
     local existing
-    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    existing=$(_cfcurl --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
         "$base?type=A&name=$domain" 2>/dev/null || true)
 
     local record_id
@@ -182,7 +186,7 @@ delete_cloudflare_dns() {
     [[ -z "$record_id" ]] && { log "Cloudflare DNS cleanup: no A record found for $domain"; echo "  — Cloudflare DNS: no A record found"; return 0; }
 
     if _cfcurl --retry 1 --retry-delay 3 -X DELETE "$base/$record_id" \
-        -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
         -H "Content-Type: application/json" | jq -e '.success' >/dev/null 2>&1; then
         log "Cloudflare DNS: deleted A record for $domain"
         echo "  ✓ Cloudflare DNS: deleted $domain"
@@ -202,7 +206,7 @@ update_cloudflare_dns_direct() {
     local ttl="${CLOUDFLARE_DNS_TTL:-120}"
 
     local existing
-    existing=$(_cfcurl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?type=A&name=$subdomain" 2>/dev/null || true)
+    existing=$(_cfcurl --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") "$base?type=A&name=$subdomain" 2>/dev/null || true)
 
     IFS='|' read -r count record_id old_ip < <(echo "$existing" | jq -r '.result | length as $c | "\($c)|\(. [0].id // "")|\(. [0].content // "")"' 2>/dev/null) || { count=0; record_id=; old_ip=; }
 
@@ -220,7 +224,7 @@ update_cloudflare_dns_direct() {
     if [[ "$count" -gt 0 ]]; then
         [[ "$old_ip" == "$ip" ]] && { log "Cloudflare direct DNS: $subdomain → $ip (unchanged)"; return 0; }
         if _cfcurl --retry 1 --retry-delay 3 -X PUT "$base/$record_id" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
             -H "Content-Type: application/json" \
             -d "$dns_body" > /dev/null 2>&1; then
             log "Cloudflare direct DNS: $subdomain → $ip"
@@ -233,7 +237,7 @@ update_cloudflare_dns_direct() {
         fi
     else
         if _cfcurl --retry 1 --retry-delay 3 -X POST "$base" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --config <(_bearer_auth "$CLOUDFLARE_API_TOKEN") \
             -H "Content-Type: application/json" \
             -d "$dns_body" > /dev/null 2>&1; then
             log "Cloudflare direct DNS: $subdomain → $ip (created)"

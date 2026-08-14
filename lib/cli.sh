@@ -38,8 +38,14 @@ parse_args() {
     if [[ "$1" == "--logs" ]]; then
         local prefix="deploy"
         [[ "${2:-}" == "tf" || "${2:-}" == "terraform" ]] && prefix="terraform"
-        local latest; latest=$(ls -t "$LOG_DIR/${prefix}_"*.log 2>/dev/null | head -1)
-        [[ -z "$latest" ]] && { echo "No ${prefix} logs found"; exit 1; }
+        local latest
+        # nullglob prevents a literal "deploy_*.log" pattern being passed to
+        # ls (which would fail and trip set -e before the "No logs" branch).
+        shopt -s nullglob
+        local logs=("$LOG_DIR/${prefix}_"*.log)
+        shopt -u nullglob
+        [[ ${#logs[@]} -eq 0 ]] && { echo "No ${prefix} logs found"; exit 1; }
+        latest=$(ls -t "${logs[@]}" | head -1)
         tail -f "$latest"; exit 0
     fi
 
