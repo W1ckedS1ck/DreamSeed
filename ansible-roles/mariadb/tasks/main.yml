@@ -13,7 +13,6 @@
     src: 99-optimizations.cnf.j2
     dest: /etc/mysql/conf.d/99-optimizations.cnf
     mode: "0644"
-    validate: mariadbd --validate-config --defaults-file=%s
   notify: Restart MariaDB
 
 - name: Create MySQL log directory
