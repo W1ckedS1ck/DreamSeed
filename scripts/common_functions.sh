@@ -17,17 +17,28 @@ fi
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
-    # Same .env contract as lib/env.sh: KEY=value, optional quotes, inline
-    # comments, multi-line values, $HOME/$UPPERCASE_VAR expansion. No source/eval — no RCE.
-    local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|BASH_FUNC_.*)$'
+    # Same parsing contract as lib/env.sh (deploy side): KEY=value, optional
+    # quotes, inline comments, multi-line values, $HOME/$UPPERCASE_VAR expansion
+    # (bounded, 10 passes). No source/eval — no RCE.
+    # Intentional divergences (documented, not accidental):
+    #   - blocked vars are SKIPPED silently here (server .env is
+    #     Ansible-generated/trusted); lib/env.sh FAILS loudly instead;
+    #   - ENV is allowed here because server.env.j2 legitimately writes ENV=;
+    #   - malformed lines are skipped here (server scripts run unattended).
+    local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|BASH_FUNC_.*|PS1|PS2|PS3|PS4|TMPDIR|USER|HOME|UID|GID|SHLVL|PPID|BASH_VERSION|BASH_SUBSHELL)$'
     local key="" value="" quote="" no_expand=""
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         line="${line#export }"
         if [[ -n "$quote" ]]; then
-            # Multi-line quoted value — accumulate until the closing quote
-            if [[ "$line" == *"$quote" ]]; then
-                value+=$'\n'"${line%"$quote"}"
-                export "$key=$value"; key=""; value=""; quote=""
+            # Multi-line quoted value — accumulate until the closing quote.
+            # Anything after the closing quote is an inline comment (same as
+            # lib/env.sh); single-quoted values stay literal (no expansion).
+            if [[ "$line" == *"$quote"* ]]; then
+                value+=$'\n'"${line%%"$quote"*}"
+                local lit=""
+                [[ "$quote" == "'" ]] && lit="1"
+                _server_env_set "$key" "$value" "$lit" || exit 1
+                key=""; value=""; quote=""
             else
                 value+=$'\n'"$line"
             fi
@@ -37,29 +48,61 @@ load_env() {
         [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
         key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
         [[ "$key" =~ $blocked_vars ]] && { key=""; continue; }
+        # Multi-line quoted value: opening quote without a matching close on
+        # this line (trailing whitespace/comments after the close are allowed).
+        if [[ "$value" =~ ^\"(.*)$ && ! "$value" =~ ^\".*\"[[:space:]]*(#.*)?$ ]]; then
+            quote='"'; value="${value#\"}"; continue
+        elif [[ "$value" =~ ^\'(.*)$ && ! "$value" =~ ^\'.*\'[[:space:]]*(#.*)?$ ]]; then
+            quote="'"; value="${value#\'}"; continue
+        fi
         no_expand=""
         if [[ "$value" =~ ^\"(.*)\"[[:space:]]*(#.*)?$ ]]; then
             value="${BASH_REMATCH[1]}"
         elif [[ "$value" =~ ^\'(.*)\'[[:space:]]*(#.*)?$ ]]; then
             value="${BASH_REMATCH[1]}"; no_expand="1"
-        elif [[ "$value" =~ ^\"(.*)$ || "$value" =~ ^\'(.*)$ ]]; then
-            quote="${value:0:1}"; value="${value:1}"; continue
         else
             value="${value%%[[:space:]]#*}"                    # strip inline comment
             value="${value%"${value##*[![:space:]]}"}"         # trim trailing whitespace
         fi
-        if [[ -z "$no_expand" ]]; then
-            while [[ "$value" =~ \$\{?([A-Z_][A-Z0-9_]*)\}? ]]; do
-                local v="${BASH_REMATCH[1]}"
-                value="${value//\$\{$v\}/${!v:-}}"
-                value="${value//\$$v/${!v:-}}"
-            done
-        fi
-        if [[ "$value" == *'$('* || "$value" == *'`'* ]]; then
-            echo "Error: command substitution in $key" >&2; exit 1
-        fi
-        export "$key=$value"; key=""; value=""
+        _server_env_set "$key" "$value" "$no_expand" || exit 1
+        key=""; value=""
     done < "$env_file"
+    if [[ -n "$quote" ]]; then
+        echo "Error: unterminated quoted value for '$key' in $env_file (reached EOF)" >&2
+        exit 1
+    fi
+}
+
+# Export a single parsed var. Mirrors lib/env.sh _env_export: command
+# substitution rejection (raw + after expansion) and bounded $UPPERCASE_VAR
+# expansion (single-quoted values stay literal).
+_server_env_set() {
+    local key="$1" val="$2" no_expand="${3:-}"
+    if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
+        echo "Error: command substitution detected in .env key '$key'" >&2
+        exit 1
+    fi
+    if [[ -z "$no_expand" ]]; then
+        # Bound the expansion loop — a cyclic/self-referential value (e.g.
+        # BAR='$BAR' followed by FOO=$BAR) would otherwise loop forever.
+        # Parity with lib/env.sh (both allow max 10 passes).
+        local i=0 v varname
+        while [[ "$val" =~ \$\{?([A-Z_][A-Z0-9_]*)\}? ]]; do
+            varname="${BASH_REMATCH[1]}"
+            v="${!varname:-}"
+            val="${val//\$\{$varname\}/$v}"
+            val="${val//\$$varname/$v}"
+            ((++i >= 10)) && {
+                echo "Error: variable expansion limit exceeded in .env key '$key'" >&2
+                exit 1
+            }
+        done
+        if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
+            echo "Error: command substitution detected in .env key '$key' (after expansion)" >&2
+            exit 1
+        fi
+    fi
+    export "$key=$val"
 }
 
 # Detect env suffix for backup paths: Prod → "", Dev → "-dev".
@@ -114,7 +157,7 @@ send_tg() {
     # Keep the token out of argv (ps aux) — curl reads the URL from a
     # 0600 temp config file instead of a command-line argument.
     local tg_cfg tg_url tg_resp err
-    tg_cfg=$(mktemp) || return 0
+    tg_cfg=$(mktemp) || { echo "WARNING: Telegram send failed: mktemp" >&2; return 1; }
     chmod 600 "$tg_cfg"
     printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
     local data=(
@@ -125,10 +168,15 @@ send_tg() {
     [[ -n "${TG_THREAD_ID:-}" ]] && data+=(--data-urlencode "message_thread_id=$TG_THREAD_ID")
     tg_resp=$(curl -s -m 10 -X POST --config "$tg_cfg" "${data[@]}" 2>/dev/null) || true
     rm -f "$tg_cfg"
+    # Honest exit code: return 1 on API failure so callers can decide whether a
+    # dropped notification matters (send_tg.sh already exits 1). Callers that
+    # must not fail on a notification use `send_tg ... || true`.
     if ! echo "$tg_resp" | jq -e '.ok == true' >/dev/null 2>&1; then
         err=$(echo "$tg_resp" | jq -r '.description // "unknown"' 2>/dev/null || echo "unknown")
         echo "WARNING: Telegram send failed: $err" >&2
+        return 1
     fi
+    return 0
 }
 
 ping_heartbeat() {

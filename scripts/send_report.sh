@@ -103,7 +103,7 @@ $(date +%d.%m) - $ENV_DISPLAY"
 
 $(date '+%d.%m.%Y %H:%M')"
 
-    send_tg "$MSG"
+    send_tg "$MSG" || true
 
 # ==== WEEKLY REPORT ====
 elif [ "$REPORT_TYPE" = "weekly" ]; then
@@ -132,7 +132,7 @@ $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
 
 $(date '+%d.%m.%Y %H:%M')"
 
-    send_tg "$MSG"
+    send_tg "$MSG" || true
 
 else
     echo "Usage: $0 {daily|weekly}"
