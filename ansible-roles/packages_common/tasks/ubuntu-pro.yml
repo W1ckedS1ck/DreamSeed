@@ -27,5 +27,7 @@
 
 - name: Report Ubuntu Pro attachment status
   when: ubuntu_pro_token | length > 0
+  vars:
+    _pro_attach_ran: "{{ pro_attach is defined and not (pro_attach.skipped | default(false)) }}"
   ansible.builtin.debug:
-    msg: "Ubuntu Pro: {{ 'attach run (rc=' ~ pro_attach.rc ~ ')' if (pro_attach is defined and not (pro_attach.skipped | default(false))) else 'already attached / pro unavailable — skipped' }}"
+    msg: "Ubuntu Pro: {{ 'attach run (rc=' ~ pro_attach.rc ~ ')' if _pro_attach_ran else 'already attached / pro unavailable — skipped' }}"

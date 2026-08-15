@@ -79,6 +79,12 @@ check_services() {
 
     local output rc
     [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
+    # Clear the deploy-in-progress marker (written by playbook-01) so this
+    # final authoritative check runs and the 5-min timer resumes immediately.
+    ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+        -o LogLevel=ERROR \
+        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "rm -f /tmp/.dreamseed_deploying" 2>/dev/null || true
     set +e
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -o LogLevel=ERROR \

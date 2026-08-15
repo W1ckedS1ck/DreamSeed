@@ -10,6 +10,17 @@ LOCK_FILE="$LOCK_DIR/check_services.lock"
 exec 200>"$LOCK_FILE"
 flock -n 200 || { echo "check_services already running, skipping"; exit 0; }
 
+# Skip while a deploy is provisioning (marker written by playbook-01) so the
+# 5-min timer doesn't false-alert on half-configured services. A stale marker
+# (>30 min, e.g. left behind by a failed deploy) is ignored — checks resume.
+if [ -f /tmp/.dreamseed_deploying ]; then
+    _deploy_marker_mtime=$(stat -c %Y /tmp/.dreamseed_deploying 2>/dev/null || echo 0)
+    if [ $(( $(date +%s) - _deploy_marker_mtime )) -lt 1800 ]; then
+        echo "Deploy in progress — skipping health check"
+        exit 0
+    fi
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
