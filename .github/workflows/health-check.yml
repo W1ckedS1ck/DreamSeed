@@ -13,7 +13,7 @@ on:
         default: prod
 
 concurrency:
-  group: health-check-${{ github.event_name == 'schedule' && 'prod-hetz' || inputs.target }}
+  group: env-${{ github.event_name == 'schedule' && 'prod-hetz' || inputs.target }}
   cancel-in-progress: false
 
 permissions:

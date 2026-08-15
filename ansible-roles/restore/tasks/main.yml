@@ -179,10 +179,7 @@
 # ========================
 - name: Check if DB already has tables
   ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      mysql "{{ db_name | quote }}" -e "SHOW TABLES" 2>/dev/null | wc -l
-    executable: /bin/bash
+    cmd: mysql -N "{{ db_name | quote }}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()" 2>/dev/null
   register: restore_db_tables
   changed_when: false
   failed_when: false

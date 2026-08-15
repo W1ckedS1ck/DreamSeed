@@ -21,7 +21,7 @@ on:
         default: apply
 
 concurrency:
-  group: tf-${{ inputs.workspace }}
+  group: env-${{ inputs.workspace }}
   cancel-in-progress: false
 
 permissions:
@@ -102,6 +102,7 @@ jobs:
               write_env "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}"
               write_env "TF_VAR_server_type=cx23"
               write_env "TF_VAR_ssh_key_name=Vitali.pub"
+              write_env "TF_VAR_primary_ip_name=primary_ip-1"
             fi
             write_env "TF_VAR_environment=${{ inputs.workspace }}"
           fi

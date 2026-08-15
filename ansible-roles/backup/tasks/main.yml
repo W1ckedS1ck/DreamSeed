@@ -66,6 +66,7 @@
   become: true
   ansible.builtin.pip:
     name: python-telegram-bot
+    version: ">=20,<22"
     state: present
     extra_args: --break-system-packages
 
@@ -148,6 +149,7 @@
       2>&1 | logger -t session-cleanup
     user: root
     state: absent
+  become: true
 
 - name: Setup backup verification cron (daily at 4:30 AM)
   ansible.builtin.cron:

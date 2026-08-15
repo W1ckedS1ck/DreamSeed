@@ -29,6 +29,19 @@ TG_CHAT_ID = os.environ.get("TG_CHAT_ID", "")
 TG_THREAD_STR = os.environ.get("TG_THREAD_ID", "").strip()
 TG_THREAD_ID = int(TG_THREAD_STR) if TG_THREAD_STR.isdigit() else None
 
+
+class _TokenMask(logging.Filter):
+    """Redact the bot token from every log record (httpx/PTB may log full URLs)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if TG_TOKEN and TG_TOKEN in record.getMessage():
+            record.msg = record.getMessage().replace(TG_TOKEN, "***")
+            record.args = ()
+        return True
+
+
+logging.getLogger().addFilter(_TokenMask())
+
 BACKUP_DIR = os.environ.get("BACKUP_DIR", "/home/ubuntu/backups")
 RCLONE_REMOTE = os.environ.get("RCLONE_REMOTE", "gdrive-crypt")
 REMOTE_BASE = os.environ.get("REMOTE_BASE", "DreamSeed/backups")
@@ -51,7 +64,7 @@ def _chat_allowed(update: Update) -> bool:
 def get_env() -> str:
     env = os.environ.get("ENV", "")
     if env:
-        return "prod" if env == "prod" else "dev"
+        return "prod" if env.startswith("prod") else "dev"
     return "prod" if "prod" in socket.gethostname() else "dev"
 
 

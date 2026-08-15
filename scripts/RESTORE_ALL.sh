@@ -341,44 +341,48 @@ else
     RESTORE_PROJECT=1
     RESTORE_DB=1
 
-    SELECTED_PROJECT=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -1)
-    SELECTED_DB=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -1)
-    SELECTED_REDIS=$(list_backups "$BACKUP_DIR/redis" 'redis_dump_*.rdb' | head -1)
+    # Local-first: local backups are authoritative when fresh (DB dumps run
+    # hourly and uploads are separately alerted, so cloud cannot be newer).
+    # Cloud is consulted only when the local DB backup is missing or stale
+    # (>= 6h): one metadata-only rclone lsf, then only the newest file per
+    # type is downloaded. PROD paths always (dev/test restore prod data).
+    SELECTED_PROJECT=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -1) || true
+    SELECTED_DB=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -1) || true
+    SELECTED_REDIS=$(list_backups "$BACKUP_DIR/redis" 'redis_dump_*.rdb' | head -1) || true
 
-    if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
-        echo "Local backups not found, trying Google Drive..."
-        mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db"
+    _db_age=0
+    [ -n "$SELECTED_DB" ] && _db_age=$(( $(date +%s) - $(stat -c %Y "$SELECTED_DB") ))
 
-        # IMPORTANT: Auto-latest mode ALWAYS restores from PROD backups, regardless of environment.
-        # Dev servers MUST use prod data. This is intentional — dev has no separate backup pipeline.
-        # Interactive mode keeps ENV_SUFFIX="" for the same reason (line 222).
-        # Do not add ENV_SUFFIX here. See detect_env() in common_functions.sh for design rationale.
-        # Each rclone exit code is captured: a failed download must NOT be
-        # silently confused with "no backups exist" and fall back on stale
-        # local files (M13).
-        _dl_err=0
-        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
-            --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || \
-            { rclone copy "gdrive:$REMOTE_BASE/project/" "$BACKUP_DIR/project/" \
-                --include "DreamSeed_*.tar.gz" --ignore-existing -v 2>&1 | tail -3 || { _dl_err=1; echo "  ✗ project download failed on GDrive too" >&2; }; }
-        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
-            --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || \
-            { rclone copy "gdrive:$REMOTE_BASE/db/" "$BACKUP_DIR/db/" \
-                --include "db_*.sql.gz" --ignore-existing -v 2>&1 | tail -3 || { _dl_err=1; echo "  ✗ DB download failed on GDrive too" >&2; }; }
-        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
-            --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || \
-            { rclone copy "gdrive:$REMOTE_BASE/redis/" "$BACKUP_DIR/redis/" \
-                --include "redis_dump_*.rdb" --ignore-existing -v 2>&1 | tail -3 || { _dl_err=1; echo "  ✗ Redis download failed on GDrive too" >&2; }; }
-        if [ "$_dl_err" -eq 1 ]; then
-            echo -e "${RED}✗ GDrive download failed — NOT falling back to possibly-stale local files.${NC}" >&2
-            echo "  Fix connectivity/rclone config and re-run." >&2
-            exit 1
-        fi
-
-        SELECTED_PROJECT=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -1)
-        SELECTED_DB=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -1)
-        SELECTED_REDIS=$(list_backups "$BACKUP_DIR/redis" 'redis_dump_*.rdb' | head -1)
+    _cloud_listing=""
+    if [ -z "$SELECTED_DB" ] || [ "$_db_age" -ge 21600 ] || [ -z "$SELECTED_PROJECT" ]; then
+        echo "Local backups missing or DB $(( _db_age / 3600 ))h old — checking cloud..."
+        _cloud_listing=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive 2>/dev/null) || {
+            echo -e "${YELLOW}  ⚠ Cloud listing failed — using local backups only${NC}" >&2
+            _cloud_listing=""
+        }
     fi
+
+    _fetch() {
+        local dir="$1" subdir="$2" cur="$3" cloud_new=""
+        if [ -n "$_cloud_listing" ]; then
+            cloud_new=$(printf '%s\n' "$_cloud_listing" \
+                | grep -E "^${subdir}/" | sed "s#^${subdir}/##" | sort -r | head -1) || true
+            if [ -n "$cloud_new" ] && { [ -z "$cur" ] || [ "$cloud_new" \> "$(basename "$cur")" ]; }; then
+                echo "  ${subdir}: downloading newest cloud backup ${cloud_new}" >&2
+                mkdir -p "$dir"
+                if rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}/${cloud_new}" "$dir/" >/dev/null 2>&1; then
+                    echo "$dir/$cloud_new"
+                    return 0
+                fi
+                echo -e "${YELLOW}  ⚠ ${subdir}: cloud download failed — keeping local${NC}" >&2
+            fi
+        fi
+        printf '%s' "$cur"
+    }
+
+    SELECTED_PROJECT=$(_fetch "$BACKUP_DIR/project" "project" "$SELECTED_PROJECT")
+    SELECTED_DB=$(_fetch "$BACKUP_DIR/db" "db" "$SELECTED_DB")
+    SELECTED_REDIS=$(_fetch "$BACKUP_DIR/redis" "redis" "$SELECTED_REDIS")
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
         echo "ERROR: Latest backups not found (local or GDrive)"
@@ -391,6 +395,10 @@ else
     echo "Project: $(basename "$SELECTED_PROJECT")"
     echo "DB: $(basename "$SELECTED_DB")"
     [ -n "$SELECTED_REDIS" ] && echo "Redis: $(basename "$SELECTED_REDIS")"
+    _db_age=$(( $(date +%s) - $(stat -c %Y "$SELECTED_DB") ))
+    if [ "$_db_age" -ge 21600 ]; then
+        echo -e "${RED}  ⚠ WARNING: newest DB backup is $(( _db_age / 3600 ))h old — backups may have stalled${NC}" >&2
+    fi
     echo ""
 fi
 
@@ -406,6 +414,10 @@ fi
 if [ -n "$SELECTED_PROJECT" ]; then
     if ! timeout 300 sudo tar -tzf "$SELECTED_PROJECT" >/dev/null 2>&1; then
         echo -e "${RED}✗ Project archive corrupted: $(basename "$SELECTED_PROJECT")${NC}"
+        exit 1
+    fi
+    if timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | grep -qE '(^|/)\.\.(/|$)'; then
+        echo -e "${RED}✗ Project archive contains path-traversal entries: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
     echo -e "${GREEN}✓ Project archive: OK${NC}"
@@ -453,7 +465,7 @@ DB_IMPORT_LOG="$PRE_RESTORE_BACKUP_DIR/db_import_error.log"
 
 if [ -n "$SELECTED_DB" ]; then
     BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
-    if mysqldump --single-transaction "$DB_NAME" 2>"$DB_SNAPSHOT_LOG" | gzip > "$BACKUP_DB_FILE"; then
+    if mysqldump --single-transaction --routines --events --triggers "$DB_NAME" 2>"$DB_SNAPSHOT_LOG" | gzip > "$BACKUP_DB_FILE"; then
         DB_SNAPSHOT_OK=1
         echo -e "${GREEN}✓ Database snapshot: $(du -h "$BACKUP_DB_FILE" | cut -f1)${NC}"
     else

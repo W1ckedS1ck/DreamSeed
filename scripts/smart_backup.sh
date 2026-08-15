@@ -34,9 +34,10 @@ ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
 
 TMP_DB_BACKUP=""
+PROJECT_TMP=""
 
 # ====== Lock against parallel runs ======
-trap 'rm -f "${TMP_DB_BACKUP:-}" 2>/dev/null || true; exec 9>&-' EXIT
+trap 'rm -f "${PROJECT_TMP:-}" "${TMP_DB_BACKUP:-}" 2>/dev/null || true; exec 9>&-' EXIT
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
 LOCK_FILE="$LOCK_DIR/smart_backup.lock"
@@ -91,18 +92,20 @@ fi
 if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
-    if timeout 1800 sudo tar -czf "$PROJECT_BACKUP" \
+    PROJECT_TMP="$(mktemp "$BACKUP_DIR/project/.tmp_project_XXXXXX.tar.gz")"
+    if timeout 1800 sudo tar -czf "$PROJECT_TMP" \
         --exclude="$(basename "$PROJECT_DIR")/core/cache" \
         --exclude="$(basename "$PROJECT_DIR")/core/backup" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
-       timeout 300 sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
+       timeout 300 sudo tar -tzf "$PROJECT_TMP" > /dev/null 2>&1; then
+        sudo mv "$PROJECT_TMP" "$PROJECT_BACKUP"
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
         PROJECT_STATUS="✅ Project backed up"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"
         touch "$MARKER_FILE"
     else
-        rm -f "$PROJECT_BACKUP"
+        rm -f "$PROJECT_TMP"
         PROJECT_STATUS="❌ Project backup failed"
     fi
 fi
@@ -113,7 +116,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
 
-TMP_DB_BACKUP="$(mktemp "$BACKUP_DIR/db/db_tmp_XXXXXX.sql.gz")"
+TMP_DB_BACKUP="$(mktemp "$BACKUP_DIR/db/.tmp_db_XXXXXX.sql.gz")"
 set +o pipefail
 timeout 1800 mysqldump --single-transaction --routines --events --triggers \
     --ignore-table="${DB_NAME}.${MODX_TABLE_PREFIX:-modx_}session" \

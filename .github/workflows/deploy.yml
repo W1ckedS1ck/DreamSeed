@@ -35,7 +35,7 @@ on:
         type: string
 
 concurrency:
-  group: deploy-${{ inputs.environment }}
+  group: env-${{ inputs.environment }}
   cancel-in-progress: false
 
 permissions:
@@ -44,7 +44,6 @@ permissions:
 
 env:
   ACTIONS_RUNNER_DEBUG: false
-  ARTIFACT_RETENTION_DAYS: 30
 
 jobs:
   deploy:
@@ -392,6 +391,7 @@ jobs:
           shred -u ~/.ssh/deploy_key 2>/dev/null || rm -f ~/.ssh/deploy_key
           shred -u ~/.vault_pass_dreamseed 2>/dev/null || rm -f ~/.vault_pass_dreamseed
           shred -u secrets/.env 2>/dev/null || rm -f secrets/.env
+          shred -u secrets/rclone.conf 2>/dev/null || rm -f secrets/rclone.conf
           rm -f ~/.ssh/deploy_key.pub
 
   publish-preview:

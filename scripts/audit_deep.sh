@@ -14,10 +14,11 @@ source "$SCRIPT_DIR/common_functions.sh"
 
 DOMAIN="${DOMAIN:-}"
 CURL_RESOLVE=""
+CURL_RESOLVE_PUBLIC=""
 PUBLIC_IP=""
 if [[ -n "$DOMAIN" ]]; then
   CURL_RESOLVE="--resolve ${DOMAIN}:443:127.0.0.1 --resolve ${DOMAIN}:80:127.0.0.1"
-  PUBLIC_IP=$(curl -s --max-time 3 https://checkip.amazonaws.com 2>/dev/null || ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '127\.0\.0\.' | head -1)
+  PUBLIC_IP=$(curl -s --max-time 3 https://checkip.amazonaws.com 2>/dev/null || ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '127\.0\.0\.' | head -1 || true)
   [[ -n "$PUBLIC_IP" ]] && CURL_RESOLVE_PUBLIC="--resolve ${DOMAIN}:443:${PUBLIC_IP} --resolve ${DOMAIN}:80:${PUBLIC_IP}" || CURL_RESOLVE_PUBLIC=""
 fi
 fail_count=0

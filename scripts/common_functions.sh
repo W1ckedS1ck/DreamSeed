@@ -12,9 +12,7 @@ else
   GREEN=''; YELLOW=''; RED=''; CYAN=''; NC=''
 fi
 
-# Backup rotation defaults (can be overridden via environment)
-BACKUP_PROJECT_KEEP="${BACKUP_PROJECT_KEEP:-5}"
-BACKUP_DB_KEEP="${BACKUP_DB_KEEP:-15}"
+# Backup rotation defaults (overridable via server .env: PROJECT_KEEP / DB_KEEP)
 
 load_env() {
     local env_file="$1"
@@ -64,7 +62,6 @@ load_env() {
         fi
         export "$key=$value"; key=""; value=""
     done < "$env_file"
-    OWNER="${OWNER:-}"
 }
 
 # Detect environment suffix for backup paths.

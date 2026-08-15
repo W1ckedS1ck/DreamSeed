@@ -121,6 +121,7 @@ jobs:
               echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
               echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"
               echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
+              echo "TF_VAR_primary_ip_name=primary_ip-1" >> "$GITHUB_ENV"
               ;;
             cloudflare)
               echo "TF_VAR_cloudflare_api_token=$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
@@ -144,21 +145,10 @@ jobs:
         id: plan
         working-directory: ${{ matrix.tf_dir }}
         run: |
-          PLAN_FILE="/tmp/${{ matrix.target }}.tfplan"
-
-          # Remote backends (Cloudflare) don't support -out; detect by checking backend type
-          if grep -q 'backend "remote"' ./*.tf 2>/dev/null; then
-            # For remote backends, just run plan without -out
-            terraform plan -detailed-exitcode -no-color 2>&1 | tee /tmp/plan.log
-            rc=${PIPESTATUS[0]}
-            CHANGES=$(grep -c '^  #' /tmp/plan.log || echo "0")
-          else
-            # For local backends, save plan to file
-            terraform plan -detailed-exitcode -no-color \
-              -out="$PLAN_FILE" 2>&1 | tee /tmp/plan.log
-            rc=${PIPESTATUS[0]}
-            CHANGES=$(terraform show -json "$PLAN_FILE" | jq '[.resource_changes[] | select(.change.actions != ["no-op"])] | length' 2>/dev/null || echo "0")
-          fi
+          # All backends are remote (Terraform Cloud) — plan without -out.
+          terraform plan -detailed-exitcode -no-color 2>&1 | tee /tmp/plan.log
+          rc=${PIPESTATUS[0]}
+          CHANGES=$(grep -c '^  #' /tmp/plan.log || true)
 
           if [ "$rc" -eq 1 ]; then
             echo "::error::Terraform plan failed for ${{ matrix.target }} — check credentials, state, or provider."
@@ -178,12 +168,7 @@ jobs:
         working-directory: ${{ matrix.tf_dir }}
         run: |
           echo "## Drift Details for ${{ matrix.target }}"
-          # For remote backends, show from log; for local, parse plan file
-          if grep -q 'backend "remote"' ./*.tf 2>/dev/null; then
-            grep -E "^  #|^  +" /tmp/plan.log | head -20
-          else
-            terraform show -json "/tmp/${{ matrix.target }}.tfplan" | jq '.resource_changes[] | select(.change.actions != ["no-op"]) | {address: .address, actions: .change.actions}' 2>/dev/null || true
-          fi
+          grep -E "^  #|^  +" /tmp/plan.log | head -20
 
       - name: Report and notify drift (prod only)
         if: steps.plan.outputs.has_drift == 'true' && matrix.provider == 'prod'
@@ -211,7 +196,10 @@ jobs:
         run: |
           DRIFT="${{ steps.plan.outputs.has_drift }}"
           CHANGES="${{ steps.plan.outputs.changes }}"
-          if [ "$DRIFT" = "true" ]; then
+          PLAN="${{ steps.plan.outcome }}"
+          if [ "$PLAN" = "failure" ]; then
+            STATUS="❌ Plan failed"
+          elif [ "$DRIFT" = "true" ]; then
             STATUS="⚠️ Drift ($CHANGES changes)"
           else
             STATUS="✅ No drift"

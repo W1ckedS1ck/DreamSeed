@@ -96,13 +96,10 @@ jobs:
         run: terraform apply -auto-approve
 
       - name: Verify folder exists
+        working-directory: terraform/grafana
         run: |
-          FOLDER_UID=$(terraform output -raw folder_uid 2>/dev/null || echo "")
-          if [ -n "$FOLDER_UID" ]; then
-            echo "Folder UID from state: $FOLDER_UID"
-          else
-            echo "No folder in state — skipping verification"
-          fi
+          FOLDER_UID=$(terraform output -raw folder_uid)
+          echo "Folder UID from state: $FOLDER_UID"
 
       - name: Terraform State Output
         working-directory: terraform/grafana

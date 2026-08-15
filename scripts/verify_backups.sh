@@ -62,6 +62,19 @@ else
 "
 fi
 
+# Freshness: DB dumps run hourly — an archive older than 12h means the backup
+# pipeline is broken even if the file itself is valid (project backup is exempt:
+# it's only created when site files change).
+if [[ -n "$DB_BACKUP" && "$LOCAL_DB_OK" -eq 1 ]]; then
+    DB_AGE_H=$(( ( $(date +%s) - $(stat -c %Y "$DB_BACKUP") ) / 3600 ))
+    if [[ "$DB_AGE_H" -ge 12 ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ DB backup STALE (${DB_AGE_H}h): $(basename "$DB_BACKUP")" >> "$LOG_FILE"
+        ALERTS+="❌ DB backup stale (${DB_AGE_H}h): $(basename "$DB_BACKUP")
+"
+        LOCAL_DB_OK=0
+    fi
+fi
+
 export_metric "backup_verification_ok{type=\"local\",instance=\"$DOMAIN\"} $(( LOCAL_PROJ_OK && LOCAL_DB_OK ))"
 
 # ====== Verify cloud backups (if rclone configured) ======

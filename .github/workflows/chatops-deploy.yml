@@ -12,8 +12,9 @@ permissions:
   # prod targets additionally require admin collaborator permission.
   actions: write
 
-env:
-  ARTIFACT_RETENTION_DAYS: 7
+concurrency:
+  group: chatops
+  cancel-in-progress: true
 
 jobs:
   dispatch:
@@ -29,18 +30,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          COMMENT_USER="${{ github.event.comment.user.login }}"
-          PERMISSION=$(gh api "/repos/${{ github.repository }}/collaborators/$COMMENT_USER/permission" \
-            --jq '.permission' 2>/dev/null || echo "none")
+          ASSOC="${{ github.event.comment.author_association }}"
+          echo "association=$ASSOC" >> "$GITHUB_OUTPUT"
 
-          if [[ "$PERMISSION" =~ ^(admin|write|maintain)$ ]]; then
+          if [[ ! "$ASSOC" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "permission=none" >> "$GITHUB_OUTPUT"
+            gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+              -X POST -f content="-1" > /dev/null 2>&1 || true
+            exit 0
+          fi
+
+          PERMISSION=$(gh api "/repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          echo "permission=$PERMISSION" >> "$GITHUB_OUTPUT"
+
+          if [[ "$PERMISSION" =~ ^(admin|write)$ ]]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
           else
             echo "allowed=false" >> "$GITHUB_OUTPUT"
             gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
               -X POST -f content="-1" > /dev/null 2>&1 || true
           fi
-          echo "permission=$PERMISSION" >> "$GITHUB_OUTPUT"
 
       - name: React
         if: steps.check.outputs.allowed == 'true'
@@ -59,7 +70,7 @@ jobs:
           python3 .github/actions/chatops/parse.py "$COMMENT" "$GITHUB_OUTPUT"
 
       - name: Post help
-        if: steps.parse.outputs.command == 'help'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'help'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -83,7 +94,7 @@ jobs:
           fi
 
       - name: Post invalid
-        if: steps.parse.outputs.command == 'invalid'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'invalid'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -95,14 +106,14 @@ jobs:
           exit 1
 
       - name: Post status
-        if: steps.parse.outputs.command == 'status'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'status'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/actions/chatops/post_status.py "${{ github.event.issue.number }}" "${{ github.repository }}"
 
       - name: Dispatch deploy
-        if: steps.parse.outputs.command == 'deploy'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'deploy'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
@@ -127,7 +138,7 @@ jobs:
             --body "Deploy **$TARGET** ($WEB_SERVER) triggered by @$USER"
 
       - name: Dispatch destroy
-        if: steps.parse.outputs.command == 'destroy'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'destroy'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
