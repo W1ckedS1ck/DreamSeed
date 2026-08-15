@@ -133,6 +133,12 @@
   ],
   "packageRules": [
     {
+      "description": "Hold PHP at 8.3 until MODX 3 migration",
+      "matchDatasources": ["endoflife-date"],
+      "matchPackageNames": ["php"],
+      "enabled": false
+    },
+    {
       "description": "Pin GitHub Actions to commit SHAs for security",
       "matchManagers": ["github-actions"],
       "pinDigests": true
