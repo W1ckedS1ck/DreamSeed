@@ -428,7 +428,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
     # Pre-extraction layout check: the archive's top-level dir must match the
     # project dir name (smart_backup archives as "-C dirname basename"). Catches
     # a wrong/renamed archive BEFORE extraction, not via post-hoc rollback.
-    _topdir=$(timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | head -1 | cut -d/ -f1)
+    _topdir=$(timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | head -1 | cut -d/ -f1 || true)
     if [[ -z "$_topdir" || "$_topdir" != "$(basename "$PROJECT_DIR")" ]]; then
         echo -e "${RED}✗ Project archive top-level '${_topdir:-<empty>}' != expected '$(basename "$PROJECT_DIR")': $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
@@ -526,6 +526,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
             sudo rm -rf "$PROJECT_DIR"
             [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
             PROJECT_STATUS="❌ Archive structure error"
+            RESTORE_RESULT=1
             echo -e "${RED}✗ Project restore failed!${NC}"
         else
             sudo rm -rf "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
@@ -540,6 +541,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
         sudo rm -rf "$PROJECT_DIR"
         [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
         PROJECT_STATUS="❌ Error"
+        RESTORE_RESULT=1
         echo -e "${RED}✗ Project restore failed!${NC}"
     fi
 else
@@ -653,6 +655,7 @@ if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]] && [[ -f "$SELECTED_RED
         echo -e "${GREEN}✓ Redis restored${NC}"
     else
         REDIS_STATUS="❌ Error"
+        RESTORE_RESULT=1
         echo -e "${RED}✗ Redis restore failed!${NC}"
     fi
 fi

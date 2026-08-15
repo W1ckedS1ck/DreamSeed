@@ -4,6 +4,11 @@
   become: false
   gather_facts: true
 
+  pre_tasks:
+    - name: Use cached php_version fact (fallback from playbook-01)
+      ansible.builtin.set_fact:
+        php_version: "{{ ansible_facts['php_version'] | default(php_version) }}"
+
   tasks:
     - name: Configure Nginx
       ansible.builtin.include_role:
