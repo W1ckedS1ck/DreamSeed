@@ -258,6 +258,38 @@ ansible-roles/<name>/
 
 ---
 
+## Terraform Provider Updates
+
+**Routine updates are handled by Renovate** (`renovate.json`): non-major provider bumps
+automerge weekly, major bumps arrive as PRs requiring review. No manual action needed.
+
+Only force-update manually for a major outside the schedule or an urgent security fix.
+
+### How to force-update providers
+
+```bash
+# Per module (aws, cloudflare, grafana, hetzner):
+cd terraform/<module>
+cp .terraform.lock.hcl /tmp/lock.bak
+rm .terraform.lock.hcl          # the lock file PINS the version — keep it and
+                                # `terraform providers lock` will NOT upgrade
+terraform providers lock -platform=linux_amd64 -platform=darwin_arm64
+```
+
+Gotchas learned the hard way:
+
+- The committed `.terraform.lock.hcl` **pins the resolved version**. `terraform providers lock`
+  with an existing lock only adds missing checksums — it does not bump the version. Remove
+  the lock first, then re-run, to resolve the newest version that satisfies the constraint.
+- `terraform init -upgrade` can fail against the Terraform Cloud backend with
+  "Currently selected workspace ... does not exist" when a stale local `.terraform/terraform.tfstate`
+  exists without a matching `.terraform/environment`. `terraform providers lock` avoids the
+  backend entirely (metadata + hashes only).
+- Validate via CI (`Terraform Lint + Validate` job) — runs `init -backend=false`, `tflint`,
+  and `terraform validate` with the new lock.
+
+---
+
 ## Security Incident Recovery
 
 ### Scenario A: SSH key compromised
