@@ -84,7 +84,11 @@ SERVICES_STOPPED=0
 RESTORE_TEMP_DIRS=()
 
 cleanup_trap() {
-    rm -f "$LOCK_FILE"
+    # Do NOT unlink the lock file: flock locks the inode, and deleting it here
+    # (before the fd closes) lets a concurrent restore create a fresh inode and
+    # acquire the lock while we're still running (TOCTOU). The lock is released
+    # by exec 9>&-; the leftover file is harmless — same pattern as
+    # check_services.sh / smart_backup.sh.
     exec 9>&-
     for _d in "${RESTORE_TEMP_DIRS[@]:-}"; do
         rm -rf "$_d" 2>/dev/null || true
@@ -421,8 +425,17 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo -e "${RED}✗ Project archive corrupted: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
-    if timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | grep -qE '(^|/)\.\.(/|$)'; then
-        echo -e "${RED}✗ Project archive contains path-traversal entries: $(basename "$SELECTED_PROJECT")${NC}"
+    if timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | grep -qE '^/|(^|/)\.\.(/|$)'; then
+        echo -e "${RED}✗ Project archive contains absolute or path-traversal entries: $(basename "$SELECTED_PROJECT")${NC}"
+        exit 1
+    fi
+    # Reject symlinks whose target escapes the project dir (absolute path, or
+    # a `..` component anywhere — including mid-path like `a/../../etc`).
+    # Extracting one as root would let later archive entries write through it
+    # (tar-slip). Relative in-tree symlinks are fine.
+    if timeout 300 sudo tar -tvzf "$SELECTED_PROJECT" 2>/dev/null \
+        | grep -E ' -> (/|[^ ]*\.\./)' | grep -q .; then
+        echo -e "${RED}✗ Project archive contains unsafe symlinks: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
     # Pre-extraction layout check: the archive's top-level dir must match the
@@ -518,8 +531,11 @@ if [ -n "$SELECTED_PROJECT" ]; then
     fi
     sudo mkdir -p "$PROJECT_DIR"
 
-    # Stream from source (local file or cloud cache), no tmpfs
-    if timeout 1800 gunzip -c "$SELECTED_PROJECT" | sudo tar -xf - -C "$(dirname "$PROJECT_DIR")" 2>/dev/null; then
+    # Stream from source (local file or cloud cache), no tmpfs.
+    # --no-same-owner/--no-same-permissions: don't trust the archive's
+    # ownership/modes (we re-own to www-data below) — blocks a hostile archive
+    # from planting root-owned or setuid files on restore-as-root.
+    if timeout 1800 gunzip -c "$SELECTED_PROJECT" | sudo tar --no-same-owner --no-same-permissions -xf - -C "$(dirname "$PROJECT_DIR")" 2>/dev/null; then
         # Verify structure
         if [ ! -f "$PROJECT_DIR/index.php" ]; then
             echo -e "${RED}✗ Restored project missing index.php — archive may be invalid${NC}"
@@ -648,12 +664,24 @@ if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]] && [[ -f "$SELECTED_RED
         echo "Restoring Redis..."
     fi
 
+    # Stop Redis BEFORE copying. Copying over a live dump.rdb and then
+    # restarting is a race: on SIGTERM Redis performs a shutdown save (Ubuntu
+    # default save points), which overwrites the file we just copied — silently
+    # no-oping the restore. Correct order: stop → copy → chown → start.
+    if sudo systemctl stop redis-server >/dev/null 2>&1; then
+        :
+    else
+        echo -e "${YELLOW}  ⚠ Redis was not running (stopping skipped)${NC}"
+    fi
+
     if sudo cp "$SELECTED_REDIS" /var/lib/redis/dump.rdb 2>/dev/null && \
        sudo chown redis:redis /var/lib/redis/dump.rdb 2>/dev/null && \
-       sudo systemctl restart redis-server 2>/dev/null; then
+       sudo systemctl start redis-server 2>/dev/null; then
         REDIS_STATUS="✅ $(basename "$SELECTED_REDIS")"
         echo -e "${GREEN}✓ Redis restored${NC}"
     else
+        # Bring Redis back up even if the copy failed, then report the failure.
+        sudo systemctl start redis-server >/dev/null 2>&1 || true
         REDIS_STATUS="❌ Error"
         RESTORE_RESULT=1
         echo -e "${RED}✗ Redis restore failed!${NC}"
@@ -746,5 +774,5 @@ if [[ "$DB_STATUS" == *"Rollback"* ]]; then
 ⚠️ <b>Data rollback — verify carefully!</b>"
 fi
 
-send_tg "$MSG"
+send_tg "$MSG" || true
 exit "${RESTORE_RESULT:-0}"
