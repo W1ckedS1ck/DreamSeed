@@ -55,11 +55,11 @@ run_check_mode() {
     fi
     for entry in "${PLAYBOOK_LIST[@]}"; do
         local pb="${entry%%:*}" label="${entry##*:}"
-        if "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
+        if _ansible_syntax "$pb" > /dev/null 2>&1; then
             echo "  ✓ $label"
         else
             echo "  ✗ $label syntax error"
-            ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" 2>&1
+            _ansible_syntax "$pb" 2>&1
             exit 1
         fi
     done

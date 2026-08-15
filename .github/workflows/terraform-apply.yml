@@ -39,6 +39,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: 🚀 Start
         run: echo "Terraform apply started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
@@ -61,11 +63,23 @@ jobs:
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Set provider env vars
+        env:
+          PROV: ${{ inputs.provider }}
+          WS: ${{ inputs.workspace }}
+          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_REGION: ${{ secrets.PROD_REGION }}
+          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
+          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
+          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PROD_HETZ_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          HETZ_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
           write_env() { printf '%s\n' "$1" >> "$GITHUB_ENV"; }
-          write_env "TF_DIR=terraform/${{ inputs.provider }}"
-          write_env "TF_WORKSPACE=${{ inputs.workspace }}"
-          case "${{ inputs.workspace }}" in
+          write_env "TF_DIR=terraform/$PROV"
+          write_env "TF_WORKSPACE=$WS"
+          case "$WS" in
             prod*)
               IS_PROD=true
               ;;
@@ -73,38 +87,38 @@ jobs:
               IS_PROD=false
               ;;
           esac
-          if [ "${{ inputs.provider }}" = "aws" ]; then
+          if [ "$PROV" = "aws" ]; then
             if [ "$IS_PROD" = "true" ]; then
-              write_env "AWS_ACCESS_KEY_ID=${{ secrets.PROD_ACCESS_KEY }}"
-              write_env "AWS_SECRET_ACCESS_KEY=${{ secrets.PROD_SECRET_KEY }}"
-              write_env "AWS_DEFAULT_REGION=${{ secrets.PROD_REGION }}"
+              write_env "AWS_ACCESS_KEY_ID=$PROD_ACCESS_KEY"
+              write_env "AWS_SECRET_ACCESS_KEY=$PROD_SECRET_KEY"
+              write_env "AWS_DEFAULT_REGION=$PROD_REGION"
             else
-              write_env "AWS_ACCESS_KEY_ID=${{ secrets.DEV_AWS_ACCESS_KEY }}"
-              write_env "AWS_SECRET_ACCESS_KEY=${{ secrets.DEV_AWS_SECRET_KEY }}"
-              write_env "AWS_DEFAULT_REGION=${{ secrets.DEV_AWS_REGION }}"
+              write_env "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY"
+              write_env "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY"
+              write_env "AWS_DEFAULT_REGION=$DEV_AWS_REGION"
             fi
-            write_env "TF_VAR_environment=${{ inputs.workspace }}"
+            write_env "TF_VAR_environment=$WS"
           fi
-          if [ "${{ inputs.provider }}" = "cloudflare" ]; then
-            write_env "TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}"
-            case "${{ inputs.workspace }}" in
+          if [ "$PROV" = "cloudflare" ]; then
+            write_env "TF_VAR_cloudflare_api_token=$CF_TOKEN"
+            case "$WS" in
               cloudflare-prod) write_env "TF_VAR_domain=dreamseed.online" ;;
               *)              write_env "TF_VAR_domain=vitalikuts.online" ;;
             esac
           fi
-          if [ "${{ inputs.provider }}" = "hetzner" ]; then
+          if [ "$PROV" = "hetzner" ]; then
             if [ "$IS_PROD" = "true" ]; then
-              write_env "TF_VAR_hcloud_token=${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}"
+              write_env "TF_VAR_hcloud_token=$PROD_HETZ_TOKEN"
               write_env "TF_VAR_server_type=cx33"
               write_env "TF_VAR_ssh_key_name=Vitali.pub"
               write_env "TF_VAR_enable_primary_ip=true"
             else
-              write_env "TF_VAR_hcloud_token=${{ secrets.HCLOUD_TOKEN }}"
+              write_env "TF_VAR_hcloud_token=$HETZ_TOKEN"
               write_env "TF_VAR_server_type=cx23"
               write_env "TF_VAR_ssh_key_name=Vitali.pub"
               write_env "TF_VAR_primary_ip_name=primary_ip-1"
             fi
-            write_env "TF_VAR_environment=${{ inputs.workspace }}"
+            write_env "TF_VAR_environment=$WS"
           fi
 
       - name: Terraform Init
@@ -123,13 +137,15 @@ jobs:
 
       - name: Terraform ${{ inputs.mode }}
         working-directory: ${{ env.TF_DIR }}
+        env:
+          SSH_KEY_SECRET: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
         run: |
           MODE_FLAG=""
           [ "${{ inputs.mode }}" = "refresh-only" ] && MODE_FLAG="-refresh-only"
           if [ "${{ inputs.provider }}" = "aws" ]; then
             case "${{ inputs.workspace }}" in
-              prod)    SSH_KEY_SECRET="${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ;;
-              dev-aws) SSH_KEY_SECRET="${{ secrets.VITALI_SSH_PUBLIC_KEY }}" ;;
+              prod)    : ;;
+              dev-aws) : ;;
               *)       echo "::error::Unknown workspace ${{ inputs.workspace }} for AWS provider"; exit 1 ;;
             esac
             echo "$SSH_KEY_SECRET" > /tmp/key.pub

@@ -164,32 +164,42 @@ runs:
   steps:
     - name: Mask secrets
       shell: bash
+      env:
+        TG_TOKEN: ${{ inputs.tg_token }}
+        DB_PASS: ${{ inputs.db_pass }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare_api_token }}
+        HCLOUD_TOKEN: ${{ inputs.hcloud_token }}
+        PROD_HETZ_HCLOUD_TOKEN: ${{ inputs.prod_hetz_hcloud_token }}
+        GRAFANA_PASS: ${{ inputs.grafana_pass }}
+        BETTERUPTIME_API_TOKEN: ${{ inputs.betteruptime_api_token }}
+        BETTERUPTIME_BACKUP_KEY: ${{ inputs.betteruptime_backup_key }}
+        BETTERUPTIME_GDRIVE_KEY: ${{ inputs.betteruptime_gdrive_key }}
+        BETTERUPTIME_REPORT_DAILY_KEY: ${{ inputs.betteruptime_report_daily_key }}
+        BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ inputs.betteruptime_report_weekly_key }}
+        BETTERUPTIME_VERIFY_KEY: ${{ inputs.betteruptime_verify_key }}
+        BETTERUPTIME_CHECK_SERVICES_KEY: ${{ inputs.betteruptime_check_services_key }}
+        DEV_GRAFANA_CLOUD_TOKEN: ${{ inputs.dev_grafana_cloud_token }}
+        PROD_GRAFANA_CLOUD_TOKEN: ${{ inputs.prod_grafana_cloud_token }}
+        DEV_AWS_ACCESS_KEY: ${{ inputs.dev_aws_access_key }}
+        DEV_AWS_SECRET_KEY: ${{ inputs.dev_aws_secret_key }}
+        PROD_ACCESS_KEY: ${{ inputs.prod_access_key }}
+        PROD_SECRET_KEY: ${{ inputs.prod_secret_key }}
+        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
+        LOKI_USERNAME: ${{ inputs.loki_username }}
+        SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
+        VAULT_PASSWORD: ${{ inputs.vault_password }}
+        RCLONE_CONF_BASE64: ${{ inputs.rclone_conf_base64 }}
       run: |
         for v in \
-          "${{ inputs.tg_token }}" \
-          "${{ inputs.db_pass }}" \
-          "${{ inputs.cloudflare_api_token }}" \
-          "${{ inputs.hcloud_token }}" \
-          "${{ inputs.prod_hetz_hcloud_token }}" \
-          "${{ inputs.grafana_pass }}" \
-          "${{ inputs.betteruptime_api_token }}" \
-          "${{ inputs.betteruptime_backup_key }}" \
-          "${{ inputs.betteruptime_gdrive_key }}" \
-          "${{ inputs.betteruptime_report_daily_key }}" \
-          "${{ inputs.betteruptime_report_weekly_key }}" \
-          "${{ inputs.betteruptime_verify_key }}" \
-          "${{ inputs.betteruptime_check_services_key }}" \
-          "${{ inputs.dev_grafana_cloud_token }}" \
-          "${{ inputs.prod_grafana_cloud_token }}" \
-          "${{ inputs.dev_aws_access_key }}" \
-          "${{ inputs.dev_aws_secret_key }}" \
-          "${{ inputs.prod_access_key }}" \
-          "${{ inputs.prod_secret_key }}" \
-          "${{ inputs.ubuntu_pro_token }}" \
-          "${{ inputs.loki_username }}" \
-          "${{ inputs.ssh_private_key }}" \
-          "${{ inputs.vault_password }}" \
-          "${{ inputs.rclone_conf_base64 }}"; do
+          "$TG_TOKEN" "$DB_PASS" "$CLOUDFLARE_API_TOKEN" "$HCLOUD_TOKEN" \
+          "$PROD_HETZ_HCLOUD_TOKEN" "$GRAFANA_PASS" "$BETTERUPTIME_API_TOKEN" \
+          "$BETTERUPTIME_BACKUP_KEY" "$BETTERUPTIME_GDRIVE_KEY" \
+          "$BETTERUPTIME_REPORT_DAILY_KEY" "$BETTERUPTIME_REPORT_WEEKLY_KEY" \
+          "$BETTERUPTIME_VERIFY_KEY" "$BETTERUPTIME_CHECK_SERVICES_KEY" \
+          "$DEV_GRAFANA_CLOUD_TOKEN" "$PROD_GRAFANA_CLOUD_TOKEN" \
+          "$DEV_AWS_ACCESS_KEY" "$DEV_AWS_SECRET_KEY" "$PROD_ACCESS_KEY" \
+          "$PROD_SECRET_KEY" "$UBUNTU_PRO_TOKEN" "$LOKI_USERNAME" \
+          "$SSH_PRIVATE_KEY" "$VAULT_PASSWORD" "$RCLONE_CONF_BASE64"; do
           [ -n "$v" ] && echo "::add-mask::$v" || true
         done
         # NOTE: only actual secrets are masked above. Non-secret vars (region, chat IDs,
@@ -241,7 +251,7 @@ runs:
         # spaces/#/$VAR can't corrupt the .env contract (lib/env.sh parses quotes).
         # Embedded single quotes are OK for single-line values (parser strips the
         # outermost pair). Only used for tokens — never for shell interpolation.
-        emit_env() { [ -n "$2" ] && printf "%s='%s'\n" "$1" "$2"; }
+        emit_env() { [ -n "$2" ] && printf "%s='%s'\n" "$1" "$2" || true; }
         {
           emit_env TG_TOKEN "$TG_TOKEN"
           emit_env TG_CHAT_ID "$TG_CHAT_ID"

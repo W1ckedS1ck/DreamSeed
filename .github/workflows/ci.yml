@@ -15,7 +15,6 @@ env:
   TFLINT_VERSION: "v0.64.0"
   GITLEAKS_VERSION: "8.30.1"
   TERRAFORM_VERSION: "1.15.8"
-  ACTIONLINT_VERSION: "1.7.12"
 
 jobs:
   shellcheck:
@@ -24,6 +23,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: 🚀 Start
         run: echo "ShellCheck started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - name: Run ShellCheck
@@ -37,6 +38,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: 🚀 Start
         run: echo "Ansible Lint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -55,6 +58,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: 🚀 Start
         run: echo "Terraform checks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - uses: ./.github/actions/setup-terraform
@@ -75,6 +80,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: 🚀 Start
         run: echo "Checkov started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - name: Run Checkov
@@ -92,6 +99,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: 🚀 Start
         run: echo "Trivy started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -114,6 +123,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: 🚀 Start
         run: echo "Gitleaks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
@@ -129,6 +139,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: 🚀 Start
         run: echo "Actionlint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - name: Install shellcheck for inline run scripts
@@ -145,14 +157,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: 🚀 Start
         run: echo "Pre-commit started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.x'
-          cache: pip
-          cache-dependency-path: ansible/requirements-deploy.txt
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.npm
@@ -170,21 +181,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/bin
-          key: sysdeps-${{ runner.os }}-terraform-${{ env.TERRAFORM_VERSION }}-tflint-${{ env.TFLINT_VERSION }}-actionlint-${{ env.ACTIONLINT_VERSION }}
+          key: sysdeps-${{ runner.os }}-terraform-${{ env.TERRAFORM_VERSION }}-tflint-${{ env.TFLINT_VERSION }}
           restore-keys: |
             sysdeps-${{ runner.os }}-
       - name: Install pre-commit system deps
         run: |
           mkdir -p ~/.cache/bin
-
-          # actionlint
-          if [ -f ~/.cache/bin/actionlint ]; then
-            sudo cp ~/.cache/bin/actionlint /usr/local/bin/actionlint
-          else
-            curl -sLo /tmp/actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${{ env.ACTIONLINT_VERSION }}/actionlint_${{ env.ACTIONLINT_VERSION }}_linux_amd64.tar.gz"
-            sudo tar -xz -C /usr/local/bin -f /tmp/actionlint.tar.gz actionlint
-            sudo cp /usr/local/bin/actionlint ~/.cache/bin/actionlint
-          fi
 
           # Terraform (pinned via TERRAFORM_VERSION env var)
           if [ -f ~/.cache/bin/terraform ]; then
@@ -204,16 +206,17 @@ jobs:
             tflint --init --config .tflint.hcl 2>/dev/null || true
             sudo cp /usr/local/bin/tflint ~/.cache/bin/tflint
           fi
-
-          # ansible-lint + PyMySQL (pinned via requirements-deploy.txt)
-          pip install -r ansible/requirements-deploy.txt --quiet
       - name: Run pre-commit hooks (changed files only)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           pip install pre-commit
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            REF="origin/${{ github.base_ref }}"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            REF="origin/$BASE_REF"
           else
-            REF="origin/${{ github.ref_name }}"
+            REF="origin/$REF_NAME"
           fi
           if git rev-parse "$REF" &>/dev/null; then
             pre-commit run --from-ref "$REF" --to-ref HEAD --show-diff-on-failure
@@ -224,3 +227,63 @@ jobs:
         env:
           NPM_CONFIG_LOGLEVEL: error
         run: npx --yes --package renovate@44 -- renovate-config-validator
+
+  deploy-check:
+    name: Deploy Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Smoke-test the REAL deploy.sh orchestration path (CLI parsing, target
+    # resolution, .env parsing, preflight, playbook presence + syntax) — the
+    # 8 lint/scan checks above never exercise deploy.sh itself. Runs with
+    # `-i 0.0.0.0` to skip Terraform (already validated offline by the
+    # Terraform job) so no TF_API_TOKEN is exposed to PR runs. GIT_REF is
+    # pinned to dev so guard_source_ref never trips on main pushes.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: 🚀 Start
+        run: echo "Deploy Check started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - uses: ./.github/actions/setup-terraform
+      - uses: ./.github/actions/setup-ansible
+      - uses: ./.github/actions/setup-secrets
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+      - uses: ./.github/actions/setup-env
+        with:
+          hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          vault_password: ${{ secrets.VAULT_PASSWORD }}
+      - name: Target config
+        run: |
+          cat >> secrets/.env << 'EOF'
+          DEV_HETZ_SSH_KEY_NAME=Vitali.pub
+          DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1
+          DEV_HETZ_SERVER_TYPE=cx23
+          EOF
+      - name: Run Deploy Check (deploy.sh -c)
+        env:
+          GIT_REF: refs/heads/dev
+        run: |
+          chmod +x deploy.sh
+          ./deploy.sh dev-hetz -c -n -i 0.0.0.0
+
+  zizmor:
+    name: GitHub Actions Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: 🚀 Start
+        run: echo "zizmor started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run zizmor
+        run: uvx zizmor --min-confidence high .

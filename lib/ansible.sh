@@ -16,6 +16,16 @@ _ansible_cmd() {
     return "$rc"
 }
 
+# Syntax-check a playbook with the same config as a real run. check mode
+# previously invoked ansible-playbook WITHOUT ANSIBLE_CONFIG/ROLES_PATH, so
+# every playbook failed with "role not found" and `deploy.sh -c` was broken.
+_ansible_syntax() {
+    ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
+    ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
+    ANSIBLE_NOCOLOR=1 \
+    "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$1"
+}
+
 run_ansible() {
     local pb="$1" label="$2"
     [[ "$TTY" == "false" ]] && echo "::group::${label}"

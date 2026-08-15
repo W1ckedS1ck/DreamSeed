@@ -21,6 +21,7 @@ TOOLS=(
     "trivy:trivy:brew install trivy"
     "terraform:terraform:brew install terraform"
     "markdownlint-cli2:markdownlint-cli2:npm install -g markdownlint-cli2"
+    "uv:uv:curl -LsSf https://astral.sh/uv/install.sh | sh"
 )
 
 FAILED=false
@@ -88,6 +89,18 @@ run_actionlint() {
         print_ok "No issues"; ci_annotation "actionlint" "pass"
     else
         print_fail "Issues found"; ci_annotation "actionlint" "fail"
+    fi
+    group_end
+}
+
+run_zizmor() {
+    group_start "zizmor (GitHub Actions Security)"
+    if ! tool_available uv; then print_skip "uv not installed"; group_end; return 0; fi
+
+    if uvx zizmor --min-confidence high .; then
+        print_ok "No high-confidence issues"; ci_annotation "zizmor" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "zizmor" "fail"
     fi
     group_end
 }
@@ -422,6 +435,7 @@ OPTIONS:
   --ansible-lint      Run only ansible-lint
 
   --actionlint        Run only actionlint (GitHub Actions workflows)
+  --zizmor            Run only zizmor (GitHub Actions security)
   --renovate          Run only renovate config validator
   --tflint            Run only tflint
   --validate-terraform Run only terraform validate
@@ -447,6 +461,7 @@ run_fast() {
     run_ruff
     run_ansible_lint
     run_actionlint
+    run_zizmor
     run_renovate_validate
     run_markdownlint
     run_cloudflare_ips
@@ -474,6 +489,7 @@ while [[ $# -gt 0 ]]; do
         --ruff)              MODE="ruff"; shift ;;
         --ansible-lint)      MODE="ansible-lint"; shift ;;
         --actionlint)        MODE="actionlint"; shift ;;
+        --zizmor)            MODE="zizmor"; shift ;;
         --renovate)          MODE="renovate"; shift ;;
         --tflint)            MODE="tflint"; shift ;;
         --validate-terraform) MODE="terraform-validate"; shift ;;
@@ -496,6 +512,7 @@ case "$MODE" in
     ruff)                run_ruff ;;
     ansible-lint)        run_ansible_lint ;;
     actionlint)          run_actionlint ;;
+    zizmor)              run_zizmor ;;
     renovate)            run_renovate_validate ;;
     tflint)              run_tflint ;;
     terraform-validate)  run_terraform_validate ;;

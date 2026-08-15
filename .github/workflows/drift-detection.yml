@@ -64,6 +64,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: 🚀 Start
         run: echo "Drift detection started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
