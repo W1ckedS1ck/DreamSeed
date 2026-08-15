@@ -2,11 +2,9 @@
 # shellcheck shell=bash
 # Sourced by deploy.sh — do not execute directly.
 
-# Guard against deploying a protected ref (main/master) into a dev env.
-# A real incident shipped prod-main code to dev-aws because dispatch made no
-# branch/env pairing. Dev envs must run from dev/feature branches; prod may
-# come from main. Never blocks prod, never blocks destroy, never blocks unless
-# the ref is main/master — and ALLOW_UNPROTECTED_REF=1 overrides if ever needed.
+# Guard against shipping protected-ref (main/master) code to dev envs. A real
+# incident pushed prod-main to dev-aws via workflow_dispatch. Dev must run from
+# dev/feature branches; prod is unaffected. ALLOW_UNPROTECTED_REF=1 overrides.
 guard_source_ref() {
     local refs residue
     refs="${GIT_REF:-}"

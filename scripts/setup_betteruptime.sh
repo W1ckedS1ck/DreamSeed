@@ -1,10 +1,7 @@
 #!/bin/bash
-# Better Stack setup — heartbeats + Telegram webhooks.
-# Portfolio script. Idempotent: safe to run repeatedly.
-#   --write-env    Write new keys to secrets/.env automatically
-#
-# Requires BETTERUPTIME_API_TOKEN in secrets/.env.
-# TG_TOKEN, TG_CHAT_ID are optional — if set, also sets up webhooks.
+# Better Stack setup — heartbeats + Telegram webhooks. Idempotent.
+#   --write-env  Write new keys to secrets/.env automatically
+# Requires BETTERUPTIME_API_TOKEN in secrets/.env; TG_TOKEN/TG_CHAT_ID optional.
 
 set -euo pipefail
 
@@ -43,7 +40,7 @@ bu_auth() { printf 'header = "Authorization: Bearer %s"\n' "$BETTERUPTIME_API_TO
 
 ENV_FILE="$SCRIPT_DIR/secrets/.env"
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
+# ==== Helpers ====
 
 get_existing_heartbeats() {
     curl -s -X GET "$API/heartbeats?page=1&per_page=50" --config <(bu_auth) || echo '{"data":[]}'
@@ -115,7 +112,7 @@ write_key_to_env() {
     rm -f "$tmpfile"
 }
 
-# ─── Heartbeats ─────────────────────────────────────────────────────────────
+# ==== Heartbeats ====
 
 echo -e "\n${CYAN}Better Stack — heartbeats${NC}\n"
 
@@ -160,7 +157,7 @@ for spec in \
     fi
 done
 
-# ─── HTTP monitors ──────────────────────────────────────────────────────────
+# ==== HTTP monitors ====
 
 echo -e "\n${CYAN}Better Stack — HTTP monitors${NC}\n"
 # Note: widget type for status page (history/response_time) is UI-only.
@@ -223,7 +220,7 @@ print(json.dumps(payload))
     fi
 done
 
-# ─── Status page resources ──────────────────────────────────────────────────
+# ==== Status page resources ====
 
 SP_ID=$(curl -s -X GET "$API/status-pages" --config <(bu_auth) | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')" 2>/dev/null)
 
@@ -279,7 +276,7 @@ done
 
 fi
 
-# ─── Telegram webhooks ──────────────────────────────────────────────────────
+# ==== Telegram webhooks ====
 
 if [[ -z "${TG_TOKEN:-}" || -z "${TG_CHAT_ID:-}" ]]; then
     echo -e "\n${YELLOW}Skipping webhooks — set TG_TOKEN and TG_CHAT_ID in secrets/.env${NC}"

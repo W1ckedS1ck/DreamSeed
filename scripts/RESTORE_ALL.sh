@@ -4,7 +4,7 @@ set -euo pipefail
 # Ensure HOME is set for temp directories
 export HOME="${HOME:?ERROR: HOME environment variable not set}"
 
-# ====== Prevent concurrent executions ======
+# ==== Prevent concurrent executions ====
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
 LOCK_FILE="$LOCK_DIR/restore_all.lock"
@@ -14,7 +14,7 @@ if ! flock -n -x 9; then
     exit 1
 fi
 
-# ====== Load shared functions ======
+# ==== Load shared functions ====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
@@ -27,7 +27,7 @@ if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
     exit 1
 fi
 
-# ====== Validate required env vars ======
+# ==== Validate required env vars ====
 : "${DB_NAME:?ERROR: DB_NAME not set in .env or environment}"
 if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     echo "ERROR: DB_NAME contains invalid characters: '$DB_NAME'"
@@ -49,7 +49,7 @@ mkdir -p "$(dirname "$RESTORE_LOG")"
     echo "Host: $(hostname)"
 } >> "$RESTORE_LOG"
 
-# ====== Settings ======
+# ==== Settings ====
 : "${RCLONE_REMOTE:=gdrive-crypt}"
 : "${REMOTE_BASE:=DreamSeed/backups}"
 
@@ -233,7 +233,7 @@ select_backup_cloud() {
     fi
 }
 
-# ====== INTERACTIVE MODE ======
+# ==== INTERACTIVE MODE ====
 if [ "$MODE" != "--auto-latest" ]; then
     # ====== Header ======
     print_header "Restore DreamSeed"
@@ -336,7 +336,7 @@ if [ "$MODE" != "--auto-latest" ]; then
 
     echo ""
 
-# ====== AUTO MODE (--auto-latest) ======
+# ==== AUTO MODE (--auto-latest) ====
 else
     RESTORE_PROJECT=1
     RESTORE_DB=1
@@ -362,6 +362,12 @@ else
         }
     fi
 
+    # NOTE: cloud selection sorts file NAMES lexicographically (sort -r), not by
+    # mtime — unlike the interactive selector (rclone lsf --format tps). This is
+    # only correct because backups embed ISO timestamps (db_2026-08-15_14-31...)
+    # whose lexicographic order == chronological. If the naming format ever
+    # changes (smart_backup.sh DATE), the newest cloud backup will silently be
+    # wrong. Rewrite to mtime-based sorting when that happens.
     _fetch() {
         local dir="$1" subdir="$2" cur="$3" cloud_new=""
         if [ -n "$_cloud_listing" ]; then
@@ -402,9 +408,8 @@ else
     echo ""
 fi
 
-# ================================================
-# STEP 4: Validate archives
-# ================================================
+# ==== STEP 4: Validate archives ====
+
 if [ "$MODE" = "interactive" ]; then
     echo -e "${YELLOW}[0] Validating archive integrity...${NC}"
 else
@@ -420,6 +425,14 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo -e "${RED}✗ Project archive contains path-traversal entries: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
+    # Pre-extraction layout check: the archive's top-level dir must match the
+    # project dir name (smart_backup archives as "-C dirname basename"). Catches
+    # a wrong/renamed archive BEFORE extraction, not via post-hoc rollback.
+    _topdir=$(timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | head -1 | cut -d/ -f1)
+    if [[ -z "$_topdir" || "$_topdir" != "$(basename "$PROJECT_DIR")" ]]; then
+        echo -e "${RED}✗ Project archive top-level '${_topdir:-<empty>}' != expected '$(basename "$PROJECT_DIR")': $(basename "$SELECTED_PROJECT")${NC}"
+        exit 1
+    fi
     echo -e "${GREEN}✓ Project archive: OK${NC}"
 fi
 if [ -n "$SELECTED_DB" ]; then
@@ -431,9 +444,8 @@ if [ -n "$SELECTED_DB" ]; then
 fi
 echo ""
 
-# ================================================
-# STEP 5: Stop services
-# ================================================
+# ==== STEP 5: Stop services ====
+
 if [ "$MODE" = "interactive" ]; then
     echo -e "${YELLOW}[1] Stopping services...${NC}"
 else
@@ -448,9 +460,8 @@ SERVICES_STOPPED=1
 echo -e "${GREEN}✓ Services stopped${NC}"
 echo ""
 
-# ================================================
-# STEP 5.5: Backup current state (emergency snapshot)
-# ================================================
+# ==== STEP 5.5: Backup current state (emergency snapshot) ====
+
 if [ "$MODE" = "interactive" ]; then
     echo -e "${YELLOW}[1.5] Backing up current state...${NC}"
 else
@@ -487,9 +498,8 @@ fi
 echo -e "${CYAN}Emergency snapshot saved to: $PRE_RESTORE_BACKUP_DIR${NC}"
 echo ""
 
-# ================================================
-# STEP 6: Restore project
-# ================================================
+# ==== STEP 6: Restore project ====
+
 PROJECT_STATUS="⏭️ Skipped"
 
 if [ -n "$SELECTED_PROJECT" ]; then
@@ -539,9 +549,8 @@ else
 fi
 echo ""
 
-# ================================================
-# STEP 7: Restore database
-# ================================================
+# ==== STEP 7: Restore database ====
+
 DB_STATUS="⏭️ Skipped"
 
 if [ -n "$SELECTED_DB" ]; then
@@ -626,9 +635,8 @@ else
 fi
 echo ""
 
-# ================================================
-# STEP 7: Restore Redis (if available)
-# ================================================
+# ==== STEP 7: Restore Redis (if available) ====
+
 REDIS_STATUS="⏭️ Skipped"
 
 if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]] && [[ -f "$SELECTED_REDIS" ]]; then
@@ -650,9 +658,8 @@ if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]] && [[ -f "$SELECTED_RED
 fi
 echo ""
 
-# ================================================
-# STEP 8: Clear cache and permissions
-# ================================================
+# ==== STEP 8: Clear cache and permissions ====
+
 if [ "$MODE" = "interactive" ]; then
     echo -e "${YELLOW}[5] Clearing cache and setting permissions...${NC}"
 else
@@ -666,9 +673,8 @@ sudo chmod -R 775 "$PROJECT_DIR/core/cache"
 echo -e "${GREEN}✓ Cache cleared${NC}"
 echo ""
 
-# ================================================
-# STEP 9: Start services
-# ================================================
+# ==== STEP 9: Start services ====
+
 if [ "$MODE" = "interactive" ]; then
     echo -e "${YELLOW}[6] Starting services...${NC}"
 else
@@ -702,9 +708,8 @@ echo ""
 # Only let cleanup_trap delete the pre-restore snapshot on a fully clean run.
 [ "${RESTORE_RESULT:-0}" -eq 0 ] && SNAPSHOT_SAFE_TO_DELETE=1
 
-# ================================================
-# Summary
-# ================================================
+# ==== Summary ====
+
 ELAPSED=$(( $(date +%s) - START_TIME ))
 
 ELAPSED_DISPLAY="Time: ${ELAPSED}s"

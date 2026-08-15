@@ -17,10 +17,8 @@ fi
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
-    # Same .env contract as lib/env.sh parse_env_file (deploy.sh): KEY=value,
-    # optional "quotes", inline comments after space+#, multi-line quoted
-    # values, $HOME / $UPPERCASE_VAR expansion (double-quoted/unquoted only).
-    # No source/eval — no RCE.
+    # Same .env contract as lib/env.sh: KEY=value, optional quotes, inline
+    # comments, multi-line values, $HOME/$UPPERCASE_VAR expansion. No source/eval — no RCE.
     local blocked_vars='^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|BASH_FUNC_.*)$'
     local key="" value="" quote="" no_expand=""
     while IFS= read -r line; do
@@ -64,15 +62,9 @@ load_env() {
     done < "$env_file"
 }
 
-# Detect environment suffix for backup paths.
-# Prod → ""  (backs up to DreamSeed/backups/project/ and db/)
-# Dev  → "-dev" (backs up to DreamSeed/backups/project-dev/ and db-dev/)
-#
-# DESIGN NOTE: Dev uploads to dev-specific paths, but ALL restore logic
-# (deploy restore role, RESTORE_ALL.sh --auto-latest, interactive mode)
-# pulls from prod paths only. Dev is an ephemeral copy of prod — it has
-# no independent backup pipeline. Dev cloud backups exist as a safety
-# net only; they are never consumed by any restore flow.
+# Detect env suffix for backup paths: Prod → "", Dev → "-dev".
+# Dev uploads go to *-dev paths but are never consumed — restore pulls prod only
+# (design rationale in group_vars/all.yml).
 detect_env() {
     if [[ -f "$SCRIPT_DIR/.env" ]]; then
         local env_val

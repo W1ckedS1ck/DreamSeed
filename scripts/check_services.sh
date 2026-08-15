@@ -95,10 +95,19 @@ if command -v promtail &>/dev/null; then
 fi
 
 # --- Site HTTP (via localhost with SNI — bypasses Cloudflare, no DNS dependency) ---
-http=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/" 2>/dev/null || echo "000")
+page=$(curl -sk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" -w '\n%{http_code}' "https://${DOMAIN}/" 2>/dev/null || echo "000")
+http="${page##*$'\n'}"
+body="${page%$'\n'*}"
 if [[ "$http" == "200" || "$http" == "301" ]]; then
-    echo "  ✓ HTTP $http ${DOMAIN:-localhost}"
-    export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 1"
+    if [[ "$http" == "200" ]] && { [[ -z "$body" ]] || [[ "$body" != *"<html"* ]]; }; then
+        # 200 but not an HTML page (empty body, error string, maintenance stub)
+        echo "  ✗ HTTP $http ${DOMAIN:-localhost} — 200 but not HTML (${#body} bytes)"
+        export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 0"
+        fail=1
+    else
+        echo "  ✓ HTTP $http ${DOMAIN:-localhost}"
+        export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 1"
+    fi
 elif [[ "$http" == "520" ]]; then
     echo "  ⚠ HTTP $http ${DOMAIN:-localhost} — Cloudflare upstream sync (non-fatal)"
     export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 0"
@@ -235,10 +244,17 @@ if systemctl is-active vmagent &>/dev/null; then
     _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {print $2}'); _errors=${_errors:-0}
 
     _errfile="/var/tmp/.vmagent_errors_last"
-    _prev=0
-    [[ -f "$_errfile" ]] && _prev=$(cat "$_errfile")
-    echo "$_errors" > "$_errfile"
-    (( _errors < _prev )) && _new=0 || _new=$(( _errors - _prev ))
+    # Baseline for the errors delta. Robust to: file lost (first run / tmp cleaner)
+    # -> no delta; unreadable file -> no set -e abort; vmagent counter reset
+    # (errors < prev) -> no delta.
+    _had_file=false; [[ -r "$_errfile" ]] && _had_file=true
+    _prev=$(cat "$_errfile" 2>/dev/null || echo 0)
+    if [[ "$_had_file" != true || "$_errors" -lt "$_prev" ]]; then
+        _new=0
+    else
+        _new=$(( _errors - _prev ))
+    fi
+    echo "$_errors" > "$_errfile" 2>/dev/null || true
 
     if [[ "$_blocks" -gt 0 && "$_new" -eq 0 ]]; then
         export_metric 'vmagent_remote_write_ok 1'; echo "  ✓ vmagent: remote write OK"

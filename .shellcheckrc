@@ -1,0 +1,4 @@
+# SC2034: globals defined in one sourced lib and consumed in another (deploy.sh,
+# lib/cli.sh etc.) are reported unused by single-file shellcheck runs. They are
+# used — cross-file — so the check is a false positive here.
+disable=SC2034

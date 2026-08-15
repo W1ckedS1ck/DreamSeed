@@ -139,14 +139,14 @@ jobs:
 
       - name: Terraform Init
         working-directory: ${{ matrix.tf_dir }}
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Detect Drift
         id: plan
         working-directory: ${{ matrix.tf_dir }}
         run: |
           # All backends are remote (Terraform Cloud) — plan without -out.
-          terraform plan -detailed-exitcode -no-color 2>&1 | tee /tmp/plan.log
+          terraform plan -detailed-exitcode -no-color -input=false 2>&1 | tee /tmp/plan.log
           rc=${PIPESTATUS[0]}
           CHANGES=$(grep -c '^  #' /tmp/plan.log || true)
 

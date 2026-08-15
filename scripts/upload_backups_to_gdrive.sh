@@ -3,31 +3,29 @@ set -euo pipefail
 
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# ====== Load shared functions ======
+# ==== Load shared functions ====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
-# ====== Logging ======
+# ==== Logging ====
 LOG_DIR="${BACKUP_DIR:-/home/ubuntu/backups}/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/upload_$(date +%Y-%m-%d).log"
 touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/dev/null"
 exec >> "$LOG_FILE" 2>&1
 
-# ====== Start time ======
+# ==== Start time ====
 START_TIME=$(date +%s)
 DOMAIN="${DOMAIN:-$(hostname -f 2>/dev/null || echo "unknown")}"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Upload started — environment suffix: $(detect_env)"
 
-# NOTE: Dev = Prod. Everything prod does, dev does too — same monitoring,
-# same backups, same alerting. Even though restore always pulls from prod
-# paths, dev must mirror prod behavior exactly (including cloud uploads).
-# Do NOT skip dev uploads or introduce dev-vs-prod logic.
+# Dev mirrors prod exactly (monitoring/backups/alerting); restore pulls prod paths.
+# Do NOT add dev-vs-prod logic.
 
-# ====== Settings ======
+# ==== Settings ====
 LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 PROJECT_DIR="$LOCAL_BACKUP_DIR/project"
 DB_DIR="$LOCAL_BACKUP_DIR/db"
@@ -90,19 +88,18 @@ upload_new_files() {
     done <<< "$files"
 }
 
-# ====== 1. Upload project ======
+# ==== 1. Upload project ====
 upload_new_files "$PROJECT_DIR" "DreamSeed_*.tar.gz" "$REMOTE_BASE/project${ENV_SUFFIX}/" 1800 "Project"
 
-# ====== 2. Upload database ======
+# ==== 2. Upload database ====
 upload_new_files "$DB_DIR" "db_*.sql.gz" "$REMOTE_BASE/db${ENV_SUFFIX}/" 1800 "DB"
 
-# ====== 3. Upload Redis ======
+# ==== 3. Upload Redis ====
 if [[ -d "$REDIS_DIR" ]]; then
     upload_new_files "$REDIS_DIR" "redis_dump_*.rdb" "$REMOTE_BASE/redis${ENV_SUFFIX}/" 600 "Redis"
 fi
 
-# ====== 4. Clean old backups in cloud ======
-
+# ==== 4. Clean old backups in cloud ====
 prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
 "
 prune_cloud_backups "db" "$MAX_DB_BACKUPS" || UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
@@ -116,7 +113,7 @@ else
     echo "  Cleanup: ⚠️ skipped (timeout or error)"
 fi
 
-# ====== 5. Rotate old logs (keep 30 days) ======
+# ==== 5. Rotate old logs (keep 30 days) ====
 find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
 
 if [[ "$HAS_ERROR" -eq 0 ]]; then
@@ -128,13 +125,13 @@ else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Upload completed with errors"
 fi
 
-# ====== Suppress alert on fresh servers (<1h uptime — backup cron races with manual steps) ======
+# ==== Suppress alert on fresh servers (<1h uptime — backup cron races with manual steps) ====
 UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 999999)
 if [ "$HAS_ERROR" -eq 1 ] && [ "$UPTIME" -lt 3600 ]; then
     exit 0
 fi
 
-# ====== Send alert only on failure ======
+# ==== Send alert only on failure ====
 if [ "$HAS_ERROR" -eq 1 ]; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
@@ -144,4 +141,7 @@ if [ "$HAS_ERROR" -eq 1 ]; then
 ${UPLOAD_MSG}⏰ $(date '+%d.%m.%Y %H:%M')  ⏱ ${DURATION}s
 =========================="
     send_tg "$MSG"
+    # Honest exit code — cron/systemd must see the failure, not only TG/Better Stack.
+    exit 1
 fi
+exit 0

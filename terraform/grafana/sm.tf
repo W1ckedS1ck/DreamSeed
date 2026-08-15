@@ -8,7 +8,14 @@ data "grafana_synthetic_monitoring_probes" "main" {
 }
 
 locals {
+  # Probe names are map keys into data.grafana_synthetic_monitoring_probes.main.
+  # A Grafana-side rename would break `terraform plan` with an "invalid map key"
+  # error — loud, not silent. Centralized here so a rename is a one-line fix.
+  # The exact probe set is a budget decision (free tier, ~15k checks/mo).
   sm_probes_america = ["NorthCalifornia", "Ohio", "Montreal"]
+  sm_probes_multi   = ["NorthCalifornia", "Ohio"]
+  sm_probes_grafana = ["NorthCalifornia", "Ohio"]
+  sm_probes_ssl     = ["Ohio"]
 }
 
 # --- HTTP check — main site (US West + Central + Canada, every 15 min) ---
@@ -89,10 +96,7 @@ resource "grafana_synthetic_monitoring_check" "multi_main" {
     }
   }
 
-  probes = [
-    data.grafana_synthetic_monitoring_probes.main.probes["NorthCalifornia"],
-    data.grafana_synthetic_monitoring_probes.main.probes["Ohio"],
-  ]
+  probes = [for p in local.sm_probes_multi : data.grafana_synthetic_monitoring_probes.main.probes[p]]
 
   labels = {
     env    = terraform.workspace
@@ -125,10 +129,7 @@ resource "grafana_synthetic_monitoring_check" "http_grafana" {
     }
   }
 
-  probes = [
-    data.grafana_synthetic_monitoring_probes.main.probes["NorthCalifornia"],
-    data.grafana_synthetic_monitoring_probes.main.probes["Ohio"],
-  ]
+  probes = [for p in local.sm_probes_grafana : data.grafana_synthetic_monitoring_probes.main.probes[p]]
 
   labels = {
     env    = terraform.workspace
@@ -159,7 +160,7 @@ resource "grafana_synthetic_monitoring_check" "ssl_main" {
     }
   }
 
-  probes = [data.grafana_synthetic_monitoring_probes.main.probes["Ohio"]]
+  probes = [for p in local.sm_probes_ssl : data.grafana_synthetic_monitoring_probes.main.probes[p]]
 
   labels = {
     env    = terraform.workspace

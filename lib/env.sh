@@ -2,20 +2,9 @@
 # shellcheck shell=bash
 # Sourced by deploy.sh — do not execute directly.
 
-# Parse a .env file safely: validates format, strips quotes/comments,
-# expands $HOME / ${HOME} / $UPPERCASE_VAR, and exports variables —
-# WITHOUT executing the file as shell (no `source`). This prevents RCE
-# via shell metacharacters in env values (e.g. `DB_PASS=foo; rm -rf ~/`).
-#
-# Supports:
-#   - Multi-line quoted values (KEY="line1\nline2")
-#   - Inline comments after values (KEY="val"  # comment)
-#   - $HOME / ${HOME} / $UPPERCASE_VAR expansion (no RCE — indirect expansion only)
-#
-# Rejects:
-#   - Command substitution: $() and backticks (defense-in-depth)
-#   - Dangerous variable names: PATH, IFS, LD_PRELOAD, SHELL, etc.
-#   - Lines not matching KEY=VALUE format
+# Safe .env parser: no `source`/eval → no RCE. Supports quoted/multi-line values,
+# inline comments and $HOME/$UPPERCASE_VAR expansion. Rejects $()/backticks and
+# dangerous var names (PATH, IFS, LD_PRELOAD, ...).
 parse_env_file() {
     local f="$1" n=0 quote='' line key val
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then

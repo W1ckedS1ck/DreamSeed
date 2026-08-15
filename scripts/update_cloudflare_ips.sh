@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# ====== Usage ======
+# ==== Usage ====
 # Periodically updates nginx Cloudflare real IP config.
 # Runs automatically via systemd timer (weekly).
 # Safe to run manually at any time.

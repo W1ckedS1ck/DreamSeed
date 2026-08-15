@@ -9,7 +9,7 @@ done
 # Path for cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# ====== Load shared functions ======
+# ==== Load shared functions ====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
@@ -18,7 +18,7 @@ load_env "$SCRIPT_DIR/.env"
 # Parse report type
 REPORT_TYPE="${1:-daily}"  # daily or weekly
 
-# ====== Settings ======
+# ==== Settings ====
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive-crypt}"
 LOCAL_PROJ_KEEP="${BACKUP_PROJECT_KEEP:-${PROJECT_KEEP:-5}}"
@@ -52,7 +52,7 @@ else
     LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
 fi
 
-# ====== DAILY REPORT ======
+# ==== DAILY REPORT ====
 if [ "$REPORT_TYPE" = "daily" ]; then
     _du_out=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null) && PROJ_1_SIZE=$(echo "$_du_out" | cut -f1) || PROJ_1_SIZE="ERROR"
     _du_out=$(du -h "$(echo "$DB_FILES" | head -1)" 2>/dev/null) && DB_1_SIZE=$(echo "$_du_out" | cut -f1) || DB_1_SIZE="ERROR"
@@ -105,7 +105,7 @@ $(date '+%d.%m.%Y %H:%M')"
 
     send_tg "$MSG"
 
-# ====== WEEKLY REPORT ======
+# ==== WEEKLY REPORT ====
 elif [ "$REPORT_TYPE" = "weekly" ]; then
     MSG="<b>WEEKLY REPORT</b>
 $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"

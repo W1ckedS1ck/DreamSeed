@@ -1,9 +1,5 @@
 #!/bin/bash
 # Deep audit — covers all auto-checkable items from AUDIT_CHECKLIST.md
-# Sections: 1(System), 2(Web), 3(Security), 4(PHP), 5(DB), 6(Redis),
-#           7(Sessions), 8(SSL), 9(MODX), 10(Perf), 11(Monitoring),
-#           12(Grafana), 13(Backups), 14(Telegram), 15(Security),
-#           16(Systemd), 17(Processes), 18(Ports), 19(Logs), 20(Functional)
 # Manual only: backup manual run (smart_backup.sh + upload_backups_to_gdrive.sh)
 # Run: bash /home/ubuntu/Scripts/audit_deep.sh
 set -euo pipefail
@@ -23,7 +19,7 @@ if [[ -n "$DOMAIN" ]]; then
 fi
 fail_count=0
 
-# ── Auto-detect ──
+# ==== Auto-detect ====
 
 WEB_SVC=""
 if systemctl is-active nginx &>/dev/null; then WEB_SVC="nginx"
@@ -38,8 +34,8 @@ done
 
 detect_domain() {
   local d
-  d=$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -v default | grep -v ssl | head -1)
-  [[ -z "$d" ]] && d=$(ls /etc/apache2/sites-enabled/ 2>/dev/null | grep -v default | head -1)
+  d=$(find /etc/nginx/sites-enabled/ -maxdepth 1 -type f ! -name default ! -name ssl -printf '%f\n' 2>/dev/null | head -1)
+  [[ -z "$d" ]] && d=$(find /etc/apache2/sites-enabled/ -maxdepth 1 -type f ! -name default -printf '%f\n' 2>/dev/null | head -1)
   echo "${d:-}"
 }
 [[ -z "$DOMAIN" ]] && DOMAIN=$(detect_domain)
@@ -64,7 +60,7 @@ echo "  Web:    ${WEB_SVC:-unknown}"
 echo "  PHP:    $PHP_VER"
 echo ""
 
-# ── 1. System ──────────────────────────────────────────────────────────────────
+# ==== 1. System ====
 
 echo "── 1. System ──"
 
@@ -86,7 +82,7 @@ else
 fi
 
 # Logrotate
-_lr_count=$(ls /etc/logrotate.d/ 2>/dev/null | grep -c -E 'nginx|php|mariadb|redis' || true)
+_lr_count=$(find /etc/logrotate.d/ -maxdepth 1 -type f \( -name '*nginx*' -o -name '*php*' -o -name '*mariadb*' -o -name '*redis*' \) 2>/dev/null | wc -l || true)
 if [[ "$_lr_count" -ge 4 ]]; then
   ok "Logrotate: $_lr_count entries (nginx php mariadb redis)" "logrotate_entries"
 else
@@ -104,7 +100,7 @@ fi
 _apt_updates=$(apt-get --just-print upgrade 2>/dev/null | grep -c '^Inst' || true)
 echo "    Apt updates available: $_apt_updates"
 
-# ── 2. Web Server ──────────────────────────────────────────────────────────────
+# ==== 2. Web Server ====
 
 echo ""
 echo "── 2. Web Server ──"
@@ -156,7 +152,7 @@ elif [[ -n "$DOMAIN" ]]; then
   warn "Public endpoint: no public IP detected" "public_endpoint"
 fi
 
-# ── 3. Security Perimeter ──────────────────────────────────────────────────────
+# ==== 3. Security Perimeter ====
 
 echo ""
 echo "── 3. Security Perimeter ──"
@@ -247,7 +243,7 @@ else
   warn "SSH: root=$_ssh_root pw=$_ssh_pw" "ssh_hardening"
 fi
 
-# ── 4. PHP ─────────────────────────────────────────────────────────────────────
+# ==== 4. PHP ====
 
 echo ""
 echo "── 4. PHP ──"
@@ -295,7 +291,7 @@ _fpm_procs=$(ps aux | grep php-fpm | grep -v grep | wc -l | tr -d ' ')
 _fpm_mem=$(ps aux | grep php-fpm | grep -v grep | awk '{sum+=$6; count++} END {if(count>0) print int(sum/count/1024) " MB avg"; else print "0 MB"}')
 echo "    FPM workers: $_fpm_procs ($_fpm_mem)"
 
-# ── 5. Database ────────────────────────────────────────────────────────────────
+# ==== 5. Database ====
 
 echo ""
 echo "── 5. Database ──"
@@ -324,7 +320,7 @@ else
   fail "MariaDB NOT bound to localhost" "mysql_bind_local"
 fi
 
-# ── 6. Redis ───────────────────────────────────────────────────────────────────
+# ==== 6. Redis ====
 
 echo ""
 echo "── 6. Redis ──"
@@ -352,7 +348,7 @@ else
   warn "Redis: only $_redis_cmds renamed (expect 5+)" "redis_rename_cmds"
 fi
 
-# ── 7. Sessions ────────────────────────────────────────────────────────────────
+# ==== 7. Sessions ====
 
 echo ""
 echo "── 7. PHP Sessions (Redis via FPM) ──"
@@ -370,7 +366,7 @@ _redis_before=$(redis-cli DBSIZE 2>/dev/null || true)
 _session_keys=$(redis-cli --scan --pattern "PHPREDIS_SESSION:*" 2>/dev/null | head -3 | tr '\n' ' ' || true)
 echo "    Redis session keys: $_redis_before total ($_session_keys)"
 
-# ── 8. SSL ─────────────────────────────────────────────────────────────────────
+# ==== 8. SSL ====
 
 echo ""
 echo "── 8. SSL ──"
@@ -393,7 +389,7 @@ else
   warn "No local SSL certificates" "ssl_cert"
 fi
 
-# ── 9. MODX ────────────────────────────────────────────────────────────────────
+# ==== 9. MODX ====
 
 echo ""
 echo "── 9. MODX ──"
@@ -428,7 +424,7 @@ else
   warn "Manager: $_manager_code" "modx_manager"
 fi
 
-# ── 10. Performance ────────────────────────────────────────────────────────────
+# ==== 10. Performance ====
 
 echo ""
 echo "── 10. Performance ──"
@@ -449,7 +445,7 @@ else
   warn "Brotli not detected" "brotli"
 fi
 
-# ── 11. Monitoring ─────────────────────────────────────────────────────────────
+# ==== 11. Monitoring ====
 
 echo ""
 echo "── 11. Monitoring ──"
@@ -516,7 +512,7 @@ else
 fi
 echo "    Upload metric in VictoriaMetrics: $_upload_metric"
 
-# ── 12. Grafana ────────────────────────────────────────────────────────────────
+# ==== 12. Grafana ====
 
 echo ""
 echo "── 12. Grafana ──"
@@ -575,7 +571,7 @@ unset _grafana_pass
 _grafana_mem=$(ps aux | grep grafana-server | grep -v grep | head -1 | awk '{printf "%.1f%% (%s MB RSS)", $4, int($6/1024)}' 2>/dev/null || echo "not found")
 echo "    Grafana memory: $_grafana_mem"
 
-# ── 13. Backups ────────────────────────────────────────────────────────────────
+# ==== 13. Backups ====
 
 echo ""
 echo "── 13. Backups ──"
@@ -600,7 +596,7 @@ fi
 # Backup dirs
 for _d in project db redis; do
   if [[ -d "$BACKUP_DIR/$_d" ]]; then
-    _fc=$(ls "$BACKUP_DIR/$_d" 2>/dev/null | wc -l)
+    _fc=$(find "$BACKUP_DIR/$_d" -maxdepth 1 -type f 2>/dev/null | wc -l)
     echo "    $_d/: $_fc files"
   else
     echo "    $_d/: MISSING"
@@ -615,7 +611,7 @@ else
   warn "rclone_retry not found" "rclone_retry"
 fi
 
-# ── 14. Telegram Bot ─────────────────────────────────────────────────────────
+# ==== 14. Telegram Bot ====
 
 echo ""
 echo "── 14. Telegram Bot ──"
@@ -649,7 +645,7 @@ else
   fi
 fi
 
-# ── 15. Security (extra) ─────────────────────────────────────────────────────
+# ==== 15. Security (extra) ====
 
 echo ""
 echo "── 15. Security (extra) ──"
@@ -680,7 +676,7 @@ for _fj in dreamseed-botsearch dreamseed-bad-request modx-admin recidive sshd; d
   echo "    $_fj: $_b total banned"
 done
 
-# ── 16. Systemd Services ─────────────────────────────────────────────────────
+# ==== 16. Systemd Services ====
 
 echo ""
 echo "── 16. Systemd Services ──"
@@ -710,14 +706,14 @@ else
   fail "$_all_active/${#_expected_services[@]} services active" "systemd_services"
 fi
 
-# ── 17. Processes ────────────────────────────────────────────────────────────
+# ==== 17. Processes ====
 
 echo ""
 echo "── 17. Top Processes (by memory) ──"
 
 ps aux --sort=-%mem 2>/dev/null | head -8 | awk '{printf "  %-30s %5s %6s MB\n", $11, $4, int($6/1024)}'
 
-# ── 18. Open Ports ─────────────────────────────────────────────────────────
+# ==== 18. Open Ports ====
 
 echo ""
 echo "── 18. Open Ports (public) ──"
@@ -736,7 +732,7 @@ else
   warn "No public ports detected" "public_ports"
 fi
 
-# ── 19. Journal Errors ─────────────────────────────────────────────────────
+# ==== 19. Journal Errors ====
 
 echo ""
 echo "── 19. Journal Errors (last 1h) ──"
@@ -750,7 +746,7 @@ else
   sudo journalctl --since "1 hour ago" -p err --no-pager 2>/dev/null | grep -v 'snapd\|ModemManager\|shutdown\|loop\|-- No entries --' | head -5 | while read -r _l; do echo "    $_l"; done
 fi
 
-# ── 20. Functional ──────────────────────────────────────────────────────────
+# ==== 20. Functional ====
 
 echo ""
 echo "── 20. Functional Checks ──"
@@ -789,7 +785,7 @@ else
   warn "Promtail not running" "functional_promtail"
 fi
 
-# ── Summary ─────────────────────────────────────────────────────────────────
+# ==== Summary ====
 
 echo ""
 echo "═══ AUDIT SUMMARY ═══"

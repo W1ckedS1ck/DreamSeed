@@ -1,16 +1,16 @@
 ---
 # Shared binary installer for monitoring exporters.
-# Note (audit 2026-08): HTTPS-only, no checksums — accepted for single-maintainer project.
 # Usage:
-#   - name: Install Foo Exporter
-#     ansible.builtin.include_tasks: _install_binary.yml
-#     vars:
-#       monitor_bin_name: "foo_exporter"
-#       monitor_bin_path: "/usr/local/bin/foo_exporter"
-#       monitor_version: "{{ monitoring_foo_version }}"
-#       monitor_download_url: "https://github.com/org/foo_exporter/releases/download/v{{ monitor_version }}/..."
-#       monitor_extracted_binary: "/tmp/foo_exporter-{{ monitor_version }}.linux-amd64/foo_exporter"
-
+#   ansible.builtin.include_tasks: _install_binary.yml
+#   vars:
+#     monitor_bin_name: "foo_exporter"
+#     monitor_bin_path: "/usr/local/bin/foo_exporter"
+#     monitor_version: "{{ monitoring_foo_version }}"
+#     monitor_download_url: "https://github.com/org/foo_exporter/releases/download/..."
+#     monitor_extracted_binary: "/tmp/foo_exporter-{{ monitor_version }}.linux-amd64/foo_exporter"
+#
+# Note: HTTPS-only, no checksum verification — accepted risk for this project.
+# Add SHA256 if you need stronger supply-chain guarantees.
 - name: "Check installation: {{ monitor_bin_name }}"
   ansible.builtin.stat:
     path: "{{ monitor_bin_path }}"

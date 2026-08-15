@@ -4,12 +4,10 @@
 
 wait_for_server() {
     # ----- Clear stale host key (prevents mismatch on IP reuse) -----
-    # TOFU security note (audit 2026-08): host key is pinned into known_hosts
-    # right here via ssh-keyscan on first contact, and every later SSH
-    # (Ansible, check_services, post.sh) verifies against it. accept-new below
-    # only applies to this very first probe. Deliberately NOT pinned to
-    # pre-known host keys: servers are ephemeral (IP + key rotate on rebuild),
-    # and MITM on a just-created Hetzner/AWS IP is not a realistic threat.
+    # TOFU: host key is pinned into known_hosts on first contact via ssh-keyscan.
+    # All later SSH (Ansible, checks) verifies against it. Not pre-pinned because
+    # servers are ephemeral (IP + host key rotate on rebuild); MITM on a freshly
+    # allocated cloud IP is not a realistic threat for this setup.
     ssh-keygen -R "$SERVER_IP" > /dev/null 2>&1 || true
     ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
 

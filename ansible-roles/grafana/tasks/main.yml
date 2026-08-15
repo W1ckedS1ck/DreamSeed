@@ -1,12 +1,7 @@
 ---
-# Grafana apt repo (GPG key + deb822_repository) is provisioned once in the
-# packages_common role (playbook-01). Here we only install + configure.
-
-# Pinned install with a loud fallback. The pinned version is kept current by
-# Renovate, so normally this succeeds. If the pinned version is not (yet) in
-# the Grafana apt repo — Renovate may bump it before the repo syncs — fall
-# back to the repo's latest, but print an explicit warning so the drift is
-# never silent. Retries cover transient apt/network flakiness.
+# Grafana apt repo provisioned once in packages_common (playbook-01); here only install/config.
+# Pinned version (Renovate-managed). If not yet in the apt repo, fall back to
+# latest with an explicit warning — drift must never be silent.
 - name: Install Grafana (pinned version)
   become: true
   block:

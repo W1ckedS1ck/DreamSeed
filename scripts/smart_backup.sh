@@ -5,13 +5,13 @@ for cmd in curl tar gzip find mysqldump; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
 done
 
-# ====== Load shared functions ======
+# ==== Load shared functions ====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
-# ====== Settings ======
+# ==== Settings ====
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 MARKER_FILE="$BACKUP_DIR/.project_marker"
@@ -36,7 +36,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
 TMP_DB_BACKUP=""
 PROJECT_TMP=""
 
-# ====== Lock against parallel runs ======
+# ==== Lock against parallel runs ====
 trap 'rm -f "${PROJECT_TMP:-}" "${TMP_DB_BACKUP:-}" 2>/dev/null || true; exec 9>&-' EXIT
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
@@ -51,20 +51,20 @@ fi
 echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
     curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
 
-# ====== Validate MODX_TABLE_PREFIX ======
+# ==== Validate MODX_TABLE_PREFIX ====
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
 if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
     echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'" >&2
     exit 1
 fi
 
-# ====== Validate DB_NAME (used in mysqldump --ignore-table, SQL queries) ======
+# ==== Validate DB_NAME (used in mysqldump --ignore-table, SQL queries) ====
 if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     echo "ERROR: DB_NAME contains invalid characters: '$DB_NAME'" >&2
     exit 1
 fi
 
-# ====== Pre-flight: disk space check ======
+# ==== Pre-flight: disk space check ====
 AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{printf "%.0f", $4/1024}')
 if [ "$AVAILABLE_MB" -lt 500 ]; then
     MSG="🔴 <b>BACKUP BLOCKED</b> — $ENV_DISPLAY_ESCAPED
@@ -75,7 +75,7 @@ Cleanup old backups or expand disk."
     exit 1
 fi
 
-# ====== Project backup (only if changed) ======
+# ==== Project backup (only if changed) ====
 PROJECT_STATUS=""
 
 if [[ -f "$MARKER_FILE" ]]; then
@@ -112,7 +112,7 @@ fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
 
-# ====== Database backup (always) ======
+# ==== Database backup (always) ====
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
 
@@ -134,7 +134,7 @@ else
 fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
 
-# ====== Redis backup (if available) ======
+# ==== Redis backup (if available) ====
 REDIS_STATUS=""
 REDIS_KEEP="${BACKUP_REDIS_KEEP:-${REDIS_KEEP:-5}}"
 
@@ -159,7 +159,7 @@ else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
 fi
 
-# ====== Telegram notification only on failure ======
+# ==== Telegram notification only on failure ====
 if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
     MSG="====== ALERT ======
 🔴 <b>BACKUP FAILED</b> — $ENV_DISPLAY_ESCAPED
@@ -194,3 +194,10 @@ else
 fi
 
 rotate_files "$BACKUP_DIR/logs/backup_*.log" 30
+
+# Honest exit code: any failed piece must be visible to cron/systemd, not just
+# via TG/Better Stack. Alerting already happened above — this only fixes the code.
+if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
+    exit 1
+fi
+exit 0

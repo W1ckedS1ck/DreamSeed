@@ -1,8 +1,6 @@
 ---
-# Validate DB identifiers BEFORE any task uses them in SQL / shell / templates.
-# Defense-in-depth: db_prefix and db_name are hardcoded in group_vars/all.yml,
-# but a bad value (e.g. from a copy-paste error) would inject into server.env,
-# cron jobs, and SQL queries before the assert originally fired (was at line 87).
+# Validate db_prefix/db_name before any SQL/shell/template use — a bad value
+# would inject into server.env, cron, and SQL (defense-in-depth).
 - name: Validate db_prefix and db_name format
   ansible.builtin.assert:
     that:

@@ -19,7 +19,7 @@ LOCAL_DB_OK=0
 CLOUD_OK=0
 ALERTS=""
 
-# ====== Verify local project backup ======
+# ==== Verify local project backup ====
 PROJ_BACKUP=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -1)
 
 if [[ -n "$PROJ_BACKUP" && -f "$PROJ_BACKUP" ]]; then
@@ -37,7 +37,7 @@ else
 "
 fi
 
-# ====== Verify local DB backup ======
+# ==== Verify local DB backup ====
 DB_BACKUP=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -1)
 
 if [[ -n "$DB_BACKUP" && -f "$DB_BACKUP" ]]; then
@@ -77,7 +77,7 @@ fi
 
 export_metric "backup_verification_ok{type=\"local\",instance=\"$DOMAIN\"} $(( LOCAL_PROJ_OK && LOCAL_DB_OK ))"
 
-# ====== Verify cloud backups (if rclone configured) ======
+# ==== Verify cloud backups (if rclone configured) ====
 if [[ -f ~/.config/rclone/rclone.conf ]]; then
     ENV=$(detect_env)
     PROJ_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/project${ENV}"
@@ -102,8 +102,24 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
 "
         CLOUD_OK=0
     elif [[ "$PROJ_CLOUD_COUNT" -gt 0 && "$DB_CLOUD_COUNT" -gt 0 ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Cloud backups OK: $PROJ_CLOUD_COUNT project, $DB_CLOUD_COUNT DB" >> "$LOG_FILE"
-        CLOUD_OK=1
+        # Cloud-side freshness: count > 0 can hide a stalled upload pipeline,
+        # mirroring the local DB 12h check above.
+        DB_CLOUD_NEWEST=$(rclone lsf "$DB_CLOUD_PATH" --format t 2>/dev/null | sort | tail -1)
+        [[ -z "$DB_CLOUD_NEWEST" ]] && DB_CLOUD_NEWEST=$(rclone lsf "gdrive:DreamSeed/backups/db${ENV}" --format t 2>/dev/null | sort | tail -1)
+        DB_CLOUD_AGE=0
+        if [ -n "$DB_CLOUD_NEWEST" ]; then
+            _ts=$(date -d "$DB_CLOUD_NEWEST" +%s 2>/dev/null || echo "$(date +%s)")
+            DB_CLOUD_AGE=$(( ( $(date +%s) - _ts ) / 3600 ))
+        fi
+        if [[ "$DB_CLOUD_AGE" -ge 12 ]]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Cloud DB backup STALE (${DB_CLOUD_AGE}h): $DB_CLOUD_NEWEST" >> "$LOG_FILE"
+            ALERTS+="❌ Cloud DB backup stale (${DB_CLOUD_AGE}h): $DB_CLOUD_NEWEST
+"
+            CLOUD_OK=0
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Cloud backups OK: $PROJ_CLOUD_COUNT project, $DB_CLOUD_COUNT DB (newest ${DB_CLOUD_AGE}h)" >> "$LOG_FILE"
+            CLOUD_OK=1
+        fi
     else
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Cloud backups MISSING: project=$PROJ_CLOUD_COUNT, db=$DB_CLOUD_COUNT" >> "$LOG_FILE"
         ALERTS+="❌ Cloud backups missing or empty
@@ -116,7 +132,7 @@ else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏭ Cloud verification skipped (rclone not configured)" >> "$LOG_FILE"
 fi
 
-# ====== Send alerts if verification failed ======
+# ==== Send alerts if verification failed ====
 if [[ -n "$ALERTS" ]]; then
     MSG="====== ALERT ======
 🔴 <b>BACKUP VERIFICATION FAILED</b> — $DOMAIN

@@ -34,8 +34,8 @@ mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/deploy_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
-> "$LOG"; chmod 600 "$LOG"
-> "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
+: > "$LOG"; chmod 600 "$LOG"
+: > "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
 
 # Load modules
 source "$SCRIPT_DIR/lib/helpers.sh"

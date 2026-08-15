@@ -85,15 +85,15 @@ jobs:
 
       - name: Terraform Init
         working-directory: terraform/grafana
-        run: terraform init -upgrade=true
+        run: terraform init -input=false
 
       - name: Terraform Plan
         working-directory: terraform/grafana
-        run: terraform plan
+        run: terraform plan -input=false
 
       - name: Terraform Apply
         working-directory: terraform/grafana
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -input=false
 
       - name: Verify folder exists
         working-directory: terraform/grafana
@@ -149,3 +149,10 @@ jobs:
             FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
             echo "\`$FOLDER\`"
           } >> "$M"
+
+      - name: Shred local secrets
+        if: always()
+        run: |
+          # terraform.tfvars.json holds grafana_cloud_token / sm_access_token.
+          # Runner is ephemeral, but shred it to match the pattern of other workflows.
+          shred -u terraform/grafana/terraform.tfvars.json 2>/dev/null || rm -f terraform/grafana/terraform.tfvars.json

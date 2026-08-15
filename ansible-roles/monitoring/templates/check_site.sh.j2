@@ -126,4 +126,4 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
             WHERE table_schema='{{ db_name | replace("'", "''") }}';" 2>/dev/null)
         [ -n "$_db_tables" ] && echo "database_tables{instance=\"{{ domain }}\",database=\"{{ db_name }}\"} $_db_tables"
     fi
-} | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1
+} | curl -s --retry 3 --retry-delay 2 --retry-connrefused --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1

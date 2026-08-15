@@ -91,9 +91,9 @@ _cfcurl() { curl -s --connect-timeout 5 --max-time 15 "$@"; }
 # Usage: curl ... --config <(_bearer_auth "$TOKEN") ...
 _bearer_auth() { printf 'header = "Authorization: Bearer %s"\n' "$1"; }
 
-# Resolve Cloudflare zone ID from a (sub)domain by walking labels down to the
-# registrable zone, e.g. ssh.aws.vitalikuts.online → vitalikuts.online.
-# Works for any nesting depth; apex domains resolve on the first attempt.
+# Resolve Cloudflare zone ID from any (sub)domain by walking labels up to the
+# registrable zone (e.g. ssh.aws.vitalikuts.online → vitalikuts.online). Works
+# for arbitrary nesting; apex domains resolve on the first attempt.
 _cf_zone_id() {
     local domain="$1"
     [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && { log "Cloudflare: CLOUDFLARE_API_TOKEN not set"; return 1; }
