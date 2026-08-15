@@ -21,6 +21,7 @@ ALERTS=""
 
 # ==== Verify local project backup ====
 PROJ_BACKUP=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -1)
+PROJ_MISSING=0
 
 if [[ -n "$PROJ_BACKUP" && -f "$PROJ_BACKUP" ]]; then
     if timeout 300 tar -tzf "$PROJ_BACKUP" > /dev/null 2>&1; then
@@ -32,9 +33,11 @@ if [[ -n "$PROJ_BACKUP" && -f "$PROJ_BACKUP" ]]; then
 "
     fi
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ No project backup found" >> "$LOG_FILE"
-    ALERTS+="❌ No project backup found in $BACKUP_DIR/project
-"
+    # Project archives are only created when site files change (smart_backup.sh),
+    # so absence is EXPECTED on low-churn sites. Don't hard-fail here — resolve
+    # against DB freshness below (a fresh DB dump proves the pipeline runs).
+    PROJ_MISSING=1
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠ No project backup found (expected when site files unchanged)" >> "$LOG_FILE"
 fi
 
 # ==== Verify local DB backup ====
@@ -72,6 +75,18 @@ if [[ -n "$DB_BACKUP" && "$LOCAL_DB_OK" -eq 1 ]]; then
         ALERTS+="❌ DB backup stale (${DB_AGE_H}h): $(basename "$DB_BACKUP")
 "
         LOCAL_DB_OK=0
+    fi
+fi
+
+# A missing project backup is only a failure when the pipeline is actually
+# broken — i.e. the DB backup is stale/missing too (DB dumps run every hour,
+# project archives only on change).
+if [[ "$PROJ_MISSING" -eq 1 ]]; then
+    if [[ "$LOCAL_DB_OK" -eq 1 ]]; then
+        LOCAL_PROJ_OK=1
+    else
+        ALERTS+="❌ No project backup found in $BACKUP_DIR/project
+"
     fi
 fi
 
@@ -140,7 +155,7 @@ if [[ -n "$ALERTS" ]]; then
 $ALERTS
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
-    send_tg "$MSG"
+    send_tg "$MSG" || true
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alert sent to Telegram" >> "$LOG_FILE"
 else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All verifications passed" >> "$LOG_FILE"
@@ -152,3 +167,10 @@ else
 fi
 
 rotate_files "$BACKUP_DIR/logs/verify_*.log" 30
+
+# Honest exit code: cron/Better Stack must see a failed verification, not just
+# a Telegram message (matches smart_backup.sh / upload_backups_to_gdrive.sh).
+if [[ -n "$ALERTS" ]]; then
+    exit 1
+fi
+exit 0

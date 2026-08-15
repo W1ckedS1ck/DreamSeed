@@ -140,7 +140,7 @@ if [ "$HAS_ERROR" -eq 1 ]; then
 
 ${UPLOAD_MSG}⏰ $(date '+%d.%m.%Y %H:%M')  ⏱ ${DURATION}s
 =========================="
-    send_tg "$MSG"
+    send_tg "$MSG" || true
     # Honest exit code — cron/systemd must see the failure, not only TG/Better Stack.
     exit 1
 fi

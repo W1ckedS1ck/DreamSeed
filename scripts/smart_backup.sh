@@ -70,7 +70,7 @@ if [ "$AVAILABLE_MB" -lt 500 ]; then
     MSG="🔴 <b>BACKUP BLOCKED</b> — $ENV_DISPLAY_ESCAPED
 Disk space critical: ${AVAILABLE_MB}MB available (need ≥500MB)
 Cleanup old backups or expand disk."
-    send_tg "$MSG"
+    send_tg "$MSG" || true
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Disk space critical: ${AVAILABLE_MB}MB" >> "$LOG_FILE"
     exit 1
 fi
@@ -144,11 +144,21 @@ if sudo test -f /var/lib/redis/dump.rdb; then
     # Force a synchronous snapshot first so the copy reflects current data,
     # not whatever Redis last auto-saved. SAVE blocks until the dump is on
     # disk (BGSAVE is async and could be copied mid-flight) (M14).
-    sudo redis-cli SAVE >/dev/null 2>&1 || true
+    # Honest handling: if SAVE fails (e.g. Redis down), we still back up the
+    # last known dump but report a FAILURE — never a silent "fresh" success.
+    REDIS_SAVE_OK=0
+    if sudo redis-cli SAVE >/dev/null 2>&1; then
+        REDIS_SAVE_OK=1
+    fi
     if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null && \
        sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >> "$LOG_FILE"
-        REDIS_STATUS="✅ Redis backed up"
+        if [ "$REDIS_SAVE_OK" -eq 1 ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >> "$LOG_FILE"
+            REDIS_STATUS="✅ Redis backed up"
+        else
+            REDIS_STATUS="❌ Redis SAVE failed — backed up last known dump"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+        fi
         rotate_files "$BACKUP_DIR/redis/redis_dump_*.rdb" "$REDIS_KEEP"
     else
         REDIS_STATUS="❌ Redis backup failed"
@@ -173,7 +183,7 @@ $REDIS_STATUS"
     MSG+="
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
-    send_tg "$MSG"
+    send_tg "$MSG" || true
 fi
 
 if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* && "$REDIS_STATUS" != "❌"* ]]; then
