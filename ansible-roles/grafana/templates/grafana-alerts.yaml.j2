@@ -147,10 +147,10 @@ groups:
         annotations:
           summary: Redis service is not running (sessions will be lost)
 
-{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 5, 'gt', '5m', 'OK', 'Error', 'warning') }}
+{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 90, 'gt', '10m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
-            {% raw %}Backup cron hasn't run for 5 min on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
+            {% raw %}Backup cron hasn't started for 90 min on {{ $labels.instance }} — backups run hourly, check systemd/scheduler{% endraw %}
 
 {{ alert_body('upload-failed', 'Cloud Upload Failed', '(time() - upload_last_success_timestamp) / 3600', 86400, 2, 'gt', '5m', 'OK', 'Error', 'warning') }}
         annotations:

@@ -72,39 +72,22 @@
     },
     {
       "customType": "regex",
+      "description": "Track Terraform CLI version in CI (ci.yml) — kept in sync with setup-terraform",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["TERRAFORM_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "hashicorp/terraform",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
       "description": "Track tflint version in CI",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
       "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "terraform-linters/tflint",
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
-      "description": "Track Terraform CLI version in pre-commit curl URL (ci.yml)",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
-      "matchStrings": ["hashicorp\\.com/terraform/(?<currentValue>[\\d.]+)/terraform[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
-      "description": "Track tflint version in pre-commit curl URL (ci.yml)",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
-      "matchStrings": ["terraform-linters/tflint/releases/download/v(?<currentValue>[\\d.]+)/tflint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
-      "description": "Track actionlint version in pre-commit curl URL (ci.yml)",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
-      "matchStrings": ["rhysd/actionlint/releases/download/v(?<currentValue>[\\d.]+)/actionlint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
       "datasourceTemplate": "github-releases"
     },
     {
@@ -163,7 +146,7 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Group Terraform CLI — setup-terraform action + pre-commit curl in sync",
+      "description": "Group Terraform CLI — setup-terraform action default + ci.yml TERRAFORM_VERSION in sync",
       "matchPackageNames": ["hashicorp/terraform"],
       "groupName": "Terraform CLI",
       "labels": ["terraform"],
@@ -172,7 +155,7 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Group tflint — TFLINT_VERSION env var + pre-commit curl in sync",
+      "description": "Group tflint — TFLINT_VERSION env var + setup-tflint action in sync",
       "matchPackageNames": ["terraform-linters/tflint"],
       "groupName": "tflint",
       "labels": ["dependencies", "linting"],
@@ -181,7 +164,7 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Group actionlint — uses: SHA + pre-commit curl in sync",
+      "description": "Group actionlint — uses: SHA pin updates in sync",
       "matchPackageNames": ["rhysd/actionlint"],
       "groupName": "actionlint",
       "labels": ["dependencies"],

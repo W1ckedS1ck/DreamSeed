@@ -99,6 +99,22 @@
     owner: www-data
     group: www-data
 
+# FRESH-DEPLOY RACE GUARD: playbook-02 (web) runs concurrently with
+# playbook-03 (db+restore) in parallel mode. On a fresh server the restore role
+# replaces web_root wholesale (mv → extract → remount), so the cache
+# backup/restore dance below must NOT run at the same time — a cp -a racing
+# restore's mv would fail the playbook, and a temp-cache copy could recreate
+# web_root/core/cache as a plain dir while restore is extracting. The stat
+# mirrors restore's own site-exists gate: when config.inc.php is absent the
+# site is about to be (re)built by restore, so skip the dance and let restore
+# own web_root (it mounts tmpfs itself). The tmpfs MOUNT task below stays
+# ungated — it creates the fstab entry restore relies on.
+- name: Check if MODX site already installed (restore race guard)
+  become: true
+  ansible.builtin.stat:
+    path: "{{ web_root }}/core/config/config.inc.php"
+  register: php_site_exists
+
 - name: Check cache filesystem type
   become: true
   ansible.builtin.shell:
@@ -119,7 +135,9 @@
       fi
     executable: /bin/bash
   changed_when: false
-  when: _cache_fs.stdout | trim != "tmpfs"
+  when:
+    - _cache_fs.stdout | trim != "tmpfs"
+    - php_site_exists.stat.exists
 
 - name: Mount tmpfs for MODX cache
   become: true
@@ -139,11 +157,15 @@
     owner: www-data
     group: www-data
     mode: preserve
-  when: _cache_fs.stdout | trim != "tmpfs"
+  when:
+    - _cache_fs.stdout | trim != "tmpfs"
+    - php_site_exists.stat.exists
 
 - name: Cleanup cache backup
   become: true
   ansible.builtin.file:
     path: /tmp/modx-cache-backup
     state: absent
-  when: _cache_fs.stdout | trim != "tmpfs"
+  when:
+    - _cache_fs.stdout | trim != "tmpfs"
+    - php_site_exists.stat.exists
