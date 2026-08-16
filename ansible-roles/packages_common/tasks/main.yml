@@ -69,9 +69,6 @@
 - name: Setup PHP version and packages
   ansible.builtin.include_tasks: php.yml
 
-- name: Attach Ubuntu Pro subscription (ESM)
-  ansible.builtin.include_tasks: ubuntu-pro.yml
-
 - name: Install redis packages
   become: true
   ansible.builtin.apt:

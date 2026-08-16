@@ -1,0 +1,9 @@
+---
+- name: 09 Ubuntu Pro
+  hosts: dreamseed
+  become: false
+  gather_facts: false
+
+  tasks:
+    - name: Ubuntu Pro attachment
+      ansible.builtin.include_tasks: ../ansible-roles/packages_common/tasks/ubuntu-pro.yml

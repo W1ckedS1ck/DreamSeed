@@ -83,6 +83,7 @@ main() {
         "playbook-01-base.yml:Base packages"
         "$web_playbook"
         "playbook-03-db.yml:Database & Restore"
+        "playbook-09-pro.yml:Ubuntu Pro"
         "playbook-04-security.yml:Security hardening"
         "playbook-05-monitor.yml:Monitoring"
         "playbook-06-backup.yml:Backup & Telegram bot"

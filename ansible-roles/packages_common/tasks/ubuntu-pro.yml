@@ -2,6 +2,7 @@
 # Ubuntu Pro (ESM) attachment.
 # Runs via Ansible (not cloud-init) so the token is never written into
 # Terraform state or instance user-data. Token sourced from UBUNTU_PRO_TOKEN.
+# Token passes through --attach-config (not argv), per Canonical docs.
 
 - name: Check Ubuntu Pro subscription status
   become: true
@@ -27,26 +28,17 @@
 - name: Attach Ubuntu Pro subscription
   become: true
   ansible.builtin.shell:
-    cmd: "pro attach --attach-config /root/.pro-attach.yaml ; rm -f /root/.pro-attach.yaml"
-  async: 300
-  poll: 0
+    cmd: |
+      pro attach --attach-config /root/.pro-attach.yaml
+      rc=$?
+      rm -f /root/.pro-attach.yaml
+      exit $rc
   register: pro_attach
   changed_when: false
-  failed_when: false
   when:
     - ubuntu_pro_token | length > 0
     - pro_status.rc | default(1) == 0
     - not (pro_status.stdout | default('{}') | from_json).attached | default(false)
-
-- name: Record Ubuntu Pro async job id
-  become: true
-  ansible.builtin.copy:
-    content: "{{ pro_attach.ansible_job_id }}"
-    dest: /var/tmp/.ansible-pro-job-id
-    mode: "0600"
-  when:
-    - ubuntu_pro_token | length > 0
-    - pro_attach is defined and not (pro_attach.skipped | default(false))
 
 - name: Report Ubuntu Pro attachment status
   when: ubuntu_pro_token | length > 0
@@ -54,6 +46,5 @@
     _pro_attach_ran: "{{ pro_attach is defined and not (pro_attach.skipped | default(false)) }}"
   ansible.builtin.debug:
     msg: >-
-      Ubuntu Pro: {{ 'attach started in background (job ' ~ pro_attach.ansible_job_id ~ ')
-      — result verified in playbook-04' if _pro_attach_ran
+      Ubuntu Pro: {{ 'attached (rc=' ~ pro_attach.rc ~ ')' if _pro_attach_ran
       else 'already attached / pro unavailable — skipped' }}

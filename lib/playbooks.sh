@@ -9,11 +9,12 @@ run_playbooks() {
         run_ansible "playbook-01-base.yml" "Base packages" || step_fail "Base packages failed"
         step_ok
 
-        # Phase 2: Web + DB
+        # Phase 2: Web + DB + Ubuntu Pro (parallel)
         step_start "Phase 2: Web/DB"
         run_parallel "Web/DB" \
             "$1" \
-            "playbook-03-db.yml:Database & Restore" || step_fail "Phase 2 failed"
+            "playbook-03-db.yml:Database & Restore" \
+            "playbook-09-pro.yml:Ubuntu Pro" || step_fail "Phase 2 failed"
         step_ok
 
         # Phase 2.5: Security (sequential — requires DB + web config)
