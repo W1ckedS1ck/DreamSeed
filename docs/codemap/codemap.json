@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-14T21:23:02Z",
-  "generated_from_commit": "9070503077a7b7642056e9c75130bda934d16934",
+  "generated_at": "2026-08-16T10:52:35Z",
+  "generated_from_commit": "96f7a8bca940f5ac5ceb93546227bb3aa07cc633",
   "working_tree_changed": false,
   "graph_hash": "9abb63fdf04ba0d2",
   "scope": [
@@ -412,11 +412,11 @@
       "evidence": [
         {
           "path": "ansible-roles/mariadb/tasks/main.yml",
-          "symbol": "ansible.mysql.mysql_user"
+          "symbol": "ansible.mariadb.mariadb_user"
         },
         {
           "path": "ansible-roles/mariadb/tasks/main.yml",
-          "symbol": "ansible.mysql.mysql_db"
+          "symbol": "ansible.mariadb.mariadb_db"
         },
         {
           "path": "ansible-roles/redis/tasks/main.yml",
@@ -754,7 +754,7 @@
       "evidence": [
         {
           "path": "ansible-roles/mariadb/tasks/main.yml",
-          "symbol": "ansible.mysql.mysql_db"
+          "symbol": "ansible.mariadb.mariadb_db"
         },
         {
           "path": "ansible-roles/redis/tasks/main.yml",
@@ -1264,7 +1264,7 @@
       "evidence": [
         {
           "path": "ansible-roles/mariadb/tasks/main.yml",
-          "symbol": "ansible.mysql.mysql_db"
+          "symbol": "ansible.mariadb.mariadb_db"
         },
         {
           "path": "ansible-roles/redis/tasks/main.yml",
