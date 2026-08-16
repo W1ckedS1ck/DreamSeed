@@ -341,17 +341,27 @@ ssh-keygen -t ed25519 -f ~/.ssh/new_deploy_key -C "github-actions@dreamseed"
 ./deploy.sh prod -n -i <ip>
 ```
 
-### Scenario D: MariaDB root password leaked
+### Scenario D: MariaDB credentials leaked
 
-The root password is NOT stored in secrets/.env — it's generated during deploy and stored in `/root/.my.cnf` on the server. If the server itself is compromised:
+DB root authenticates via `auth_socket` (no password, local root only). The app user's password (`DB_PASS`) lives in `secrets/.env` and in `/home/ubuntu/.my.cnf` (mode 0600) on the server. If `DB_PASS` leaks:
 
 ```bash
-# 1. Rebuild the server (cannot just change password — there's no access)
+# 1. Update the password
+ansible-vault edit secrets/.env   # change DB_PASS
+
+# 2. Redeploy to push the new password to the server + update /home/ubuntu/.my.cnf
+./deploy.sh prod -n -i <ip>
+```
+
+If the server itself is compromised (attacker has root → can read `/home/ubuntu/.my.cnf` and everything else):
+
+```bash
+# 1. Rebuild the server (root access == game over, don't patch)
 ./deploy.sh prod -x   # destroy
 ./deploy.sh prod -n   # rebuild
 
 # 2. All data is restored from backup during deploy
-# 3. New root password is auto-generated
+# 3. Rotate ALL secrets (DB_PASS, GRAFANA_PASS, TG_TOKEN, CLOUDFLARE_API_TOKEN, ...)
 ```
 
 If only the backup user credentials leaked:

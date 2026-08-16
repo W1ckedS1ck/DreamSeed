@@ -74,7 +74,7 @@ flowchart LR
 ## Secrets Flow
 
 ```
-secrets/.env (plaintext, gitignored)
+secrets/.env (ansible-vault AES256 encrypted, gitignored)
    │
    ├─ CI (GitHub Actions)
    │   │
@@ -150,7 +150,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                  ┌──────────────┐           ┌──────────────────┐
                                  │   Grafana    │           │  Grafana Cloud   │
                                  │  :3000       │           │  (hosted metrics)│
-                                  │  5 dashboards│           │  5 community     │
+                                  │  6/5 dashboards│           │  5 community     │
                                                                     │  23 alerts   │           │  dashboards      │
                                   │              │           │  (gnet 1860/7362/│
                                   │              │           │   763/17452/10229)│
@@ -230,9 +230,9 @@ Layer 2 — SSH:
   Disable EC2 Instance Connect (AuthorizedKeysCommand none, 00 prefix wins via sshd first-wins)
 
 Layer 3 — Application:
-  fail2ban: modx-admin (POST /connectors/ — 25 retries)
-  fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits)
-  fail2ban: dreamseed-bad-request (HTTP 400 — 6 hits)
+  fail2ban: modx-admin (POST /connectors/ — 25 retries) → bans at Cloudflare edge
+  fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits) → edge ban 12h
+  fail2ban: dreamseed-bad-request (HTTP 400 — 6 hits) → edge ban 1h
   MODX core dirs: 0750, config: 0640 root:www-data
 
 Layer 4 — System:
@@ -253,10 +253,12 @@ Layer 5 — Secrets:
 ```
 Trigger            Workflow              Jobs
 ───────            ────────              ────
-Push / PR          CI                    ShellCheck, ansible-lint, actionlint,
+Push / PR          CI                    11 jobs (8 required for merge):
+                                           ShellCheck, ansible-lint, actionlint,
                                            Terraform checks (tflint+validate+fmt),
-                                          Trivy, gitleaks, pre-commit
-                     ────────── 8 parallel ──────────
+                                           Checkov, Trivy, gitleaks, yamllint,
+                                           zizmor, pre-commit, Deploy Check
+                     ────────── 8 required ──────────
 
 Manual dispatch    Deploy                Setup → secrets → deploy.sh / destroy
                    Rollback              Get IP → confirm → RESTORE_ALL.sh
@@ -295,7 +297,11 @@ DreamSeed/
 │   ├── actions/
 │   │   ├── setup-terraform/  # Composite: install tf + plugin cache
 │   │   ├── setup-ansible/    # Composite: install ansible + galaxy collections
-│   │   └── setup-secrets/    # Composite: SSH deploy key, vault password, rclone config
+│   │   ├── setup-secrets/    # Composite: SSH deploy key, vault password, rclone config
+│   │   ├── setup-env/        # Composite: mask + write secrets/.env from GH secrets
+│   │   ├── setup-gitleaks/   # Composite: install pinned gitleaks binary
+│   │   ├── capture-screenshot/ # Composite: site screenshot for Pages preview
+│   │   └── chatops/          # Python parsers for /deploy chat commands
 │   ├── scripts/
 │   │   └── test-restored-server.sh  # Post-restore verification suite
 │   └── workflows/           # 10 workflows (see CI/CD section)

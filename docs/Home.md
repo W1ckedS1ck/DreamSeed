@@ -24,7 +24,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 | Configuration | Ansible (8 playbooks, 17 custom roles) |
 | Web | Nginx + PHP-FPM + Redis + MariaDB |
 | CMS | MODX Revolution |
-| SSL | Cloudflare (Full Strict), certbot DNS-Cloudflare fallback |
+| SSL | Cloudflare (Full SSL), certbot DNS-Cloudflare fallback |
 | Monitoring | VictoriaMetrics + vmagent, Node/MySQLd/Redis/Nginx exporters |
 | Dashboards | Grafana (on-server, 6 on Nginx / 5 on Apache, 23 alerts) |
 | Remote Write | Grafana Cloud (Prometheus remote_write) |
@@ -38,7 +38,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 ## Key Architecture Decisions
 
 - **Terraform + Ansible**: Terraform provisions cloud resources; Ansible configures them. The `deploy.sh` orchestrator runs both in sequence, auto-generating Ansible inventory from Terraform outputs.
-- **Cloudflare SSL**: Cloudflare edge terminates TLS (Full Strict). Origin servers use either restored certs, certbot DNS-Cloudflare, or self-signed certs as fallback.
+- **Cloudflare SSL**: Cloudflare edge terminates TLS (Full SSL). Origin servers use either restored certs, certbot DNS-Cloudflare, or self-signed certs as fallback.
 - **VictoriaMetrics on-server**: Metrics are scraped locally by VictoriaMetrics (15s interval, 3mo retention) and remotely written to Grafana Cloud via vmagent. This survives server death — the cloud retains the last push.
 - **Dev = Prod**: Dev environments mirror prod in every way — monitoring, backups, alerting. Dev backups upload to separate cloud paths but pull prod data on restore.
 - **Ephemeral dev**: Dev-aws and dev-hetz are destroyed and rebuilt regularly. State is disposable; all persistent data comes from prod backups.

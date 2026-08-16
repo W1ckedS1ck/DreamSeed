@@ -4,8 +4,8 @@
 
 There are 2 layers of linting:
 
-- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --ci` for the full suite (adds tflint, terraform validate, gitleaks, Trivy, secrets audit)
-- **CI on GitHub**: `ci.yml` (full, 8 parallel jobs)
+- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
+- **CI on GitHub**: `ci.yml` (11 jobs, 8 required for merge)
 
 ---
 
@@ -24,6 +24,9 @@ There are 2 layers of linting:
 | 9 | **markdownlint-cli2** | local | `docs/**/*.md`, `README.md` | Markdown |
 | 10 | **Checkov** | CI | IaC security scanning in `terraform/` | IaC Security |
 | 11 | **actionlint** | CI | `.github/workflows/*.yml` syntax | GitHub Actions |
+| 12 | **yamllint** | CI + local | generic YAML (`.github/`, `ansible/`, configs) | YAML |
+| 13 | **zizmor** | CI | GitHub Actions security (workflow attacks, secrets) | GitHub Actions |
+| 14 | **Deploy Check** | CI | real `deploy.sh -c` smoke test (env parse, vault, playbook syntax) | orchestration |
 
 ---
 
@@ -88,7 +91,7 @@ There are 2 layers of linting:
 
 **Type:** GitHub Actions workflow linter.
 **Catches:** incorrect `uses:` references, missing permissions, shell injection, deprecated syntax.
-**Config:** runs with `-shellcheck=/usr/bin/shellcheck` — every inline `run:` script in workflows is also checked by shellcheck (the separate ShellCheck job covers standalone `.sh` files).
+**Config:** runs with `-shellcheck="$(command -v shellcheck)"` (pip `shellcheck-py`) — every inline `run:` script in workflows is also checked by shellcheck (the separate ShellCheck job covers standalone `.sh` files).
 
 ---
 
