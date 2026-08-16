@@ -27,7 +27,21 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Parse command
+        id: parse
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          python3 .github/actions/chatops/parse.py "$COMMENT" "$GITHUB_OUTPUT"
+
+      # Any comment that is not a /deploy or /destroy command is ignored
+      # silently: green run, no reaction, no reply, no workflow noise.
+      - name: Ignore non-command
+        if: steps.parse.outputs.command == 'none'
+        run: echo "Not a chatops command — ignoring."
+
       - name: Check author permissions
+        if: steps.parse.outputs.command != 'none'
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,7 +73,7 @@ jobs:
           fi
 
       - name: React
-        if: steps.check.outputs.allowed == 'true'
+        if: steps.parse.outputs.command != 'none' && steps.check.outputs.allowed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -67,14 +81,6 @@ jobs:
         run: |
           gh api "/repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
             -X POST -f content="rocket" > /dev/null 2>&1 || true
-
-      - name: Parse command
-        id: parse
-        if: steps.check.outputs.allowed == 'true'
-        env:
-          COMMENT: ${{ github.event.comment.body }}
-        run: |
-          python3 .github/actions/chatops/parse.py "$COMMENT" "$GITHUB_OUTPUT"
 
       - name: Post help
         if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'help'
@@ -86,7 +92,7 @@ jobs:
           python3 .github/actions/chatops/post_help.py "$ISSUE" "$REPO"
 
       - name: Gate production to admins
-        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command != 'help' && steps.parse.outputs.command != 'status' && steps.parse.outputs.command != 'invalid'
+        if: steps.check.outputs.allowed == 'true' && (steps.parse.outputs.command == 'deploy' || steps.parse.outputs.command == 'destroy')
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
@@ -116,7 +122,6 @@ jobs:
           gh issue comment "$ISSUE" \
             --repo "$REPO" \
             --body "Unknown command. Run /deploy help for available commands."
-          exit 1
 
       - name: Post status
         if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'status'
