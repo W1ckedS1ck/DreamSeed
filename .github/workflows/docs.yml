@@ -100,6 +100,6 @@ jobs:
           fi
 
           git add -A
-          git commit -m "Sync docs/ from ${{ github.ref_name }} (${{ github.sha }})"
+          git commit -m "Sync docs/ from ${GITHUB_REF_NAME} (${GITHUB_SHA})"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
           git push
