@@ -248,6 +248,21 @@ else
         echo "  ⚠ fail2ban: active but missing jails"
         export_metric "fail2ban_up 0"
     fi
+    # Edge-ban config (cloudflare-token action) — if absent, web jails are log-only
+    if sudo grep -q 'cloudflare-token' /etc/fail2ban/jail.d/custom.conf 2>/dev/null; then
+        echo "  ✓ fail2ban: edge-ban active (cloudflare-token)"
+    else
+        echo "  ⚠ fail2ban: web jails log-only (cloudflare-token not configured)"
+        export_metric "fail2ban_up 0"
+    fi
+    # Jail file holds the CF firewall token — must be 0640, never world-readable
+    _f2b_mode=$(stat -c %a /etc/fail2ban/jail.d/custom.conf 2>/dev/null || echo "?")
+    if [[ "$_f2b_mode" == "640" ]]; then
+        echo "  ✓ fail2ban jail.d mode 640"
+    else
+        echo "  ⚠ fail2ban jail.d/custom.conf mode $_f2b_mode (expect 640)"
+        export_metric "fail2ban_up 0"
+    fi
 fi
 
 # --- Systemd timers ---
