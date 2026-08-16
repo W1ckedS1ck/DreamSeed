@@ -22,6 +22,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: restore-test
@@ -175,7 +177,8 @@ jobs:
           echo "=== Destroying data to simulate disaster ==="
           ssh ubuntu@"$SERVER_IP" "sudo rm -rf /var/www/html/* /var/www/html/.[!.]* 2>/dev/null; sudo rm -rf /var/www/html" || true
           ssh ubuntu@"$SERVER_IP" "sudo mysql -e 'DROP DATABASE modx_db; CREATE DATABASE modx_db;'" || true
-          ssh ubuntu@"$SERVER_IP" "redis-cli FLUSHALL" || true
+          # FLUSHALL/FLUSHDB are renamed off (redis.conf hardening), so clear via scan+del
+          ssh ubuntu@"$SERVER_IP" "redis-cli --scan | xargs -r redis-cli del >/dev/null; echo \"Redis cleared — keys remaining: \$(redis-cli dbsize)\"" || true
 
       # --- Restore path 1: local backups (present on server) ---
       - name: Restore (LOCAL) via RESTORE_ALL.sh
@@ -290,6 +293,12 @@ jobs:
           url: "https://${{ env.DOMAIN }}/"
           output: /tmp/pages-screenshot/test-restore.png
 
+      - name: Upload screenshot to Pages
+        if: steps.deploy.outcome == 'success'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: /tmp/pages-screenshot
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -373,3 +382,33 @@ jobs:
           shred -u secrets/.env 2>/dev/null || rm -f secrets/.env
           shred -u secrets/rclone.conf 2>/dev/null || rm -f secrets/rclone.conf
           rm -f ~/.ssh/deploy_key.pub ~/.ssh/config
+
+  publish-preview:
+    name: Publish screenshot preview
+    needs: restore-test
+    if: needs.restore-test.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy screenshot preview
+        id: pages
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
+
+      - name: Write preview summary
+        run: |
+          M="${GITHUB_STEP_SUMMARY:-}"
+          [[ -z "$M" ]] && exit 0
+          {
+            echo "<details><summary>📸 Restore Test screenshot</summary>"
+            echo ""
+            echo "![restore-test](${{ steps.pages.outputs.page_url }}test-restore.png?t=${{ github.run_id }})"
+            echo ""
+            echo "</details>"
+          } >> "$M"
