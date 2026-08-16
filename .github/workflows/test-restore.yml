@@ -22,8 +22,7 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  # pages/id-token scoped to publish-preview job only — not needed workflow-wide
 
 concurrency:
   group: restore-test
