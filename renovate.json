@@ -53,6 +53,16 @@
     },
     {
       "customType": "regex",
+      "description": "Track actionlint version in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["ACTIONLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "rhysd/actionlint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
       "description": "Track tflint plugin versions (.tflint.hcl)",
       "managerFilePatterns": [
         "/^\\.tflint\\.hcl$/"
