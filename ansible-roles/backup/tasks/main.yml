@@ -27,11 +27,21 @@
 
 - name: Upload backup scripts
   ansible.builtin.copy:
-    src: "{{ scripts_dir }}/"
-    dest: "{{ scripts_dir_remote }}/"
+    src: "{{ scripts_dir }}/{{ item }}"
+    dest: "{{ scripts_dir_remote }}/{{ item }}"
     owner: ubuntu
     group: ubuntu
     mode: "0755"
+  loop:
+    - smart_backup.sh
+    - upload_backups_to_gdrive.sh
+    - verify_backups.sh
+    - RESTORE_ALL.sh
+    - send_report.sh
+    - common_functions.sh
+    - audit_deep.sh
+    - env_loader.py
+    - telegram_bot.py
 
 - name: Install python-telegram-bot for async bot
   become: true

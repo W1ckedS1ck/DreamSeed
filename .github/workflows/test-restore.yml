@@ -301,8 +301,10 @@ jobs:
         run: |
           if ls /tmp/pages-screenshot/*.png >/dev/null 2>&1; then
             echo "exists=yes"
+            echo "exists=yes" >> "$GITHUB_OUTPUT"
           else
             echo "exists=no"
+            echo "exists=no" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload screenshot to Pages
