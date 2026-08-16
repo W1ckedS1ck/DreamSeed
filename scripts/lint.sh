@@ -235,45 +235,70 @@ run_terraform_validate() {
     local tf
     tf=$(command -v tofu || command -v terraform)
 
-    for dir in terraform/aws terraform/hetzner terraform/grafana terraform/cloudflare; do
-        [[ ! -d "$dir" ]] && continue
-        echo "    Validating $dir..."
-        # Use TF_VAR_ env vars (works with both terraform and tofu validate)
-        if [[ "$dir" == *"grafana" ]]; then
-            export TF_VAR_grafana_cloud_url="http://x"
-            export TF_VAR_grafana_cloud_token="x"
-            export TF_VAR_sm_access_token="x"
-            export TF_VAR_sm_enabled="false"
-            export TF_VAR_domain="x"
-            export TF_VAR_sm_url="x"
-        fi
-        if [[ "$dir" == *"cloudflare" ]]; then
-            export TF_VAR_cloudflare_api_token="x"
-            export TF_VAR_domain="x"
-        fi
+    local dirs=() d i
+    for d in terraform/aws terraform/hetzner terraform/grafana terraform/cloudflare; do
+        [[ -d "$d" ]] && dirs+=("$d")
+    done
 
-        # Handle ansible-vault encrypted terraform.tfvars (grafana module)
-        local tfvars_file="$dir/terraform.tfvars"
-        local tfvars_vaulted=""
-        if [[ -f "$tfvars_file" ]] && head -c 16 "$tfvars_file" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
-            tfvars_vaulted="$tfvars_file.vaulted"
-            mv "$tfvars_file" "$tfvars_vaulted"
-            # Guarantee restore even if interrupted (SIGINT/TERM) between the
-            # move above and the restore below; re-raise INT so Ctrl-C still stops.
-            trap '[[ -n "${tfvars_vaulted:-}" && -f "$tfvars_vaulted" ]] && mv "$tfvars_vaulted" "$tfvars_file"; trap - EXIT INT TERM; kill -INT $$ 2>/dev/null || true' EXIT INT TERM
-        fi
+    # Validate the 4 dirs in parallel (sequential init+validate was the
+    # slowest CI step). Each runs in a subshell (isolated env + vault-trap);
+    # status is written to a per-dir temp file, aggregated below.
+    local pids=() res_files=()
+    for i in "${!dirs[@]}"; do
+        d="${dirs[$i]}"
+        res_files[$i]=$(mktemp)
+        echo "    Validating $d..."
+        (
+            # Use TF_VAR_ env vars (works with both terraform and tofu validate)
+            if [[ "$d" == *"grafana" ]]; then
+                export TF_VAR_grafana_cloud_url="http://x"
+                export TF_VAR_grafana_cloud_token="x"
+                export TF_VAR_sm_access_token="x"
+                export TF_VAR_sm_enabled="false"
+                export TF_VAR_domain="x"
+                export TF_VAR_sm_url="x"
+            fi
+            if [[ "$d" == *"cloudflare" ]]; then
+                export TF_VAR_cloudflare_api_token="x"
+                export TF_VAR_domain="x"
+            fi
 
-        if "$tf" -chdir="$dir" init -backend=false && "$tf" -chdir="$dir" validate; then
-            print_ok "$dir — valid"
+            # Handle ansible-vault encrypted terraform.tfvars (grafana module)
+            tfvars_file="$d/terraform.tfvars"
+            tfvars_vaulted=""
+            if [[ -f "$tfvars_file" ]] && head -c 16 "$tfvars_file" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
+                tfvars_vaulted="$tfvars_file.vaulted"
+                mv "$tfvars_file" "$tfvars_vaulted"
+                # Guarantee restore even if interrupted (SIGINT/TERM) between the
+                # move above and the restore below; re-raise INT so Ctrl-C still stops.
+                trap '[[ -n "${tfvars_vaulted:-}" && -f "$tfvars_vaulted" ]] && mv "$tfvars_vaulted" "$tfvars_file"; trap - EXIT INT TERM; kill -INT $$ 2>/dev/null || true' EXIT INT TERM
+            fi
+
+            if "$tf" -chdir="$d" init -backend=false 2>&1 && "$tf" -chdir="$d" validate 2>&1; then
+                echo "tf_validate_status=ok"
+            else
+                echo "tf_validate_status=fail"
+            fi
+
+            # Restore vaulted tfvars if we moved it, and disarm the restore trap
+            if [[ -n "$tfvars_vaulted" && -f "$tfvars_vaulted" ]]; then
+                mv "$tfvars_vaulted" "$tfvars_file"
+            fi
+            trap - EXIT INT TERM
+        ) >"${res_files[$i]}" 2>&1 &
+        pids[$i]=$!
+    done
+
+    for i in "${!dirs[@]}"; do
+        d="${dirs[$i]}"
+        wait "${pids[$i]}"
+        if grep -q '^tf_validate_status=ok$' "${res_files[$i]}" 2>/dev/null; then
+            print_ok "$d — valid"
         else
-            print_fail "$dir — validation failed"
+            print_fail "$d — validation failed"
+            grep -v '^tf_validate_status=' "${res_files[$i]}" 2>/dev/null | tail -5 | sed 's/^/        /' || true
         fi
-
-        # Restore vaulted tfvars if we moved it, and disarm the restore trap
-        if [[ -n "$tfvars_vaulted" && -f "$tfvars_vaulted" ]]; then
-            mv "$tfvars_vaulted" "$tfvars_file"
-        fi
-        trap - EXIT INT TERM
+        rm -f "${res_files[$i]}"
     done
     ci_annotation "Terraform Validate" "$([[ $FAILED == false ]] && echo pass || echo fail)"
     group_end
