@@ -223,7 +223,7 @@ Layer 0 — Edge (Cloudflare):
 
 Layer 1 — Network:
   Cloudflare proxy (hides origin IP)
-  Hetzner Firewall / AWS SG: ports 22, 80, 443 only
+  Hetzner Firewall / AWS SG: port 22 (world) + 80/443 (Cloudflare edge ranges only)
 
 Layer 2 — SSH:
   PermitRootLogin no, MaxAuthTries 3, LogLevel VERBOSE

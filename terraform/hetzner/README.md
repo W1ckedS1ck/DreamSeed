@@ -5,12 +5,14 @@
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5 |
 | <a name="requirement_hcloud"></a> [hcloud](#requirement\_hcloud) | ~> 1.66 |
+| <a name="requirement_http"></a> [http](#requirement\_http) | ~> 3.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
 | <a name="provider_hcloud"></a> [hcloud](#provider\_hcloud) | 1.68.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | 3.6.1 |
 
 ## Modules
 
@@ -26,6 +28,8 @@ No modules.
 | [hcloud_ssh_key.ci_key](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/ssh_key) | resource |
 | [hcloud_primary_ip.main](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/data-sources/primary_ip) | data source |
 | [hcloud_ssh_key.default](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/data-sources/ssh_key) | data source |
+| [http_http.cf_ips_v4](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
+| [http_http.cf_ips_v6](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
 
 ## Inputs
 

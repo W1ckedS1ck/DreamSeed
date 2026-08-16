@@ -193,7 +193,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 - Fail2ban with **custom vulnerability scanner filter** (dreamseed-botsearch) — 2 hits → 12h edge ban
 - Fail2ban with **custom bad-request filter** (dreamseed-bad-request) — HTTP 400 → 6 hits → 1h edge ban
 - Secrets encrypted with Ansible Vault at rest; `gitleaks` scans every push
-- Cloud-native firewalls (AWS SG / Hetzner Firewall) — only ports 22, 80, 443 open
+- Cloud-native firewalls (AWS SG / Hetzner Firewall) — ports 22 (world), 80/443 restricted to Cloudflare edge ranges
 - Full sysctl hardening (ICMP redirects, martian logging, core dumps disabled)
 
 ### 📊 Full Observability — Auto-Provisioned

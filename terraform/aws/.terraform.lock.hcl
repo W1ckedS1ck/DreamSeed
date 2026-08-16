@@ -25,3 +25,11 @@ provider "registry.terraform.io/hashicorp/aws" {
     "zh:fb7ef7e405b05789cec32c8ea06a353789c6e3a336b876508cf2ac98984f0558",
   ]
 }
+
+provider "registry.terraform.io/hashicorp/http" {
+  version     = "3.6.1"
+  constraints = "~> 3.0"
+  hashes = [
+    "h1:uEqqVV3ui6Zr0k/lqyjvHM0Lg267qMMji+ux7wPfJXI=",
+  ]
+}
