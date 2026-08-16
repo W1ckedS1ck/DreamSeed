@@ -23,12 +23,12 @@ variable "primary_ip_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (prod, dev-hetz, etc.) — used in resource names to avoid conflicts"
+  description = "Deployment environment (dev-hetz, test, prod-hetz) — used in resource names to avoid conflicts"
   type        = string
 
   validation {
-    condition     = can(regex("^(prod|dev|test)(-[a-z]+)?$", var.environment))
-    error_message = "Must match {type}[-{provider}], e.g. prod, dev-aws, prod-hetz, test"
+    condition     = contains(["dev-hetz", "test", "prod-hetz"], var.environment)
+    error_message = "Hetzner provider can only be used with environment dev-hetz, test, or prod-hetz (got: ${var.environment}). 'prod'/'dev-aws' are AWS-only."
   }
 }
 

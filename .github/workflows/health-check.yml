@@ -28,6 +28,8 @@ jobs:
     name: Update ${{ matrix.target }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && contains(fromJSON('["prod", "prod-hetz"]'), matrix.target) && 'production' || '' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -174,7 +176,7 @@ jobs:
           for svc in nginx apache2 php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
             if $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active; then
               echo "[OK] $svc"
-              [ "$svc" = "nginx" ] || [ "$svc" = "apache2" ] && WEB_OK=1
+              if [ "$svc" = "nginx" ] || [ "$svc" = "apache2" ]; then WEB_OK=1; fi
             fi
           done
           [ -n "$WEB_OK" ] || echo "[FAIL] web server (neither nginx nor apache2 active)"

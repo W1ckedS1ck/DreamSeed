@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ==== Usage ====
 # Periodically updates nginx Cloudflare real IP config.
-# Runs automatically via systemd timer (weekly).
+# Runs weekly via the health-check workflow (per target) and at deploy.
 # Safe to run manually at any time.
 # Never overwrites the live config unless the fetched ranges are valid CIDRs.
 

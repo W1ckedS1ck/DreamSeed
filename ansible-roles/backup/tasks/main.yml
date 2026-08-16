@@ -13,23 +13,6 @@
 - name: Upload rclone config
   ansible.builtin.include_tasks: ../restore/tasks/rclone_config.yml
 
-- name: Create root MySQL config for cron jobs
-  ansible.builtin.copy:
-    content: |
-      [client]
-      user=root
-      password={{ db_pass }}
-
-      [mysql]
-      user=root
-      password={{ db_pass }}
-    dest: /root/.my.cnf
-    owner: root
-    group: root
-    mode: "0600"
-  become: true
-  no_log: true
-
 - name: Create backup directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -160,7 +143,7 @@
   become: true
 
 - name: Check MODX system_settings table
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = '{{ db_prefix }}system_settings'"
@@ -169,7 +152,7 @@
   failed_when: false
 
 - name: Update MODX session_gc_maxlifetime to 24 hours
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -182,7 +165,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Clear session_handler_class (force PHP native handler → Redis)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -195,7 +178,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Truncate MODX session table on deploy (clear stale sessions)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
@@ -215,7 +198,7 @@
     - modx_check.query_result is defined
 
 - name: Set MODX database query caching (cache_db)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -228,7 +211,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Set MODX session data caching (cache_db_session)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >

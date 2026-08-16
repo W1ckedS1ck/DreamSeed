@@ -283,14 +283,6 @@ jobs:
         with:
           path: /tmp/pages-screenshot
 
-      - name: Upload deploy summary
-        if: always() && inputs.action == 'deploy'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: deploy-summary-${{ inputs.environment }}
-          path: /tmp/deploy-summary.txt
-          retention-days: 90
-
       - name: Destroy
         if: inputs.action == 'destroy'
         id: destroy

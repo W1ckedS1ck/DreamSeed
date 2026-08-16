@@ -254,7 +254,7 @@ ansible-roles/<name>/
 - `become` is NOT set at playbook level (all 8 playbooks declare `become: false`) — opt in with `become: true` per task
 - Use `ansible.builtin.` modules, not bare `command:` or `shell:` unless necessary
 - `no_log: true` on any task handling passwords, tokens, keys
-- No collections other than `ansible.mysql` and `ansible.posix`
+- No collections other than `ansible.mariadb` and `ansible.posix`
 
 ---
 

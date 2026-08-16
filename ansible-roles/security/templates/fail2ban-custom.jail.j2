@@ -1,7 +1,5 @@
-# Custom Fail2ban jails for DreamSeed
-# Web jails are ENABLED — nginx sees real visitor IPs via Cloudflare
-# CF-Connecting-IP + ngx_http_realip_module, so iptables/nftables bans work.
-# See: ansible-roles/security/templates/cloudflare-realip.conf.j2
+# Web jails are LOG-ONLY (banaction=none): behind Cloudflare the firewall sees
+# edge IPs, not attackers. Web enforcement = CF WAF + nginx limit_req; only SSH bans.
 
 # ==== SSH ====
 
@@ -19,6 +17,7 @@ filter = sshd[publickey=any]
 [modx-admin]
 enabled     = true
 port        = http,https
+banaction   = none
 filter      = modx-admin
 backend     = pyinotify
 {% if web_server == "nginx" %}
@@ -36,6 +35,7 @@ bantime  = 3600
 [dreamseed-botsearch]
 enabled     = true
 port        = http,https
+banaction   = none
 filter      = dreamseed-botsearch
 backend     = pyinotify
 logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
@@ -46,6 +46,7 @@ bantime     = 12h
 [dreamseed-bad-request]
 enabled     = true
 port        = http,https
+banaction   = none
 filter      = dreamseed-bad-request
 backend     = pyinotify
 logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
@@ -88,10 +89,11 @@ maxretry = 6
 bantime  = 1h
 {% endif %}
 
-# ==== Recidive — extends bans for repeat offenders ====
+# ==== Recidive (log-only too) ====
 
 [recidive]
 enabled  = true
+banaction = none
 logpath  = /var/log/fail2ban.log
 maxretry = 3
 findtime = 86400

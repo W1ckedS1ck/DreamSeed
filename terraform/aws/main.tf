@@ -158,10 +158,3 @@ resource "aws_instance" "web" {
     Name = "dreamseed-${var.environment}"
   }
 }
-
-check "workspace_valid_for_aws" {
-  assert {
-    condition     = contains(["prod", "dev-aws", "test"], var.environment)
-    error_message = "AWS provider can only be used with environment prod, dev-aws, or test (got: ${var.environment})"
-  }
-}

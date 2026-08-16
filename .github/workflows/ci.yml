@@ -245,12 +245,14 @@ jobs:
     name: Deploy Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Push-only: loads real secrets and executes PR-modified code — never run on PRs.
+    if: github.event_name != 'pull_request'
     # Smoke-test the REAL deploy.sh orchestration path (CLI parsing, target
     # resolution, .env parsing, preflight, playbook presence + syntax) — the
     # 8 lint/scan checks above never exercise deploy.sh itself. Runs with
     # `-i 0.0.0.0` to skip Terraform (already validated offline by the
-    # Terraform job) so no TF_API_TOKEN is exposed to PR runs. GIT_REF is
-    # pinned to dev so guard_source_ref never trips on main pushes.
+    # Terraform job) so no TF_API_TOKEN is exposed. GIT_REF matches the
+    # triggering branch, so guard_source_ref never trips.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
