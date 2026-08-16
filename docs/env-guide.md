@@ -28,57 +28,79 @@ CLOUDFLARE_FIREWALL_TOKEN  →  Authorization: Bearer <token> (CF API v4)
 
 Scoped API token with **`Zone → Firewall Services → Edit`** (zone-scoped to the target's zone). Used by the `security` Ansible role: fail2ban web jails ban offending IPs **at the Cloudflare edge** via the `cloudflare-token` action. Empty value = web jails are log-only (no bans). Zone ID is resolved automatically from the target domain at deploy time.
 
-### Global API Key — for admin tasks
+### Master account (email + Global API Key) — admin/emergency only
 
-> **Note:** manual-only. `CLOUDFLARE_EMAIL` / `CLOUDFLARE_GLOBAL_KEY` are not stored in `secrets/.env` and are not consumed by any code or workflow. Use them ad-hoc from your local shell when the dashboard is unavailable; prefer scoped API tokens in CI.
+**What it is:** `CLOUDFLARE_EMAIL` + `CLOUDFLARE_GLOBAL_KEY` — the account master credential, **equivalent to the account password** (full access to everything: zones, DNS, WAF, tokens, billing-adjacent APIs).
 
 ```
 CLOUDFLARE_EMAIL      →  X-Auth-Email: <email>
 CLOUDFLARE_GLOBAL_KEY →  X-Auth-Key: <key>
 ```
 
-Where to get: same page, scroll to "Global API Key".
+Where to get: Cloudflare Dashboard → My Profile → API Tokens → "Global API Key" (reveal with account password).
 
-Full account access (like password). Use it to create/modify API Tokens via API when the dashboard is unavailable.
+Stored in: `secrets/.env` (ansible-vault). **Never** in CI, workflows, or on servers.
 
-Example — create a scoped API Token:
+**Security posture:**
 
-```bash
-curl -X POST "https://api.cloudflare.com/client/v4/user/tokens" \
-  -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-  -H "X-Auth-Key: $CLOUDFLARE_GLOBAL_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "my-ci-token",
-    "policies": [
-      {
-        "effect": "allow",
-        "resources": {"com.cloudflare.api.account.zone.*": "*"},
-        "permission_groups": [
-          {"id": "c8fed203ed3043cba015a93ad1616f1f"},  # Zone Read
-          {"id": "4755a26eedb94da69e1066d98aa820be"},  # DNS Write
-          {"id": "3245da1cf36c45c3847bb9b483c62f97"},  # Cache Settings Read
-          {"id": "9ff81cbbe65c400b97d92c3c1033cab6"}   # Cache Settings Write
-        ]
-      },
-      {
-        "effect": "allow",
-        "resources": {"com.cloudflare.api.account.*": "*"},
-        "permission_groups": [
-          {"id": "fb39996ee9044d2a8725921e02744b39"}   # Account Rulesets Read
-        ]
-      }
-    ]
-  }'
-```
+- Used **only** to bootstrap/manage *scoped* API tokens (least privilege) — never directly by any code, workflow, or server.
+- One leaked Global Key = full Cloudflare account takeover (DNS hijack, domain theft). Treat it like the account password; rotate immediately on any doubt.
+- All automation must use scoped Bearer tokens (like `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_FIREWALL_TOKEN`).
 
-List all permission group IDs:
+**Shell usage (token stays out of argv/ps):**
 
 ```bash
-curl -s -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-  -H "X-Auth-Key: $CLOUDFLARE_GLOBAL_KEY" \
-  "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/tokens/permission_groups"
+# reads keys from the vault, auth via curl --config (never -H in argv)
+EMAIL=$(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed | grep '^CLOUDFLARE_EMAIL=' | cut -d= -f2- | tr -d '"')
+KEY=$(ansible-vault view secrets/.env --vault-password-file ~/.vault_pass_dreamseed | grep '^CLOUDFLARE_GLOBAL_KEY=' | cut -d= -f2- | tr -d '"')
+AUTH="header = \"X-Auth-Email: $EMAIL\"\nheader = \"X-Auth-Key: $KEY\"\nheader = \"Content-Type: application/json\"\n"
+curl -s --config <(printf "$AUTH") "https://api.cloudflare.com/client/v4/accounts"
 ```
+
+**Workflow — master creates a scoped token (the pattern used for the fail2ban firewall token):**
+
+1. Find your **account ID**:
+
+   ```bash
+   curl -s --config <(printf "$AUTH") "https://api.cloudflare.com/client/v4/accounts" | jq -r '.result[0].id'
+   ```
+
+2. Find the **permission group ID** you need (zone scope = `com.cloudflare.api.account.zone`):
+
+   ```bash
+   curl -s --config <(printf "$AUTH") "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/tokens/permission_groups?per_page=200" \
+     | jq -r '.result[] | select(.name | test("Firewall Services")) | "\(.id)  \(.name)"'
+   ```
+
+3. Create a scoped token (zone-level resources only):
+
+   ```bash
+   curl -s -X POST --config <(printf "$AUTH") "https://api.cloudflare.com/client/v4/user/tokens" \
+     -d '{
+       "name": "dreamseed-something (one purpose)",
+       "status": "active",
+       "policies": [{
+         "effect": "allow",
+         "resources": {"com.cloudflare.api.account.zone.<ZONE_ID>": "*"},
+         "permission_groups": [{"id": "<PERMISSION_GROUP_ID>", "effect": "allow"}]
+       }]
+     }'
+   ```
+
+   The token value is returned **once** — capture it immediately (0600 file), add to `secrets/.env` via `ansible-vault edit`.
+
+4. **To extend a token to more zones** (resources), `PUT /user/tokens/<id>` with the same policy + an extra zone resource. The token *value* does not change.
+
+Known permission group IDs (vitalikuts.online account, zone scope):
+
+| ID | Permission |
+|----|-----------|
+| `43137f8d07884d3198dc0ee77ca6e79b` | Firewall Services **Write** |
+| `4ec32dfcb35641c5bb32d5ef1ab963b4` | Firewall Services Read |
+| `c8fed203ed3043cba015a93ad1616f1f` | Zone Read |
+| `4755a26eedb94da69e1066d98aa820be` | DNS Write |
+
+**Rotating the Global API Key:** Dashboard → My Profile → API Tokens → Global API Key → Roll. Update `secrets/.env` afterwards.
 
 ### Which one to use
 
