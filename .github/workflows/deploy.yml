@@ -150,6 +150,7 @@ jobs:
           SERVER_IP: ${{ inputs.server_ip }}
         run: |
           chmod +x deploy.sh
+          : > /tmp/deploy.log
 
           ENV="${{ inputs.environment }}"
           WEB_SRV="${{ inputs.web_server }}"
@@ -186,7 +187,9 @@ jobs:
           fi
 
           if [[ "$rc" -eq 0 ]]; then
-            if grep -qE '❌ CRITICAL|ERROR!|Traceback \(|^Error:|^✗ Error' /tmp/deploy.log 2>/dev/null; then
+            if grep -q 'GRAFANA_FALLBACK_FAILED=true' /tmp/deploy.log 2>/dev/null; then
+              echo "::warning::Grafana fallback failed — deploy degraded (dashboards/alerting may be missing)"
+            elif grep -qE '❌ CRITICAL|ERROR!|Traceback \(|^Error:|^✗ Error|fatal: \[.*\]: FAILED!' /tmp/deploy.log 2>/dev/null; then
               echo "::error::Deploy reported failures despite exit code 0"
               rc=1
             fi
@@ -194,6 +197,14 @@ jobs:
 
           perl -pe 's/\e\[[\d;]*[mK]//g' /tmp/deploy.log > /tmp/deploy-summary.txt
           exit "$rc"
+
+      - name: Upload deploy log (debug)
+        if: always() && inputs.action == 'deploy' && failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: deploy-log-${{ inputs.environment }}
+          path: /tmp/deploy.log
+          retention-days: 7
 
       - name: Post-deploy
         if: always() && inputs.action == 'deploy'
@@ -208,6 +219,11 @@ jobs:
           SKIP_DNS="${{ inputs.skip_dns }}"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           DEPLOY_STATUS="${{ steps.deploy.outcome }}"
+
+          GRAFANA_DEGRADED=false
+          if [ -f /tmp/deploy-summary.txt ] && grep -q 'GRAFANA_FALLBACK_FAILED=true' /tmp/deploy-summary.txt 2>/dev/null; then
+            GRAFANA_DEGRADED=true
+          fi
 
           # --- Deploy summary ---
           SERVER_IP="${{ steps.deploy.outputs.server_ip }}"
@@ -233,6 +249,9 @@ jobs:
               echo "| 🔗 **Commit** | ${{ github.sha }} |"
               echo "| 🔗 **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
               echo "| 📸 **Screenshot preview** | published in a separate job below — refresh in ~1 min |"
+              if [ "$GRAFANA_DEGRADED" = "true" ]; then
+                echo "| ⚠ **Grafana** | degraded — fallback failed (dashboards/alerting may be missing) |"
+              fi
             } >> "$M"
           fi
 
@@ -265,6 +284,10 @@ jobs:
             Server: ${SERVER_IP:-new}
             🖥 ${WEB}
             📅 $(date '+%Y-%m-%d %H:%M')"
+            if [ "$GRAFANA_DEGRADED" = "true" ]; then
+              MSG+="
+            ⚠ *Grafana degraded* — fallback failed (dashboards may be missing)"
+            fi
             bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
           fi
 

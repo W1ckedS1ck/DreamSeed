@@ -24,7 +24,6 @@
       - libpam-pwquality
       - unattended-upgrades
     state: present
-    update_cache: true
   register: _apt_result
   retries: 3
   delay: 10

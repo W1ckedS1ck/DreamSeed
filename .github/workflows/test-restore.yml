@@ -295,21 +295,29 @@ jobs:
           url: "https://${{ env.DOMAIN }}/"
           output: /tmp/pages-screenshot/test-restore.png
 
-      - name: Upload screenshot to Pages
+      - name: Check screenshot exists
+        id: shot_check
         if: always() && steps.server-ip.outputs.ip != ''
+        run: |
+          if ls /tmp/pages-screenshot/*.png >/dev/null 2>&1; then
+            echo "exists=yes"
+          else
+            echo "exists=no"
+          fi
+
+      - name: Upload screenshot to Pages
+        if: steps.shot_check.outputs.exists == 'yes'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: /tmp/pages-screenshot
-          if-no-files-found: ignore
 
       - name: Upload screenshots
-        if: always()
+        if: steps.shot_check.outputs.exists == 'yes'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: restore-test-screenshots
           path: /tmp/pages-screenshot/*.png
           retention-days: 30
-          if-no-files-found: ignore
 
       # --- Phase 4: teardown ---
       - name: Destroy test server

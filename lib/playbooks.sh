@@ -37,6 +37,7 @@ run_playbooks() {
             step_ok
         else
             echo "  ⚠ Grafana failed — continuing (fallback, non-fatal)"
+            echo "  ⚠ GRAFANA_FALLBACK_FAILED=true"
         fi
     else
         for entry in "${PLAYBOOK_LIST[@]}"; do
@@ -44,7 +45,10 @@ run_playbooks() {
             step_start "$label"
             if [[ "$pb" == "playbook-07-grafana.yml" ]]; then
                 # Grafana = fallback: never fail the deploy on its error.
-                run_ansible "$pb" "$label" || echo "  ⚠ Grafana failed — continuing (fallback, non-fatal)"
+                run_ansible "$pb" "$label" || {
+                    echo "  ⚠ Grafana failed — continuing (fallback, non-fatal)"
+                    echo "  ⚠ GRAFANA_FALLBACK_FAILED=true"
+                }
             else
                 run_ansible "$pb" "$label" || step_fail "$label failed"
                 step_ok
