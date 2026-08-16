@@ -3,7 +3,10 @@ set -euo pipefail
 
 # Validate required commands
 for cmd in find rclone du cut date grep curl jq; do
-    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+    command -v "$cmd" >/dev/null 2>&1 || {
+        echo "ERROR: '$cmd' not found in PATH"
+        exit 1
+    }
 done
 
 # Path for cron
@@ -16,7 +19,7 @@ source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
 # Parse report type
-REPORT_TYPE="${1:-daily}"  # daily or weekly
+REPORT_TYPE="${1:-daily}" # daily or weekly
 
 # ==== Settings ====
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"

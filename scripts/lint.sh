@@ -7,9 +7,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 # ----- Colors (strip in CI / non-TTY) -----
-RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; CYAN=$'\033[0;36m'; NC=$'\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
 CI_MODE=false
-[[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; CYAN=''; NC=''; }
+[[ -t 1 ]] || {
+    RED=''
+    GREEN=''
+    YELLOW=''
+    CYAN=''
+    NC=''
+}
 
 TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
@@ -28,12 +38,18 @@ FAILED=false
 
 # ----- Helpers -----
 
-group_start() { local n="$1"; if [[ "$CI_MODE" == "true" ]]; then echo "::group::${n}"; else echo -e "\n  ${CYAN}▶ ${n}${NC}"; fi; }
-group_end()   { if [[ "$CI_MODE" == "true" ]]; then echo "::endgroup::"; fi; }
+group_start() {
+    local n="$1"
+    if [[ "$CI_MODE" == "true" ]]; then echo "::group::${n}"; else echo -e "\n  ${CYAN}▶ ${n}${NC}"; fi
+}
+group_end() { if [[ "$CI_MODE" == "true" ]]; then echo "::endgroup::"; fi; }
 
-print_ok()    { echo -e "    ${GREEN}✓${NC} $1"; }
-print_fail()  { echo -e "    ${RED}✗${NC} $1"; FAILED=true; }
-print_skip()  { echo -e "    ${YELLOW}⊘${NC} $1"; }
+print_ok() { echo -e "    ${GREEN}✓${NC} $1"; }
+print_fail() {
+    echo -e "    ${RED}✗${NC} $1"
+    FAILED=true
+}
+print_skip() { echo -e "    ${YELLOW}⊘${NC} $1"; }
 print_error() { $CI_MODE && echo "::error::$1" || echo -e "  ${RED}✗${NC} $1"; }
 
 tool_available() {
@@ -54,7 +70,11 @@ ci_annotation() {
 
 run_shellcheck() {
     group_start "ShellCheck"
-    if ! tool_available shellcheck; then print_skip "shellcheck not installed"; group_end; return 0; fi
+    if ! tool_available shellcheck; then
+        print_skip "shellcheck not installed"
+        group_end
+        return 0
+    fi
 
     local sh_files=()
     while IFS= read -r -d '' f; do sh_files+=("$f"); done < <(
@@ -62,91 +82,133 @@ run_shellcheck() {
     )
 
     if shellcheck --severity=error "${sh_files[@]}"; then
-        print_ok "No errors"; ci_annotation "ShellCheck" "pass"
+        print_ok "No errors"
+        ci_annotation "ShellCheck" "pass"
     else
-        print_fail "Errors found"; ci_annotation "ShellCheck" "fail"
+        print_fail "Errors found"
+        ci_annotation "ShellCheck" "fail"
     fi
     group_end
 }
 
 run_ruff() {
     group_start "Ruff (Python)"
-    if ! tool_available ruff; then print_skip "ruff not installed"; group_end; return 0; fi
+    if ! tool_available ruff; then
+        print_skip "ruff not installed"
+        group_end
+        return 0
+    fi
 
     if ruff check scripts/; then
-        print_ok "No issues"; ci_annotation "Ruff" "pass"
+        print_ok "No issues"
+        ci_annotation "Ruff" "pass"
     else
-        print_fail "Issues found"; ci_annotation "Ruff" "fail"
+        print_fail "Issues found"
+        ci_annotation "Ruff" "fail"
     fi
     group_end
 }
 
 run_actionlint() {
     group_start "actionlint (GitHub Actions)"
-    if ! tool_available actionlint; then print_skip "actionlint not installed"; group_end; return 0; fi
+    if ! tool_available actionlint; then
+        print_skip "actionlint not installed"
+        group_end
+        return 0
+    fi
 
     if actionlint; then
-        print_ok "No issues"; ci_annotation "actionlint" "pass"
+        print_ok "No issues"
+        ci_annotation "actionlint" "pass"
     else
-        print_fail "Issues found"; ci_annotation "actionlint" "fail"
+        print_fail "Issues found"
+        ci_annotation "actionlint" "fail"
     fi
     group_end
 }
 
 run_zizmor() {
     group_start "zizmor (GitHub Actions Security)"
-    if ! tool_available uv; then print_skip "uv not installed"; group_end; return 0; fi
+    if ! tool_available uv; then
+        print_skip "uv not installed"
+        group_end
+        return 0
+    fi
 
     if uvx zizmor --min-confidence high .; then
-        print_ok "No high-confidence issues"; ci_annotation "zizmor" "pass"
+        print_ok "No high-confidence issues"
+        ci_annotation "zizmor" "pass"
     else
-        print_fail "Issues found"; ci_annotation "zizmor" "fail"
+        print_fail "Issues found"
+        ci_annotation "zizmor" "fail"
     fi
     group_end
 }
 
 run_yamllint() {
     group_start "yamllint (YAML)"
-    if ! tool_available uv; then print_skip "uv not installed"; group_end; return 0; fi
+    if ! tool_available uv; then
+        print_skip "uv not installed"
+        group_end
+        return 0
+    fi
 
     if uvx yamllint --strict .; then
-        print_ok "No issues"; ci_annotation "yamllint" "pass"
+        print_ok "No issues"
+        ci_annotation "yamllint" "pass"
     else
-        print_fail "Issues found"; ci_annotation "yamllint" "fail"
+        print_fail "Issues found"
+        ci_annotation "yamllint" "fail"
     fi
     group_end
 }
 
 run_renovate_validate() {
     group_start "Renovate Config Validator"
-    if ! tool_available npx; then print_skip "npx not installed"; group_end; return 0; fi
+    if ! tool_available npx; then
+        print_skip "npx not installed"
+        group_end
+        return 0
+    fi
 
     # Pin renovate so validation is deterministic across machines/CI.
     # managerFilePatterns in renovate.json requires renovate >= 41 (see CLAUDE.md).
     # NPM_CONFIG_LOGLEVEL=error silences npm's engine/deprecation noise (we run on node >= renovate's engines).
     if NPM_CONFIG_LOGLEVEL=error npx --yes --package renovate@44 -- renovate-config-validator 2>&1; then
-        print_ok "renovate.json valid"; ci_annotation "Renovate" "pass"
+        print_ok "renovate.json valid"
+        ci_annotation "Renovate" "pass"
     else
-        print_fail "renovate.json invalid"; ci_annotation "Renovate" "fail"
+        print_fail "renovate.json invalid"
+        ci_annotation "Renovate" "fail"
     fi
     group_end
 }
 
 run_ansible_lint() {
     group_start "Ansible Lint"
-    if ! tool_available ansible-lint; then print_skip "ansible-lint not installed"; group_end; return 0; fi
+    if ! tool_available ansible-lint; then
+        print_skip "ansible-lint not installed"
+        group_end
+        return 0
+    fi
 
     if (cd ansible && ansible-lint .); then
-        print_ok "No issues"; ci_annotation "Ansible Lint" "pass"
+        print_ok "No issues"
+        ci_annotation "Ansible Lint" "pass"
     else
-        print_fail "Issues found"; ci_annotation "Ansible Lint" "fail"
+        print_fail "Issues found"
+        ci_annotation "Ansible Lint" "fail"
     fi
     group_end
 }
 
 run_tflint() {
     group_start "TFLint"
-    if ! tool_available tflint; then print_skip "tflint not installed"; group_end; return 0; fi
+    if ! tool_available tflint; then
+        print_skip "tflint not installed"
+        group_end
+        return 0
+    fi
 
     local tf_config="$SCRIPT_DIR/.tflint.hcl"
     for dir in aws hetzner grafana cloudflare; do
@@ -166,7 +228,9 @@ run_tflint() {
 run_terraform_validate() {
     group_start "Terraform Validate"
     if ! tool_available terraform && ! tool_available tofu; then
-        print_skip "terraform/tofu not installed"; group_end; return 0
+        print_skip "terraform/tofu not installed"
+        group_end
+        return 0
     fi
     local tf
     tf=$(command -v tofu || command -v terraform)
@@ -218,7 +282,11 @@ run_terraform_validate() {
 run_gitleaks() {
     local mode="${1:-working-tree}"
     group_start "Gitleaks (Secrets) — ${mode}"
-    if ! tool_available gitleaks; then print_skip "gitleaks not installed"; group_end; return 0; fi
+    if ! tool_available gitleaks; then
+        print_skip "gitleaks not installed"
+        group_end
+        return 0
+    fi
 
     local -a args
     if [[ "$mode" == "full-history" ]]; then
@@ -228,33 +296,47 @@ run_gitleaks() {
     fi
 
     if gitleaks detect "${args[@]}" -v 2>&1; then
-        print_ok "No secrets found"; ci_annotation "Gitleaks" "pass"
+        print_ok "No secrets found"
+        ci_annotation "Gitleaks" "pass"
     else
-        print_fail "Secrets detected"; ci_annotation "Gitleaks" "fail"
+        print_fail "Secrets detected"
+        ci_annotation "Gitleaks" "fail"
     fi
     group_end
 }
 
 run_trivy() {
     group_start "Trivy (IaC Security)"
-    if ! tool_available trivy; then print_skip "trivy not installed"; group_end; return 0; fi
+    if ! tool_available trivy; then
+        print_skip "trivy not installed"
+        group_end
+        return 0
+    fi
 
     if trivy config --severity HIGH,CRITICAL --exit-code 1 terraform/ 2>&1; then
-        print_ok "No misconfigurations"; ci_annotation "Trivy" "pass"
+        print_ok "No misconfigurations"
+        ci_annotation "Trivy" "pass"
     else
-        print_fail "Security issues found"; ci_annotation "Trivy" "fail"
+        print_fail "Security issues found"
+        ci_annotation "Trivy" "fail"
     fi
     group_end
 }
 
 run_markdownlint() {
     group_start "markdownlint (Documentation)"
-    if ! tool_available markdownlint-cli2; then print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"; group_end; return 0; fi
+    if ! tool_available markdownlint-cli2; then
+        print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"
+        group_end
+        return 0
+    fi
 
     if markdownlint-cli2 --config markdownlint-cli2.jsonc "docs/**/*.md" "README.md"; then
-        print_ok "No issues"; ci_annotation "markdownlint" "pass"
+        print_ok "No issues"
+        ci_annotation "markdownlint" "pass"
     else
-        print_fail "Issues found"; ci_annotation "markdownlint" "fail"
+        print_fail "Issues found"
+        ci_annotation "markdownlint" "fail"
     fi
     group_end
 }
@@ -265,7 +347,8 @@ run_secrets_audit() {
 
     # .gitignore check
     if [[ ! -f .gitignore ]]; then
-        print_fail ".gitignore not found"; ((++issues))
+        print_fail ".gitignore not found"
+        ((++issues))
     else
         if grep -q "^secrets/" .gitignore && grep -q "^\.env" .gitignore && grep -q "^\*\.service" .gitignore; then
             print_ok ".gitignore looks good (secrets/, .env, *.service excluded)"
@@ -336,14 +419,14 @@ run_secrets_audit() {
     local patterns=("password=\"" "token=\"" "TG_TOKEN=" "AWS_SECRET_KEY=" "AWS_SECRET_ACCESS_KEY=" "api_key=" "private_key" "Authorization: Bearer")
     local found=0
     for pat in "${patterns[@]}"; do
-        if git grep -n "$pat" HEAD 2>/dev/null | \
-            grep -v "^HEAD:secrets/" | \
-            grep -v "\.example:" | \
-            grep -v "^HEAD:\.github/" | \
-            grep -v "^HEAD:scripts/lint.sh:" | \
-            grep -v "\.md:" | \
-            grep -v "{{ " | \
-            grep -v '\$' | \
+        if git grep -n "$pat" HEAD 2>/dev/null |
+            grep -v "^HEAD:secrets/" |
+            grep -v "\.example:" |
+            grep -v "^HEAD:\.github/" |
+            grep -v "^HEAD:scripts/lint.sh:" |
+            grep -v "\.md:" |
+            grep -v "{{ " |
+            grep -v '\$' |
             grep -q "." 2>/dev/null; then
             ((++found))
         fi
@@ -367,20 +450,31 @@ run_secrets_audit() {
 run_cloudflare_ips() {
     group_start "Cloudflare Real IP Ranges"
     local file="$SCRIPT_DIR/ansible-roles/nginx/files/cloudflare-realip.conf"
-    if [[ ! -f "$file" ]]; then print_skip "cloudflare-realip.conf not found"; group_end; return 0; fi
+    if [[ ! -f "$file" ]]; then
+        print_skip "cloudflare-realip.conf not found"
+        group_end
+        return 0
+    fi
 
     local cf_ipv4 cf_ipv6 local_ips
     cf_ipv4=$(curl -sL --max-time 10 https://www.cloudflare.com/ips-v4 2>/dev/null || echo "")
     cf_ipv6=$(curl -sL --max-time 10 https://www.cloudflare.com/ips-v6 2>/dev/null || echo "")
-    if [[ -z "$cf_ipv4" ]]; then print_skip "Cannot fetch Cloudflare IPs (offline?)"; group_end; return 0; fi
+    if [[ -z "$cf_ipv4" ]]; then
+        print_skip "Cannot fetch Cloudflare IPs (offline?)"
+        group_end
+        return 0
+    fi
 
     local_ips=$(grep 'set_real_ip_from' "$file" | awk '{print $2}' | sed 's/;//' | sort)
-    local online_ips; online_ips=$(printf '%s\n%s\n' "$cf_ipv4" "$cf_ipv6" | sort)
+    local online_ips
+    online_ips=$(printf '%s\n%s\n' "$cf_ipv4" "$cf_ipv6" | sort)
 
     if [[ "$local_ips" != "$online_ips" ]]; then
         print_fail "Cloudflare IP ranges differ from official list"
-        local missing; missing=$(diff <(echo "$local_ips") <(echo "$online_ips") 2>/dev/null | grep '>' | sed 's/^> //')
-        local extra; extra=$(diff <(echo "$local_ips") <(echo "$online_ips") 2>/dev/null | grep '<' | sed 's/^< //')
+        local missing
+        missing=$(diff <(echo "$local_ips") <(echo "$online_ips") 2>/dev/null | grep '>' | sed 's/^> //')
+        local extra
+        extra=$(diff <(echo "$local_ips") <(echo "$online_ips") 2>/dev/null | grep '<' | sed 's/^< //')
         [[ -n "$missing" ]] && echo "    Missing: $(echo "$missing" | tr '\n' ' ')"
         [[ -n "$extra" ]] && echo "    Extra (remove): $(echo "$extra" | tr '\n' ' ')"
         ci_annotation "Cloudflare IPs" "fail"
@@ -432,7 +526,7 @@ list_tools() {
 # ----- Main -----
 
 usage() {
-    cat << EOF
+    cat <<EOF
 DreamSeed Unified Linter
 
 Usage: $0 [OPTIONS]
@@ -496,50 +590,118 @@ MODE="fast"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --fast)              MODE="fast"; shift ;;
-        --full)              MODE="full"; shift ;;
-        --ci)                CI_MODE=true; shift ;;
-        --shellcheck)        MODE="shellcheck"; shift ;;
-        --ruff)              MODE="ruff"; shift ;;
-        --ansible-lint)      MODE="ansible-lint"; shift ;;
-        --actionlint)        MODE="actionlint"; shift ;;
-        --zizmor)            MODE="zizmor"; shift ;;
-        --yamllint)          MODE="yamllint"; shift ;;
-        --renovate)          MODE="renovate"; shift ;;
-        --tflint)            MODE="tflint"; shift ;;
-        --validate-terraform) MODE="terraform-validate"; shift ;;
-        --gitleaks)          MODE="gitleaks"; shift ;;
-        --gitleaks-full-history) MODE="gitleaks-full-history"; shift ;;
-        --trivy)             MODE="trivy"; shift ;;
-        --markdownlint)      MODE="markdownlint"; shift ;;
-        --secrets)           MODE="secrets"; shift ;;
-        --cloudflare-ips)    MODE="cloudflare-ips"; shift ;;
-        --list)              MODE="list"; shift ;;
-        -h|--help)           usage; exit 0 ;;
-        *) echo "Unknown option: $1"; usage; exit 1 ;;
+        --fast)
+            MODE="fast"
+            shift
+            ;;
+        --full)
+            MODE="full"
+            shift
+            ;;
+        --ci)
+            CI_MODE=true
+            shift
+            ;;
+        --shellcheck)
+            MODE="shellcheck"
+            shift
+            ;;
+        --ruff)
+            MODE="ruff"
+            shift
+            ;;
+        --ansible-lint)
+            MODE="ansible-lint"
+            shift
+            ;;
+        --actionlint)
+            MODE="actionlint"
+            shift
+            ;;
+        --zizmor)
+            MODE="zizmor"
+            shift
+            ;;
+        --yamllint)
+            MODE="yamllint"
+            shift
+            ;;
+        --renovate)
+            MODE="renovate"
+            shift
+            ;;
+        --tflint)
+            MODE="tflint"
+            shift
+            ;;
+        --validate-terraform)
+            MODE="terraform-validate"
+            shift
+            ;;
+        --gitleaks)
+            MODE="gitleaks"
+            shift
+            ;;
+        --gitleaks-full-history)
+            MODE="gitleaks-full-history"
+            shift
+            ;;
+        --trivy)
+            MODE="trivy"
+            shift
+            ;;
+        --markdownlint)
+            MODE="markdownlint"
+            shift
+            ;;
+        --secrets)
+            MODE="secrets"
+            shift
+            ;;
+        --cloudflare-ips)
+            MODE="cloudflare-ips"
+            shift
+            ;;
+        --list)
+            MODE="list"
+            shift
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            exit 1
+            ;;
     esac
 done
 
 case "$MODE" in
-    fast)                run_fast ;;
-    full)                run_full ;;
-    shellcheck)          run_shellcheck ;;
-    ruff)                run_ruff ;;
-    ansible-lint)        run_ansible_lint ;;
-    actionlint)          run_actionlint ;;
-    zizmor)              run_zizmor ;;
-    yamllint)            run_yamllint ;;
-    renovate)            run_renovate_validate ;;
-    tflint)              run_tflint ;;
-    terraform-validate)  run_terraform_validate ;;
-    gitleaks)            run_gitleaks ;;
+    fast) run_fast ;;
+    full) run_full ;;
+    shellcheck) run_shellcheck ;;
+    ruff) run_ruff ;;
+    ansible-lint) run_ansible_lint ;;
+    actionlint) run_actionlint ;;
+    zizmor) run_zizmor ;;
+    yamllint) run_yamllint ;;
+    renovate) run_renovate_validate ;;
+    tflint) run_tflint ;;
+    terraform-validate) run_terraform_validate ;;
+    gitleaks) run_gitleaks ;;
     gitleaks-full-history) run_gitleaks "full-history" ;;
-    trivy)               run_trivy ;;
-    markdownlint)        run_markdownlint ;;
-    secrets)             run_secrets_audit ;;
-    cloudflare-ips)      run_cloudflare_ips ;;
-    list)                list_tools ;;
-    *)                   echo "Unknown mode"; usage; exit 1 ;;
+    trivy) run_trivy ;;
+    markdownlint) run_markdownlint ;;
+    secrets) run_secrets_audit ;;
+    cloudflare-ips) run_cloudflare_ips ;;
+    list) list_tools ;;
+    *)
+        echo "Unknown mode"
+        usage
+        exit 1
+        ;;
 esac
 
 print_summary || exit 1

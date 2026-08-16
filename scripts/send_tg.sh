@@ -24,7 +24,7 @@ PARSE_MODE="${2:-HTML}"
 
 tg_cfg=$(mktemp) || exit 0
 chmod 600 "$tg_cfg"
-printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" >"$tg_cfg"
 
 tg_resp=$(curl -s -m 10 -X POST --config "$tg_cfg" \
     --data-urlencode "chat_id=$TG_CHAT_ID" \

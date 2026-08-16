@@ -18,18 +18,22 @@ trap 'for _f in "${_LIST_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
 ENV_PLAIN=$(mktemp)
 chmod 600 "$ENV_PLAIN"
 _LIST_TMPFILES+=("$ENV_PLAIN")
-ansible-vault view "$SCRIPT_DIR/secrets/.env" --vault-password-file "${HOME}/.vault_pass_dreamseed" > "$ENV_PLAIN" 2>/dev/null || {
+ansible-vault view "$SCRIPT_DIR/secrets/.env" --vault-password-file "${HOME}/.vault_pass_dreamseed" >"$ENV_PLAIN" 2>/dev/null || {
     echo "Error: cannot decrypt secrets/.env" >&2
     exit 1
 }
 load_env "$ENV_PLAIN"
 
-[[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && { echo "Error: BETTERUPTIME_API_TOKEN not set in secrets/.env"; exit 1; }
+[[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && {
+    echo "Error: BETTERUPTIME_API_TOKEN not set in secrets/.env"
+    exit 1
+}
 
 API="https://uptime.betterstack.com/api/v2"
 bu_auth() { printf 'header = "Authorization: Bearer %s"\n' "$BETTERUPTIME_API_TOKEN"; }
 
-CYAN='\033[0;36m'; NC='\033[0m'
+CYAN='\033[0;36m'
+NC='\033[0m'
 
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 echo -e "${CYAN}  Better Stack — Uptime Inventory${NC}"
@@ -42,9 +46,9 @@ fetch_and_format() {
     json_tmp=$(mktemp "${HOME:?}/.tmp_bs_json_XXXXXX")
     py_tmp=$(mktemp "${HOME:?}/.tmp_bs_py_XXXXXX")
     _LIST_TMPFILES+=("$json_tmp" "$py_tmp")
-    curl -s "$API/$endpoint" --config <(bu_auth) > "$json_tmp"
+    curl -s "$API/$endpoint" --config <(bu_auth) >"$json_tmp"
 
-    cat > "$py_tmp" << 'PYEOF'
+    cat >"$py_tmp" <<'PYEOF'
 import sys, json, re
 with open(sys.argv[1]) as f:
     data = json.load(f)

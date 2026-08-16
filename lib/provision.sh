@@ -7,20 +7,24 @@ run_terraform() {
         step_start "Terraform init + apply ($TARGET)"
         export_tf_env
 
-        terraform_init_if_needed || { echo "Terraform init failed"; tail -30 "$DEPLOY_TF_LOG"; step_fail "Terraform init failed"; }
+        terraform_init_if_needed || {
+            echo "Terraform init failed"
+            tail -30 "$DEPLOY_TF_LOG"
+            step_fail "Terraform init failed"
+        }
         terraform_select_workspace || step_fail "Failed to select workspace: $TF_WORKSPACE"
-        _tf validate -no-color >> "$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
+        _tf validate -no-color >>"$DEPLOY_TF_LOG" 2>&1 || step_fail "Terraform config invalid"
 
         local bk="$SCRIPT_DIR/secrets/tfstate-backup"
         mkdir -p "$bk"
-        if _tf state pull > "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null && [[ -s "$bk/${TF_WORKSPACE}_pre.tfstate" ]]; then
+        if _tf state pull >"$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null && [[ -s "$bk/${TF_WORKSPACE}_pre.tfstate" ]]; then
             chmod 600 "$bk/${TF_WORKSPACE}_pre.tfstate"
             echo "  ✓ Pre-apply state backed up"
         else
             rm -f "$bk/${TF_WORKSPACE}_pre.tfstate" 2>/dev/null
         fi
 
-        if _tf apply -auto-approve -no-color >> "$DEPLOY_TF_LOG" 2>&1; then
+        if _tf apply -auto-approve -no-color >>"$DEPLOY_TF_LOG" 2>&1; then
             :
         else
             tail -30 "$DEPLOY_TF_LOG"
@@ -37,8 +41,9 @@ run_terraform() {
         export SERVER_IP
 
         local TF_STATE_BACKUP_TMP
-        TF_STATE_BACKUP_TMP=$(mktemp); chmod 600 "$TF_STATE_BACKUP_TMP"
-        if _tf state pull > "$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
+        TF_STATE_BACKUP_TMP=$(mktemp)
+        chmod 600 "$TF_STATE_BACKUP_TMP"
+        if _tf state pull >"$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
             mv "$TF_STATE_BACKUP_TMP" "$bk/${TF_WORKSPACE}_$(date +%Y%m%d_%H%M%S).tfstate"
             TF_STATE_BACKUP_TMP=
             ls -1t "$bk"/${TF_WORKSPACE}_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true

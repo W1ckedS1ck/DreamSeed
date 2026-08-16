@@ -15,9 +15,20 @@ ssh() { command ssh -i "$SSH_KEY" "$@" 2>/dev/null; }
 P=0 F=0 W=0
 FAIL_ITEMS=""
 
-pass() { echo "[PASS] $1"; ((++P)); }
-fail() { echo "[FAIL] $1"; ((++F)); [ -n "$FAIL_ITEMS" ] && FAIL_ITEMS="$FAIL_ITEMS, "; FAIL_ITEMS="${FAIL_ITEMS}${1%% *}"; }
-warn() { echo "[WARN] $1"; ((++W)); }
+pass() {
+    echo "[PASS] $1"
+    ((++P))
+}
+fail() {
+    echo "[FAIL] $1"
+    ((++F))
+    [ -n "$FAIL_ITEMS" ] && FAIL_ITEMS="$FAIL_ITEMS, "
+    FAIL_ITEMS="${FAIL_ITEMS}${1%% *}"
+}
+warn() {
+    echo "[WARN] $1"
+    ((++W))
+}
 
 # ==== Checks start ====
 
@@ -52,9 +63,9 @@ ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && pa
 CONFIG_PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
 CONFIG_OWNER=$(ssh ubuntu@"$SERVER_IP" "stat -c '%U' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
 if [ -n "$CONFIG_PERMS" ] && [ "${CONFIG_PERMS: -1}" = "0" ]; then
-  [ "$CONFIG_OWNER" = "www-data" ] && pass "Config permissions: $CONFIG_PERMS ($CONFIG_OWNER)" || warn "Config owner: $CONFIG_OWNER (expected www-data)"
+    [ "$CONFIG_OWNER" = "www-data" ] && pass "Config permissions: $CONFIG_PERMS ($CONFIG_OWNER)" || warn "Config owner: $CONFIG_OWNER (expected www-data)"
 else
-  warn "Config permissions: ${CONFIG_PERMS:-N/A} (expected 640/660, not world-readable)"
+    warn "Config permissions: ${CONFIG_PERMS:-N/A} (expected 640/660, not world-readable)"
 fi
 ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && pass "Assets exists" || fail "Assets missing"
 
@@ -103,7 +114,7 @@ echo "$CRON" | grep -q "session-cleanup" && warn "Cron: session cleanup (unexpec
 # --- Backup ---
 SCRIPTS_DIR="/home/ubuntu/Scripts"
 for script in smart_backup.sh upload_backups_to_gdrive.sh verify_backups.sh; do
-  ssh ubuntu@"$SERVER_IP" "test -f $SCRIPTS_DIR/$script" && pass "Script: $script" || fail "Script: $script missing"
+    ssh ubuntu@"$SERVER_IP" "test -f $SCRIPTS_DIR/$script" && pass "Script: $script" || fail "Script: $script missing"
 done
 
 GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | grep . || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")

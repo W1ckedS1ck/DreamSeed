@@ -3,20 +3,27 @@
 
 # shellcheck disable=SC2034  # color vars are consumed by sourcing scripts
 if [ -t 1 ]; then
-  GREEN=$'\033[0;32m'
-  YELLOW=$'\033[1;33m'
-  RED=$'\033[0;31m'
-  CYAN=$'\033[0;36m'
-  NC=$'\033[0m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[1;33m'
+    RED=$'\033[0;31m'
+    CYAN=$'\033[0;36m'
+    NC=$'\033[0m'
 else
-  GREEN=''; YELLOW=''; RED=''; CYAN=''; NC=''
+    GREEN=''
+    YELLOW=''
+    RED=''
+    CYAN=''
+    NC=''
 fi
 
 # Backup rotation defaults (overridable via server .env: PROJECT_KEEP / DB_KEEP)
 
 load_env() {
     local env_file="$1"
-    [[ ! -f "$env_file" ]] && { echo "Error: file $env_file not found!" >&2; exit 1; }
+    [[ ! -f "$env_file" ]] && {
+        echo "Error: file $env_file not found!" >&2
+        exit 1
+    }
     # Same parsing contract as lib/env.sh (deploy side): KEY=value, optional
     # quotes, inline comments, multi-line values, $HOME/$UPPERCASE_VAR expansion
     # (bounded, 10 passes). No source/eval — no RCE.
@@ -38,7 +45,9 @@ load_env() {
                 local lit=""
                 [[ "$quote" == "'" ]] && lit="1"
                 _server_env_set "$key" "$value" "$lit" || exit 1
-                key=""; value=""; quote=""
+                key=""
+                value=""
+                quote=""
             else
                 value+=$'\n'"$line"
             fi
@@ -46,27 +55,37 @@ load_env() {
         fi
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
         [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
-        key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
-        [[ "$key" =~ $blocked_vars ]] && { key=""; continue; }
+        key="${BASH_REMATCH[1]}"
+        value="${BASH_REMATCH[2]}"
+        [[ "$key" =~ $blocked_vars ]] && {
+            key=""
+            continue
+        }
         # Multi-line quoted value: opening quote without a matching close on
         # this line (trailing whitespace/comments after the close are allowed).
         if [[ "$value" =~ ^\"(.*)$ && ! "$value" =~ ^\".*\"[[:space:]]*(#.*)?$ ]]; then
-            quote='"'; value="${value#\"}"; continue
+            quote='"'
+            value="${value#\"}"
+            continue
         elif [[ "$value" =~ ^\'(.*)$ && ! "$value" =~ ^\'.*\'[[:space:]]*(#.*)?$ ]]; then
-            quote="'"; value="${value#\'}"; continue
+            quote="'"
+            value="${value#\'}"
+            continue
         fi
         no_expand=""
         if [[ "$value" =~ ^\"(.*)\"[[:space:]]*(#.*)?$ ]]; then
             value="${BASH_REMATCH[1]}"
         elif [[ "$value" =~ ^\'(.*)\'[[:space:]]*(#.*)?$ ]]; then
-            value="${BASH_REMATCH[1]}"; no_expand="1"
+            value="${BASH_REMATCH[1]}"
+            no_expand="1"
         else
-            value="${value%%[[:space:]]#*}"                    # strip inline comment
-            value="${value%"${value##*[![:space:]]}"}"         # trim trailing whitespace
+            value="${value%%[[:space:]]#*}"            # strip inline comment
+            value="${value%"${value##*[![:space:]]}"}" # trim trailing whitespace
         fi
         _server_env_set "$key" "$value" "$no_expand" || exit 1
-        key=""; value=""
-    done < "$env_file"
+        key=""
+        value=""
+    done <"$env_file"
     if [[ -n "$quote" ]]; then
         echo "Error: unterminated quoted value for '$key' in $env_file (reached EOF)" >&2
         exit 1
@@ -123,7 +142,7 @@ detect_env() {
         local h
         h=$(hostname)
         case "$h" in
-            *-prod|*prod-*) echo "" ;;
+            *-prod | *prod-*) echo "" ;;
             *) echo "-dev" ;;
         esac
     fi
@@ -157,9 +176,12 @@ send_tg() {
     # Keep the token out of argv (ps aux) — curl reads the URL from a
     # 0600 temp config file instead of a command-line argument.
     local tg_cfg tg_url tg_resp err
-    tg_cfg=$(mktemp) || { echo "WARNING: Telegram send failed: mktemp" >&2; return 1; }
+    tg_cfg=$(mktemp) || {
+        echo "WARNING: Telegram send failed: mktemp" >&2
+        return 1
+    }
     chmod 600 "$tg_cfg"
-    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
+    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" >"$tg_cfg"
     local data=(
         --data-urlencode "chat_id=$TG_CHAT_ID"
         --data-urlencode "text=$text"
@@ -227,7 +249,7 @@ rotate_files() {
     glob=$(basename "$pattern")
     mapfile -t files < <(find "$dir" -maxdepth 1 -name "$glob" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
     if [ "${#files[@]}" -gt "$keep" ]; then
-        for ((i=keep; i<${#files[@]}; i++)); do
+        for ((i = keep; i < ${#files[@]}; i++)); do
             rm -f "${files[i]}"
         done
     fi
@@ -243,5 +265,5 @@ list_backups() {
 
 export_metric() {
     local payload="$1"
-    echo "$payload" | timeout 10 curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+    echo "$payload" | timeout 10 curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true
 }

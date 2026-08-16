@@ -7,9 +7,9 @@ _ansible_cmd() {
     # let the pipeline fail so its exit code can be captured — deploy.sh enables `set -e`.
     set +e
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
-    ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
-    ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_FILE}" \
+        ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
+        ANSIBLE_NOCOLOR=1 \
+        "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_FILE}" \
         "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
     local rc=${PIPESTATUS[0]}
     set -e
@@ -21,9 +21,9 @@ _ansible_cmd() {
 # every playbook failed with "role not found" and `deploy.sh -c` was broken.
 _ansible_syntax() {
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
-    ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
-    ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$1"
+        ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
+        ANSIBLE_NOCOLOR=1 \
+        "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$1"
 }
 
 run_ansible() {
@@ -37,14 +37,15 @@ run_ansible() {
 }
 
 run_parallel() {
-    local phase="$1"; shift
+    local phase="$1"
+    shift
     [[ "$TTY" == "false" ]] && echo "::group::${phase}"
     echo "    ▶ ${phase}"
     local pids=() ok=true
     for entry in "$@"; do
         local pb="${entry%%:*}" label="${entry##*:}"
         echo "      ├ ${label}"
-        ( _ansible_cmd "$pb" ) &
+        (_ansible_cmd "$pb") &
         pids+=("$!")
     done
     for pid in "${pids[@]}"; do
@@ -65,12 +66,13 @@ run_parallel() {
 
 resolve_scripts_dir_remote() {
     local dir
-    dir=$(python3 - "$SCRIPT_DIR/ansible/group_vars/all.yml" <<'PYEOF' 2>/dev/null
+    dir=$(
+        python3 - "$SCRIPT_DIR/ansible/group_vars/all.yml" <<'PYEOF' 2>/dev/null
 import yaml, sys
 d = yaml.safe_load(open(sys.argv[1]))
 print(d.get('scripts_dir_remote', '/home/ubuntu/Scripts'))
 PYEOF
-)
+    )
     dir="${dir:-/home/ubuntu/Scripts}"
     # Validate path is safe before passing to SSH remote command
     if [[ ! "$dir" =~ ^/[A-Za-z0-9/_-]+$ ]]; then

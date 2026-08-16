@@ -8,14 +8,17 @@ LOCK_DIR="${HOME:-/root}/.locks"
 mkdir -p "$LOCK_DIR"
 LOCK_FILE="$LOCK_DIR/check_services.lock"
 exec 200>"$LOCK_FILE"
-flock -n 200 || { echo "check_services already running, skipping"; exit 0; }
+flock -n 200 || {
+    echo "check_services already running, skipping"
+    exit 0
+}
 
 # Skip while a deploy is provisioning (marker written by playbook-01) so the
 # 5-min timer doesn't false-alert on half-configured services. A stale marker
 # (>30 min, e.g. left behind by a failed deploy) is ignored — checks resume.
 if [ -f /tmp/.dreamseed_deploying ]; then
     _deploy_marker_mtime=$(stat -c %Y /tmp/.dreamseed_deploying 2>/dev/null || echo 0)
-    if [ $(( $(date +%s) - _deploy_marker_mtime )) -lt 1800 ]; then
+    if [ $(($(date +%s) - _deploy_marker_mtime)) -lt 1800 ]; then
         echo "Deploy in progress — skipping health check"
         exit 0
     fi
@@ -118,7 +121,7 @@ else
 fi
 
 # --- SSL ---
-if curl -sfk --max-time 5 "https://$DOMAIN/" > /dev/null 2>&1; then
+if curl -sfk --max-time 5 "https://$DOMAIN/" >/dev/null 2>&1; then
     echo "  ✓ SSL: Cloudflare (edge)"
     export_metric "ssl_certificate_valid{provider=\"cloudflare\"} 1"
 elif certbot certificates 2>/dev/null | grep -q "^  Certificate Name:"; then
@@ -134,8 +137,12 @@ else
 fi
 
 # --- MODX ---
-if [[ -f /var/www/html/index.php ]]; then echo "  ✓ MODX: index.php"
-else echo "  ✗ MODX: index.php missing"; fail=1; fi
+if [[ -f /var/www/html/index.php ]]; then
+    echo "  ✓ MODX: index.php"
+else
+    echo "  ✗ MODX: index.php missing"
+    fail=1
+fi
 
 # --- Database ---
 if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
@@ -147,9 +154,14 @@ else
     tables=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME//\'/''}';" 2>/dev/null || echo "0")
     export_metric "database_tables{database=\"$DB_NAME\"} $tables"
 fi
-if [[ "$tables" -ge 50 ]]; then echo "  ✓ DB: $tables tables"
-elif [[ "$tables" -ge 1 ]]; then echo "  ⚠ DB: only $tables tables"
-else echo "  ✗ DB: no tables"; fail=1; fi
+if [[ "$tables" -ge 50 ]]; then
+    echo "  ✓ DB: $tables tables"
+elif [[ "$tables" -ge 1 ]]; then
+    echo "  ⚠ DB: only $tables tables"
+else
+    echo "  ✗ DB: no tables"
+    fail=1
+fi
 
 # --- VictoriaMetrics (retry 10 times × 2s — may still be starting) ---
 _vm_ok=0
@@ -175,13 +187,18 @@ _check_ep() {
     local p=$1 k=$2 n=$3
     local raw
     for i in $(seq 1 5); do
-        raw=$(curl -sf --max-time 3 "http://127.0.0.1:$p/metrics" 2>/dev/null) || { sleep 2; continue; }
-        if grep -q "$k" <<< "$raw" 2>/dev/null; then
-            echo "  ✓ $n"; return 0
+        raw=$(curl -sf --max-time 3 "http://127.0.0.1:$p/metrics" 2>/dev/null) || {
+            sleep 2
+            continue
+        }
+        if grep -q "$k" <<<"$raw" 2>/dev/null; then
+            echo "  ✓ $n"
+            return 0
         fi
         sleep 2
     done
-    echo "  ✗ $n"; return 1
+    echo "  ✗ $n"
+    return 1
 }
 
 _check_ep 9100 node_ node_exporter || fail=1
@@ -195,12 +212,18 @@ fi
 _check_ep 9121 redis_ redis_exporter || fail=1
 # --- Backup crons ---
 if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
-  echo "  ✓ cron: backup"
-  export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
-else echo "  ✗ cron: backup not set"; fail=1; fi
+    echo "  ✓ cron: backup"
+    export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
+else
+    echo "  ✗ cron: backup not set"
+    fail=1
+fi
 if crontab -u ubuntu -l 2>/dev/null | grep -q upload_backups_to_gdrive; then
-  echo "  ✓ cron: upload"
-else echo "  ✗ cron: upload not set"; fail=1; fi
+    echo "  ✓ cron: upload"
+else
+    echo "  ✗ cron: upload not set"
+    fail=1
+fi
 
 # --- fail2ban ---
 _f2b_active=$(systemctl is-active fail2ban 2>/dev/null || echo "inactive")
@@ -240,31 +263,39 @@ done
 # --- vmagent (Grafana Cloud metrics agent) ---
 if systemctl is-active vmagent &>/dev/null; then
     _raw=$(curl -sf --max-time 5 "http://127.0.0.1:8429/metrics" 2>/dev/null || echo "")
-    _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {print $2}'); _blocks=${_blocks:-0}
-    _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {print $2}'); _errors=${_errors:-0}
+    _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {print $2}')
+    _blocks=${_blocks:-0}
+    _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {print $2}')
+    _errors=${_errors:-0}
 
     _errfile="/var/tmp/.vmagent_errors_last"
     # Baseline for the errors delta. Robust to: file lost (first run / tmp cleaner)
     # -> no delta; unreadable file -> no set -e abort; vmagent counter reset
     # (errors < prev) -> no delta.
-    _had_file=false; [[ -r "$_errfile" ]] && _had_file=true
+    _had_file=false
+    [[ -r "$_errfile" ]] && _had_file=true
     _prev=$(cat "$_errfile" 2>/dev/null || echo 0)
     if [[ "$_had_file" != true || "$_errors" -lt "$_prev" ]]; then
         _new=0
     else
-        _new=$(( _errors - _prev ))
+        _new=$((_errors - _prev))
     fi
-    echo "$_errors" > "$_errfile" 2>/dev/null || true
+    echo "$_errors" >"$_errfile" 2>/dev/null || true
 
     if [[ "$_blocks" -gt 0 && "$_new" -eq 0 ]]; then
-        export_metric 'vmagent_remote_write_ok 1'; echo "  ✓ vmagent: remote write OK"
+        export_metric 'vmagent_remote_write_ok 1'
+        echo "  ✓ vmagent: remote write OK"
     elif [[ "$_blocks" -gt 0 && "$_new" -gt 0 ]]; then
-        export_metric 'vmagent_remote_write_ok 0'; echo "  ⚠ vmagent: +$_new errors (total $_errors)"
+        export_metric 'vmagent_remote_write_ok 0'
+        echo "  ⚠ vmagent: +$_new errors (total $_errors)"
     else
-        export_metric 'vmagent_remote_write_ok 0'; echo "  ⚠ vmagent: running, no data yet"
+        export_metric 'vmagent_remote_write_ok 0'
+        echo "  ⚠ vmagent: running, no data yet"
     fi
 else
-    export_metric 'vmagent_remote_write_ok 0'; echo "  ✗ vmagent: not running"; fail=1
+    export_metric 'vmagent_remote_write_ok 0'
+    echo "  ✗ vmagent: not running"
+    fail=1
 fi
 
 # --- TIER 1 CRITICAL CHECKS ---
@@ -275,7 +306,7 @@ _local_fail=0
 _external_warn=0
 
 # 1. Redis connectivity (LOCAL — CRITICAL for sessions)
-if redis-cli ping > /dev/null 2>&1; then
+if redis-cli ping >/dev/null 2>&1; then
     echo "  ✓ Redis: ping OK"
 else
     echo "  ✗ Redis: not responding (sessions will be lost)"
@@ -305,10 +336,14 @@ fi
 
 # 4. Telegram API connectivity (EXTERNAL — warn if broken)
 if [[ -n "${TG_TOKEN:-}" ]]; then
-    _tg_cfg=$(mktemp) || { echo "  ⚠ Telegram: mktemp failed"; _external_warn=1; _tg_cfg=""; }
+    _tg_cfg=$(mktemp) || {
+        echo "  ⚠ Telegram: mktemp failed"
+        _external_warn=1
+        _tg_cfg=""
+    }
     if [[ -n "$_tg_cfg" ]]; then
         chmod 600 "$_tg_cfg"
-        printf 'url = "https://api.telegram.org/bot%s/getMe"\n' "$TG_TOKEN" > "$_tg_cfg"
+        printf 'url = "https://api.telegram.org/bot%s/getMe"\n' "$TG_TOKEN" >"$_tg_cfg"
         if curl -sf --max-time 5 --config "$_tg_cfg" 2>/dev/null | grep -q '"ok":true'; then
             echo "  ✓ Telegram: API OK"
         else

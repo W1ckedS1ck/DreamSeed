@@ -27,7 +27,9 @@ parse_env_file() {
                 local no_expand=""
                 [[ "$quote" == "'" ]] && no_expand="1"
                 _env_export "$f" "$n" "$key" "$val" "$no_expand" || return 1
-                key=""; val=""; quote=""
+                key=""
+                val=""
+                quote=""
             else
                 val+=$'\n'"$line"
             fi
@@ -48,10 +50,12 @@ parse_env_file() {
         # Multi-line quoted value: opening quote without matching close on same line.
         # Trailing whitespace/comments after the closing quote are allowed.
         if [[ "$val" =~ ^\"(.*)$ && ! "$val" =~ ^\".*\"[[:space:]]*(#.*)?$ ]]; then
-            quote='"'; val="${val#\"}"
+            quote='"'
+            val="${val#\"}"
             continue
         elif [[ "$val" =~ ^\'(.*)$ && ! "$val" =~ ^\'.*\'[[:space:]]*(#.*)?$ ]]; then
-            quote="'"; val="${val#\'}"
+            quote="'"
+            val="${val#\'}"
             continue
         fi
 
@@ -62,7 +66,7 @@ parse_env_file() {
             val="${BASH_REMATCH[1]}"
         elif [[ "$val" =~ ^\'(.*)\'[[:space:]]*(#.*)?$ ]]; then
             val="${BASH_REMATCH[1]}"
-            no_expand="1"  # Single-quoted values are literal (no $VAR expansion)
+            no_expand="1" # Single-quoted values are literal (no $VAR expansion)
         else
             # Unquoted: strip inline comment (whitespace + #, but not # without preceding whitespace)
             val="${val%%[[:space:]]#*}"
@@ -71,7 +75,7 @@ parse_env_file() {
         fi
 
         _env_export "$f" "$n" "$key" "$val" "$no_expand" || return 1
-    done < "$f"
+    done <"$f"
 
     if [[ -n "$quote" ]]; then
         echo "Error: unterminated quoted value for '$key' in $f (reached EOF)" >&2
@@ -87,7 +91,7 @@ _env_export() {
     local f="$1" n="$2" key="$3" val="$4" no_expand="${5:-}"
     # Block dangerous variable names that could hijack shell behavior
     case "$key" in
-        PATH|IFS|LD_PRELOAD|LD_LIBRARY_PATH|SHELL|SHELLOPTS|BASHOPTS|BASH_ENV|ENV|PS1|PS2|PS3|PS4|TMPDIR|USER|HOME|UID|GID|SHLVL|PPID|BASH_VERSION|BASH_SUBSHELL)
+        PATH | IFS | LD_PRELOAD | LD_LIBRARY_PATH | SHELL | SHELLOPTS | BASHOPTS | BASH_ENV | ENV | PS1 | PS2 | PS3 | PS4 | TMPDIR | USER | HOME | UID | GID | SHLVL | PPID | BASH_VERSION | BASH_SUBSHELL)
             echo "Error: blocked variable name '$key' in $f:$n" >&2
             return 1
             ;;
@@ -126,14 +130,28 @@ resolve_env_file() {
     # the temp file and shred it on exit.
     local f="$1"
     ENV_SRC=""
-    [[ ! -f "$f" ]] && { echo "Error: $f not found" >&2; exit 1; }
+    [[ ! -f "$f" ]] && {
+        echo "Error: $f not found" >&2
+        exit 1
+    }
     if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
         local pw="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
-        [[ ! -f "$pw" ]] && { echo "Error: vault password file not found: $pw" >&2; exit 1; }
+        [[ ! -f "$pw" ]] && {
+            echo "Error: vault password file not found: $pw" >&2
+            exit 1
+        }
         [[ -n "${ENV_DECRYPTED_TMP:-}" && -f "${ENV_DECRYPTED_TMP:-}" ]] && rm -f "$ENV_DECRYPTED_TMP"
-        local tmp; tmp=$(mktemp); chmod 600 "$tmp"
-        ANSIBLE_VAULT_PASSWORD_FILE="$pw" ansible-vault view "$f" > "$tmp" 2>/dev/null || { echo "Error: vault decrypt failed" >&2; exit 1; }
-        [[ -s "$tmp" ]] || { echo "Error: vault decrypted file is empty" >&2; exit 1; }
+        local tmp
+        tmp=$(mktemp)
+        chmod 600 "$tmp"
+        ANSIBLE_VAULT_PASSWORD_FILE="$pw" ansible-vault view "$f" >"$tmp" 2>/dev/null || {
+            echo "Error: vault decrypt failed" >&2
+            exit 1
+        }
+        [[ -s "$tmp" ]] || {
+            echo "Error: vault decrypted file is empty" >&2
+            exit 1
+        }
         ENV_DECRYPTED_TMP="$tmp"
         ENV_SRC="$tmp"
     else
@@ -184,14 +202,17 @@ export_tf_env() {
         # Build list of additional SSH keys from ADDITIONAL_SSH_KEYS env var
         local ssh_keys
         ssh_keys="$(
-          local arr=()
-          while IFS= read -r k; do [[ -n "${k// /}" ]] && arr+=("$k"); done <<< "${ADDITIONAL_SSH_KEYS:-}"
-          if [[ ${#arr[@]} -gt 0 ]]; then
-            printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
-          else
-            jq -n '[]'
-          fi
-        )" || { echo "Failed to build SSH keys list" >&2; exit 1; }
+            local arr=()
+            while IFS= read -r k; do [[ -n "${k// /}" ]] && arr+=("$k"); done <<<"${ADDITIONAL_SSH_KEYS:-}"
+            if [[ ${#arr[@]} -gt 0 ]]; then
+                printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
+            else
+                jq -n '[]'
+            fi
+        )" || {
+            echo "Failed to build SSH keys list" >&2
+            exit 1
+        }
         export TF_VAR_additional_ssh_keys="$ssh_keys"
     }
     [[ "$TF_PROVIDER" == "hetzner" ]] && {
@@ -204,34 +225,39 @@ export_tf_env() {
         # Build list of additional SSH keys: deploy key + ADDITIONAL_SSH_KEYS env var
         local ssh_keys
         ssh_keys="$(
-          local arr=()
-          local pk_path="${SSH_PUBLIC_KEY_PATH:-}"
-          if [[ -n "$pk_path" ]]; then
-            pk_path="${pk_path/#\~/$HOME}"
-            if [[ -r "$pk_path" ]]; then
-              arr+=("$(<"$pk_path")")
+            local arr=()
+            local pk_path="${SSH_PUBLIC_KEY_PATH:-}"
+            if [[ -n "$pk_path" ]]; then
+                pk_path="${pk_path/#\~/$HOME}"
+                if [[ -r "$pk_path" ]]; then
+                    arr+=("$(<"$pk_path")")
+                fi
             fi
-          fi
-          local additional="${ADDITIONAL_SSH_KEYS:-}"
-          if [[ -n "$additional" ]]; then
-            while IFS= read -r k; do
-              k="${k// /}"
-              [[ -n "$k" ]] && arr+=("$k")
-            done <<< "$additional"
-          fi
-          if [[ ${#arr[@]} -gt 0 ]]; then
-            printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
-          else
-            jq -n '[]'
-          fi
-        )" || { echo "Failed to build SSH keys list" >&2; exit 1; }
+            local additional="${ADDITIONAL_SSH_KEYS:-}"
+            if [[ -n "$additional" ]]; then
+                while IFS= read -r k; do
+                    k="${k// /}"
+                    [[ -n "$k" ]] && arr+=("$k")
+                done <<<"$additional"
+            fi
+            if [[ ${#arr[@]} -gt 0 ]]; then
+                printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
+            else
+                jq -n '[]'
+            fi
+        )" || {
+            echo "Failed to build SSH keys list" >&2
+            exit 1
+        }
         export TF_VAR_additional_ssh_keys="$ssh_keys"
         # Also export ssh_public_key for TF to create CI key if needed
         # NOTE: TF_VAR_additional_ssh_keys is already set above (includes deploy key + ADDITIONAL_SSH_KEYS)
         if [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
-            local pk; pk="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
+            local pk
+            pk="${SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
             if [[ -r "$pk" ]]; then
-                local pk_content; pk_content="$(<"$pk")"
+                local pk_content
+                pk_content="$(<"$pk")"
                 export TF_VAR_ssh_public_key="$pk_content"
             fi
         fi

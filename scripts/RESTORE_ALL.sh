@@ -36,7 +36,7 @@ fi
 : "${DOMAIN:?ERROR: DOMAIN not set in .env or environment}"
 
 # Parse mode (must come before log block so $MODE is available)
-MODE="${1:-interactive}"  # interactive or --auto-latest
+MODE="${1:-interactive}" # interactive or --auto-latest
 
 # Setup restore log
 RESTORE_LOG="/home/ubuntu/backups/restore_$(date +%Y%m%d_%H%M%S).log"
@@ -47,7 +47,7 @@ mkdir -p "$(dirname "$RESTORE_LOG")"
     echo "Mode: $MODE"
     echo "User: $USER"
     echo "Host: $(hostname)"
-} >> "$RESTORE_LOG"
+} >>"$RESTORE_LOG"
 
 # ==== Settings ====
 : "${RCLONE_REMOTE:=gdrive-crypt}"
@@ -59,15 +59,15 @@ else
     WEB_SERVICE="apache2"
 fi
 
-PHP_FPM=$(systemctl list-units --type=service --state=running 2>/dev/null \
-    | grep -oP 'php[\d.]+-fpm' | head -1 || echo "php-fpm")
+PHP_FPM=$(systemctl list-units --type=service --state=running 2>/dev/null |
+    grep -oP 'php[\d.]+-fpm' | head -1 || echo "php-fpm")
 
 if [ "$WEB_SERVICE" = "nginx" ]; then
-    SITE_DOMAIN=$(grep -hs "server_name" /etc/nginx/sites-available/*.conf 2>/dev/null \
-        | grep -v "server_name _" | awk '{print $2}' | tr -d ';' | head -1 || true)
+    SITE_DOMAIN=$(grep -hs "server_name" /etc/nginx/sites-available/*.conf 2>/dev/null |
+        grep -v "server_name _" | awk '{print $2}' | tr -d ';' | head -1 || true)
 else
-    SITE_DOMAIN=$(grep -rh "ServerName" /etc/apache2/sites-enabled/ 2>/dev/null \
-        | awk '{print $2}' | head -1 || true)
+    SITE_DOMAIN=$(grep -rh "ServerName" /etc/apache2/sites-enabled/ 2>/dev/null |
+        awk '{print $2}' | head -1 || true)
 fi
 SITE_URL="https://${SITE_DOMAIN:-localhost}"
 
@@ -151,7 +151,7 @@ select_backup() {
     echo "" >&2
     for i in "${!files[@]}"; do
         SIZE=$(du -h "${files[$i]}" | cut -f1)
-        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "${files[$i]}")  ${CYAN}[$SIZE]${NC}" >&2
+        echo -e "  ${GREEN}$((i + 1))${NC}. $(basename "${files[$i]}")  ${CYAN}[$SIZE]${NC}" >&2
     done
     echo "" >&2
 
@@ -165,7 +165,7 @@ select_backup() {
     fi
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
-        local selected="${files[$((choice-1))]}"
+        local selected="${files[$((choice - 1))]}"
         echo -e "${GREEN}Selected:${NC} $(basename "$selected")" >&2
         echo "$selected"
         return 0
@@ -200,7 +200,7 @@ select_backup_cloud() {
         else
             size_str="$((size / 1024))KB"
         fi
-        echo -e "  ${GREEN}$((i+1))${NC}. $(basename "$name")  ${CYAN}[$size_str]${NC}" >&2
+        echo -e "  ${GREEN}$((i + 1))${NC}. $(basename "$name")  ${CYAN}[$size_str]${NC}" >&2
     done
     echo "" >&2
 
@@ -214,12 +214,13 @@ select_backup_cloud() {
     fi
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
-        local line="${files[$((choice-1))]}"
+        local line="${files[$((choice - 1))]}"
         local selected_name="${line#*;}"
         selected_name="${selected_name%;*}"
         echo -e "${GREEN}Selected:${NC} $(basename "$selected_name")" >&2
         echo -e "${YELLOW}Downloading...${NC}" >&2
-        local temp_dir; temp_dir=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
+        local temp_dir
+        temp_dir=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
         RESTORE_TEMP_DIRS+=("$temp_dir")
         rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
         local temp_file="$temp_dir/$(basename "$selected_name")"
@@ -255,7 +256,11 @@ if [ "$MODE" != "--auto-latest" ]; then
     case "$SOURCE_CHOICE" in
         1) SOURCE="local" ;;
         2) SOURCE="cloud" ;;
-        *) echo -e "${YELLOW}Default: local${NC}"; SOURCE="local"; echo "" ;;
+        *)
+            echo -e "${YELLOW}Default: local${NC}"
+            SOURCE="local"
+            echo ""
+            ;;
     esac
 
     # DESIGN: ENV_SUFFIX is intentionally empty — interactive restore always
@@ -277,11 +282,26 @@ if [ "$MODE" != "--auto-latest" ]; then
     SELECTED_REDIS=""
 
     case "$MENU_CHOICE" in
-        1) RESTORE_PROJECT=1; RESTORE_DB=0 ;;
-        2) RESTORE_PROJECT=0; RESTORE_DB=1 ;;
-        3) RESTORE_PROJECT=1; RESTORE_DB=1 ;;
-        4) echo -e "${YELLOW}Exit.${NC}"; exit 0 ;;
-        *) echo -e "${RED}Invalid choice!${NC}"; exit 1 ;;
+        1)
+            RESTORE_PROJECT=1
+            RESTORE_DB=0
+            ;;
+        2)
+            RESTORE_PROJECT=0
+            RESTORE_DB=1
+            ;;
+        3)
+            RESTORE_PROJECT=1
+            RESTORE_DB=1
+            ;;
+        4)
+            echo -e "${YELLOW}Exit.${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice!${NC}"
+            exit 1
+            ;;
     esac
 
     # ================================================
@@ -326,8 +346,8 @@ if [ "$MODE" != "--auto-latest" ]; then
     echo ""
     echo -e "${RED}⚠️  WARNING! The following will be performed:${NC}"
     [ -n "$SELECTED_PROJECT" ] && echo -e "  - Replace project files: ${CYAN}$(basename "$SELECTED_PROJECT")${NC}"
-    [ -n "$SELECTED_DB" ]      && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
-    [ -n "$SELECTED_REDIS" ]   && echo -e "  - Restore Redis sessions: ${CYAN}$(basename "$SELECTED_REDIS")${NC}"
+    [ -n "$SELECTED_DB" ] && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
+    [ -n "$SELECTED_REDIS" ] && echo -e "  - Restore Redis sessions: ${CYAN}$(basename "$SELECTED_REDIS")${NC}"
     echo -e "  - Stop $WEB_SERVICE and PHP-FPM"
     echo -e "  - Clear MODX cache"
     echo ""
@@ -355,11 +375,11 @@ else
     SELECTED_REDIS=$(list_backups "$BACKUP_DIR/redis" 'redis_dump_*.rdb' | head -1) || true
 
     _db_age=0
-    [ -n "$SELECTED_DB" ] && _db_age=$(( $(date +%s) - $(stat -c %Y "$SELECTED_DB") ))
+    [ -n "$SELECTED_DB" ] && _db_age=$(($(date +%s) - $(stat -c %Y "$SELECTED_DB")))
 
     _cloud_listing=""
     if [ -z "$SELECTED_DB" ] || [ "$_db_age" -ge 21600 ] || [ -z "$SELECTED_PROJECT" ]; then
-        echo "Local backups missing or DB $(( _db_age / 3600 ))h old — checking cloud..."
+        echo "Local backups missing or DB $((_db_age / 3600))h old — checking cloud..."
         _cloud_listing=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive 2>/dev/null) || {
             echo -e "${YELLOW}  ⚠ Cloud listing failed — using local backups only${NC}" >&2
             _cloud_listing=""
@@ -375,8 +395,8 @@ else
     _fetch() {
         local dir="$1" subdir="$2" cur="$3" cloud_new=""
         if [ -n "$_cloud_listing" ]; then
-            cloud_new=$(printf '%s\n' "$_cloud_listing" \
-                | grep -E "^${subdir}/" | sed "s#^${subdir}/##" | sort -r | head -1) || true
+            cloud_new=$(printf '%s\n' "$_cloud_listing" |
+                grep -E "^${subdir}/" | sed "s#^${subdir}/##" | sort -r | head -1) || true
             if [ -n "$cloud_new" ] && { [ -z "$cur" ] || [ "$cloud_new" \> "$(basename "$cur")" ]; }; then
                 echo "  ${subdir}: downloading newest cloud backup ${cloud_new}" >&2
                 mkdir -p "$dir"
@@ -405,9 +425,9 @@ else
     echo "Project: $(basename "$SELECTED_PROJECT")"
     echo "DB: $(basename "$SELECTED_DB")"
     [ -n "$SELECTED_REDIS" ] && echo "Redis: $(basename "$SELECTED_REDIS")"
-    _db_age=$(( $(date +%s) - $(stat -c %Y "$SELECTED_DB") ))
+    _db_age=$(($(date +%s) - $(stat -c %Y "$SELECTED_DB")))
     if [ "$_db_age" -ge 21600 ]; then
-        echo -e "${RED}  ⚠ WARNING: newest DB backup is $(( _db_age / 3600 ))h old — backups may have stalled${NC}" >&2
+        echo -e "${RED}  ⚠ WARNING: newest DB backup is $((_db_age / 3600))h old — backups may have stalled${NC}" >&2
     fi
     echo ""
 fi
@@ -433,8 +453,8 @@ if [ -n "$SELECTED_PROJECT" ]; then
     # a `..` component anywhere — including mid-path like `a/../../etc`).
     # Extracting one as root would let later archive entries write through it
     # (tar-slip). Relative in-tree symlinks are fine.
-    if timeout 300 sudo tar -tvzf "$SELECTED_PROJECT" 2>/dev/null \
-        | grep -E ' -> (/|[^ ]*\.\./)' | grep -q .; then
+    if timeout 300 sudo tar -tvzf "$SELECTED_PROJECT" 2>/dev/null |
+        grep -E ' -> (/|[^ ]*\.\./)' | grep -q .; then
         echo -e "${RED}✗ Project archive contains unsafe symlinks: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
@@ -489,13 +509,16 @@ DB_IMPORT_LOG="$PRE_RESTORE_BACKUP_DIR/db_import_error.log"
 
 if [ -n "$SELECTED_DB" ]; then
     BACKUP_DB_FILE="$PRE_RESTORE_BACKUP_DIR/db_snapshot.sql.gz"
-    if mysqldump --single-transaction --routines --events --triggers "$DB_NAME" 2>"$DB_SNAPSHOT_LOG" | gzip > "$BACKUP_DB_FILE"; then
+    if mysqldump --single-transaction --routines --events --triggers "$DB_NAME" 2>"$DB_SNAPSHOT_LOG" | gzip >"$BACKUP_DB_FILE"; then
         DB_SNAPSHOT_OK=1
         echo -e "${GREEN}✓ Database snapshot: $(du -h "$BACKUP_DB_FILE" | cut -f1)${NC}"
     else
         rm -f "$BACKUP_DB_FILE"
         echo -e "${YELLOW}⚠️  Database snapshot failed (continuing)${NC}"
-        [ -s "$DB_SNAPSHOT_LOG" ] && { echo -e "${YELLOW}— dump error (tail):${NC}"; tail -n 10 "$DB_SNAPSHOT_LOG"; }
+        [ -s "$DB_SNAPSHOT_LOG" ] && {
+            echo -e "${YELLOW}— dump error (tail):${NC}"
+            tail -n 10 "$DB_SNAPSHOT_LOG"
+        }
     fi
 fi
 
@@ -522,8 +545,14 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo "Restoring project..."
     fi
 
-    [[ "$PROJECT_DIR" == "/var/www" || "$PROJECT_DIR" == "/var/www/" ]] && { echo "ERROR: PROJECT_DIR cannot be /var/www"; exit 1; }
-    [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || { echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"; exit 1; }
+    [[ "$PROJECT_DIR" == "/var/www" || "$PROJECT_DIR" == "/var/www/" ]] && {
+        echo "ERROR: PROJECT_DIR cannot be /var/www"
+        exit 1
+    }
+    [[ "$PROJECT_DIR" =~ ^/var/www/.+$ ]] || {
+        echo "ERROR: PROJECT_DIR must be under /var/www/, got: $PROJECT_DIR"
+        exit 1
+    }
 
     # Backup current project
     if [ -d "$PROJECT_DIR" ]; then
@@ -596,8 +625,8 @@ if [ -n "$SELECTED_DB" ]; then
         [ $DIFF -lt 0 ] && DIFF_STR=" ($DIFF)"
 
         ROLLBACK_STR=""
-        if [ -n "$LAST_EDIT_BEFORE" ] && [ "$LAST_EDIT_BEFORE" != "NULL" ] && \
-           [ -n "$LAST_EDIT_AFTER" ] && [ "$LAST_EDIT_AFTER" != "NULL" ]; then
+        if [ -n "$LAST_EDIT_BEFORE" ] && [ "$LAST_EDIT_BEFORE" != "NULL" ] &&
+            [ -n "$LAST_EDIT_AFTER" ] && [ "$LAST_EDIT_AFTER" != "NULL" ]; then
             TIMESTAMP_BEFORE=$(date -d "$LAST_EDIT_BEFORE" +%s 2>/dev/null)
             TIMESTAMP_AFTER=$(date -d "$LAST_EDIT_AFTER" +%s 2>/dev/null)
             if [ -n "$TIMESTAMP_BEFORE" ] && [ -n "$TIMESTAMP_AFTER" ]; then
@@ -624,7 +653,10 @@ if [ -n "$SELECTED_DB" ]; then
     else
         DB_STATUS="❌ Import error"
         echo -e "${RED}✗ Database restore failed!${NC}"
-        [ -s "$DB_IMPORT_LOG" ] && { echo -e "${YELLOW}\n— import error (tail):${NC}"; tail -n 20 "$DB_IMPORT_LOG"; }
+        [ -s "$DB_IMPORT_LOG" ] && {
+            echo -e "${YELLOW}\n— import error (tail):${NC}"
+            tail -n 20 "$DB_IMPORT_LOG"
+        }
 
         # Auto-rollback: re-import the pre-restore snapshot so the DB is
         # left in a known-good state instead of a half-imported one.
@@ -638,7 +670,8 @@ if [ -n "$SELECTED_DB" ]; then
                 DB_STATUS="❌ Import error + rollback failed (manual intervention required)"
                 RESTORE_RESULT=1
                 echo -e "${RED}✗ Rollback FAILED — DB may be in a broken/half-imported state.${NC}"
-                echo -e "${YELLOW}— rollback error (tail):${NC}"; tail -n 20 "$DB_IMPORT_LOG"
+                echo -e "${YELLOW}— rollback error (tail):${NC}"
+                tail -n 20 "$DB_IMPORT_LOG"
             fi
         else
             DB_STATUS="❌ Import error (no usable snapshot for rollback). Manual intervention required."
@@ -674,9 +707,9 @@ if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]] && [[ -f "$SELECTED_RED
         echo -e "${YELLOW}  ⚠ Redis was not running (stopping skipped)${NC}"
     fi
 
-    if sudo cp "$SELECTED_REDIS" /var/lib/redis/dump.rdb 2>/dev/null && \
-       sudo chown redis:redis /var/lib/redis/dump.rdb 2>/dev/null && \
-       sudo systemctl start redis-server 2>/dev/null; then
+    if sudo cp "$SELECTED_REDIS" /var/lib/redis/dump.rdb 2>/dev/null &&
+        sudo chown redis:redis /var/lib/redis/dump.rdb 2>/dev/null &&
+        sudo systemctl start redis-server 2>/dev/null; then
         REDIS_STATUS="✅ $(basename "$SELECTED_REDIS")"
         echo -e "${GREEN}✓ Redis restored${NC}"
     else
@@ -741,7 +774,7 @@ echo ""
 
 # ==== Summary ====
 
-ELAPSED=$(( $(date +%s) - START_TIME ))
+ELAPSED=$(($(date +%s) - START_TIME))
 
 ELAPSED_DISPLAY="Time: ${ELAPSED}s"
 echo ""

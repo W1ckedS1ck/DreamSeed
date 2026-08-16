@@ -12,14 +12,26 @@ PHP_VERSION="${PHP_VERSION:-8.3}"
 ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
 TERRAFORM="${TERRAFORM:-}"
 if [[ -z "$TERRAFORM" ]]; then
-    if command -v tofu &>/dev/null; then TERRAFORM="tofu"
-    elif command -v terraform &>/dev/null; then TERRAFORM="terraform"
-    else echo "Error: neither tofu nor terraform found in PATH"; exit 1
+    if command -v tofu &>/dev/null; then
+        TERRAFORM="tofu"
+    elif command -v terraform &>/dev/null; then
+        TERRAFORM="terraform"
+    else
+        echo "Error: neither tofu nor terraform found in PATH"
+        exit 1
     fi
 fi
 
-RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; NC=$'\033[0m'
-[[ -t 1 ]] || { RED=''; GREEN=''; YELLOW=''; NC=''; }
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m'
+[[ -t 1 ]] || {
+    RED=''
+    GREEN=''
+    YELLOW=''
+    NC=''
+}
 TTY=$([[ -t 1 ]] && echo true || echo false)
 
 CLOUDINIT_ATTEMPTS=15 CLOUDINIT_INTERVAL=2
@@ -34,8 +46,10 @@ mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/deploy_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_TF_LOG="$LOG_DIR/terraform_$(date +%Y%m%d_%H%M%S).log"
 DEPLOY_HISTORY="$LOG_DIR/deploy_history.log"
-: > "$LOG"; chmod 600 "$LOG"
-: > "$DEPLOY_TF_LOG"; chmod 600 "$DEPLOY_TF_LOG"
+: >"$LOG"
+chmod 600 "$LOG"
+: >"$DEPLOY_TF_LOG"
+chmod 600 "$DEPLOY_TF_LOG"
 
 # Load modules
 source "$SCRIPT_DIR/lib/helpers.sh"
@@ -110,10 +124,11 @@ main() {
     update_dns
 
     # ----- Post-deploy checks -----
-    local chk_start; chk_start=$(date +%s)
+    local chk_start
+    chk_start=$(date +%s)
     check_services
     STEP_NAMES+=("Post-deploy checks")
-    STEP_TIMES+=($(( $(date +%s) - chk_start )))
+    STEP_TIMES+=($(($(date +%s) - chk_start)))
 
     # ----- Record deployed commit -----
     record_deploy

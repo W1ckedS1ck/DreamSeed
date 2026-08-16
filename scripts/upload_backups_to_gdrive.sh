@@ -14,7 +14,7 @@ LOG_DIR="${BACKUP_DIR:-/home/ubuntu/backups}/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/upload_$(date +%Y-%m-%d).log"
 touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/dev/null"
-exec >> "$LOG_FILE" 2>&1
+exec >>"$LOG_FILE" 2>&1
 
 # ==== Start time ====
 START_TIME=$(date +%s)
@@ -54,7 +54,6 @@ MAX_PROJECT_BACKUPS="${CLOUD_PROJECT_KEEP:-10}"
 MAX_DB_BACKUPS="${CLOUD_DB_KEEP:-100}"
 MAX_REDIS_BACKUPS="${CLOUD_REDIS_KEEP:-10}"
 
-
 HAS_ERROR=0
 UPLOAD_MSG=""
 
@@ -66,7 +65,10 @@ upload_new_files() {
     local local_dir="$1" glob="$2" remote_dir="$3" timeout="$4" label="$5"
     local files base existing_present
     files=$(find "$local_dir" -maxdepth 1 -type f -name "$glob" -printf '%f\n' 2>/dev/null | sort -r || true)
-    [ -z "$files" ] && { echo "  $label: ⚠️ no backups found"; return 0; }
+    [ -z "$files" ] && {
+        echo "  $label: ⚠️ no backups found"
+        return 0
+    }
 
     existing_present=$(rclone lsf "$RCLONE_REMOTE:$remote_dir/" --files-only 2>/dev/null | sort || true)
     export RCLONE_CMD_TIMEOUT="$timeout"
@@ -85,7 +87,7 @@ upload_new_files() {
 "
             HAS_ERROR=1
         fi
-    done <<< "$files"
+    done <<<"$files"
 }
 
 # ==== 1. Upload project ====
@@ -117,8 +119,8 @@ fi
 find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
 
 if [[ "$HAS_ERROR" -eq 0 ]]; then
-    echo "upload_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
-        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+    echo "upload_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" |
+        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true
     [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]] && { ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY" || true; }
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All uploads successful"
 else

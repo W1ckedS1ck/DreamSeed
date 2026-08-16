@@ -2,7 +2,10 @@
 set -euo pipefail
 
 for cmd in curl tar gzip find mysqldump; do
-    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+    command -v "$cmd" >/dev/null 2>&1 || {
+        echo "ERROR: '$cmd' not found in PATH"
+        exit 1
+    }
 done
 
 # ==== Load shared functions ====
@@ -31,7 +34,7 @@ LOG_FILE="$BACKUP_DIR/logs/backup_$(date +%Y-%m-%d).log"
 ENV=$(detect_env)
 ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >>"$LOG_FILE"
 
 TMP_DB_BACKUP=""
 PROJECT_TMP=""
@@ -48,8 +51,8 @@ if ! flock -n 9; then
 fi
 
 # Cron heartbeat — always fires, even if backup fails
-echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
-    curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" |
+    curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true
 
 # ==== Validate MODX_TABLE_PREFIX ====
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
@@ -71,7 +74,7 @@ if [ "$AVAILABLE_MB" -lt 500 ]; then
 Disk space critical: ${AVAILABLE_MB}MB available (need ≥500MB)
 Cleanup old backups or expand disk."
     send_tg "$MSG" || true
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Disk space critical: ${AVAILABLE_MB}MB" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Disk space critical: ${AVAILABLE_MB}MB" >>"$LOG_FILE"
     exit 1
 fi
 
@@ -83,10 +86,10 @@ if [[ -f "$MARKER_FILE" ]]; then
         ! -path "*/core/cache/*" \
         ! -path "*/core/backup/*" \
         -newer "$MARKER_FILE" -print -quit 2>/dev/null)
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')" >>"$LOG_FILE"
 else
     CHANGED="initial"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: first run" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: first run" >>"$LOG_FILE"
 fi
 
 if [[ -z "$CHANGED" ]]; then
@@ -96,11 +99,11 @@ else
     if timeout 1800 sudo tar -czf "$PROJECT_TMP" \
         --exclude="$(basename "$PROJECT_DIR")/core/cache" \
         --exclude="$(basename "$PROJECT_DIR")/core/backup" \
-        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
-       timeout 300 sudo tar -tzf "$PROJECT_TMP" > /dev/null 2>&1; then
+        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null &&
+        timeout 300 sudo tar -tzf "$PROJECT_TMP" >/dev/null 2>&1; then
         sudo mv "$PROJECT_TMP" "$PROJECT_BACKUP"
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >>"$LOG_FILE"
         PROJECT_STATUS="✅ Project backed up"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"
         touch "$MARKER_FILE"
@@ -110,7 +113,7 @@ else
     fi
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >>"$LOG_FILE"
 
 # ==== Database backup (always) ====
 # Using .my.cnf — credentials not passed as arguments
@@ -120,7 +123,7 @@ TMP_DB_BACKUP="$(mktemp "$BACKUP_DIR/db/.tmp_db_XXXXXX.sql.gz")"
 set +o pipefail
 timeout 1800 mysqldump --single-transaction --routines --events --triggers \
     --ignore-table="${DB_NAME}.${MODX_TABLE_PREFIX:-modx_}session" \
-    "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
+    "$DB_NAME" | gzip >"$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
 
@@ -132,7 +135,7 @@ else
     rm -f "$TMP_DB_BACKUP"
     DB_STATUS="❌ Database dump failed"
 fi
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >>"$LOG_FILE"
 
 # ==== Redis backup (if available) ====
 REDIS_STATUS=""
@@ -150,23 +153,23 @@ if sudo test -f /var/lib/redis/dump.rdb; then
     if sudo redis-cli SAVE >/dev/null 2>&1; then
         REDIS_SAVE_OK=1
     fi
-    if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null && \
-       sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
+    if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null &&
+        sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
         if [ "$REDIS_SAVE_OK" -eq 1 ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >>"$LOG_FILE"
             REDIS_STATUS="✅ Redis backed up"
         else
             REDIS_STATUS="❌ Redis SAVE failed — backed up last known dump"
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >>"$LOG_FILE"
         fi
         rotate_files "$BACKUP_DIR/redis/redis_dump_*.rdb" "$REDIS_KEEP"
     else
         REDIS_STATUS="❌ Redis backup failed"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >>"$LOG_FILE"
     fi
 else
     REDIS_STATUS="ℹ️ Redis not available"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >>"$LOG_FILE"
 fi
 
 # ==== Telegram notification only on failure ====
@@ -187,20 +190,20 @@ $REDIS_STATUS"
 fi
 
 if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* && "$REDIS_STATUS" != "❌"* ]]; then
-    echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
-        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+    echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" |
+        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true
     # Ping external watchdog on success
     if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
         if ping_heartbeat "$BETTERUPTIME_BACKUP_KEY"; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >>"$LOG_FILE"
         else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ failed" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ failed" >>"$LOG_FILE"
         fi
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)" >>"$LOG_FILE"
     fi
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (backup failed)" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (backup failed)" >>"$LOG_FILE"
 fi
 
 rotate_files "$BACKUP_DIR/logs/backup_*.log" 30
