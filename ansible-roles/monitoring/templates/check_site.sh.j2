@@ -4,8 +4,10 @@
 VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
 
 {
-    # Site check
-    if _resp_time=$(curl -sfk --max-time 10 -o /dev/null -w "%{time_total}" "https://{{ domain }}" 2>/dev/null); then
+    # Site check — probe local nginx via SNI (--resolve). Public/edge reachability
+    # is covered externally by the Better Stack "Main site" monitor, so the local
+    # probe stays Cloudflare/WAF/DNS-independent (no false site-down on CF issues).
+    if _resp_time=$(curl -sfk --max-time 10 --resolve "{{ domain }}:443:127.0.0.1" -o /dev/null -w "%{time_total}" "https://{{ domain }}" 2>/dev/null); then
         echo "site_up{instance=\"{{ domain }}\"} 1"
         echo "site_response_time_seconds{instance=\"{{ domain }}\"} ${_resp_time}"
     else
@@ -72,8 +74,8 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     if [ "$(cat "$_probe_marker" 2>/dev/null)" != "$_cur_block" ]; then
         echo "$_cur_block" > "$_probe_marker"
 
-        # 1. Admin login check (/manager/ returns 200 with MODX content)
-        if curl -sk --max-time 10 "https://{{ domain }}/manager/" 2>/dev/null | grep -qi "modx\|login"; then
+        # 1. Admin login check — probe local nginx via SNI (bypass CF/WAF/rate-limit)
+        if curl -sk --max-time 10 --resolve "{{ domain }}:443:127.0.0.1" "https://{{ domain }}/manager/" 2>/dev/null | grep -qiE "modx|login"; then
             echo "admin_login_ok{instance=\"{{ domain }}\"} 1"
         else
             echo "admin_login_ok{instance=\"{{ domain }}\"} 0"

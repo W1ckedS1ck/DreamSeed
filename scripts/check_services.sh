@@ -63,7 +63,7 @@ done
 fail=0
 
 # --- Services ---
-for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "mysqld_exporter" "victoria-metrics" "grafana-server"; do
+for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "node_exporter" "mysqld_exporter" "nginx_exporter" "redis_exporter" "victoria-metrics" "grafana-server"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"
@@ -103,8 +103,10 @@ fi
 if command -v promtail &>/dev/null; then
     if systemctl is-active promtail &>/dev/null; then
         echo "  ✓ promtail"
+        export_metric 'promtail_up 1'
     else
         echo "  ✗ promtail (inactive)"
+        export_metric 'promtail_up 0'
         fail=1
     fi
 fi
@@ -225,7 +227,7 @@ _check_ep 9121 redis_ redis_exporter || fail=1
 # --- Backup crons ---
 if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
     echo "  ✓ cron: backup"
-    export_metric "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)"
+    # NOT pushed — cron-backup alert must track smart_backup.sh runs, not this.
 else
     echo "  ✗ cron: backup not set"
     fail=1
@@ -316,8 +318,9 @@ if systemctl is-active vmagent &>/dev/null; then
         export_metric 'vmagent_remote_write_ok 0'
         echo "  ⚠ vmagent: +$_new errors (total $_errors)"
     else
-        export_metric 'vmagent_remote_write_ok 0'
-        echo "  ⚠ vmagent: running, no data yet"
+        # no blocks yet (fresh start) — not an error, avoid false critical.
+        export_metric 'vmagent_remote_write_ok 1'
+        echo "  ✓ vmagent: running, no blocks yet (normal right after start)"
     fi
 else
     export_metric 'vmagent_remote_write_ok 0'
