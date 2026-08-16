@@ -11,9 +11,15 @@
   become: true
   ansible.builtin.template:
     src: 99-optimizations.cnf.j2
-    dest: /etc/mysql/conf.d/99-optimizations.cnf
+    dest: /etc/mysql/mariadb.conf.d/99-optimizations.cnf
     mode: "0644"
   notify: Restart MariaDB
+
+- name: Remove stale my.cnf from conf.d
+  become: true
+  ansible.builtin.file:
+    path: /etc/mysql/conf.d/99-optimizations.cnf
+    state: absent
 
 - name: Create MySQL log directory
   become: true
