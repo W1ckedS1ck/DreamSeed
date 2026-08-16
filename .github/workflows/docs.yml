@@ -2,7 +2,7 @@ name: "[Docs] Code Map + Wiki Sync"
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'terraform/**'
       - 'ansible/**'
@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   publish-code-map:
+    # Pages site stays main-only; dev only syncs the wiki (see sync-wiki).
+    if: github.ref_name == 'main'
     name: Publish Code Map
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -63,6 +65,9 @@ jobs:
     name: Sync to Wiki
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: wiki-sync
+      cancel-in-progress: false
     permissions:
       contents: write
 
@@ -95,6 +100,6 @@ jobs:
           fi
 
           git add -A
-          git commit -m "Sync docs/ from main (${{ github.sha }})"
+          git commit -m "Sync docs/ from ${{ github.ref_name }} (${{ github.sha }})"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
           git push
