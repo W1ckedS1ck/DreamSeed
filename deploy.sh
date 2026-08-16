@@ -86,8 +86,8 @@ main() {
         "playbook-04-security.yml:Security hardening"
         "playbook-05-monitor.yml:Monitoring"
         "playbook-06-backup.yml:Backup & Telegram bot"
-        "playbook-07-grafana.yml:Grafana"
         "playbook-08-promtail.yml:Promtail"
+        "playbook-07-grafana.yml:Grafana"
     )
 
     print_env

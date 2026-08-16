@@ -343,13 +343,14 @@ else
     _local_fail=1
 fi
 
-# 2. Grafana /api/health (LOCAL — CRITICAL for UI)
-# /api/health is public (used by LB probes) — no auth, so no password in argv.
+# 2. Grafana /api/health (LOCAL — WARN: grafana is a fallback, deploy must not fail)
+# Grafana installs LAST as a fallback; if it's absent/broken the deploy still
+# succeeds. /api/health is public (used by LB probes) — no auth, no password in argv.
 if curl -sf --max-time 5 "http://127.0.0.1:3000/api/health" 2>/dev/null | grep -q '"database": "ok"'; then
     echo "  ✓ Grafana: healthy"
 else
-    echo "  ✗ Grafana: not healthy (UI won't work)"
-    _local_fail=1
+    echo "  ⚠ Grafana: not healthy (fallback — non-fatal)"
+    fail=1
 fi
 
 # 3. Promtail → Loki connectivity (EXTERNAL — check via Promtail metrics)
