@@ -371,7 +371,7 @@ jobs:
           domain: test.dreamseed.online
           domain_www: false
           deploy_env: test
-          php_version: "8.3" # renovate: depName=php
+          php_version: "8.5.9" # renovate: depName=php
           cloudflare_api_token: "${CLOUDFLARE_API_TOKEN}"
           ssl_cf_dns_enabled: false
           grafana_admin_password: "${GRAFANA_PASS}"
