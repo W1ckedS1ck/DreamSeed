@@ -401,6 +401,34 @@ sudo journalctl -u sshd --no-pager | grep "Failed password"
 sudo cat /var/log/fail2ban.log
 ```
 
+### Manual restore: prod from a dev environment's cloud backups
+
+> **Never automatic.** Dev backups live in per-env cloud paths and are normally write-only
+> (dev is an ephemeral copy of prod). To pull a dev environment's data into prod by hand:
+
+```bash
+# On the PROD server. Suffix = full env name: dev-hetz, dev-aws, test.
+# 1. List available dev backups:
+rclone lsf gdrive-crypt:DreamSeed/backups/db-dev-hetz/
+rclone lsf gdrive-crypt:DreamSeed/backups/project-dev-hetz/
+
+# 2. Download the chosen dev backups:
+rclone copy gdrive-crypt:DreamSeed/backups/db-dev-hetz/db_modx_db_<date>.sql.gz /tmp/
+rclone copy gdrive-crypt:DreamSeed/backups/project-dev-hetz/DreamSeed_<date>.tar.gz /tmp/
+
+# 3. Apply (stops services, restores DB + files, clears cache):
+bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest   # then verify it picked the local files
+# or manually:
+sudo systemctl stop nginx php*-fpm
+gunzip -c /tmp/db_modx_db_<date>.sql.gz | mysql modx_db
+sudo tar -xzf /tmp/DreamSeed_<date>.tar.gz -C /var/www
+sudo chown -R www-data:www-data /var/www/html
+sudo rm -rf /var/www/html/core/cache/*
+sudo systemctl start nginx php*-fpm
+```
+
+All servers share one crypt key (canonical `RCLONE_CONF_BASE64`), so dev paths decrypt on prod.
+
 ### Prerequisites for recovery
 
 Store these **outside the repo** (password manager / team vault):
