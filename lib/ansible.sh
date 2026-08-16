@@ -51,11 +51,13 @@ run_parallel() {
     for pid in "${pids[@]}"; do
         if ! wait "$pid"; then
             ok=false
-            # A sibling playbook failed: kill and reap the remaining
-            # background runners so an orphaned ansible-playbook doesn't
-            # keep mutating the server after the deploy aborts.
+            # A sibling playbook failed: kill the remaining background runners so
+            # an orphaned ansible-playbook doesn't keep mutating the server after
+            # the deploy aborts. $other is a SUBSHELL pid — kill its children
+            # (ansible-playbook | tee) first, then the subshell itself.
             for other in "${pids[@]}"; do
                 [[ "$other" == "$pid" ]] && continue
+                pkill -P "$other" 2>/dev/null || true
                 kill "$other" 2>/dev/null || true
             done
         fi

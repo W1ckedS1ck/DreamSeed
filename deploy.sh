@@ -65,7 +65,9 @@ source "$SCRIPT_DIR/lib/inventory.sh"
 source "$SCRIPT_DIR/lib/playbooks.sh"
 source "$SCRIPT_DIR/lib/post.sh"
 
-trap cleanup EXIT INT TERM HUP
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 
 # ----- main -----
 
