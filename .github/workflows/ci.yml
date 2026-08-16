@@ -42,15 +42,9 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "Ansible Lint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-        with:
-          python-version: '3.x'
-          cache: pip
-          cache-dependency-path: ansible/requirements-deploy.txt
+      - uses: ./.github/actions/setup-ansible
       - name: Run ansible-lint
-        run: |
-          pip install -r ansible/requirements-deploy.txt --quiet
-          bash scripts/lint.sh --ci --ansible-lint
+        run: bash scripts/lint.sh --ci --ansible-lint
 
   terraform-checks:
     name: Terraform Lint + Validate

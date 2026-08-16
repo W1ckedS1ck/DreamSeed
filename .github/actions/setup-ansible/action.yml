@@ -13,6 +13,6 @@ runs:
     - run: pip install -r ansible/requirements-deploy.txt --quiet
       shell: bash
 
-    # Pinned here; also bundled with the `ansible` pip package (safety net).
+    # Collection versions pinned in ansible/requirements.yml (Renovate bumps).
     - run: ansible-galaxy collection install -r ansible/requirements.yml
       shell: bash
