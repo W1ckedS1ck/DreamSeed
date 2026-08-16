@@ -140,6 +140,13 @@
       "enabled": false
     },
     {
+      "description": "Grafana version is documented only (install uses apt-latest) — keep PR as release radar, no automerge",
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["grafana/grafana"],
+      "groupName": null,
+      "automerge": false
+    },
+    {
       "description": "Pin GitHub Actions to commit SHAs for security",
       "matchManagers": ["github-actions"],
       "pinDigests": true
