@@ -13,6 +13,13 @@ runs:
     - run: pip install -r ansible/requirements-deploy.txt --quiet
       shell: bash
 
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.ansible/collections
+        key: ansible-collections-${{ runner.os }}-${{ hashFiles('ansible/requirements.yml') }}
+        restore-keys: ansible-collections-${{ runner.os }}-
+
     # Collection versions pinned in ansible/requirements.yml (Renovate bumps).
+    # Installed every run for idempotency; the cache above makes it a no-op on hit.
     - run: ansible-galaxy collection install -r ansible/requirements.yml
       shell: bash
