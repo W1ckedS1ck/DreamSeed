@@ -1,0 +1,58 @@
+---
+# yamllint configuration for DreamSeed.
+# Focus on real YAML issues, not stylistic noise from long action SHAs,
+# GitHub Actions keywords, or Jinja2 templates.
+
+yaml-files:
+  - '*.yaml'
+  - '*.yml'
+  - '*.yaml.j2'
+  - '*.yml.j2'
+
+ignore: |
+  .git/
+  .cache/
+  .opencode/
+  terraform/*/.terraform/
+  ansible-roles/*/templates/*.j2
+  ansible-roles/*/files/*.yaml
+  ansible-roles/*/files/*.yml
+
+rules:
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+  commas:
+    max-spaces-before: 0
+    min-spaces-after: 1
+    max-spaces-after: 1
+  comments:
+    min-spaces-from-content: 1
+    require-starting-space: true
+  comments-indentation: enable
+  document-end: disable
+  document-start: disable
+  empty-lines:
+    max: 2
+  empty-values: disable
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+  key-duplicates: enable
+  key-ordering: disable
+  line-length: disable
+  new-line-at-end-of-file: enable
+  new-lines:
+    type: unix
+  octal-values: enable
+  quoted-strings: disable
+  trailing-spaces: enable
+  truthy:
+    allowed-values: ['true', 'false', 'on']

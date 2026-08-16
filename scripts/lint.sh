@@ -105,6 +105,18 @@ run_zizmor() {
     group_end
 }
 
+run_yamllint() {
+    group_start "yamllint (YAML)"
+    if ! tool_available uv; then print_skip "uv not installed"; group_end; return 0; fi
+
+    if uvx yamllint --strict .; then
+        print_ok "No issues"; ci_annotation "yamllint" "pass"
+    else
+        print_fail "Issues found"; ci_annotation "yamllint" "fail"
+    fi
+    group_end
+}
+
 run_renovate_validate() {
     group_start "Renovate Config Validator"
     if ! tool_available npx; then print_skip "npx not installed"; group_end; return 0; fi
@@ -426,7 +438,7 @@ DreamSeed Unified Linter
 Usage: $0 [OPTIONS]
 
 OPTIONS:
-  --fast              Quick check: shellcheck + ruff + ansible-lint (default)
+  --fast              Quick check: shellcheck + ruff + ansible-lint + actionlint + zizmor + yamllint (default)
   --full              All linters (fast + tflint + terraform validate + gitleaks + trivy + secrets)
   --ci                CI mode (::group::/::error:: annotations)
 
@@ -436,6 +448,7 @@ OPTIONS:
 
   --actionlint        Run only actionlint (GitHub Actions workflows)
   --zizmor            Run only zizmor (GitHub Actions security)
+  --yamllint          Run only yamllint (YAML)
   --renovate          Run only renovate config validator
   --tflint            Run only tflint
   --validate-terraform Run only terraform validate
@@ -462,6 +475,7 @@ run_fast() {
     run_ansible_lint
     run_actionlint
     run_zizmor
+    run_yamllint
     run_renovate_validate
     run_markdownlint
     run_cloudflare_ips
@@ -490,6 +504,7 @@ while [[ $# -gt 0 ]]; do
         --ansible-lint)      MODE="ansible-lint"; shift ;;
         --actionlint)        MODE="actionlint"; shift ;;
         --zizmor)            MODE="zizmor"; shift ;;
+        --yamllint)          MODE="yamllint"; shift ;;
         --renovate)          MODE="renovate"; shift ;;
         --tflint)            MODE="tflint"; shift ;;
         --validate-terraform) MODE="terraform-validate"; shift ;;
@@ -513,6 +528,7 @@ case "$MODE" in
     ansible-lint)        run_ansible_lint ;;
     actionlint)          run_actionlint ;;
     zizmor)              run_zizmor ;;
+    yamllint)            run_yamllint ;;
     renovate)            run_renovate_validate ;;
     tflint)              run_tflint ;;
     terraform-validate)  run_terraform_validate ;;

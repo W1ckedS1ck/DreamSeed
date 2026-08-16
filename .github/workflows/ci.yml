@@ -150,6 +150,19 @@ jobs:
         with:
           args: -shellcheck=/usr/bin/shellcheck
 
+  yamllint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install yamllint
+        run: pip install yamllint==1.38.0
+      - name: Run yamllint
+        run: yamllint --strict .
+
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest

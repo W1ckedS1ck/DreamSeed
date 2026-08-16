@@ -34,6 +34,11 @@ repos:
         args: ["--config", ".markdownlint.yml"]
         files: \.(md|markdown)$
 
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+
   - repo: local
     hooks:
       - id: terraform-docs-aws
