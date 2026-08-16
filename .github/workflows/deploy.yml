@@ -24,6 +24,12 @@ on:
         description: 'Skip Terraform — reconfigure existing server IP (deploy only)'
         required: false
         type: string
+      mode:
+        description: 'Playbook execution mode (deploy only)'
+        required: false
+        type: choice
+        options: [parallel, sequential]
+        default: parallel
       skip_dns:
         description: 'Skip Cloudflare DNS update (default: update)'
         required: false
@@ -167,7 +173,7 @@ jobs:
           [[ "$WEB_SRV" == "apache" ]] && DEPLOY_ARGS+=("-a") || DEPLOY_ARGS+=("-n")
           [[ -n "$SERVER_IP" ]] && DEPLOY_ARGS+=("-i" "$SERVER_IP")
           [[ "${{ inputs.skip_dns }}" == "true" ]] && DEPLOY_ARGS+=("--no-dns")
-          DEPLOY_ARGS+=("-p")
+          [[ "${{ inputs.mode }}" == "parallel" ]] && DEPLOY_ARGS+=("-p")
 
           set +e
           stdbuf -oL ./deploy.sh "${DEPLOY_ARGS[@]}" 2>&1 | tee /tmp/deploy.log
