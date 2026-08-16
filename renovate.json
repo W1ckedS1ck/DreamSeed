@@ -92,6 +92,16 @@
     },
     {
       "customType": "regex",
+      "description": "Track yamllint version in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["pip install yamllint==(?<currentValue>[\\w.\\-]+)"],
+      "depNameTemplate": "yamllint",
+      "datasourceTemplate": "pypi"
+    },
+    {
+      "customType": "regex",
       "description": "Track pre-commit hooks",
       "managerFilePatterns": [
         "/^\\.pre-commit-config\\.yaml$/"
@@ -101,13 +111,11 @@
     },
     {
       "customType": "regex",
-      "description": "Track PHP version (test-restore.yml input and group_vars default)",
+      "description": "Track PHP version (group_vars default)",
       "managerFilePatterns": [
-        "/^\\.github/workflows/test-restore\\.yml$/",
         "/^ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": [
-        "php_version:\\s*\"(?<currentValue>[\\d.]+)\"\\s*# renovate: depName=php",
         "default\\('(?<currentValue>[\\d.]+)'[^#]*# renovate: depName=php"
       ],
       "depNameTemplate": "php",
