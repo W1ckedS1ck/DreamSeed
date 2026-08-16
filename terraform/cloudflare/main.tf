@@ -116,4 +116,25 @@ resource "cloudflare_ruleset" "cache" {
 }
 
 # email_obfuscation disabled manually via Cloudflare Dashboard
-# Terraform cannot manage this — token lacks zone:settings:edit permission
+# (token now has zone:settings:edit, could be managed here if wanted)
+
+# Zone-level security settings. Token has Zone Settings Write (master account
+# extends it — see docs/env-guide.md "Master account").
+# NOTE: Bot Fight Mode (free plan) is a dashboard toggle, not available via this resource.
+resource "cloudflare_zone_setting" "always_use_https" {
+  zone_id    = data.cloudflare_zone.this.id
+  setting_id = "always_use_https"
+  value      = "on"
+}
+
+resource "cloudflare_zone_setting" "ssl" {
+  zone_id    = data.cloudflare_zone.this.id
+  setting_id = "ssl"
+  value      = "full"
+}
+
+resource "cloudflare_zone_setting" "min_tls_version" {
+  zone_id    = data.cloudflare_zone.this.id
+  setting_id = "min_tls_version"
+  value      = "1.2"
+}
