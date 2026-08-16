@@ -201,16 +201,9 @@ if [[ -n "$RAW_IP" ]]; then
     fi
 fi
 
-# Direct origin via resolved IP — firewall must drop non-CF traffic on 80/443
-if [[ -n "$RAW_IP" && -n "$DOMAIN" ]]; then
-    _origin=$(curl -sk --resolve "${DOMAIN}:443:${RAW_IP}" -o /dev/null -w '%{http_code}' --max-time 6 "https://${DOMAIN}/" 2>/dev/null || echo "000")
-    _origin="${_origin:0:3}"
-    if [[ "$_origin" == "000" ]]; then
-        ok "Direct origin blocked by firewall (80/443 = Cloudflare-only)" "direct_origin_blocked"
-    else
-        warn "Direct origin REACHABLE via resolved IP — HTTP $_origin (firewall not CF-restricted?)" "direct_origin_blocked"
-    fi
-fi
+# Direct-origin firewall block is NOT testable from inside the server: a server
+# connecting to its own public IP hairpins past the cloud firewall. Verify from
+# OUTSIDE instead (manual checklist §3): curl --resolve <domain>:443:<IP> → 000.
 
 # Host header injection
 if [[ -n "$RAW_IP" ]]; then
@@ -261,7 +254,7 @@ done
 
 # Fail2ban bans at the Cloudflare EDGE (cloudflare-token action) — web jails are
 # useless as firewall bans behind CF. Config check: 4 jails use cloudflare-token.
-_f2b_cf=$(grep -c 'cloudflare-token' /etc/fail2ban/jail.d/custom.conf 2>/dev/null || true)
+_f2b_cf=$(sudo grep -c 'cloudflare-token' /etc/fail2ban/jail.d/custom.conf 2>/dev/null || true)
 if [[ "$_f2b_cf" -ge 4 ]]; then
     ok "Fail2ban edge-ban (cloudflare-token): $_f2b_cf jails" "f2b_cloudflare_token"
 else
