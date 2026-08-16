@@ -185,7 +185,9 @@ groups:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
 
-{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[1h])) default 0', 600, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
+# Watchdog: must NEVER forget (no default-0 — that auto-resolves on a broken timer).
+# 2h window >> 10m threshold avoids razor-edge flap; Alerting on noData = VM gone.
+{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[2h]))', 7200, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
