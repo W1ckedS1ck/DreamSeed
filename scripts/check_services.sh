@@ -15,9 +15,6 @@ flock -n 200 || {
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
-load_env "$SCRIPT_DIR/.env"
-
-DOMAIN="${DOMAIN:-}"
 
 # Skip while a deploy is provisioning (marker written by playbook-01) so the
 # 5-min timer doesn't false-alert on half-configured services. A stale marker
@@ -27,11 +24,22 @@ DOMAIN="${DOMAIN:-}"
 if [ -f /tmp/.dreamseed_deploying ]; then
     _deploy_marker_mtime=$(stat -c %Y /tmp/.dreamseed_deploying 2>/dev/null || echo 0)
     if [ $(($(date +%s) - _deploy_marker_mtime)) -lt 1800 ]; then
+        # Fresh server, early deploy: playbook-06 hasn't rendered .env yet.
+        # The skip path only needs the DOMAIN label — don't hard-fail on .env.
+        DOMAIN=""
+        if [ -f "$SCRIPT_DIR/.env" ]; then
+            DOMAIN="$(grep -E '^DOMAIN=' "$SCRIPT_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
+        fi
         export_metric "check_services_last_run{instance=\"$DOMAIN\"} $(date +%s)"
         echo "Deploy in progress — skipping health check"
         exit 0
     fi
 fi
+
+# Normal run needs the full .env (DB creds, tokens, etc.) — fail loudly if it's
+# missing, never run half-configured.
+load_env "$SCRIPT_DIR/.env"
+DOMAIN="${DOMAIN:-}"
 
 DB_NAME="${DB_NAME:-modx_db}"
 
