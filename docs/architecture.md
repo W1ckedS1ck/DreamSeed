@@ -83,10 +83,10 @@ secrets/.env (ansible-vault AES256 encrypted, gitignored)
    │   │        → creates secrets/.env from env vars
    │   │        → copies SSH key, vault password, rclone.conf
    │   │
-    │   └─ deploy.sh → DEPLOY_VARS_TMP (mktemp, 0600)
-    │                  │
-    │                  ▼
-    │                  ansible-playbook --extra-vars @DEPLOY_VARS_TMP
+   │   └─ deploy.sh → DEPLOY_VARS_TMP (mktemp, 0600)
+   │                  │
+   │                  ▼
+   │                  ansible-playbook --extra-vars @DEPLOY_VARS_TMP
    │
    └─ Server-side: /home/ubuntu/Scripts/.env (0600)
 ```
@@ -134,30 +134,27 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 ### Internal Layer (on-server)
 
 ```
-┌──────────────┐    :8428    ┌─────────────────┐    :8429    ┌───────────────┐
-│  Exporters   │─────────────│ VictoriaMetrics │──────────-──│   vmagent     │
-│  node_exporter             │ retention: 3mo  │             │ remote write  │
-│  nginx/apache_exporter     │ scrape: 15s     │             └───────┬───────┘
-│  mysqld_exporter           └────────┬────────┘                     │
-│  check_site.sh (every 1m)           │                              │
-│  check_services.sh (every 5m)       │                              │
-│  smart_backup.sh (heartbeat)        │                              │
-
-└─────────────────────────────────────┘                              │
-                                      │                              │
-                                      │ Grafana datasource           │ Grafana Cloud
-                                      ▼                              ▼
-                                 ┌──────────────┐           ┌──────────────────┐
-                                 │   Grafana    │           │  Grafana Cloud   │
-                                 │  :3000       │           │  (hosted metrics)│
-                                  │  6/5 dashboards│           │  5 community     │
-                                                                    │  23 alerts   │           │  dashboards      │
-                                  │              │           │  (gnet 1860/7362/│
-                                  │              │           │   763/17452/10229)│
-                                 └──────┬───────┘           └──────────────────┘
-                                        │ Telegram  point
-                                        ▼
-                                 Telegram (chat_id)
+┌──────────────────────────────┐  :8428     ┌──────────────────┐  :8429     ┌────────────────┐
+│  Exporters                   │───────────▶│  VictoriaMetrics │───────────▶│  vmagent       │
+│  node_exporter               │            │  retention: 3mo  │            │  remote write  │
+│  nginx/apache_exporter       │            │  scrape: 15s     │            └───────┬────────┘
+│  mysqld_exporter             │            └────────┬─────────┘                    │
+│  check_site.sh (every 1m)    │                     │                              │
+│  check_services.sh (every 5m)│                     │                              │
+│  smart_backup.sh (heartbeat) │                     │                              │
+└──────────────────────────────┘                     │                              │
+                                                     │                              │
+                                                     │ Grafana datasource           │ Grafana Cloud
+                                                     ▼                              ▼
+                                              ┌─────────────────┐     ┌─────────────────────┐
+                                              │   Grafana       │     │  Grafana Cloud      │
+                                              │  :3000          │     │  hosted metrics     │
+                                              │  27 alerts      │     │  5 community        │
+                                              │ 6/5 dashboards  │     │  (gnet 1860/...)    │
+                                              └────────┬────────┘     └─────────────────────┘
+                                                       │ Telegram point
+                                                       ▼
+                                              Telegram (chat_id)
 ```
 
 ### External Layer (cloud — survives server death)
@@ -175,33 +172,51 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 23 rules)
+### Alert Rules (Grafana — 27 rules)
+
+> Two classes:
+>
+> - **Value alerts** (`noDataState=OK`): fire only when the probe reports a real
+>   failure value. A dead producer (check_site.sh / check_services.sh) does NOT
+>   false-fire them — that is the canaries' job.
+> - **Canaries** (`noDataState=Alerting`, marked 🔔): fire and keep firing when
+>   the producer itself dies (check-site-cron, check-services-cron). They are the
+>   authoritative "checker is dead" signal; correlated value alerts then read as
+>   "service broken" only when the checker is alive.
+>
+> Everything below runs inside the local VM (single node per server). Exporter
+> metrics are scraped by VM (15s); check_site.sh pushes every 1m; check_services.sh
+> every 5m. Better Stack (external) covers the public/edge view — see below.
 
 | Alert | Severity | Condition | Interval / for |
 |-------|----------|-----------|----------------|
-| High CPU | warning | >85% 5m | scraped 15s, for: 5m |
-| High RAM | warning | >90% 5m | scraped 15s, for: 5m |
-| Low Disk Space | warning | <10% free | scraped 15s, for: 5m |
-| Swap Thrashing | warning | page-in rate >100/s | scraped 15s, for: 5m |
-| MySQL Down | critical | mysql_up == 0 | scraped 15s, for: 2m |
-| Nginx/Apache Down | critical | nginx/apache_up == 0 | scraped 15s, for: 2m |
-| PHP-FPM Down | critical | php_fpm_up == 0 | pushed 1m, for: 2m |
-| Site Down | critical | site_up != 1 | pushed 1m, for: 2m |
-| Site Response Time > 5s | warning | site_response > 5s | pushed 1m, for: 5m |
-| MODX Core Missing | critical | modx_core_ok == 0 | pushed 1m, for: 5m |
-| MODX Cache Not Writable | warning | modx_cache_ok == 0 | pushed 1m, for: 5m |
-| VictoriaMetrics Down | critical | victoria_up == 0 | scraped 15s, for: 1m |
-| Redis Down | critical | redis_up == 0 | scraped 15s, for: 2m |
-| Backup Cron Not Running | warning | >5 min since last run | heartbeat 1h, for: 5m |
-| Site Health Check Not Running | warning | >3 min since last run | heartbeat 1m, for: 1m |
-| SSL Cert Expiring | info | <7 days remaining | pushed 1m, for: 1h |
-| Admin Login Failed | warning | admin_login_ok == 0 | probe 15m, for: 15m |
-| MiniShop2 Write Failed | warning | db_write_ok == 0 | probe 15m, for: 6m |
-| Database Tables Below Threshold | info | <50 tables in modx_db | pushed 15m, for: 6m |
-| Backup Verification Failed | warning | backup_verification_ok == 0 | cron 24h, for: 5m |
-| Service Check Not Running | warning | stale >10 min | heartbeat 1m, for: 10m |
-| VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | scraped 15s, for: 10m |
-| Cloud Upload Failed | warning | upload_last_success_timestamp >2h | pushed 1h, for: 5m |
+| High CPU | warning | >85% 5m | node_exporter 15s, for: 5m |
+| High RAM | warning | >90% 5m | node_exporter 15s, for: 5m |
+| Low Disk Space | warning | <10% free | node_exporter 15s, for: 5m |
+| Swap Thrashing | warning | page-in rate >100/s | node_exporter 15s, for: 5m |
+| MySQL Down | critical | mysql_up == 0 | mysqld_exporter 15s, for: 2m |
+| Nginx/Apache Down | critical | nginx/apache_up == 0 | exporter 15s, for: 2m |
+| PHP-FPM Down | critical | php_fpm_up == 0 (value only) | check_site 1m, for: 2m |
+| Site Down | critical | site_up == 0 (value only, localhost probe) | check_site 1m, for: 2m |
+| Site Response Time > 5s | warning | site_response > 5s (localhost probe) | check_site 1m, for: 5m |
+| MODX Core Missing | critical | modx_core_ok == 0 | check_site 1m, for: 5m |
+| MODX Cache Not Writable | warning | modx_cache_ok == 0 | check_site 1m, for: 5m |
+| VictoriaMetrics Down | critical | victoria_up == 0, or VM query error | check_site 1m, for: 1m |
+| Redis Down | critical | redis_up == 0 | redis_exporter 15s, for: 2m |
+| Backup Cron Not Running | warning | >90 min since smart_backup ran (window 1d) | smart_backup 1h, for: 10m |
+| Site Health Check Not Running 🔔 | warning | check_site_last_run stale >3 min | check_site 1m, for: 1m |
+| SSL Cert Expiring | info | <7 days remaining | check_site 1m, for: 1h |
+| Admin Login Failed | warning | admin_login_ok == 0 (localhost probe) | check_site 15m, for: 15m |
+| MiniShop2 Write Failed | warning | db_write_ok == 0 | check_site 15m, for: 6m |
+| Database Tables Below Threshold | info | <50 tables in modx_db | check_site 15m, for: 6m |
+| Backup Verification Failed | warning | min(local,cloud backup_verification_ok) == 0 | verify_backups 24h, for: 5m |
+| Service Check Not Running 🔔 | warning | check_services_last_run stale >10 min (window 2h) | check_services 5m, for: 10m |
+| Fail2ban Down | warning | fail2ban_up == 0 | check_services 5m, for: 10m |
+| Promtail Down | warning | promtail_up == 0 | check_services 5m, for: 10m |
+| Node Exporter Down | warning | service_status{node_exporter} == 0 | check_services 5m, for: 10m |
+| Telegram Bot Down | warning | service_status{telegram-bot} == 0 | check_services 5m, for: 10m |
+| VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | check_services 5m, for: 10m |
+| Cloud Upload Failed | warning | upload_last_success_timestamp >2h | upload script 1h, for: 5m |
 
 ### External Monitoring
 
@@ -271,7 +286,7 @@ Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
 Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
    manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
                                            → check_services (timers, fail2ban, exporters)
-                                           → Grafana alert rules check (≥23)
+                                            → Grafana alert rules check (≥27)
                                            → GDrive backup check
                                           → Destroy → Telegram report (P/F/W summary)
 

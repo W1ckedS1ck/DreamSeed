@@ -26,7 +26,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 | CMS | MODX Revolution |
 | SSL | Cloudflare (Full SSL), certbot DNS-Cloudflare fallback |
 | Monitoring | VictoriaMetrics + vmagent, Node/MySQLd/Redis/Nginx exporters |
-| Dashboards | Grafana (on-server, 6 on Nginx / 5 on Apache, 23 alerts) |
+| Dashboards | Grafana (on-server, 6 on Nginx / 5 on Apache, 27 alerts) |
 | Remote Write | Grafana Cloud (Prometheus remote_write) |
 | Logs | Promtail → Grafana Cloud Loki |
 | RUM | Grafana Faro |

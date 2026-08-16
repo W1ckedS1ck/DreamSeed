@@ -114,7 +114,7 @@ SSH → sudo journalctl -u vmagent --no-pager -n 20
 
 ### Where alerts are defined
 
-All 23 alert rules live in one file:
+All 27 alert rules live in one file:
 
 ```
 ansible-roles/grafana/templates/grafana-alerts.yaml.j2

@@ -4,7 +4,7 @@
 
 There are 2 layers of linting:
 
-- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
+- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
 - **CI on GitHub**: `ci.yml` (11 jobs, 8 required for merge)
 
 ---
@@ -26,7 +26,10 @@ There are 2 layers of linting:
 | 11 | **actionlint** | CI | `.github/workflows/*.yml` syntax | GitHub Actions |
 | 12 | **yamllint** | CI + local | generic YAML (`.github/`, `ansible/`, configs) | YAML |
 | 13 | **zizmor** | CI | GitHub Actions security (workflow attacks, secrets) | GitHub Actions |
-| 14 | **Deploy Check** | CI | real `deploy.sh -c` smoke test (env parse, vault, playbook syntax) | orchestration |
+| 14 | **Renovate Config Validator** | local + CI | `renovate.json` schema + custom manager patterns (runs in `--fast` and in the pre-commit CI job) | JSON/RegEx |
+| 15 | **Cloudflare IP ranges** | local | vendored `cloudflare-realip.conf` vs live `cloudflare.com/ips` (runs in `--fast`) | Data |
+| 16 | **Secrets audit** | local (full) | `.gitignore` excludes (`secrets/`, `.env`, `*.service`), `secrets/` not tracked in git, required env vars present | Secrets |
+| 17 | **Deploy Check** | CI | real `deploy.sh -c` smoke test (env parse, vault, playbook syntax) | orchestration |
 
 ---
 
@@ -93,6 +96,11 @@ There are 2 layers of linting:
 **Catches:** incorrect `uses:` references, missing permissions, shell injection, deprecated syntax.
 **Config:** runs with `-shellcheck="$(command -v shellcheck)"` (pip `shellcheck-py`) — every inline `run:` script in workflows is also checked by shellcheck (the separate ShellCheck job covers standalone `.sh` files).
 
+### 12. Renovate Config Validator (JSON/RegEx)
+
+**Type:** dependency-update config validator.
+**Catches:** invalid `renovate.json` schema, broken custom manager regex patterns (e.g. double-slash wrapping after config migration). Run with `npx --yes --package renovate@44 -- renovate-config-validator`. See the Renovate section in CLAUDE.md for the `managerFilePatterns` caveat.
+
 ---
 
 ## Tool Mapping
@@ -114,4 +122,4 @@ PROJECT CODE
 
 ---
 
-### Last updated: 2026-07-29
+### Last updated: 2026-08-16
