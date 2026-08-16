@@ -44,8 +44,17 @@ run_parallel() {
     local pids=() ok=true
     for entry in "$@"; do
         local pb="${entry%%:*}" label="${entry##*:}"
+        local fallback=false
+        [[ "$pb" == "~"* ]] && { fallback=true; pb="${pb#\~}"; }
         echo "      ├ ${label}"
-        (_ansible_cmd "$pb") &
+        if [[ "$fallback" == "true" ]]; then
+            ( _ansible_cmd "$pb" || {
+                echo "  ⚠ ${label} failed — continuing (fallback, non-fatal)"
+                echo "  ⚠ GRAFANA_FALLBACK_FAILED=true"
+              } ) &
+        else
+            (_ansible_cmd "$pb") &
+        fi
         pids+=("$!")
     done
     for pid in "${pids[@]}"; do

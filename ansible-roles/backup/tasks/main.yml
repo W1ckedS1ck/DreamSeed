@@ -27,21 +27,11 @@
 
 - name: Upload backup scripts
   ansible.builtin.copy:
-    src: "{{ scripts_dir }}/{{ item }}"
-    dest: "{{ scripts_dir_remote }}/{{ item }}"
+    src: "{{ scripts_dir }}/"
+    dest: "{{ scripts_dir_remote }}/"
     owner: ubuntu
     group: ubuntu
     mode: "0755"
-  loop:
-    - smart_backup.sh
-    - upload_backups_to_gdrive.sh
-    - verify_backups.sh
-    - RESTORE_ALL.sh
-    - send_report.sh
-    - common_functions.sh
-    - audit_deep.sh
-    - env_loader.py
-    - telegram_bot.py
 
 - name: Install python-telegram-bot for async bot
   become: true
@@ -227,8 +217,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      # VM may still be starting — retry across ~30s instead of blocking 90s
-      for i in $(seq 1 15); do
+      for i in $(seq 1 5); do
         echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
         sleep 2

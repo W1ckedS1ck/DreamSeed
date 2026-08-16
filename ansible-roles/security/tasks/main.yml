@@ -275,3 +275,47 @@
     path: "{{ web_root }}"
     state: directory
     mode: g+s
+
+- name: Verify Ubuntu Pro attachment (launched async in playbook-01)
+  become: true
+  ansible.builtin.command:
+    cmd: pro status --format json
+  register: pro_verify
+  changed_when: false
+  failed_when: >-
+    pro_verify.rc == 0 and not ((pro_verify.stdout | default('{}') | from_json).attached | default(false))
+  when: ubuntu_pro_token | length > 0
+  retries: 4
+  delay: 10
+  until: pro_verify is succeeded
+
+- name: Read Ubuntu Pro async job id
+  become: true
+  ansible.builtin.command: cat /var/tmp/.ansible-pro-job-id
+  register: pro_jid_file
+  changed_when: false
+  failed_when: false
+  when: ubuntu_pro_token | length > 0
+
+- name: Clean up Ubuntu Pro async job
+  become: true
+  ansible.builtin.async_status:
+    jid: "{{ pro_jid_file.stdout }}"
+    mode: cleanup
+  when:
+    - ubuntu_pro_token | length > 0
+    - pro_jid_file.rc == 0
+
+- name: Remove Ubuntu Pro async job id
+  become: true
+  ansible.builtin.file:
+    path: /var/tmp/.ansible-pro-job-id
+    state: absent
+  when: ubuntu_pro_token | length > 0
+
+- name: Remove Ubuntu Pro attach config
+  become: true
+  ansible.builtin.file:
+    path: /root/.pro-attach.yaml
+    state: absent
+  when: ubuntu_pro_token | length > 0
