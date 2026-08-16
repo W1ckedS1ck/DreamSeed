@@ -176,10 +176,10 @@ fi
 PROMTAIL_POS=$(ssh ubuntu@"$SERVER_IP" "test -f /var/lib/promtail/positions.yml && echo yes || echo no" 2>/dev/null || echo "no")
 [ "$PROMTAIL_POS" = "yes" ] && pass "Promtail positions: /var/lib/promtail/positions.yml" || fail "Promtail positions file missing"
 
-PROMTAIL_ERRS=$(ssh ubuntu@"$SERVER_IP" "journalctl -u promtail --no-pager -n 50 2>/dev/null | grep -c 'error' || echo 0")
+PROMTAIL_ERRS=$(ssh ubuntu@"$SERVER_IP" "journalctl -u promtail --no-pager -n 50 2>/dev/null | grep -c 'error' || true")
 [ "${PROMTAIL_ERRS:-0}" -eq 0 ] && pass "Promtail: 0 errors (last 50 lines)" || warn "Promtail: ${PROMTAIL_ERRS} errors (last 50 lines)"
 
-PROMTAIL_PHP=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9080/metrics 2>/dev/null | grep -c 'promtail_read_bytes_total.*php.*fpm' || echo 0")
+PROMTAIL_PHP=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9080/metrics 2>/dev/null | grep -c 'promtail_read_bytes_total.*php.*fpm' || true")
 [ "${PROMTAIL_PHP:-0}" -gt 0 ] && pass "Promtail: reading PHP-FPM log" || fail "Promtail: NOT reading PHP-FPM log"
 
 PHP_LOG_PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a %G' /var/log/php*-fpm.log 2>/dev/null || echo 'missing'")
@@ -221,7 +221,7 @@ CRON_COUNT=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null | grep -v '^#' | gr
 echo "cron_jobs=$CRON_COUNT"
 [ "${CRON_COUNT:-0}" -ge 5 ] && pass "Cron jobs: $CRON_COUNT" || warn "Cron jobs: ${CRON_COUNT:-0} (expected 5+)"
 
-GRAFANA_LOGIN=$(ssh ubuntu@"$SERVER_IP" 'PW=$(grep -oP "(?<=GF_SECURITY_ADMIN_PASSWORD=).*" /etc/grafana/grafana.env 2>/dev/null || true); if [ -z "$PW" ]; then echo "no-env"; exit 0; fi; curl -sf -X POST -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "user=admin" --data-urlencode "password=$PW" -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/login 2>/dev/null || echo "000"' 2>/dev/null || echo "000")
+GRAFANA_LOGIN=$(ssh ubuntu@"$SERVER_IP" 'PW=$(sudo grep -oP "(?<=GF_SECURITY_ADMIN_PASSWORD=).*" /etc/grafana/grafana.env 2>/dev/null || true); if [ -z "$PW" ]; then echo "no-env"; exit 0; fi; curl -sf -X POST -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "user=admin" --data-urlencode "password=$PW" -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/login 2>/dev/null || echo "000"' 2>/dev/null || echo "000")
 [ "${GRAFANA_LOGIN:-000}" = "200" ] && pass "Grafana admin login OK (HTTP 200)" || warn "Grafana admin login: HTTP ${GRAFANA_LOGIN:-000}"
 
 # ==== Checks end ====
