@@ -185,7 +185,7 @@ groups:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
 
-{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
+{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[1h])) default 0', 600, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
