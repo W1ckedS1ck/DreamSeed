@@ -449,12 +449,26 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo -e "${RED}✗ Project archive contains absolute or path-traversal entries: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
-    # Reject symlinks whose target escapes the project dir (absolute path, or
-    # a `..` component anywhere — including mid-path like `a/../../etc`).
-    # Extracting one as root would let later archive entries write through it
-    # (tar-slip). Relative in-tree symlinks are fine.
-    if timeout 300 sudo tar -tvzf "$SELECTED_PROJECT" 2>/dev/null |
-        grep -E ' -> (/|[^ ]*\.\./)' | grep -q .; then
+    # Reject symlinks whose target ESCAPES the project dir (absolute path, or a
+    # relative target whose .. resolves above the top-level dir). Extracting one
+    # as root would let later archive entries write through it (tar-slip).
+    # Relative in-tree links (e.g. vendor/bin/carbon -> ../nesbot/carbon) are fine.
+    if ! timeout 300 sudo python3 - "$SELECTED_PROJECT" "$(basename "$PROJECT_DIR")" <<'PYEOF' 2>/dev/null
+import tarfile, sys, posixpath
+
+archive, top = sys.argv[1], sys.argv[2]
+with tarfile.open(archive, "r:gz") as tf:
+    for m in tf.getmembers():
+        if not m.issym():
+            continue
+        t = m.linkname
+        if t.startswith("/"):
+            print(f"unsafe: {m.name} -> {t} (absolute)"); sys.exit(1)
+        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(m.name), t))
+        if resolved != top and not resolved.startswith(top + "/"):
+            print(f"unsafe: {m.name} -> {t} (escapes to {resolved})"); sys.exit(1)
+PYEOF
+    then
         echo -e "${RED}✗ Project archive contains unsafe symlinks: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
