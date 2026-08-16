@@ -43,6 +43,9 @@ cloud_db_keep: 100
 # ==== Cloudflare ====
 
 cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+# fail2ban bans at the CF edge (cloudflare-token action). Empty = web jails are log-only.
+cloudflare_firewall_token: "{{ lookup('env', 'CLOUDFLARE_FIREWALL_TOKEN') | default('', true) }}"
+cloudflare_zone_id: "{{ lookup('env', 'CLOUDFLARE_ZONE_ID') | default('', true) }}"
 
 # ==== Monitoring (Grafana + VictoriaMetrics) ====
 

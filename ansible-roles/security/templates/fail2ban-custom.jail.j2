@@ -1,5 +1,8 @@
-# Web jails are LOG-ONLY (banaction=none): behind Cloudflare the firewall sees
-# edge IPs, not attackers. Web enforcement = CF WAF + nginx limit_req; only SSH bans.
+# Web jails ban at the Cloudflare EDGE (via cloudflare-token action) — the firewall
+# only sees CF edge IPs, so nftables bans can never match web traffic. Detection is
+# log-based (real visitor IPs via CF-Connecting-IP); enforcement is the CF API.
+# Falls back to log-only (banaction=none) when CLOUDFLARE_FIREWALL_TOKEN is unset.
+# notes has NO spaces — the actionunban search URL must stay valid.
 
 # ==== SSH ====
 
@@ -17,7 +20,11 @@ filter = sshd[publickey=any]
 [modx-admin]
 enabled     = true
 port        = http,https
+{% if cloudflare_firewall_token | default('', true) | length > 0 %}
+action      = cloudflare-token[cfzone="{{ cloudflare_zone_id | default('') }}", cftoken="{{ cloudflare_firewall_token }}", notes="DreamSeed-modx-admin"]
+{% else %}
 banaction   = none
+{% endif %}
 filter      = modx-admin
 backend     = pyinotify
 {% if web_server == "nginx" %}
@@ -35,7 +42,11 @@ bantime  = 3600
 [dreamseed-botsearch]
 enabled     = true
 port        = http,https
+{% if cloudflare_firewall_token | default('', true) | length > 0 %}
+action      = cloudflare-token[cfzone="{{ cloudflare_zone_id | default('') }}", cftoken="{{ cloudflare_firewall_token }}", notes="DreamSeed-botsearch"]
+{% else %}
 banaction   = none
+{% endif %}
 filter      = dreamseed-botsearch
 backend     = pyinotify
 logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
@@ -46,7 +57,11 @@ bantime     = 12h
 [dreamseed-bad-request]
 enabled     = true
 port        = http,https
+{% if cloudflare_firewall_token | default('', true) | length > 0 %}
+action      = cloudflare-token[cfzone="{{ cloudflare_zone_id | default('') }}", cftoken="{{ cloudflare_firewall_token }}", notes="DreamSeed-bad-request"]
+{% else %}
 banaction   = none
+{% endif %}
 filter      = dreamseed-bad-request
 backend     = pyinotify
 logpath     = /var/log/nginx/{{ domain }}-ssl-access.log
@@ -89,11 +104,15 @@ maxretry = 6
 bantime  = 1h
 {% endif %}
 
-# ==== Recidive (log-only too) ====
+# ==== Recidive (edge-ban too) ====
 
 [recidive]
 enabled  = true
+{% if cloudflare_firewall_token | default('', true) | length > 0 %}
+action   = cloudflare-token[cfzone="{{ cloudflare_zone_id | default('') }}", cftoken="{{ cloudflare_firewall_token }}", notes="DreamSeed-recidive"]
+{% else %}
 banaction = none
+{% endif %}
 logpath  = /var/log/fail2ban.log
 maxretry = 3
 findtime = 86400

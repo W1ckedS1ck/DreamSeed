@@ -20,6 +20,14 @@ Required permissions: `DNS:Edit`, `Cache Settings Read/Write`, `Zone:Read`, `Acc
 
 Used by: `deploy.sh`, Ansible role `ssl`, Terraform.
 
+### Firewall Token (fail2ban edge bans)
+
+```
+CLOUDFLARE_FIREWALL_TOKEN  →  Authorization: Bearer <token> (CF API v4)
+```
+
+Scoped API token with **`Zone → Firewall Services → Edit`** (zone-scoped to the target's zone). Used by the `security` Ansible role: fail2ban web jails ban offending IPs **at the Cloudflare edge** via the `cloudflare-token` action. Empty value = web jails are log-only (no bans). Zone ID is resolved automatically from the target domain at deploy time.
+
 ### Global API Key — for admin tasks
 
 > **Note:** manual-only. `CLOUDFLARE_EMAIL` / `CLOUDFLARE_GLOBAL_KEY` are not stored in `secrets/.env` and are not consumed by any code or workflow. Use them ad-hoc from your local shell when the dashboard is unavailable; prefer scoped API tokens in CI.

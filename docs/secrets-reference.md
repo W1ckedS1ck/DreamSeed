@@ -14,8 +14,9 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `DB_PASS` | MySQL password for MODX | `deploy.yml`, `test-restore.yml` |
 | `GRAFANA_PASS` | Grafana admin password | `deploy.yml`, `test-restore.yml` |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS certbot + auto DNS update) | `deploy.yml`, `test-restore.yml` |
-| `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible) | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml` |
-| `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `test-restore.yml`, `rollback.yml` |
+| `CLOUDFLARE_FIREWALL_TOKEN` | Cloudflare API (fail2ban edge bans, `Zone → Firewall Services → Edit`) | `deploy.yml`, `test-restore.yml` → `security` role |
+| `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible) | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `ci.yml` |
+| `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `test-restore.yml`, `rollback.yml`, `ci.yml` |
 | `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml`, `chatops-deploy.yml`, `docs.yml` |
 | `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
 | `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml` → `rclone_config.yml` |
@@ -77,7 +78,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Target | Purpose | Used in |
 |--------|--------|---------|---------|
-| `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml` |
+| `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml`, `ci.yml` |
 | `PROD_HETZ_HCLOUD_TOKEN` | prod-hetz | Hetzner Cloud API token | `deploy.yml`, `drift-detection.yml`, `terraform-apply.yml` |
 
 ---

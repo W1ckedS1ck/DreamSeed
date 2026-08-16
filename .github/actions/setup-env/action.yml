@@ -22,6 +22,10 @@ inputs:
     description: Cloudflare API Token
     required: false
     default: ""
+  cloudflare_firewall_token:
+    description: Cloudflare API Token (fail2ban edge bans, Firewall Services:Edit)
+    required: false
+    default: ""
   hcloud_token:
     description: Hetzner Cloud Token (dev fallback)
     required: false
@@ -168,6 +172,7 @@ runs:
         TG_TOKEN: ${{ inputs.tg_token }}
         DB_PASS: ${{ inputs.db_pass }}
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare_api_token }}
+        CLOUDFLARE_FIREWALL_TOKEN: ${{ inputs.cloudflare_firewall_token }}
         HCLOUD_TOKEN: ${{ inputs.hcloud_token }}
         PROD_HETZ_HCLOUD_TOKEN: ${{ inputs.prod_hetz_hcloud_token }}
         GRAFANA_PASS: ${{ inputs.grafana_pass }}
@@ -191,7 +196,7 @@ runs:
         RCLONE_CONF_BASE64: ${{ inputs.rclone_conf_base64 }}
       run: |
         for v in \
-          "$TG_TOKEN" "$DB_PASS" "$CLOUDFLARE_API_TOKEN" "$HCLOUD_TOKEN" \
+          "$TG_TOKEN" "$DB_PASS" "$CLOUDFLARE_API_TOKEN" "$CLOUDFLARE_FIREWALL_TOKEN" "$HCLOUD_TOKEN" \
           "$PROD_HETZ_HCLOUD_TOKEN" "$GRAFANA_PASS" "$BETTERUPTIME_API_TOKEN" \
           "$BETTERUPTIME_BACKUP_KEY" "$BETTERUPTIME_GDRIVE_KEY" \
           "$BETTERUPTIME_REPORT_DAILY_KEY" "$BETTERUPTIME_REPORT_WEEKLY_KEY" \
@@ -214,6 +219,7 @@ runs:
         TG_THREAD_ID: ${{ inputs.tg_thread_id }}
         DB_PASS: ${{ inputs.db_pass }}
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare_api_token }}
+        CLOUDFLARE_FIREWALL_TOKEN: ${{ inputs.cloudflare_firewall_token }}
         HCLOUD_TOKEN: ${{ inputs.hcloud_token }}
         PROD_HETZ_HCLOUD_TOKEN: ${{ inputs.prod_hetz_hcloud_token }}
         GRAFANA_PASS: ${{ inputs.grafana_pass }}
@@ -258,6 +264,7 @@ runs:
           emit_env TG_THREAD_ID "$TG_THREAD_ID"
           emit_env DB_PASS "$DB_PASS"
           emit_env CLOUDFLARE_API_TOKEN "$CLOUDFLARE_API_TOKEN"
+          emit_env CLOUDFLARE_FIREWALL_TOKEN "$CLOUDFLARE_FIREWALL_TOKEN"
           emit_env HCLOUD_TOKEN "$HCLOUD_TOKEN"
           emit_env PROD_HETZ_HCLOUD_TOKEN "$PROD_HETZ_HCLOUD_TOKEN"
           emit_env GRAFANA_PASS "$GRAFANA_PASS"

@@ -49,13 +49,23 @@ preflight_checks() {
     resolve_env_file "$ENV_FILE"
     local env_src="$ENV_SRC"
     parse_env_file "$env_src" || exit 1
-    export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
+    export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN CLOUDFLARE_FIREWALL_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
     export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY
     export TG_TOKEN TG_CHAT_ID TG_THREAD_ID
     export EMAIL_USER EMAIL_PASS SMTP_SERVER SMTP_PORT OWNER LOKI_URL LOKI_USERNAME FARO_COLLECTOR_URL FARO_APP_NAME
     export RCLONE_CRYPT_PASSWORD
     export UBUNTU_PRO_TOKEN
+
+    # Resolve CF zone ID from the target domain — for fail2ban edge-ban action.
+    # Skip if token unset (web jails fall back to log-only).
+    if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -n "${CLOUDFLARE_FIREWALL_TOKEN:-}" ]]; then
+        CLOUDFLARE_ZONE_ID=$(_cf_zone_id "$DEPLOY_DOMAIN" 2>/dev/null || true)
+        if [[ -z "$CLOUDFLARE_ZONE_ID" ]]; then
+            echo "  ⚠ Warning: could not resolve Cloudflare zone for $DEPLOY_DOMAIN — fail2ban web bans will be log-only"
+        fi
+        export CLOUDFLARE_ZONE_ID
+    fi
 
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then

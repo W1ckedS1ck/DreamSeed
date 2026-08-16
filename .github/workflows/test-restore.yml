@@ -63,6 +63,7 @@ jobs:
           tg_thread_id: ${{ vars.TG_THREAD_ID }}
           db_pass: ${{ secrets.DB_PASS }}
           cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare_firewall_token: ${{ secrets.CLOUDFLARE_FIREWALL_TOKEN }}
           hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
           prod_hetz_hcloud_token: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
           grafana_pass: ${{ secrets.GRAFANA_PASS }}
