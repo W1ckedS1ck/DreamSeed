@@ -134,9 +134,12 @@
   ],
   "packageRules": [
     {
-      "description": "Hold PHP at 8.3 until MODX 3 migration",
+      "description": "Hard-lock PHP to 8.3 (MODX 2.x incompatible above). More match fields than the 'Dev & monitoring tools' group so it always wins; allowedVersions caps even if enabled flips.",
+      "matchFileNames": ["ansible/group_vars/all.yml"],
       "matchDatasources": ["endoflife-date"],
       "matchPackageNames": ["php"],
+      "matchManagers": ["custom.regex"],
+      "allowedVersions": "<8.4",
       "enabled": false
     },
     {

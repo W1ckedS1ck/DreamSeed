@@ -21,8 +21,9 @@ db_pass: "{{ lookup('env', 'DB_PASS') | mandatory('DB_PASS environment variable 
 db_min_tables: 100
 
 # ==== PHP ====
+# HARD LOCK: MODX 2.x is incompatible with PHP > 8.3. Never bump (renovate rule + deploy/lint guards enforce).
 
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.5.9', true) }}" # renovate: depName=php
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}" # renovate: depName=php
 
 # ==== Redis ====
 
