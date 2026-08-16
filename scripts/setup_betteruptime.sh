@@ -1,10 +1,7 @@
 #!/bin/bash
-# Better Stack setup — heartbeats + Telegram webhooks.
-# Portfolio script. Idempotent: safe to run repeatedly.
-#   --write-env    Write new keys to secrets/.env automatically
-#
-# Requires BETTERUPTIME_API_TOKEN in secrets/.env.
-# TG_TOKEN, TG_CHAT_ID are optional — if set, also sets up webhooks.
+# Better Stack setup — heartbeats + Telegram webhooks. Idempotent.
+#   --write-env  Write new keys to secrets/.env automatically
+# Requires BETTERUPTIME_API_TOKEN in secrets/.env; TG_TOKEN/TG_CHAT_ID optional.
 
 set -euo pipefail
 
@@ -24,14 +21,17 @@ chmod 600 "$ENV_PLAIN"
 _SETUP_TMPFILES=("$ENV_PLAIN")
 trap 'for _f in "${_SETUP_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
 
-ansible-vault view "$SCRIPT_DIR/secrets/.env" > "$ENV_PLAIN" 2>/dev/null || {
+ansible-vault view "$SCRIPT_DIR/secrets/.env" >"$ENV_PLAIN" 2>/dev/null || {
     echo "Error: cannot decrypt secrets/.env" >&2
     exit 1
 }
 
 load_env "$ENV_PLAIN"
 
-[[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && { echo "Error: BETTERUPTIME_API_TOKEN not set in secrets/.env"; exit 1; }
+[[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && {
+    echo "Error: BETTERUPTIME_API_TOKEN not set in secrets/.env"
+    exit 1
+}
 
 WRITE_ENV=false
 [[ "${1:-}" == "--write-env" ]] && WRITE_ENV=true
@@ -43,7 +43,7 @@ bu_auth() { printf 'header = "Authorization: Bearer %s"\n' "$BETTERUPTIME_API_TO
 
 ENV_FILE="$SCRIPT_DIR/secrets/.env"
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
+# ==== Helpers ====
 
 get_existing_heartbeats() {
     curl -s -X GET "$API/heartbeats?page=1&per_page=50" --config <(bu_auth) || echo '{"data":[]}'
@@ -84,14 +84,17 @@ write_key_to_env() {
     chmod 600 "$tmpfile"
     _SETUP_TMPFILES+=("$tmpfile")
 
-    ansible-vault view "$ENV_FILE" > "$tmpfile" 2>/dev/null || { rm -f "$tmpfile"; return 1; }
+    ansible-vault view "$ENV_FILE" >"$tmpfile" 2>/dev/null || {
+        rm -f "$tmpfile"
+        return 1
+    }
 
     if grep -qP "^${var_name}=" "$tmpfile"; then
-        grep -vP "^${var_name}=" "$tmpfile" > "$tmpfile.new"
+        grep -vP "^${var_name}=" "$tmpfile" >"$tmpfile.new"
         _SETUP_TMPFILES+=("$tmpfile.new")
         mv "$tmpfile.new" "$tmpfile"
     fi
-    echo "${var_name}=\"${value}\"" >> "$tmpfile"
+    echo "${var_name}=\"${value}\"" >>"$tmpfile"
 
     # Encrypt into a temp file, validate it, then atomically mv into place.
     # Writing directly with --output="$ENV_FILE" would corrupt the only
@@ -110,12 +113,16 @@ write_key_to_env() {
         echo "Error: encrypted output is not a valid vault file — secrets/.env NOT touched" >&2
         return 1
     fi
-    [[ -s "$encrypted" ]] || { rm -f "$tmpfile" "$encrypted"; echo "Error: encrypted output empty — secrets/.env NOT touched" >&2; return 1; }
+    [[ -s "$encrypted" ]] || {
+        rm -f "$tmpfile" "$encrypted"
+        echo "Error: encrypted output empty — secrets/.env NOT touched" >&2
+        return 1
+    }
     mv "$encrypted" "$ENV_FILE"
     rm -f "$tmpfile"
 }
 
-# ─── Heartbeats ─────────────────────────────────────────────────────────────
+# ==== Heartbeats ====
 
 echo -e "\n${CYAN}Better Stack — heartbeats${NC}\n"
 
@@ -129,7 +136,7 @@ for spec in \
     "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600" \
     "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|60"; do
 
-    IFS='|' read -r name var_name period grace <<< "$spec"
+    IFS='|' read -r name var_name period grace <<<"$spec"
 
     url=$(heartbeat_exists "$name" "$existing_hb")
 
@@ -160,7 +167,7 @@ for spec in \
     fi
 done
 
-# ─── HTTP monitors ──────────────────────────────────────────────────────────
+# ==== HTTP monitors ====
 
 echo -e "\n${CYAN}Better Stack — HTTP monitors${NC}\n"
 # Note: widget type for status page (history/response_time) is UI-only.
@@ -187,7 +194,7 @@ for spec in \
     "https://${DOMAIN}/|Main site|The Dreamers|180" \
     "https://${DOMAIN}/grafana|Grafana|Grafana|180"; do
 
-    IFS='|' read -r url name keyword freq <<< "$spec"
+    IFS='|' read -r url name keyword freq <<<"$spec"
 
     mid=$(monitor_exists "$url" "$existing_mon")
 
@@ -209,7 +216,7 @@ print(json.dumps(payload))
 " "$url" "$name" "$keyword" "$freq")
 
     if [[ -n "$mid" ]]; then
-        curl -s -X PATCH "$API/monitors/$mid" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" > /dev/null
+        curl -s -X PATCH "$API/monitors/$mid" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" >/dev/null
         echo -e "  ${GREEN}✓${NC} $name ($url) — already exists"
     else
         resp=$(curl -s -X POST "$API/monitors" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
@@ -223,18 +230,18 @@ print(json.dumps(payload))
     fi
 done
 
-# ─── Status page resources ──────────────────────────────────────────────────
+# ==== Status page resources ====
 
 SP_ID=$(curl -s -X GET "$API/status-pages" --config <(bu_auth) | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')" 2>/dev/null)
 
 if [[ -n "$SP_ID" ]]; then
     echo -e "\n${CYAN}Better Stack — status page resources${NC}\n"
 
-existing_sp=$(curl -s -X GET "$API/status-pages/$SP_ID/resources" --config <(bu_auth) || echo '{"data":[]}')
+    existing_sp=$(curl -s -X GET "$API/status-pages/$SP_ID/resources" --config <(bu_auth) || echo '{"data":[]}')
 
-sp_resource_exists() {
-    local rtype="$1" rid="$2"
-    echo "$existing_sp" | python3 -c "
+    sp_resource_exists() {
+        local rtype="$1" rid="$2"
+        echo "$existing_sp" | python3 -c "
 import sys, json
 t, i = sys.argv[1], int(sys.argv[2])
 for r in json.load(sys.stdin).get('data', []):
@@ -243,43 +250,43 @@ for r in json.load(sys.stdin).get('data', []):
         print(r['id'])
         break
 " "$rtype" "$rid" 2>/dev/null
-}
+    }
 
-for spec in \
-    "Monitor|🌐 ${DOMAIN}|https://${DOMAIN}/|0" \
-    "Monitor|📊 Grafana|https://${DOMAIN}/grafana|1" ; do
+    for spec in \
+        "Monitor|🌐 ${DOMAIN}|https://${DOMAIN}/|0" \
+        "Monitor|📊 Grafana|https://${DOMAIN}/grafana|1"; do
 
-    IFS='|' read -r rtype name url pos <<< "$spec"
+        IFS='|' read -r rtype name url pos <<<"$spec"
 
-    rid=$(monitor_exists "$url" "$existing_mon")
-    if [[ -z "$rid" ]]; then
-        echo -e "  ${YELLOW}⚠${NC} $name — monitor not found (create it first)"
-        continue
-    fi
-
-    existing_id=$(sp_resource_exists "$rtype" "$rid")
-
-    if [[ -n "$existing_id" ]]; then
-        curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" --config <(bu_auth) \
-          -H "Content-Type: application/json" \
-          -d "{\"public_name\":\"$name\",\"position\":$pos}" > /dev/null
-        echo -e "  ${GREEN}✓${NC} $name — already on status page"
-    else
-        resp=$(curl -s -X POST "$API/status-pages/$SP_ID/resources" --config <(bu_auth) \
-          -H "Content-Type: application/json" \
-          -d "{\"resource_type\":\"$rtype\",\"resource_id\":$rid,\"public_name\":\"$name\",\"position\":$pos}" || echo "")
-        sp_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null)
-        if [[ -n "$sp_id" ]]; then
-            echo -e "  ${GREEN}✓${NC} $name — added to status page"
-        else
-            echo -e "  ${RED}✗${NC} $name — failed" >&2
+        rid=$(monitor_exists "$url" "$existing_mon")
+        if [[ -z "$rid" ]]; then
+            echo -e "  ${YELLOW}⚠${NC} $name — monitor not found (create it first)"
+            continue
         fi
-    fi
-done
+
+        existing_id=$(sp_resource_exists "$rtype" "$rid")
+
+        if [[ -n "$existing_id" ]]; then
+            curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" --config <(bu_auth) \
+                -H "Content-Type: application/json" \
+                -d "{\"public_name\":\"$name\",\"position\":$pos}" >/dev/null
+            echo -e "  ${GREEN}✓${NC} $name — already on status page"
+        else
+            resp=$(curl -s -X POST "$API/status-pages/$SP_ID/resources" --config <(bu_auth) \
+                -H "Content-Type: application/json" \
+                -d "{\"resource_type\":\"$rtype\",\"resource_id\":$rid,\"public_name\":\"$name\",\"position\":$pos}" || echo "")
+            sp_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null)
+            if [[ -n "$sp_id" ]]; then
+                echo -e "  ${GREEN}✓${NC} $name — added to status page"
+            else
+                echo -e "  ${RED}✗${NC} $name — failed" >&2
+            fi
+        fi
+    done
 
 fi
 
-# ─── Telegram webhooks ──────────────────────────────────────────────────────
+# ==== Telegram webhooks ====
 
 if [[ -z "${TG_TOKEN:-}" || -z "${TG_CHAT_ID:-}" ]]; then
     echo -e "\n${YELLOW}Skipping webhooks — set TG_TOKEN and TG_CHAT_ID in secrets/.env${NC}"
@@ -292,11 +299,13 @@ else
 
     ensure_webhook() {
         local name="$1" started="$2" resolved="$3" text="$4"
-        local wh_json; wh_json=$(mktemp "${HOME:?}/.tmp_bs_webhook_XXXXXX.json")
+        local wh_json
+        wh_json=$(mktemp "${HOME:?}/.tmp_bs_webhook_XXXXXX.json")
         _SETUP_TMPFILES+=("$wh_json")
 
         # Check if webhook already exists by name
-        existing_id=$(echo "$existing_wh" | python3 -c "
+        existing_id=$(
+            echo "$existing_wh" | python3 -c "
 import sys, json
 target = sys.argv[1]
 data = json.load(sys.stdin)
@@ -305,9 +314,9 @@ for item in data.get('data', []):
         print(item['id'])
         break
 " "$name" 2>/dev/null
-)
+        )
 
-        TG_TOKEN="$TG_TOKEN" python3 - "$name" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" "$([[ -n "$existing_id" ]] && echo false || echo true)" "$wh_json" << 'PYEOF' > /dev/null
+        TG_TOKEN="$TG_TOKEN" python3 - "$name" "$started" "$resolved" "$TG_CHAT_ID" "$THREAD" "$text" "$([[ -n "$existing_id" ]] && echo false || echo true)" "$wh_json" <<'PYEOF' >/dev/null
 import os, sys, json
 
 _, name, started, resolved, chat_id, thread, text, for_creation, out_path = sys.argv

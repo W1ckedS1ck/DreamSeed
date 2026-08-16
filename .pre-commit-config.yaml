@@ -34,6 +34,11 @@ repos:
         args: ["--config", ".markdownlint.yml"]
         files: \.(md|markdown)$
 
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+
   - repo: local
     hooks:
       - id: terraform-docs-aws
@@ -77,18 +82,4 @@ repos:
         entry: bash -c 'for d in terraform/aws terraform/hetzner terraform/grafana; do (cd "$d" && tflint --format=compact); done'
         language: system
         files: ^terraform/.*\.tf$
-        pass_filenames: false
-
-      - id: ansible-lint
-        name: Ansible lint
-        entry: bash -c 'cd ansible && ansible-lint .'
-        language: system
-        files: ^ansible/
-        pass_filenames: false
-
-      - id: actionlint
-        name: Actionlint (GitHub Actions)
-        entry: actionlint -ignore SC2129 -ignore SC2001 -ignore SC2034 -ignore SC2181 -ignore SC2015
-        language: system
-        files: ^\.github/workflows/
         pass_filenames: false

@@ -24,7 +24,6 @@
       - libpam-pwquality
       - unattended-upgrades
     state: present
-    update_cache: true
   register: _apt_result
   retries: 3
   delay: 10
@@ -70,9 +69,6 @@
 - name: Setup PHP version and packages
   ansible.builtin.include_tasks: php.yml
 
-- name: Attach Ubuntu Pro subscription (ESM)
-  ansible.builtin.include_tasks: ubuntu-pro.yml
-
 - name: Install redis packages
   become: true
   ansible.builtin.apt:
@@ -84,11 +80,13 @@
     DEBIAN_FRONTEND: noninteractive
 
 # ─── Grafana apt repo (shared by grafana + promtail roles) ───────────────
-# Provisioned once in the base playbook so the two roles don't duplicate it.
-- name: Download Grafana GPG key
+# Key VENDORED (files/grafana.asc) — pinned trust anchor, no TOFU window.
+# Fingerprint: B53A E77B ADB6 30A6 8304 6005 963F A277 1045 8545
+# Rotation: apt update fails loudly → refresh file + fingerprint above.
+- name: Deploy vendored Grafana GPG key
   become: true
-  ansible.builtin.get_url:
-    url: https://apt.grafana.com/gpg.key
+  ansible.builtin.copy:
+    src: grafana.asc
     dest: /etc/apt/keyrings/grafana.asc
     mode: "0644"
 

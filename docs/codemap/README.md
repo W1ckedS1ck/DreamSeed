@@ -14,9 +14,9 @@ A self-contained HTML map of the whole repository: every node is a module (terra
 
 ## When it updates
 
-- **Automatically** on any push to `main` (code, workflows, docs) — the `pages.yml` workflow regenerates the map in CI and republishes the site, so the published map is always current with the pushed commit.
+- **Automatically** on any push to `main` (code, workflows, docs) — the `docs.yml` workflow regenerates the map in CI and republishes the site, so the published map is always current with the pushed commit.
 - **Cloud deploys**: `deploy.yml` includes the map in the Pages artifact, so it survives deploys (the site also shows environment screenshots).
-- **Manually**: `gh workflow run pages.yml --ref <branch>` to publish from any branch.
+- **Manually**: `gh workflow run docs.yml --ref <branch>` to publish from any branch.
 
 > The published site is regenerated in CI from the latest push, so it can be newer than the committed `codemap.*` copy in the repo (that copy is a snapshot from the last manual regeneration). The workflow prints a warning in its job summary when the committed copy is stale — no build failure, no auto-commit.
 

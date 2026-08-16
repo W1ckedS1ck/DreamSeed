@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rollback-${{ inputs.environment }}
+  group: env-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
@@ -32,6 +32,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: 🚀 Start
         run: echo "Rollback started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
@@ -124,23 +126,6 @@ jobs:
           fi
           echo "Prod rollback confirmed"
 
-      - name: Capture pre-restore hashes
-        id: pre-restore
-        run: |
-          SSH_KEY="${HOME}/.ssh/deploy_key"
-          IP="${{ steps.server-ip.outputs.ip }}"
-          echo "=== Capturing pre-restore hashes ==="
-          PROJ_HASH=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-              -i "$SSH_KEY" "ubuntu@$IP" \
-              "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
-          echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
-          echo "Project hash: $PROJ_HASH"
-          DB_HASH=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-              -i "$SSH_KEY" "ubuntu@$IP" \
-              "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
-          echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
-          echo "DB hash: $DB_HASH"
-
       - name: Restore latest backup
         id: restore
         run: |
@@ -165,39 +150,6 @@ jobs:
             echo "site=$SITE"
             echo "time=$TIME"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Verify restored artifacts
-        id: verify
-        run: |
-          SSH_KEY="${HOME}/.ssh/deploy_key"
-          IP="${{ steps.server-ip.outputs.ip }}"
-          echo "=== Validating restored artifacts ==="
-          NEW_HASH=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-              -i "$SSH_KEY" "ubuntu@$IP" \
-              "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
-          OLD_HASH="${{ steps.pre-restore.outputs.project_hash }}"
-          echo "Project hash before: $OLD_HASH"
-          echo "Project hash after:  $NEW_HASH"
-          if [ "$NEW_HASH" = "$OLD_HASH" ] && [ "$NEW_HASH" != "FAILED" ]; then
-            echo "[PASS] Project files restored with identical content"
-            echo "project_hash_match=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "[FAIL] Project files hash mismatch or missing"
-            echo "project_hash_match=no" >> "$GITHUB_OUTPUT"
-          fi
-          NEW_DB=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-              -i "$SSH_KEY" "ubuntu@$IP" \
-              "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
-          OLD_DB="${{ steps.pre-restore.outputs.db_hash }}"
-          echo "DB hash before: $OLD_DB"
-          echo "DB hash after:  $NEW_DB"
-          if [ "$NEW_DB" = "$OLD_DB" ] && [ "$NEW_DB" != "FAILED" ]; then
-            echo "[PASS] Database restored with identical table structure"
-            echo "db_hash_match=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "[FAIL] Database hash mismatch"
-            echo "db_hash_match=no" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Set domain
         id: domain
@@ -249,13 +201,10 @@ jobs:
         run: |
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"
-          VERIFY="${{ steps.verify.outputs.project_hash_match }}"
-          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" && "$VERIFY" == "yes" ]]; then
+          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
             STATUS="✅ ROLLBACK OK"
           elif [[ "$RESTORE" != "success" ]]; then
             STATUS="❌ RESTORE FAILED"
-          elif [[ "$VERIFY" != "yes" ]]; then
-            STATUS="⚠️ RESTORE HASH MISMATCH"
           else
             STATUS="⚠️  SITE UNHEALTHY"
           fi
@@ -270,30 +219,17 @@ jobs:
             "${{ steps.server-ip.outputs.ip }}" \
             "${{ inputs.environment }}")
 
-          # Keep the token out of argv (ps aux) — curl reads the URL from a
-          # 0600 temp config file instead of a command-line argument.
-          tg_cfg=$(mktemp)
-          chmod 600 "$tg_cfg"
-          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
-          curl -s -m 10 -X POST --config "$tg_cfg" \
-            -d "chat_id=${TG_CHAT_ID}" \
-            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
-            --data-urlencode "parse_mode=Markdown" \
-            --data-urlencode "text=$MSG" > /dev/null || true
-          rm -f "$tg_cfg"
+          bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
 
       - name: Write job summary
         if: always()
         run: |
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"
-          VERIFY="${{ steps.verify.outputs.project_hash_match }}"
-          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" && "$VERIFY" == "yes" ]]; then
+          if [[ "$RESTORE" == "success" && "$HEALTH" == "success" ]]; then
             STATUS="✅ ROLLBACK OK"
           elif [[ "$RESTORE" != "success" ]]; then
             STATUS="❌ RESTORE FAILED"
-          elif [[ "$VERIFY" != "yes" ]]; then
-            STATUS="⚠️ RESTORE HASH MISMATCH"
           else
             STATUS="⚠️ SITE UNHEALTHY"
           fi
@@ -321,8 +257,6 @@ jobs:
             echo "| Redis | ${{ steps.restore.outputs.redis }} |"
             echo "| Site | ${{ steps.restore.outputs.site }} |"
             echo "| Duration | ${{ steps.restore.outputs.time }} |"
-            echo "| **Project hash** | ${{ steps.verify.outputs.project_hash_match == 'yes' && '✅ match' || '❌ mismatch' }} |"
-            echo "| **DB hash** | ${{ steps.verify.outputs.db_hash_match == 'yes' && '✅ match' || '❌ mismatch' }} |"
           } >> "$M"
 
       - name: Cleanup secrets

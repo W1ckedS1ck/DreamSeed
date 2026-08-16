@@ -3,7 +3,7 @@
 > For **junior support staff**. Covers all alerts from all layers (Grafana, Better Stack, Scripts).
 > All notifications arrive in a single Telegram chat.
 >
-> Last updated: 2026-07-17
+> Last updated: 2026-08-15
 
 ---
 
@@ -140,7 +140,7 @@ Use cloud console to restart:
 
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
-| 1 | G1–G25 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx/Apache, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent, Cloud Upload (+ 2 metric-only sections) | ❌ No |
+| 1 | G1–G29 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx/Apache, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent, Cloud Upload, Fail2ban, Promtail, Node Exporter, Telegram Bot (+ 2 metric-only sections) | ❌ No |
 | 2 | B1–B8 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (6 heartbeats) | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
@@ -230,7 +230,7 @@ sudo mysql -e "SHOW VARIABLES LIKE '%innodb_buffer_pool_size%';"
 ### G3. 🔴 Low Disk Space
 
 **Metric:** Available space on `/` < 10% for 5+ minutes
-**Severity:** Critical (can lead to MySQL crash, failed backups, site down)
+**Severity:** Warning (can lead to MySQL crash, failed backups, site down)
 **Possible causes:** Old backups not rotated, log files too large, unexpected growth
 
 **Diagnose:**
@@ -270,7 +270,7 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
 
   ```bash
   sudo du -sh /var/lib/victoria-metrics/
-  # Retention is 3 months by default
+  # Retention is 3 days by default (vm_retention: 3)
   ```
 
 - **Find unexpected large files:**
@@ -339,6 +339,7 @@ curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online
 **Metric:** `php_fpm_up` = 0 (socket not found or process not running)
 **Severity:** CRITICAL — site returns blank page or 502
 **Possible causes:** PHP-FPM crashed, OOM killer, config error after deploy
+**Note:** fires on a real `php_fpm_up=0` value. If it fires together with "Site Health Check Not Running" (G12) that was quiet before — the checker (`check_site.sh`) died, PHP-FPM is likely fine.
 
 **Diagnose:**
 
@@ -489,9 +490,10 @@ sudo certbot certificates 2>/dev/null || echo "No local certs (using LetsEncrypt
 
 ### G7. 🔴 Site Down
 
-**Metric:** `site_up` = 0 (HTTP check from inside the server returned non-200)
+**Metric:** `site_up` = 0 (HTTP probe to local nginx via SNI; public/edge reachability is covered by the Better Stack monitor)
 **Severity:** CRITICAL — users cannot access the site
 **Possible causes:** Nginx down, PHP-FPM down, MySQL down, MODX error, application crash
+**Note:** fires on a real `site_up=0` value. If it fires together with "Site Health Check Not Running" (G12) that was quiet before — the checker (`check_site.sh`) died, the site is likely fine.
 
 **Diagnose:**
 
@@ -519,7 +521,7 @@ Site Down is usually a symptom of one of the other alerts (MySQL, PHP-FPM, Nginx
 If ALL of MySQL/PHP-FPM/Nginx are running but site still returns 5xx:
 
 ```bash
-# Check MODX core files (see alert #9)
+# Check MODX core files (see alert #8)
 ls -la /var/www/html/core/model/modx/modx.class.php
 ls -la /var/www/html/manager/config.core.php
 
@@ -564,8 +566,8 @@ ls /var/www/html/ | head -20
   # List available backups
   ls -lt /home/ubuntu/backups/project/ | head -5
 
-  # Extract latest project backup
-  sudo tar -xzf /home/ubuntu/backups/project/DreamSeed_latest.tar.gz -C /var/www/
+  # Extract latest project backup (names are DreamSeed_<date>.tar.gz — pick the newest)
+  sudo tar -xzf "$(ls -t /home/ubuntu/backups/project/DreamSeed_*.tar.gz | head -1)" -C /var/www/
   sudo chown -R www-data:www-data /var/www/html/
   ```
 
@@ -617,9 +619,10 @@ sudo chmod -R 755 /var/www/html/core/cache/
 
 ### G10. 🔴 VictoriaMetrics Down
 
-**Metric:** `victoria_up` = 0 (VictoriaMetrics health check failed)
-**Severity:** High — no metrics collected, all Grafana alerts may stop working
+**Metric:** `victoria_up` = 0 (pushed by `check_site.sh` every 1 min — also fires when the alert query itself errors, i.e. VM unreachable)
+**Severity:** Critical — no metrics collected, all Grafana alerts may stop working
 **Possible causes:** OOM, disk full, VictoriaMetrics crashed
+**Note:** if it fires together with "Site Health Check Not Running" (G12) + "Site Down" (G7) + "PHP-FPM Down" (G5) that were quiet before — `check_site.sh` itself died; VictoriaMetrics is likely fine.
 
 **Diagnose:**
 
@@ -653,7 +656,7 @@ sudo dmesg | grep -i "oom\|victoria" | tail -5
 
 ### G11. 🔴 Backup Cron Not Running
 
-**Metric:** `cron_last_run_backup` timestamp > 120 minutes old
+**Metric:** `cron_last_run_backup` timestamp > 90 minutes old (pushed by `smart_backup.sh` at every run — even a failed run refreshes it)
 **Severity:** Warning — backups may have stopped
 **Possible causes:** Cron service stopped, script error, server busy, script stuck
 
@@ -696,6 +699,7 @@ tail -5 /home/ubuntu/backups/logs/backup_$(date +%Y-%m-%d).log
 **Metric:** `check_site_last_run` > 180 seconds old
 **Severity:** Warning — `check_site.sh` timer may have stopped
 **Possible causes:** `check_site.sh` stuck in loop, systemd timer failed, VictoriaMetrics unreachable
+**Note:** 🔔 Canary — fires and **keeps firing** until `check_site.sh` runs again. When it fires together with Site Down (G7) / PHP-FPM Down (G5) / VictoriaMetrics Down (G10) that were quiet before, the checker died and those correlated alerts are false — fix the checker, not the services.
 
 **Diagnose:**
 
@@ -735,7 +739,7 @@ curl -s http://127.0.0.1:8428/health
 ### G13. 🔴 SSL Cert Expiring Soon
 
 **Metric:** `ssl_days_remaining` < 7 days
-**Severity:** Warning — certificate about to expire
+**Severity:** Info — certificate about to expire
 **Note:** If using Cloudflare edge SSL (Full/Strict), this alert applies to the origin certificate (LetsEncrypt or self-signed), not Cloudflare's edge cert.
 
 **Diagnose:**
@@ -765,8 +769,8 @@ sudo certbot renew --preferred-challenges dns-01
 
 ### G14. 🔴 Admin Login Failed
 
-**Metric:** `admin_login_ok` = 0 (hourly probe to `/manager/` returned no MODX login page)
-**Severity:** High — admin panel may be down
+**Metric:** `admin_login_ok` = 0 (probe every 15 min to `/manager/` returned no MODX login page)
+**Severity:** Warning — admin panel may be down
 **Possible causes:** MODX core issue, PHP error, .htaccess blocking, session table corruption
 
 **Diagnose:**
@@ -799,8 +803,8 @@ sudo systemctl restart php*-fpm
 
 ### G15. 🔴 MiniShop2 Write Failed
 
-**Metric:** `db_write_ok` = 0 (hourly INSERT+DELETE probe into `modx_ms2_orders` failed)
-**Severity:** High — database write path may be broken
+**Metric:** `db_write_ok` = 0 (probe every 15 min — INSERT+DELETE into `modx_ms2_orders` — failed)
+**Severity:** Warning — database write path may be broken
 **Possible causes:** MySQL permissions changed, table corruption, disk full, foreign key constraint
 
 **Diagnose:**
@@ -829,7 +833,7 @@ df -h
 
 **Metric:** `dreamseed_health_overall` = 0 (composite check from `check_services.sh`)
 **Severity:** High — one or more services or checks are failing
-**Note:** This is not a Grafana alert rule — it's a metric pushed by `check_services.sh`. Review the latest script output to see which specific service failed.
+**Note:** This is not a Grafana alert rule — it's a metric pushed by `check_services.sh`. Fail2ban, Promtail, Node Exporter and Telegram Bot now have their own Grafana alerts (G26–G29); this composite metric is the quick "something is broken" overview. Review the latest script output to see which specific service failed.
 
 **Diagnose:**
 
@@ -861,14 +865,14 @@ curl -sk -o /dev/null -w "%{http_code}" https://localhost/
 sudo tail -30 /var/log/nginx/error.log
 ```
 
-**Fix:** Depends on the HTTP code. See Site Down alert (#8) for detailed steps.
+**Fix:** Depends on the HTTP code. See Site Down alert (#7) for detailed steps.
 
 ---
 
 ### G18. 🔴 Database Tables Below Threshold
 
 **Metric:** `database_tables` < 50 tables in `modx_db`
-**Severity:** CRITICAL — DB may be empty or not restored
+**Severity:** Info — DB may be empty or not restored
 **Possible causes:** Restore failed, wrong DB name, tables dropped, backup corrupted
 
 **Diagnose:**
@@ -1013,9 +1017,10 @@ sudo mysql -e "SHOW GLOBAL STATUS LIKE '%Slow_queries%';"
 
 ### G23. 🔴 Service Check Not Running
 
-**Metric:** `check_services_last_run` stale for >10 min
+**Metric:** `check_services_last_run` stale for >10 min (window 2h)
 **Severity:** Warning — health check system may be degraded
 **Possible causes:** check-services.timer not running, script crashed, systemd issue
+**Note:** 🔔 Canary — fires and **keeps firing** until `check_services.sh` runs again. Its death also silences the support-service metrics it pushes (fail2ban, promtail, node_exporter, telegram-bot) — the canary is the signal for those, not the value alerts.
 
 **Diagnose:**
 
@@ -1041,9 +1046,10 @@ sudo systemctl restart check-services.timer
 
 ### G24. 🔴 VMAgent Remote Write Failing
 
-**Metric:** `vmagent_remote_write_ok` = 0 (vmagent cannot push to Grafana Cloud)
+**Metric:** `vmagent_remote_write_ok` = 0 (pushed by `check_services.sh` every 5 min — vmagent cannot push to Grafana Cloud)
 **Severity:** CRITICAL — hosted metrics will be stale
 **Possible causes:** Grafana Cloud credentials wrong, network issue, vmagent crash, token expired
+**Note:** right after a vmagent start/restart the check reports OK (no data yet is not an error), so this does not false-fire on fresh deploys.
 
 **Diagnose:**
 
@@ -1101,6 +1107,93 @@ curl -s "http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp"
 - If rclone auth expired → re-deploy or update `secrets/rclone.conf`
 - If GDrive full → free up space or increase quota
 - If cron not working → check `systemctl status telegram-bot`, check systemd timers
+
+---
+
+### G26. 🔴 Fail2ban Down
+
+**Metric:** `fail2ban_up` = 0 (pushed by `check_services.sh` every 5 min)
+**Severity:** Warning — brute-force protection may be degraded
+**Possible causes:** fail2ban service crashed, required jails missing (sshd, modx-admin, dreamseed-botsearch, dreamseed-bad-request, recidive)
+
+**Diagnose:**
+
+```bash
+sudo systemctl status fail2ban
+sudo fail2ban-client status
+sudo fail2ban-client status modx-admin
+```
+
+**Fix:**
+
+```bash
+sudo systemctl restart fail2ban
+sudo fail2ban-client status
+```
+
+---
+
+### G27. 🔴 Promtail Down
+
+**Metric:** `promtail_up` = 0 (pushed by `check_services.sh` every 5 min)
+**Severity:** Warning — logs are not shipping to Loki
+**Possible causes:** promtail crashed, config error, OOM
+
+**Diagnose:**
+
+```bash
+sudo systemctl status promtail
+sudo journalctl -u promtail --no-pager -n 30
+```
+
+**Fix:**
+
+```bash
+sudo systemctl restart promtail
+```
+
+---
+
+### G28. 🔴 Node Exporter Down
+
+**Metric:** `service_status{service="node_exporter"}` = 0 (pushed by `check_services.sh` every 5 min)
+**Severity:** Warning — resource metrics (CPU/RAM/disk) are stale
+**Possible causes:** node_exporter crashed, OOM, config error
+
+**Diagnose:**
+
+```bash
+sudo systemctl status node_exporter
+sudo journalctl -u node_exporter --no-pager -n 30
+```
+
+**Fix:**
+
+```bash
+sudo systemctl restart node_exporter
+```
+
+---
+
+### G29. 🔴 Telegram Bot Not Running
+
+**Metric:** `service_status{service="telegram-bot"}` = 0 (pushed by `check_services.sh` every 5 min)
+**Severity:** Warning — alerting/reporting bot is down (prod) or a duplicate poller is running (non-prod)
+**Possible causes (prod):** bot crashed, python-telegram-bot error, API token revoked
+**Possible causes (non-prod):** a running poller on non-prod kills the prod bot (one getUpdates poller per token) — stop it
+
+**Diagnose:**
+
+```bash
+sudo systemctl status telegram-bot
+sudo journalctl -u telegram-bot --no-pager -n 30
+```
+
+**Fix:**
+
+```bash
+sudo systemctl restart telegram-bot
+```
 
 ---
 
@@ -1174,7 +1267,7 @@ curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online/
 
 **Fix:**
 
-- If HTTP != 200 → see Site Down alert (#8)
+- If HTTP != 200 → see Site Down alert (#7)
 - If MODX content changed → update the keyword in Better Stack dashboard (or remove this monitor if outdated)
 
 ---
@@ -1192,14 +1285,14 @@ curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online/
 **Diagnose:**
 
 ```bash
-ssh aws "sudo systemctl status grafana-server"
-ssh aws "curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000"
+ssh prod "sudo systemctl status grafana-server"
+ssh prod "curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000"
 ```
 
 **Fix:**
 
 ```bash
-ssh aws "sudo systemctl restart grafana-server"
+ssh prod "sudo systemctl restart grafana-server"
 ```
 
 ---
@@ -1310,7 +1403,7 @@ ssh prod "bash /home/ubuntu/Scripts/send_report.sh daily 2>&1"
 
 **What triggered:** `send_report.sh weekly` did not ping within 7d + 1h grace
 **Severity:** Info
-**Same diagnosis/fix as report-daily** (alert #18)
+**Same diagnosis/fix as report-daily** (see B6)
 
 ---
 
@@ -1401,7 +1494,7 @@ Look for errors:
   ssh prod "mysqldump modx_db | gzip > /tmp/test.sql.gz"
   ```
 
-**Note:** Previous backups are preserved in `/tmp/pre_restore_*` snapshots if a restore was recently run. After fixing → the next cron run will succeed automatically (hourly at 00).
+**Note:** Previous backups are preserved in `~/.tmp_pre_restore_*` snapshots (hidden dir in `$HOME`, e.g. `~/.tmp_pre_restore_XXXXXX`) if a restore was recently run. After fixing → the next cron run will succeed automatically (hourly at 00).
 
 ---
 
@@ -1492,7 +1585,7 @@ ssh prod "rclone delete gdrive-crypt:DreamSeed/backups/old_file --dry-run 2>&1"
 #    Check if state file is corrupted or locked
 ```
 
-**Note:** Non-prod environments (dev-aws, dev-hetz) also run drift detection but only notify in Telegram. Prod drift also escalates to email if not resolved within 24h.
+**Note:** Non-prod environments (dev-aws, dev-hetz, cloudflare) also run drift detection but only notify in Telegram. Prod drift fails the job and notifies Telegram; there is no separate email escalation.
 
 ---
 
@@ -1563,7 +1656,7 @@ It will:
 
 1. List all available backups from Google Drive
 2. Let you choose project, DB, or both
-3. Create pre-restore snapshots in `/tmp/pre_restore_*` (backup current state before overwrite)
+3. Create pre-restore snapshots in `~/.tmp_pre_restore_*` (backup current state before overwrite)
 4. Stop Nginx/Apache + PHP-FPM
 5. Restore files + DB
 6. Clear MODX cache

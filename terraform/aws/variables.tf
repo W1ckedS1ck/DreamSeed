@@ -34,11 +34,11 @@ variable "additional_ssh_keys" {
 }
 
 variable "environment" {
-  description = "Deployment environment (prod, dev-aws, etc.) — used in resource names to avoid conflicts"
+  description = "Deployment environment (prod, dev-aws) — used in resource names to avoid conflicts"
   type        = string
 
   validation {
-    condition     = can(regex("^(prod|dev|test)(-[a-z]+)?$", var.environment))
-    error_message = "Must match {type}[-{provider}], e.g. prod, dev-aws, prod-hetz, test"
+    condition     = contains(["prod", "dev-aws"], var.environment)
+    error_message = "AWS provider can only be used with environment prod or dev-aws (got: ${var.environment}). 'test' is a Hetzner-only target and shares the dreamseed-test TFC workspace."
   }
 }

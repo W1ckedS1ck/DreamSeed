@@ -1,5 +1,10 @@
 name: Setup Gitleaks
-description: Install gitleaks binary with caching
+description: Install pinned gitleaks binary with caching and SHA256 verification
+
+inputs:
+  gitleaks-version:
+    description: Gitleaks version to install
+    required: true
 
 runs:
   using: composite
@@ -13,20 +18,21 @@ runs:
 
     - name: Install gitleaks
       shell: bash
+      env:
+        GITLEAKS_VERSION: ${{ inputs.gitleaks-version }}
       run: |
+        set -euo pipefail
         mkdir -p ~/.cache/bin
-        if [ -f ~/.cache/bin/gitleaks ]; then
-          cp ~/.cache/bin/gitleaks /tmp/gitleaks
-          sudo cp /tmp/gitleaks /usr/local/bin/gitleaks
-        else
-          sudo apt-get install -y gitleaks -qq 2>/dev/null || \
-            (curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${{ inputs.gitleaks-version }}/gitleaks_${{ inputs.gitleaks-version }}_linux_x64.tar.gz" | \
-             sudo tar -xz -C /usr/local/bin gitleaks)
-          [ -f /usr/local/bin/gitleaks ] && sudo cp /usr/local/bin/gitleaks ~/.cache/bin/gitleaks || \
-          [ -f /usr/bin/gitleaks ] && sudo cp /usr/bin/gitleaks ~/.cache/bin/gitleaks || true
+        if [ -f ~/.cache/bin/gitleaks ] && ~/.cache/bin/gitleaks version 2>/dev/null | grep -q "$GITLEAKS_VERSION"; then
+          sudo cp ~/.cache/bin/gitleaks /usr/local/bin/gitleaks
+          exit 0
         fi
-
-inputs:
-  gitleaks-version:
-    description: Gitleaks version to install
-    required: true
+        cd /tmp
+        curl -sL -o "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        curl -sL -o gitleaks_checksums.txt \
+          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+        grep "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks_checksums.txt | sha256sum -c -
+        sudo tar -xz -C /usr/local/bin -f "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+        rm -f "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks_checksums.txt
+        sudo cp /usr/local/bin/gitleaks ~/.cache/bin/gitleaks

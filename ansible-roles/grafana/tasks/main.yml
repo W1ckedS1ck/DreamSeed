@@ -1,40 +1,25 @@
 ---
-# Grafana apt repo (GPG key + deb822_repository) is provisioned once in the
-# packages_common role (playbook-01). Here we only install + configure.
-
-# Pinned install with a loud fallback. The pinned version is kept current by
-# Renovate, so normally this succeeds. If the pinned version is not (yet) in
-# the Grafana apt repo — Renovate may bump it before the repo syncs — fall
-# back to the repo's latest, but print an explicit warning so the drift is
-# never silent. Retries cover transient apt/network flakiness.
-- name: Install Grafana (pinned version)
+# Grafana apt repo provisioned in packages_common (playbook-01).
+# apt.grafana.com lags GitHub releases by ~2 weeks, so a GitHub-pinned install
+# target would be stale most of the time — install apt-latest, log drift below.
+- name: Install Grafana (latest from apt repo)
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true
+    cache_valid_time: 0
   become: true
-  block:
-    - name: Install Grafana (pinned version)
-      ansible.builtin.apt:
-        name: grafana={{ grafana_version }}
-        state: present
-        update_cache: true
-        cache_valid_time: 0
-      environment:
-        DEBIAN_FRONTEND: noninteractive
-      register: grafana_install_result
-      retries: 3
-      delay: 5
-      until: grafana_install_result is success
-  rescue:
-    - name: Warn — pinned Grafana version unavailable
-      ansible.builtin.debug:
-        msg: "⚠ Grafana {{ grafana_version }} not available in apt repo — installing latest instead. Check group_vars/all.yml if this repeats."
+  environment:
+    DEBIAN_FRONTEND: noninteractive
 
-    - name: Install Grafana (fallback — latest if pinned version unavailable)
-      ansible.builtin.apt:
-        name: grafana
-        state: present
-        update_cache: true
-        cache_valid_time: 0
-      environment:
-        DEBIAN_FRONTEND: noninteractive
+- name: Record installed Grafana version
+  ansible.builtin.command: dpkg-query -W grafana
+  register: grafana_installed
+  changed_when: false
+
+- name: Grafana version status (installed vs. documented)
+  ansible.builtin.debug:
+    msg: "Grafana installed: {{ grafana_installed.stdout.split()[-1] }} (documented: {{ grafana_version }})"
 
 - name: Configure Grafana
   ansible.builtin.template:
@@ -205,7 +190,9 @@
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/login"
     method: POST
-    body: "user=admin&password={{ grafana_admin_password }}"
+    body:
+      user: admin
+      password: "{{ grafana_admin_password }}"
     body_format: form-urlencoded
     status_code: [200, 401]
   register: grafana_login_check

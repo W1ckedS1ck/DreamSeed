@@ -11,9 +11,15 @@
   become: true
   ansible.builtin.template:
     src: 99-optimizations.cnf.j2
-    dest: /etc/mysql/conf.d/99-optimizations.cnf
+    dest: /etc/mysql/mariadb.conf.d/99-optimizations.cnf
     mode: "0644"
   notify: Restart MariaDB
+
+- name: Remove stale my.cnf from conf.d
+  become: true
+  ansible.builtin.file:
+    path: /etc/mysql/conf.d/99-optimizations.cnf
+    state: absent
 
 - name: Create MySQL log directory
   become: true
@@ -33,7 +39,7 @@
 
 - name: Remove anonymous users
   become: true
-  ansible.mysql.mysql_user:
+  ansible.mariadb.mariadb_user:
     name: ""
     host_all: true
     state: absent
@@ -41,14 +47,14 @@
 
 - name: Remove test database
   become: true
-  ansible.mysql.mysql_db:
+  ansible.mariadb.mariadb_db:
     name: test
     state: absent
     login_unix_socket: /run/mysqld/mysqld.sock
 
 - name: Remove remote root access
   become: true
-  ansible.mysql.mysql_user:
+  ansible.mariadb.mariadb_user:
     name: root
     host: "127.0.0.1"
     state: absent
@@ -56,7 +62,7 @@
 
 - name: Remove IPv6 root access
   become: true
-  ansible.mysql.mysql_user:
+  ansible.mariadb.mariadb_user:
     name: root
     host: "::1"
     state: absent
@@ -67,7 +73,7 @@
 
 - name: Create database
   become: true
-  ansible.mysql.mysql_db:
+  ansible.mariadb.mariadb_db:
     name: "{{ db_name }}"
     encoding: utf8mb4
     collation: utf8mb4_unicode_ci
@@ -76,7 +82,7 @@
 
 - name: Create database user
   become: true
-  ansible.mysql.mysql_user:
+  ansible.mariadb.mariadb_user:
     name: "{{ db_user }}"
     password: "{{ db_pass }}"
     priv: "{{ db_name }}.*:ALL"
@@ -96,7 +102,7 @@
 
 - name: Create monitoring user for MySQL exporter (localhost)
   become: true
-  ansible.mysql.mysql_user:
+  ansible.mariadb.mariadb_user:
     name: monitoring
     host: localhost
     password: "{{ db_pass }}"
@@ -107,7 +113,7 @@
 
 - name: Create monitoring user for MySQL exporter (127.0.0.1)
   become: true
-  ansible.mysql.mysql_user:
+  ansible.mariadb.mariadb_user:
     name: monitoring
     host: "127.0.0.1"
     password: "{{ db_pass }}"

@@ -21,10 +21,14 @@ jobs:
     name: Grafana Cloud — ${{ inputs.workspace == 'prod' && '🔴 PRODUCTION' || '🟢 DEV' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: ${{ inputs.workspace == 'prod' && 'production' || '' }}
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: 🚀 Start
         run: echo "Grafana Cloud workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
@@ -57,16 +61,19 @@ jobs:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
           PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
           PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          PROD_SM_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
+          DEV_SA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+          DEV_SM_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
         run: |
           if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
             TOKEN="${PROD_SA_TOKEN:-$PROD_TOKEN}"
-            SM_TOKEN="${{ secrets.PROD_SM_ACCESS_TOKEN }}"
+            SM_TOKEN="$PROD_SM_TOKEN"
             GRAFANA_URL="https://dreamseed.grafana.net"
             DOMAIN="dreamseed.online"
             SM_URL="https://synthetic-monitoring-api-us-east-0.grafana.net"
           else
-            TOKEN="${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}"
-            SM_TOKEN="${{ secrets.DEV_SM_ACCESS_TOKEN }}"
+            TOKEN="$DEV_SA_TOKEN"
+            SM_TOKEN="$DEV_SM_TOKEN"
             GRAFANA_URL="https://vitalikuts.grafana.net"
             DOMAIN="aws.vitalikuts.online"
             SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
@@ -83,24 +90,21 @@ jobs:
 
       - name: Terraform Init
         working-directory: terraform/grafana
-        run: terraform init -upgrade=true
+        run: terraform init -input=false
 
       - name: Terraform Plan
         working-directory: terraform/grafana
-        run: terraform plan
+        run: terraform plan -input=false
 
       - name: Terraform Apply
         working-directory: terraform/grafana
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -input=false
 
       - name: Verify folder exists
+        working-directory: terraform/grafana
         run: |
-          FOLDER_UID=$(terraform output -raw folder_uid 2>/dev/null || echo "")
-          if [ -n "$FOLDER_UID" ]; then
-            echo "Folder UID from state: $FOLDER_UID"
-          else
-            echo "No folder in state — skipping verification"
-          fi
+          FOLDER_UID=$(terraform output -raw folder_uid)
+          echo "Folder UID from state: $FOLDER_UID"
 
       - name: Terraform State Output
         working-directory: terraform/grafana
@@ -150,3 +154,10 @@ jobs:
             FOLDER=$(echo "$OUTPUT" | jq -r '.folder_uid.value // "N/A"' 2>/dev/null)
             echo "\`$FOLDER\`"
           } >> "$M"
+
+      - name: Shred local secrets
+        if: always()
+        run: |
+          # terraform.tfvars.json holds grafana_cloud_token / sm_access_token.
+          # Runner is ephemeral, but shred it to match the pattern of other workflows.
+          shred -u terraform/grafana/terraform.tfvars.json 2>/dev/null || rm -f terraform/grafana/terraform.tfvars.json

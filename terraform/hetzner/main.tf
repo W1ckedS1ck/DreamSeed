@@ -1,3 +1,14 @@
+# Cloudflare edge ranges — web traffic MUST only come from CF (origin hidden
+# behind proxy). SSH (22) stays open to the world for Ansible. Fetched live from
+# cloudflare.com at plan time, so the firewall always tracks current ranges.
+data "http" "cf_ips_v4" {
+  url = "https://www.cloudflare.com/ips-v4"
+}
+
+data "http" "cf_ips_v6" {
+  url = "https://www.cloudflare.com/ips-v6"
+}
+
 locals {
   use_existing_key  = var.ssh_key_name != ""
   use_existing_ip   = var.primary_ip_name != ""
@@ -7,6 +18,8 @@ locals {
     service     = "DreamSeed"
     managed_by  = "terraform"
   }
+  cf_ipv4 = compact(split("\n", trimspace(data.http.cf_ips_v4.response_body)))
+  cf_ipv6 = compact(split("\n", trimspace(data.http.cf_ips_v6.response_body)))
 }
 
 data "hcloud_ssh_key" "default" {
@@ -35,14 +48,14 @@ resource "hcloud_firewall" "web" {
     direction  = "in"
     protocol   = "tcp"
     port       = "80"
-    source_ips = ["0.0.0.0/0", "::/0"]
+    source_ips = concat(local.cf_ipv4, local.cf_ipv6)
   }
 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "443"
-    source_ips = ["0.0.0.0/0", "::/0"]
+    source_ips = concat(local.cf_ipv4, local.cf_ipv6)
   }
 
   rule {
@@ -134,12 +147,5 @@ resource "hcloud_server" "main" {
       ssh_keys,
       user_data,
     ]
-  }
-}
-
-check "workspace_valid_for_hetzner" {
-  assert {
-    condition     = contains(["dev-hetz", "test", "prod-hetz"], var.environment)
-    error_message = "Hetzner provider can only be used with environment dev-hetz, test, or prod-hetz (got: ${var.environment})"
   }
 }

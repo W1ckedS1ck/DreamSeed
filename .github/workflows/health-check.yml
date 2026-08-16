@@ -13,7 +13,7 @@ on:
         default: prod
 
 concurrency:
-  group: health-check-${{ github.event_name == 'schedule' && 'prod-hetz' || inputs.target }}
+  group: env-${{ github.event_name == 'schedule' && 'prod-hetz' || inputs.target }}
   cancel-in-progress: false
 
 permissions:
@@ -28,9 +28,13 @@ jobs:
     name: Update ${{ matrix.target }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && contains(fromJSON('["prod", "prod-hetz"]'), matrix.target) && 'production' || '' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: 🚀 Start
         run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
@@ -130,6 +134,7 @@ jobs:
             echo "status=unreachable" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          set -e
 
           echo "=== Before: available updates ==="
           BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
@@ -138,7 +143,10 @@ jobs:
           echo "Total: $TOTAL ($SECURITY security)"
 
           echo "=== Running apt upgrade ==="
+          set +e
           RESULT=$($SSH "DEBIAN_FRONTEND=noninteractive sudo apt-get update -qq && DEBIAN_FRONTEND=noninteractive sudo apt upgrade -y 2>&1")
+          APT_RC=$?
+          set -e
           echo "$RESULT" | grep -E "^(Setting up|Preparing to unpack|Unpacking|^[0-9]+ upgraded)"
           UPGRADED=$(echo "$RESULT" | grep -oP '^(\d+) upgraded' || echo "0 upgraded")
           echo "$UPGRADED"
@@ -168,7 +176,7 @@ jobs:
           for svc in nginx apache2 php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
             if $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active; then
               echo "[OK] $svc"
-              [ "$svc" = "nginx" ] || [ "$svc" = "apache2" ] && WEB_OK=1
+              if [ "$svc" = "nginx" ] || [ "$svc" = "apache2" ]; then WEB_OK=1; fi
             fi
           done
           [ -n "$WEB_OK" ] || echo "[FAIL] web server (neither nginx nor apache2 active)"
@@ -176,8 +184,16 @@ jobs:
           UPDATED_NUM=$(echo "$UPGRADED" | grep -oP '^\d+' || echo "0")
           UPDATED_LIST=$(echo "$RESULT" | grep "^Setting up " | sed 's/Setting up //;s/ (.*\.\.\.)//')
 
+          if [ "$APT_RC" -ne 0 ]; then
+            echo "::error::apt upgrade failed (exit $APT_RC)"
+            {
+              echo "status=apt-failed"
+              echo "apt_rc=$APT_RC"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "status=ok" >> "$GITHUB_OUTPUT"
+          fi
           {
-            echo "status=ok"
             echo "before=$TOTAL"
             echo "security=$SECURITY"
             echo "updated=$UPDATED_NUM"
@@ -227,23 +243,15 @@ jobs:
 
           if [ "$STATUS" = "unreachable" ]; then
             MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
+          elif [ "$STATUS" = "apt-failed" ]; then
+            MSG="❌ *Server Update FAILED* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${{ steps.update.outputs.apt_rc }})${N}Remaining: ${AFTER}${TG_REBOOT}"
           elif [ "$U" = "0" ] && [ "$AFTER" = "0" ]; then
             MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
           else
             MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
           fi
 
-          # Keep the token out of argv (ps aux) — curl reads the URL from a
-          # 0600 temp config file instead of a command-line argument.
-          tg_cfg=$(mktemp)
-          chmod 600 "$tg_cfg"
-          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TG_TOKEN" > "$tg_cfg"
-          curl -s -m 10 -X POST --config "$tg_cfg" \
-            -d "chat_id=${TG_CHAT_ID}" \
-            ${TG_THREAD_ID:+-d "message_thread_id=${TG_THREAD_ID}"} \
-            --data-urlencode "parse_mode=Markdown" \
-            --data-urlencode "text=$MSG" > /dev/null || true
-          rm -f "$tg_cfg"
+          bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
 
       - name: Write job summary
         if: always()

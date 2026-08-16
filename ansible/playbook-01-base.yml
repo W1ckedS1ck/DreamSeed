@@ -16,6 +16,13 @@
       changed_when: false
       timeout: 120
 
+    - name: Mark deploy in progress (suppress check-services false alerts)
+      become: true
+      ansible.builtin.file:
+        path: /tmp/.dreamseed_deploying
+        state: touch
+        mode: "0644"
+
   roles:
     - packages_common
     - role: packages_apache

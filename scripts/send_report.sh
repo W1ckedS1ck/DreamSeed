@@ -3,26 +3,29 @@ set -euo pipefail
 
 # Validate required commands
 for cmd in find rclone du cut date grep curl jq; do
-    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+    command -v "$cmd" >/dev/null 2>&1 || {
+        echo "ERROR: '$cmd' not found in PATH"
+        exit 1
+    }
 done
 
 # Path for cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# ====== Load shared functions ======
+# ==== Load shared functions ====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
 # Parse report type
-REPORT_TYPE="${1:-daily}"  # daily or weekly
+REPORT_TYPE="${1:-daily}" # daily or weekly
 
-# ====== Settings ======
+# ==== Settings ====
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive-crypt}"
-LOCAL_PROJ_KEEP="${BACKUP_PROJECT_KEEP:-5}"
-LOCAL_DB_KEEP="${BACKUP_DB_KEEP:-15}"
+LOCAL_PROJ_KEEP="${BACKUP_PROJECT_KEEP:-${PROJECT_KEEP:-5}}"
+LOCAL_DB_KEEP="${BACKUP_DB_KEEP:-${DB_KEEP:-15}}"
 
 ENV=$(detect_env)
 ENV_DISPLAY=$(format_env_display "$ENV")
@@ -52,7 +55,7 @@ else
     LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
 fi
 
-# ====== DAILY REPORT ======
+# ==== DAILY REPORT ====
 if [ "$REPORT_TYPE" = "daily" ]; then
     _du_out=$(du -h "$(echo "$PROJ_FILES" | head -1)" 2>/dev/null) && PROJ_1_SIZE=$(echo "$_du_out" | cut -f1) || PROJ_1_SIZE="ERROR"
     _du_out=$(du -h "$(echo "$DB_FILES" | head -1)" 2>/dev/null) && DB_1_SIZE=$(echo "$_du_out" | cut -f1) || DB_1_SIZE="ERROR"
@@ -103,9 +106,9 @@ $(date +%d.%m) - $ENV_DISPLAY"
 
 $(date '+%d.%m.%Y %H:%M')"
 
-    send_tg "$MSG"
+    send_tg "$MSG" || true
 
-# ====== WEEKLY REPORT ======
+# ==== WEEKLY REPORT ====
 elif [ "$REPORT_TYPE" = "weekly" ]; then
     MSG="<b>WEEKLY REPORT</b>
 $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
@@ -132,7 +135,7 @@ $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
 
 $(date '+%d.%m.%Y %H:%M')"
 
-    send_tg "$MSG"
+    send_tg "$MSG" || true
 
 else
     echo "Usage: $0 {daily|weekly}"

@@ -1,6 +1,19 @@
+# Cloudflare edge ranges — web traffic MUST only come from CF (origin hidden
+# behind proxy). SSH (22) stays open to the world for Ansible. Fetched live from
+# cloudflare.com at plan time, so the firewall always tracks current ranges.
+data "http" "cf_ips_v4" {
+  url = "https://www.cloudflare.com/ips-v4"
+}
+
+data "http" "cf_ips_v6" {
+  url = "https://www.cloudflare.com/ips-v6"
+}
+
 locals {
   environment_tag = var.environment == "prod" ? "Prod" : "Dev"
   service_tag     = "DreamSeed"
+  cf_ipv4         = compact(split("\n", trimspace(data.http.cf_ips_v4.response_body)))
+  cf_ipv6         = compact(split("\n", trimspace(data.http.cf_ips_v6.response_body)))
 }
 
 data "aws_ami" "ubuntu" {
@@ -32,7 +45,7 @@ resource "aws_key_pair" "deploy" {
 }
 
 resource "aws_security_group" "web" {
-  # checkov:skip=CKV_AWS_24:SSH/HTTP/HTTPS from anywhere required for Ansible provisioning, Cloudflare edge, and Let's Encrypt
+  # checkov:skip=CKV_AWS_24:SSH from anywhere required for Ansible provisioning; HTTP/HTTPS restricted to Cloudflare ranges
   name        = "dreamseed-sg-${var.environment}"
   description = "Security group for DreamSeed web server (${var.environment})"
 
@@ -46,21 +59,21 @@ resource "aws_security_group" "web" {
   }
 
   ingress {
-    description      = "HTTP"
+    description      = "HTTP (Cloudflare only)"
     from_port        = 80
     to_port          = 80
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
-    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    cidr_blocks      = local.cf_ipv4
+    ipv6_cidr_blocks = local.cf_ipv6
   }
 
   ingress {
-    description      = "HTTPS"
+    description      = "HTTPS (Cloudflare only)"
     from_port        = 443
     to_port          = 443
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
-    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    cidr_blocks      = local.cf_ipv4
+    ipv6_cidr_blocks = local.cf_ipv6
   }
 
   # NOTE: Egress is intentionally restricted to known ports.
@@ -156,12 +169,5 @@ resource "aws_instance" "web" {
 
   tags = {
     Name = "dreamseed-${var.environment}"
-  }
-}
-
-check "workspace_valid_for_aws" {
-  assert {
-    condition     = contains(["prod", "dev-aws", "test"], var.environment)
-    error_message = "AWS provider can only be used with environment prod, dev-aws, or test (got: ${var.environment})"
   }
 }

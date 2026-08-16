@@ -1,8 +1,6 @@
 ---
-# Validate DB identifiers BEFORE any task uses them in SQL / shell / templates.
-# Defense-in-depth: db_prefix and db_name are hardcoded in group_vars/all.yml,
-# but a bad value (e.g. from a copy-paste error) would inject into server.env,
-# cron jobs, and SQL queries before the assert originally fired (was at line 87).
+# Validate db_prefix/db_name before any SQL/shell/template use — a bad value
+# would inject into server.env, cron, and SQL (defense-in-depth).
 - name: Validate db_prefix and db_name format
   ansible.builtin.assert:
     that:
@@ -14,23 +12,6 @@
 
 - name: Upload rclone config
   ansible.builtin.include_tasks: ../restore/tasks/rclone_config.yml
-
-- name: Create root MySQL config for cron jobs
-  ansible.builtin.copy:
-    content: |
-      [client]
-      user=root
-      password={{ db_pass }}
-
-      [mysql]
-      user=root
-      password={{ db_pass }}
-    dest: /root/.my.cnf
-    owner: root
-    group: root
-    mode: "0600"
-  become: true
-  no_log: true
 
 - name: Create backup directories
   ansible.builtin.file:
@@ -66,6 +47,7 @@
   become: true
   ansible.builtin.pip:
     name: python-telegram-bot
+    version: ">=20,<22"
     state: present
     extra_args: --break-system-packages
 
@@ -148,6 +130,7 @@
       2>&1 | logger -t session-cleanup
     user: root
     state: absent
+  become: true
 
 - name: Setup backup verification cron (daily at 4:30 AM)
   ansible.builtin.cron:
@@ -160,7 +143,7 @@
   become: true
 
 - name: Check MODX system_settings table
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = '{{ db_name }}' AND table_name = '{{ db_prefix }}system_settings'"
@@ -169,7 +152,7 @@
   failed_when: false
 
 - name: Update MODX session_gc_maxlifetime to 24 hours
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -182,7 +165,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Clear session_handler_class (force PHP native handler → Redis)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -195,7 +178,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Truncate MODX session table on deploy (clear stale sessions)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: "TRUNCATE `{{ db_name }}`.`{{ db_prefix }}session`"
@@ -203,7 +186,7 @@
   register: truncate_result
   failed_when: false
   when:
-    - clear_sessions | default(true)
+    - clear_sessions | default(false)
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
@@ -211,11 +194,11 @@
   ansible.builtin.debug:
     msg: "Session table truncate: {{ 'skipped' if truncate_result.failed else 'ok' }} (table may not exist if using Redis sessions)"
   when:
-    - clear_sessions | default(true)
+    - clear_sessions | default(false)
     - modx_check.query_result is defined
 
 - name: Set MODX database query caching (cache_db)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -228,7 +211,7 @@
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Set MODX session data caching (cache_db_session)
-  ansible.mysql.mysql_query:
+  ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
@@ -244,8 +227,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      # VM may still be starting — retry across ~30s instead of blocking 90s
-      for i in $(seq 1 15); do
+      for i in $(seq 1 5); do
         echo "cron_last_run_backup{instance=\"{{ domain }}\"} $(date +%s)" | \
           curl -sf --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" && break
         sleep 2

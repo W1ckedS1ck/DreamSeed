@@ -7,9 +7,8 @@
     path: /home/ubuntu/.config/rclone/rclone.conf
   register: rclone_config_remote
 
-# ========================
-#  Restore Project
-# ========================
+# ==== Restore Project ====
+
 - name: Check if MODX already installed (real site, not placeholder)
   become: true
   ansible.builtin.stat:
@@ -26,13 +25,8 @@
     - not restore_site_exists.stat.exists
     - not rclone_config_remote.stat.exists
 
-# NOTE: Dev environments (dev-aws, dev-hetz) intentionally restore backups
-# from prod (gdrive:DreamSeed/backups/project/ and db/). There is no
-# separate backup pipeline for dev — dev always pulls latest prod data.
-# This is by design, not a bug. Dev environments are ephemeral testing
-# copies of prod, not independent environments with their own data.
-# If you change these paths, make sure dev still gets prod data, not
-# dev-specific backups.
+# Dev restores prod backups by design (no separate pipeline — see group_vars/all.yml).
+# If changing paths, keep dev on prod data.
 
 - name: Ensure restore cache directory exists (EBS, not tmpfs)
   ansible.builtin.file:
@@ -119,7 +113,11 @@
             rm -rf "${_web}.bak.$$" 2>/dev/null || true
             exit 1
           fi
-          mount -a 2>/dev/null || true
+          mount -a 2>&1 || true
+          # tmpfs for MODX cache should be back after mount -a. A regular dir
+          # still works, so this is a WARNING (visible in the task log), not a
+          # failure — but never swallow it with /dev/null.
+          mountpoint -q "$_web/core/cache" || echo "WARNING: tmpfs not mounted at $_web/core/cache (check fstab)" >&2
           rm -rf "${_web}.bak.$$" 2>/dev/null || true
           chown -R www-data:www-data "$_web"
         executable: /bin/bash
@@ -174,15 +172,11 @@
   changed_when: false
   failed_when: false
 
-# ========================
-#  Restore Database
-# ========================
+# ==== Restore Database ====
+
 - name: Check if DB already has tables
   ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      mysql "{{ db_name | quote }}" -e "SHOW TABLES" 2>/dev/null | wc -l
-    executable: /bin/bash
+    cmd: mysql -N "{{ db_name | quote }}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()" 2>/dev/null
   register: restore_db_tables
   changed_when: false
   failed_when: false
@@ -191,9 +185,7 @@
   ansible.builtin.set_fact:
     restore_db_needs_restore: "{{ (restore_db_tables.stdout | default('0') | int) < 3 }}"
 
-# NOTE: See the project-restore block above — same logic applies: dev always
-# restores from prod backups. Paths are intentionally prod-only.
-# Dev environments have no independent backup pipeline by design.
+# Same as project restore: dev pulls prod backups by design (see group_vars/all.yml).
 
 - name: Restore database from Google Drive
   when:

@@ -2,21 +2,19 @@
 # shellcheck shell=bash
 # Sourced by deploy.sh — do not execute directly.
 
-# Guard against deploying a protected ref (main/master) into a dev env.
-# A real incident shipped prod-main code to dev-aws because dispatch made no
-# branch/env pairing. Dev envs must run from dev/feature branches; prod may
-# come from main. Never blocks prod, never blocks destroy, never blocks unless
-# the ref is main/master — and ALLOW_UNPROTECTED_REF=1 overrides if ever needed.
+# Guard against shipping protected-ref (main/master) code to dev envs. A real
+# incident pushed prod-main to dev-aws via workflow_dispatch. Dev must run from
+# dev/feature branches; prod is unaffected. ALLOW_UNPROTECTED_REF=1 overrides.
 guard_source_ref() {
     local refs residue
     refs="${GIT_REF:-}"
     if [[ -z "$refs" ]]; then
         refs="$(git -C "${SCRIPT_DIR:-.}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
     fi
-    residue="$(basename "${refs//refs\/heads\/}")"
+    residue="$(basename "${refs//refs\/heads\//}")"
     [[ "$TARGET" =~ ^dev- && "$DESTROY_MODE" == "false" ]] || return 0
     case "$residue" in
-        main|master)
+        main | master)
             if [[ -n "${ALLOW_UNPROTECTED_REF:-}" ]]; then
                 echo "⚠ Warning: dev env deploying from protected ref '$residue' (allowed via ALLOW_UNPROTECTED_REF)"
             else
@@ -38,7 +36,10 @@ check_prerequisites() {
     command -v "$TERRAFORM" &>/dev/null || missing+=("terraform")
     command -v ssh &>/dev/null || missing+=("ssh")
     command -v ssh-keygen &>/dev/null || missing+=("ssh-keygen")
-    if [[ ${#missing[@]} -gt 0 ]]; then echo "Missing: ${missing[*]}"; exit 1; fi
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "Missing: ${missing[*]}"
+        exit 1
+    fi
 }
 
 preflight_checks() {
@@ -48,13 +49,23 @@ preflight_checks() {
     resolve_env_file "$ENV_FILE"
     local env_src="$ENV_SRC"
     parse_env_file "$env_src" || exit 1
-    export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
+    export DB_PASS PHP_VERSION CLOUDFLARE_API_TOKEN CLOUDFLARE_FIREWALL_TOKEN GRAFANA_PASS DEPLOY_DOMAIN WEB_SERVER
     export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY
     export TG_TOKEN TG_CHAT_ID TG_THREAD_ID
     export EMAIL_USER EMAIL_PASS SMTP_SERVER SMTP_PORT OWNER LOKI_URL LOKI_USERNAME FARO_COLLECTOR_URL FARO_APP_NAME
     export RCLONE_CRYPT_PASSWORD
     export UBUNTU_PRO_TOKEN
+
+    # Resolve CF zone ID from the target domain — for fail2ban edge-ban action.
+    # Skip if token unset (web jails fall back to log-only).
+    if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -n "${CLOUDFLARE_FIREWALL_TOKEN:-}" ]]; then
+        CLOUDFLARE_ZONE_ID=$(_cf_zone_id "$DEPLOY_DOMAIN" 2>/dev/null || true)
+        if [[ -z "$CLOUDFLARE_ZONE_ID" ]]; then
+            echo "  ⚠ Warning: could not resolve Cloudflare zone for $DEPLOY_DOMAIN — fail2ban web bans will be log-only"
+        fi
+        export CLOUDFLARE_ZONE_ID
+    fi
 
     # Auto-setup Better Stack heartbeats for prod if needed
     if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
@@ -103,24 +114,44 @@ preflight_checks() {
 
     SSH_KEY="${SSH_PRIVATE_KEY_PATH:-}"
     SSH_KEY="${SSH_KEY/#\~/$HOME}"
-    if [[ -z "$SSH_KEY" ]]; then echo "Error: SSH_PRIVATE_KEY_PATH not set"; exit 1; fi
-    if [[ ! -f "$SSH_KEY" ]]; then echo "Error: SSH key not found: $SSH_KEY"; exit 1; fi
+    if [[ -z "$SSH_KEY" ]]; then
+        echo "Error: SSH_PRIVATE_KEY_PATH not set"
+        exit 1
+    fi
+    if [[ ! -f "$SSH_KEY" ]]; then
+        echo "Error: SSH key not found: $SSH_KEY"
+        exit 1
+    fi
 
     if [[ "$DESTROY_MODE" == "false" && "$CHECK_MODE" == "false" && "$DRY_RUN" == "false" ]]; then
-        if [[ -z "${DB_PASS:-}" ]]; then echo "Error: DB_PASS not set"; exit 1; fi
-        if [[ -z "${GRAFANA_PASS:-}" ]]; then echo "Error: GRAFANA_PASS not set"; exit 1; fi
+        if [[ -z "${DB_PASS:-}" ]]; then
+            echo "Error: DB_PASS not set"
+            exit 1
+        fi
+        if [[ -z "${GRAFANA_PASS:-}" ]]; then
+            echo "Error: GRAFANA_PASS not set"
+            exit 1
+        fi
     fi
 
     if [[ "$TF_PROVIDER" == "aws" ]]; then
-        if [[ -z "${AWS_ACCESS_KEY:-}" || -z "${AWS_SECRET_KEY:-}" ]]; then echo "Error: AWS credentials required"; exit 1; fi
+        if [[ -z "${AWS_ACCESS_KEY:-}" || -z "${AWS_SECRET_KEY:-}" ]]; then
+            echo "Error: AWS credentials required"
+            exit 1
+        fi
         : "${AWS_REGION:=us-west-1}"
-        if [[ -z "${SSH_PUBLIC_KEY_PATH:-}" ]]; then echo "Error: SSH_PUBLIC_KEY_PATH not set"; exit 1; fi
+        if [[ -z "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
+            echo "Error: SSH_PUBLIC_KEY_PATH not set"
+            exit 1
+        fi
     fi
 
     if [[ "$TF_PROVIDER" == "hetzner" && -z "${HCLOUD_TOKEN:-}" ]]; then
-        echo "Error: HCLOUD_TOKEN not set"; exit 1
+        echo "Error: HCLOUD_TOKEN not set"
+        exit 1
     fi
     if [[ "$SKIP_TERRAFORM" == "false" && ! -f "$TF_DIR/main.tf" ]]; then
-        echo "Error: $TF_DIR/main.tf not found"; exit 1
+        echo "Error: $TF_DIR/main.tf not found"
+        exit 1
     fi
 }

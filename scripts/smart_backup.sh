@@ -2,16 +2,19 @@
 set -euo pipefail
 
 for cmd in curl tar gzip find mysqldump; do
-    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: '$cmd' not found in PATH"; exit 1; }
+    command -v "$cmd" >/dev/null 2>&1 || {
+        echo "ERROR: '$cmd' not found in PATH"
+        exit 1
+    }
 done
 
-# ====== Load shared functions ======
+# ==== Load shared functions ====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
-# ====== Settings ======
+# ==== Settings ====
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 MARKER_FILE="$BACKUP_DIR/.project_marker"
@@ -31,12 +34,13 @@ LOG_FILE="$BACKUP_DIR/logs/backup_$(date +%Y-%m-%d).log"
 ENV=$(detect_env)
 ENV_DISPLAY_ESCAPED=$(format_env_escaped "$ENV")
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup started — $ENV" >>"$LOG_FILE"
 
 TMP_DB_BACKUP=""
+PROJECT_TMP=""
 
-# ====== Lock against parallel runs ======
-trap 'rm -f "${TMP_DB_BACKUP:-}" 2>/dev/null || true; exec 9>&-' EXIT
+# ==== Lock against parallel runs ====
+trap 'rm -f "${PROJECT_TMP:-}" "${TMP_DB_BACKUP:-}" 2>/dev/null || true; exec 9>&-' EXIT
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
 LOCK_FILE="$LOCK_DIR/smart_backup.lock"
@@ -47,34 +51,34 @@ if ! flock -n 9; then
 fi
 
 # Cron heartbeat — always fires, even if backup fails
-echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" | \
-    curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+echo "cron_last_run_backup{instance=\"$DOMAIN\"} $(date +%s)" |
+    curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true
 
-# ====== Validate MODX_TABLE_PREFIX ======
+# ==== Validate MODX_TABLE_PREFIX ====
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
 if ! [[ "$MODX_TABLE_PREFIX" =~ ^[a-z0-9_]+$ ]]; then
     echo "ERROR: MODX_TABLE_PREFIX contains invalid characters: '$MODX_TABLE_PREFIX'" >&2
     exit 1
 fi
 
-# ====== Validate DB_NAME (used in mysqldump --ignore-table, SQL queries) ======
+# ==== Validate DB_NAME (used in mysqldump --ignore-table, SQL queries) ====
 if ! [[ "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     echo "ERROR: DB_NAME contains invalid characters: '$DB_NAME'" >&2
     exit 1
 fi
 
-# ====== Pre-flight: disk space check ======
+# ==== Pre-flight: disk space check ====
 AVAILABLE_MB=$(df "$BACKUP_DIR" | tail -1 | awk '{printf "%.0f", $4/1024}')
 if [ "$AVAILABLE_MB" -lt 500 ]; then
     MSG="🔴 <b>BACKUP BLOCKED</b> — $ENV_DISPLAY_ESCAPED
 Disk space critical: ${AVAILABLE_MB}MB available (need ≥500MB)
 Cleanup old backups or expand disk."
-    send_tg "$MSG"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Disk space critical: ${AVAILABLE_MB}MB" >> "$LOG_FILE"
+    send_tg "$MSG" || true
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ Disk space critical: ${AVAILABLE_MB}MB" >>"$LOG_FILE"
     exit 1
 fi
 
-# ====== Project backup (only if changed) ======
+# ==== Project backup (only if changed) ====
 PROJECT_STATUS=""
 
 if [[ -f "$MARKER_FILE" ]]; then
@@ -82,42 +86,44 @@ if [[ -f "$MARKER_FILE" ]]; then
         ! -path "*/core/cache/*" \
         ! -path "*/core/backup/*" \
         -newer "$MARKER_FILE" -print -quit 2>/dev/null)
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')" >>"$LOG_FILE"
 else
     CHANGED="initial"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: first run" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Change check: first run" >>"$LOG_FILE"
 fi
 
 if [[ -z "$CHANGED" ]]; then
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
-    if timeout 1800 sudo tar -czf "$PROJECT_BACKUP" \
+    PROJECT_TMP="$(mktemp "$BACKUP_DIR/project/.tmp_project_XXXXXX.tar.gz")"
+    if timeout 1800 sudo tar -czf "$PROJECT_TMP" \
         --exclude="$(basename "$PROJECT_DIR")/core/cache" \
         --exclude="$(basename "$PROJECT_DIR")/core/backup" \
-        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null && \
-       timeout 300 sudo tar -tzf "$PROJECT_BACKUP" > /dev/null 2>&1; then
+        -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null &&
+        timeout 300 sudo tar -tzf "$PROJECT_TMP" >/dev/null 2>&1; then
+        sudo mv "$PROJECT_TMP" "$PROJECT_BACKUP"
         sudo chown ubuntu:ubuntu "$PROJECT_BACKUP" 2>/dev/null || true
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project backup OK: $PROJECT_BACKUP" >>"$LOG_FILE"
         PROJECT_STATUS="✅ Project backed up"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"
         touch "$MARKER_FILE"
     else
-        rm -f "$PROJECT_BACKUP"
+        rm -f "$PROJECT_TMP"
         PROJECT_STATUS="❌ Project backup failed"
     fi
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Project: $PROJECT_STATUS" >>"$LOG_FILE"
 
-# ====== Database backup (always) ======
+# ==== Database backup (always) ====
 # Using .my.cnf — credentials not passed as arguments
 DB_STATUS=""
 
-TMP_DB_BACKUP="$(mktemp "$BACKUP_DIR/db/db_tmp_XXXXXX.sql.gz")"
+TMP_DB_BACKUP="$(mktemp "$BACKUP_DIR/db/.tmp_db_XXXXXX.sql.gz")"
 set +o pipefail
 timeout 1800 mysqldump --single-transaction --routines --events --triggers \
     --ignore-table="${DB_NAME}.${MODX_TABLE_PREFIX:-modx_}session" \
-    "$DB_NAME" | gzip > "$TMP_DB_BACKUP"
+    "$DB_NAME" | gzip >"$TMP_DB_BACKUP"
 DUMP_RC=("${PIPESTATUS[@]}")
 set -o pipefail
 
@@ -129,9 +135,9 @@ else
     rm -f "$TMP_DB_BACKUP"
     DB_STATUS="❌ Database dump failed"
 fi
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] DB: $DB_STATUS" >>"$LOG_FILE"
 
-# ====== Redis backup (if available) ======
+# ==== Redis backup (if available) ====
 REDIS_STATUS=""
 REDIS_KEEP="${BACKUP_REDIS_KEEP:-${REDIS_KEEP:-5}}"
 
@@ -141,22 +147,32 @@ if sudo test -f /var/lib/redis/dump.rdb; then
     # Force a synchronous snapshot first so the copy reflects current data,
     # not whatever Redis last auto-saved. SAVE blocks until the dump is on
     # disk (BGSAVE is async and could be copied mid-flight) (M14).
-    sudo redis-cli SAVE >/dev/null 2>&1 || true
-    if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null && \
-       sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >> "$LOG_FILE"
-        REDIS_STATUS="✅ Redis backed up"
+    # Honest handling: if SAVE fails (e.g. Redis down), we still back up the
+    # last known dump but report a FAILURE — never a silent "fresh" success.
+    REDIS_SAVE_OK=0
+    if sudo redis-cli SAVE >/dev/null 2>&1; then
+        REDIS_SAVE_OK=1
+    fi
+    if sudo cp /var/lib/redis/dump.rdb "$REDIS_BACKUP" 2>/dev/null &&
+        sudo chown ubuntu:ubuntu "$REDIS_BACKUP" 2>/dev/null; then
+        if [ "$REDIS_SAVE_OK" -eq 1 ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis backup OK: $REDIS_BACKUP" >>"$LOG_FILE"
+            REDIS_STATUS="✅ Redis backed up"
+        else
+            REDIS_STATUS="❌ Redis SAVE failed — backed up last known dump"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >>"$LOG_FILE"
+        fi
         rotate_files "$BACKUP_DIR/redis/redis_dump_*.rdb" "$REDIS_KEEP"
     else
         REDIS_STATUS="❌ Redis backup failed"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >>"$LOG_FILE"
     fi
 else
     REDIS_STATUS="ℹ️ Redis not available"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Redis: $REDIS_STATUS" >>"$LOG_FILE"
 fi
 
-# ====== Telegram notification only on failure ======
+# ==== Telegram notification only on failure ====
 if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
     MSG="====== ALERT ======
 🔴 <b>BACKUP FAILED</b> — $ENV_DISPLAY_ESCAPED
@@ -170,24 +186,31 @@ $REDIS_STATUS"
     MSG+="
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
-    send_tg "$MSG"
+    send_tg "$MSG" || true
 fi
 
 if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* && "$REDIS_STATUS" != "❌"* ]]; then
-    echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" | \
-        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" > /dev/null 2>&1 || true
+    echo "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" |
+        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true
     # Ping external watchdog on success
     if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
         if ping_heartbeat "$BETTERUPTIME_BACKUP_KEY"; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >>"$LOG_FILE"
         else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ failed" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ❌ failed" >>"$LOG_FILE"
         fi
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)" >>"$LOG_FILE"
     fi
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (backup failed)" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ⏭ skipped (backup failed)" >>"$LOG_FILE"
 fi
 
 rotate_files "$BACKUP_DIR/logs/backup_*.log" 30
+
+# Honest exit code: any failed piece must be visible to cron/systemd, not just
+# via TG/Better Stack. Alerting already happened above — this only fixes the code.
+if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
+    exit 1
+fi
+exit 0

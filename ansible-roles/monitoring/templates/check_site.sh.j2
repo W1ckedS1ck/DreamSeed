@@ -4,9 +4,10 @@
 VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
 
 {
-    # Site check
-    _resp_time=$(curl -sfk --max-time 10 -o /dev/null -w "%{time_total}" "https://{{ domain }}" 2>/dev/null || echo "-1")
-    if [ "$_resp_time" != "-1" ]; then
+    # Site check — probe local nginx via SNI (--resolve). Public/edge reachability
+    # is covered externally by the Better Stack "Main site" monitor, so the local
+    # probe stays Cloudflare/WAF/DNS-independent (no false site-down on CF issues).
+    if _resp_time=$(curl -sfk --max-time 10 --resolve "{{ domain }}:443:127.0.0.1" -o /dev/null -w "%{time_total}" "https://{{ domain }}" 2>/dev/null); then
         echo "site_up{instance=\"{{ domain }}\"} 1"
         echo "site_response_time_seconds{instance=\"{{ domain }}\"} ${_resp_time}"
     else
@@ -14,7 +15,7 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     fi
 
     # MODX core check
-    if [ -f {{ web_root }}/manager/config.core.php ] && [ -f {{ web_root }}/core/model/modx/modx.class.php ]; then
+    if [ -f "{{ web_root }}/manager/config.core.php" ] && [ -f "{{ web_root }}/core/model/modx/modx.class.php" ]; then
         echo "modx_core_ok{instance=\"{{ domain }}\"} 1"
     else
         echo "modx_core_ok{instance=\"{{ domain }}\"} 0"
@@ -73,8 +74,8 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     if [ "$(cat "$_probe_marker" 2>/dev/null)" != "$_cur_block" ]; then
         echo "$_cur_block" > "$_probe_marker"
 
-        # 1. Admin login check (/manager/ returns 200 with MODX content)
-        if curl -sk --max-time 10 "https://{{ domain }}/manager/" 2>/dev/null | grep -qi "modx\|login"; then
+        # 1. Admin login check — probe local nginx via SNI (bypass CF/WAF/rate-limit)
+        if curl -sk --max-time 10 --resolve "{{ domain }}:443:127.0.0.1" "https://{{ domain }}/manager/" 2>/dev/null | grep -qiE "modx|login"; then
             echo "admin_login_ok{instance=\"{{ domain }}\"} 1"
         else
             echo "admin_login_ok{instance=\"{{ domain }}\"} 0"
@@ -103,7 +104,7 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         # 4. DB write probe — INSERT test order + immediately delete
         #    Verifies MySQL can create/delete rows. Checks ms2_tables_ok first.
         if [ "$ms2_tables" -ge 5 ] 2>/dev/null; then
-            test_order_id=$(mysql --database={{ db_name }} --socket=/run/mysqld/mysqld.sock -Nse "
+            test_order_id=$(mysql --database='{{ db_name }}' --socket=/run/mysqld/mysqld.sock -Nse "
                 START TRANSACTION;
                 INSERT INTO {{ db_prefix | replace("'", "''") }}ms2_orders (context, user_id, createdon) VALUES ('test', 0, NOW());
                 SELECT @id := LAST_INSERT_ID();
@@ -127,4 +128,4 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
             WHERE table_schema='{{ db_name | replace("'", "''") }}';" 2>/dev/null)
         [ -n "$_db_tables" ] && echo "database_tables{instance=\"{{ domain }}\",database=\"{{ db_name }}\"} $_db_tables"
     fi
-} | curl -s --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1
+} | curl -s --retry 3 --retry-delay 2 --retry-connrefused --data-binary @- "$VM_PUSH_URL" > /dev/null 2>&1

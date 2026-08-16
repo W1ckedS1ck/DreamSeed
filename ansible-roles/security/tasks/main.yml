@@ -103,7 +103,7 @@
     dest: /etc/fail2ban/jail.d/custom.conf
     owner: root
     group: root
-    mode: "0644"
+    mode: "0640"  # contains CF firewall token (cloudflare-token action)
   notify: Restart Fail2ban
 
 - name: Test Fail2ban config

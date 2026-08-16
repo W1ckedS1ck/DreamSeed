@@ -22,6 +22,10 @@ inputs:
     description: Cloudflare API Token
     required: false
     default: ""
+  cloudflare_firewall_token:
+    description: Cloudflare API Token (fail2ban edge bans, Firewall Services:Edit)
+    required: false
+    default: ""
   hcloud_token:
     description: Hetzner Cloud Token (dev fallback)
     required: false
@@ -164,32 +168,43 @@ runs:
   steps:
     - name: Mask secrets
       shell: bash
+      env:
+        TG_TOKEN: ${{ inputs.tg_token }}
+        DB_PASS: ${{ inputs.db_pass }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare_api_token }}
+        CLOUDFLARE_FIREWALL_TOKEN: ${{ inputs.cloudflare_firewall_token }}
+        HCLOUD_TOKEN: ${{ inputs.hcloud_token }}
+        PROD_HETZ_HCLOUD_TOKEN: ${{ inputs.prod_hetz_hcloud_token }}
+        GRAFANA_PASS: ${{ inputs.grafana_pass }}
+        BETTERUPTIME_API_TOKEN: ${{ inputs.betteruptime_api_token }}
+        BETTERUPTIME_BACKUP_KEY: ${{ inputs.betteruptime_backup_key }}
+        BETTERUPTIME_GDRIVE_KEY: ${{ inputs.betteruptime_gdrive_key }}
+        BETTERUPTIME_REPORT_DAILY_KEY: ${{ inputs.betteruptime_report_daily_key }}
+        BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ inputs.betteruptime_report_weekly_key }}
+        BETTERUPTIME_VERIFY_KEY: ${{ inputs.betteruptime_verify_key }}
+        BETTERUPTIME_CHECK_SERVICES_KEY: ${{ inputs.betteruptime_check_services_key }}
+        DEV_GRAFANA_CLOUD_TOKEN: ${{ inputs.dev_grafana_cloud_token }}
+        PROD_GRAFANA_CLOUD_TOKEN: ${{ inputs.prod_grafana_cloud_token }}
+        DEV_AWS_ACCESS_KEY: ${{ inputs.dev_aws_access_key }}
+        DEV_AWS_SECRET_KEY: ${{ inputs.dev_aws_secret_key }}
+        PROD_ACCESS_KEY: ${{ inputs.prod_access_key }}
+        PROD_SECRET_KEY: ${{ inputs.prod_secret_key }}
+        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
+        LOKI_USERNAME: ${{ inputs.loki_username }}
+        SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
+        VAULT_PASSWORD: ${{ inputs.vault_password }}
+        RCLONE_CONF_BASE64: ${{ inputs.rclone_conf_base64 }}
       run: |
         for v in \
-          "${{ inputs.tg_token }}" \
-          "${{ inputs.db_pass }}" \
-          "${{ inputs.cloudflare_api_token }}" \
-          "${{ inputs.hcloud_token }}" \
-          "${{ inputs.prod_hetz_hcloud_token }}" \
-          "${{ inputs.grafana_pass }}" \
-          "${{ inputs.betteruptime_api_token }}" \
-          "${{ inputs.betteruptime_backup_key }}" \
-          "${{ inputs.betteruptime_gdrive_key }}" \
-          "${{ inputs.betteruptime_report_daily_key }}" \
-          "${{ inputs.betteruptime_report_weekly_key }}" \
-          "${{ inputs.betteruptime_verify_key }}" \
-          "${{ inputs.betteruptime_check_services_key }}" \
-          "${{ inputs.dev_grafana_cloud_token }}" \
-          "${{ inputs.prod_grafana_cloud_token }}" \
-          "${{ inputs.dev_aws_access_key }}" \
-          "${{ inputs.dev_aws_secret_key }}" \
-          "${{ inputs.prod_access_key }}" \
-          "${{ inputs.prod_secret_key }}" \
-          "${{ inputs.ubuntu_pro_token }}" \
-          "${{ inputs.loki_username }}" \
-          "${{ inputs.ssh_private_key }}" \
-          "${{ inputs.vault_password }}" \
-          "${{ inputs.rclone_conf_base64 }}"; do
+          "$TG_TOKEN" "$DB_PASS" "$CLOUDFLARE_API_TOKEN" "$CLOUDFLARE_FIREWALL_TOKEN" "$HCLOUD_TOKEN" \
+          "$PROD_HETZ_HCLOUD_TOKEN" "$GRAFANA_PASS" "$BETTERUPTIME_API_TOKEN" \
+          "$BETTERUPTIME_BACKUP_KEY" "$BETTERUPTIME_GDRIVE_KEY" \
+          "$BETTERUPTIME_REPORT_DAILY_KEY" "$BETTERUPTIME_REPORT_WEEKLY_KEY" \
+          "$BETTERUPTIME_VERIFY_KEY" "$BETTERUPTIME_CHECK_SERVICES_KEY" \
+          "$DEV_GRAFANA_CLOUD_TOKEN" "$PROD_GRAFANA_CLOUD_TOKEN" \
+          "$DEV_AWS_ACCESS_KEY" "$DEV_AWS_SECRET_KEY" "$PROD_ACCESS_KEY" \
+          "$PROD_SECRET_KEY" "$UBUNTU_PRO_TOKEN" "$LOKI_USERNAME" \
+          "$SSH_PRIVATE_KEY" "$VAULT_PASSWORD" "$RCLONE_CONF_BASE64"; do
           [ -n "$v" ] && echo "::add-mask::$v" || true
         done
         # NOTE: only actual secrets are masked above. Non-secret vars (region, chat IDs,
@@ -204,6 +219,7 @@ runs:
         TG_THREAD_ID: ${{ inputs.tg_thread_id }}
         DB_PASS: ${{ inputs.db_pass }}
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare_api_token }}
+        CLOUDFLARE_FIREWALL_TOKEN: ${{ inputs.cloudflare_firewall_token }}
         HCLOUD_TOKEN: ${{ inputs.hcloud_token }}
         PROD_HETZ_HCLOUD_TOKEN: ${{ inputs.prod_hetz_hcloud_token }}
         GRAFANA_PASS: ${{ inputs.grafana_pass }}
@@ -237,45 +253,51 @@ runs:
         UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
       run: |
         mkdir -p secrets
+        # emit_env KEY VALUE — writes KEY='VALUE' (single-quoted) so values with
+        # spaces/#/$VAR can't corrupt the .env contract (lib/env.sh parses quotes).
+        # Embedded single quotes are OK for single-line values (parser strips the
+        # outermost pair). Only used for tokens — never for shell interpolation.
+        emit_env() { [ -n "$2" ] && printf "%s='%s'\n" "$1" "$2" || true; }
         {
-          [ -n "$TG_TOKEN" ] && echo "TG_TOKEN=$TG_TOKEN"
-          [ -n "$TG_CHAT_ID" ] && echo "TG_CHAT_ID=$TG_CHAT_ID"
-          [ -n "$TG_THREAD_ID" ] && echo "TG_THREAD_ID=$TG_THREAD_ID"
-          [ -n "$DB_PASS" ] && echo "DB_PASS=$DB_PASS"
-          [ -n "$CLOUDFLARE_API_TOKEN" ] && echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN"
-          [ -n "$HCLOUD_TOKEN" ] && echo "HCLOUD_TOKEN=$HCLOUD_TOKEN"
-          [ -n "$PROD_HETZ_HCLOUD_TOKEN" ] && echo "PROD_HETZ_HCLOUD_TOKEN=$PROD_HETZ_HCLOUD_TOKEN"
-          [ -n "$GRAFANA_PASS" ] && echo "GRAFANA_PASS=$GRAFANA_PASS"
-          [ -n "$BETTERUPTIME_API_TOKEN" ] && echo "BETTERUPTIME_API_TOKEN=$BETTERUPTIME_API_TOKEN"
-          [ -n "$BETTERUPTIME_BACKUP_KEY" ] && echo "BETTERUPTIME_BACKUP_KEY=$BETTERUPTIME_BACKUP_KEY"
-          [ -n "$BETTERUPTIME_GDRIVE_KEY" ] && echo "BETTERUPTIME_GDRIVE_KEY=$BETTERUPTIME_GDRIVE_KEY"
-          [ -n "$BETTERUPTIME_REPORT_DAILY_KEY" ] && echo "BETTERUPTIME_REPORT_DAILY_KEY=$BETTERUPTIME_REPORT_DAILY_KEY"
-          [ -n "$BETTERUPTIME_REPORT_WEEKLY_KEY" ] && echo "BETTERUPTIME_REPORT_WEEKLY_KEY=$BETTERUPTIME_REPORT_WEEKLY_KEY"
-          [ -n "$BETTERUPTIME_VERIFY_KEY" ] && echo "BETTERUPTIME_VERIFY_KEY=$BETTERUPTIME_VERIFY_KEY"
-          [ -n "$BETTERUPTIME_CHECK_SERVICES_KEY" ] && echo "BETTERUPTIME_CHECK_SERVICES_KEY=$BETTERUPTIME_CHECK_SERVICES_KEY"
+          emit_env TG_TOKEN "$TG_TOKEN"
+          emit_env TG_CHAT_ID "$TG_CHAT_ID"
+          emit_env TG_THREAD_ID "$TG_THREAD_ID"
+          emit_env DB_PASS "$DB_PASS"
+          emit_env CLOUDFLARE_API_TOKEN "$CLOUDFLARE_API_TOKEN"
+          emit_env CLOUDFLARE_FIREWALL_TOKEN "$CLOUDFLARE_FIREWALL_TOKEN"
+          emit_env HCLOUD_TOKEN "$HCLOUD_TOKEN"
+          emit_env PROD_HETZ_HCLOUD_TOKEN "$PROD_HETZ_HCLOUD_TOKEN"
+          emit_env GRAFANA_PASS "$GRAFANA_PASS"
+          emit_env BETTERUPTIME_API_TOKEN "$BETTERUPTIME_API_TOKEN"
+          emit_env BETTERUPTIME_BACKUP_KEY "$BETTERUPTIME_BACKUP_KEY"
+          emit_env BETTERUPTIME_GDRIVE_KEY "$BETTERUPTIME_GDRIVE_KEY"
+          emit_env BETTERUPTIME_REPORT_DAILY_KEY "$BETTERUPTIME_REPORT_DAILY_KEY"
+          emit_env BETTERUPTIME_REPORT_WEEKLY_KEY "$BETTERUPTIME_REPORT_WEEKLY_KEY"
+          emit_env BETTERUPTIME_VERIFY_KEY "$BETTERUPTIME_VERIFY_KEY"
+          emit_env BETTERUPTIME_CHECK_SERVICES_KEY "$BETTERUPTIME_CHECK_SERVICES_KEY"
           echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
           echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
           if [ -n "$USER_SSH_PUBLIC_KEY" ] || [ -n "$VITALI_SSH_PUBLIC_KEY" ]; then
             printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "${USER_SSH_PUBLIC_KEY:-}" "${VITALI_SSH_PUBLIC_KEY:-}"
           fi
-          [ -n "$DEV_GRAFANA_CLOUD_URL" ] && echo "DEV_GRAFANA_CLOUD_URL=$DEV_GRAFANA_CLOUD_URL"
-          [ -n "$DEV_GRAFANA_CLOUD_USERNAME" ] && echo "DEV_GRAFANA_CLOUD_USERNAME=$DEV_GRAFANA_CLOUD_USERNAME"
-          [ -n "$DEV_GRAFANA_CLOUD_TOKEN" ] && echo "DEV_GRAFANA_CLOUD_TOKEN=$DEV_GRAFANA_CLOUD_TOKEN"
-          [ -n "$PROD_GRAFANA_CLOUD_URL" ] && echo "PROD_GRAFANA_CLOUD_URL=$PROD_GRAFANA_CLOUD_URL"
-          [ -n "$PROD_GRAFANA_CLOUD_USERNAME" ] && echo "PROD_GRAFANA_CLOUD_USERNAME=$PROD_GRAFANA_CLOUD_USERNAME"
-          [ -n "$PROD_GRAFANA_CLOUD_TOKEN" ] && echo "PROD_GRAFANA_CLOUD_TOKEN=$PROD_GRAFANA_CLOUD_TOKEN"
-          [ -n "$LOKI_URL" ] && echo "LOKI_URL=$LOKI_URL"
-          [ -n "$LOKI_USERNAME" ] && echo "LOKI_USERNAME=$LOKI_USERNAME"
-          [ -n "$FARO_COLLECTOR_URL" ] && echo "FARO_COLLECTOR_URL=$FARO_COLLECTOR_URL"
-          [ -n "$DEV_AWS_ACCESS_KEY" ] && echo "DEV_AWS_ACCESS_KEY=$DEV_AWS_ACCESS_KEY"
-          [ -n "$DEV_AWS_SECRET_KEY" ] && echo "DEV_AWS_SECRET_KEY=$DEV_AWS_SECRET_KEY"
-          [ -n "$DEV_AWS_REGION" ] && echo "DEV_AWS_REGION=$DEV_AWS_REGION"
-          [ -n "$DEV_AWS_EIP" ] && echo "DEV_AWS_EIP=$DEV_AWS_EIP"
-          [ -n "$PROD_ACCESS_KEY" ] && echo "PROD_ACCESS_KEY=$PROD_ACCESS_KEY"
-          [ -n "$PROD_SECRET_KEY" ] && echo "PROD_SECRET_KEY=$PROD_SECRET_KEY"
-          [ -n "$PROD_REGION" ] && echo "PROD_REGION=$PROD_REGION"
-          [ -n "$PROD_EIP" ] && echo "PROD_EIP=$PROD_EIP"
-          [ -n "$RCLONE_CRYPT_PASSWORD" ] && echo "RCLONE_CRYPT_PASSWORD=$RCLONE_CRYPT_PASSWORD"
-          [ -n "$UBUNTU_PRO_TOKEN" ] && echo "UBUNTU_PRO_TOKEN=$UBUNTU_PRO_TOKEN"
+          emit_env DEV_GRAFANA_CLOUD_URL "$DEV_GRAFANA_CLOUD_URL"
+          emit_env DEV_GRAFANA_CLOUD_USERNAME "$DEV_GRAFANA_CLOUD_USERNAME"
+          emit_env DEV_GRAFANA_CLOUD_TOKEN "$DEV_GRAFANA_CLOUD_TOKEN"
+          emit_env PROD_GRAFANA_CLOUD_URL "$PROD_GRAFANA_CLOUD_URL"
+          emit_env PROD_GRAFANA_CLOUD_USERNAME "$PROD_GRAFANA_CLOUD_USERNAME"
+          emit_env PROD_GRAFANA_CLOUD_TOKEN "$PROD_GRAFANA_CLOUD_TOKEN"
+          emit_env LOKI_URL "$LOKI_URL"
+          emit_env LOKI_USERNAME "$LOKI_USERNAME"
+          emit_env FARO_COLLECTOR_URL "$FARO_COLLECTOR_URL"
+          emit_env DEV_AWS_ACCESS_KEY "$DEV_AWS_ACCESS_KEY"
+          emit_env DEV_AWS_SECRET_KEY "$DEV_AWS_SECRET_KEY"
+          emit_env DEV_AWS_REGION "$DEV_AWS_REGION"
+          emit_env DEV_AWS_EIP "$DEV_AWS_EIP"
+          emit_env PROD_ACCESS_KEY "$PROD_ACCESS_KEY"
+          emit_env PROD_SECRET_KEY "$PROD_SECRET_KEY"
+          emit_env PROD_REGION "$PROD_REGION"
+          emit_env PROD_EIP "$PROD_EIP"
+          emit_env RCLONE_CRYPT_PASSWORD "$RCLONE_CRYPT_PASSWORD"
+          emit_env UBUNTU_PRO_TOKEN "$UBUNTU_PRO_TOKEN"
         } > secrets/.env
         chmod 600 secrets/.env

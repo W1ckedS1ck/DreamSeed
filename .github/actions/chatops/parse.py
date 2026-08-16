@@ -10,22 +10,18 @@ def main():
 
     keys = {}
 
-    # help
     if re.search(r'^/deploy\s+help', comment):
         keys['command'] = 'help'
 
-    # status
     elif re.search(r'^/deploy\s+status', comment):
         keys['command'] = 'status'
 
-    # destroy
-    elif m := re.search(r'^/destroy\s+(prod|prod-hetz|dev-aws|dev-hetz)', comment):
+    elif m := re.search(r'^/destroy\s+(prod-hetz|dev-aws|dev-hetz|prod)\b', comment):
         keys['command'] = 'destroy'
         keys['target'] = m.group(1)
         keys['action'] = 'destroy'
 
-    # deploy
-    elif m := re.search(r'^/deploy\s+(prod|prod-hetz|dev-aws|dev-hetz)', comment):
+    elif m := re.search(r'^/deploy\s+(prod-hetz|dev-aws|dev-hetz|prod)\b', comment):
         keys['command'] = 'deploy'
         keys['target'] = m.group(1)
         keys['action'] = 'deploy'
@@ -34,8 +30,13 @@ def main():
         if ip := re.search(r'\s-i\s+(\d+\.\d+\.\d+\.\d+)', comment):
             keys['ip'] = ip.group(1)
 
-    else:
+    elif comment.startswith('/'):
+        # A slash command we don't recognize — reply with help, never deploy.
         keys['command'] = 'invalid'
+
+    else:
+        # Not a chatops command at all — ignore silently (no reaction, no failure).
+        keys['command'] = 'none'
 
     if output:
         with open(output, 'a') as f:

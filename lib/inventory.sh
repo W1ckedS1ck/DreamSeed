@@ -5,7 +5,7 @@
 generate_inventory() {
     mkdir -p "$SCRIPT_DIR/ansible/inventory"
     INVENTORY_FILE="$SCRIPT_DIR/ansible/inventory/hosts-${TF_WORKSPACE}.yml"
-    cat > "$INVENTORY_FILE" << INVEOF
+    cat >"$INVENTORY_FILE" <<INVEOF
 all:
   hosts:
     dreamseed:
@@ -17,7 +17,8 @@ all:
 INVEOF
     chmod 600 "$INVENTORY_FILE"
 
-    DEPLOY_VARS_TMP=$(mktemp -d); chmod 700 "$DEPLOY_VARS_TMP"
+    DEPLOY_VARS_TMP=$(mktemp -d)
+    chmod 700 "$DEPLOY_VARS_TMP"
     DEPLOY_VARS_FILE="$DEPLOY_VARS_TMP/vars.json"
     python3 "$SCRIPT_DIR/lib/gen_vars.py" "$TARGET" "$SCRIPT_DIR" "$DEPLOY_VARS_FILE" || step_fail "gen_vars.py failed"
     [[ -f "$DEPLOY_VARS_FILE" ]] || step_fail "gen_vars.py did not produce $DEPLOY_VARS_FILE"

@@ -12,8 +12,9 @@ permissions:
   # prod targets additionally require admin collaborator permission.
   actions: write
 
-env:
-  ARTIFACT_RETENTION_DAYS: 7
+concurrency:
+  group: chatops
+  cancel-in-progress: true
 
 jobs:
   dispatch:
@@ -23,126 +24,160 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Check author permissions
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          COMMENT_USER="${{ github.event.comment.user.login }}"
-          PERMISSION=$(gh api "/repos/${{ github.repository }}/collaborators/$COMMENT_USER/permission" \
-            --jq '.permission' 2>/dev/null || echo "none")
-
-          if [[ "$PERMISSION" =~ ^(admin|write|maintain)$ ]]; then
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "allowed=false" >> "$GITHUB_OUTPUT"
-            gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-              -X POST -f content="-1" > /dev/null 2>&1 || true
-          fi
-          echo "permission=$PERMISSION" >> "$GITHUB_OUTPUT"
-
-      - name: React
-        if: steps.check.outputs.allowed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
-            -X POST -f content="rocket" > /dev/null 2>&1 || true
+        with:
+          persist-credentials: false
 
       - name: Parse command
         id: parse
-        if: steps.check.outputs.allowed == 'true'
         env:
           COMMENT: ${{ github.event.comment.body }}
         run: |
           python3 .github/actions/chatops/parse.py "$COMMENT" "$GITHUB_OUTPUT"
 
-      - name: Post help
-        if: steps.parse.outputs.command == 'help'
+      # Any comment that is not a /deploy or /destroy command is ignored
+      # silently: green run, no reaction, no reply, no workflow noise.
+      - name: Ignore non-command
+        if: steps.parse.outputs.command == 'none'
+        run: echo "Not a chatops command — ignoring."
+
+      - name: Check author permissions
+        if: steps.parse.outputs.command != 'none'
+        id: check
         env:
           GH_TOKEN: ${{ github.token }}
+          COMMENT_AUTHOR_ASSOC: ${{ github.event.comment.author_association }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_USER_LOGIN: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
         run: |
-          python3 .github/actions/chatops/post_help.py "${{ github.event.issue.number }}" "${{ github.repository }}"
+          echo "association=$COMMENT_AUTHOR_ASSOC" >> "$GITHUB_OUTPUT"
+
+          if [[ ! "$COMMENT_AUTHOR_ASSOC" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "permission=none" >> "$GITHUB_OUTPUT"
+            gh api "/repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+              -X POST -f content="-1" > /dev/null 2>&1 || true
+            exit 0
+          fi
+
+          PERMISSION=$(gh api "/repos/$REPO/collaborators/$COMMENT_USER_LOGIN/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          echo "permission=$PERMISSION" >> "$GITHUB_OUTPUT"
+
+          if [[ "$PERMISSION" =~ ^(admin|write)$ ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            gh api "/repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+              -X POST -f content="-1" > /dev/null 2>&1 || true
+          fi
+
+      - name: React
+        if: steps.parse.outputs.command != 'none' && steps.check.outputs.allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          gh api "/repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+            -X POST -f content="rocket" > /dev/null 2>&1 || true
+
+      - name: Post help
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'help'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 .github/actions/chatops/post_help.py "$ISSUE" "$REPO"
 
       - name: Gate production to admins
-        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command != 'help' && steps.parse.outputs.command != 'status' && steps.parse.outputs.command != 'invalid'
+        if: steps.check.outputs.allowed == 'true' && (steps.parse.outputs.command == 'deploy' || steps.parse.outputs.command == 'destroy')
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
           PERMISSION: ${{ steps.check.outputs.permission }}
           ISSUE: ${{ github.event.issue.number }}
           USER: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
         run: |
           if [[ "$TARGET" =~ ^prod ]] && [[ "$PERMISSION" != "admin" ]]; then
             gh issue comment "$ISSUE" \
-              --repo "${{ github.repository }}" \
+              --repo "$REPO" \
               --body "⛔ @$USER — production deploy/destroy requires **admin** permissions (your role: $PERMISSION)."
             echo "::error::Production dispatch requires admin (got $PERMISSION)"
             exit 1
           fi
 
       - name: Post invalid
-        if: steps.parse.outputs.command == 'invalid'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'invalid'
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          ISSUE: ${{ github.event.issue.number }}
         run: |
-          gh api "/repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+          gh api "/repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
             -X POST -f content="-1" > /dev/null 2>&1 || true
-          gh issue comment "${{ github.event.issue.number }}" \
-            --repo "${{ github.repository }}" \
+          gh issue comment "$ISSUE" \
+            --repo "$REPO" \
             --body "Unknown command. Run /deploy help for available commands."
-          exit 1
 
       - name: Post status
-        if: steps.parse.outputs.command == 'status'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'status'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
         run: |
-          python3 .github/actions/chatops/post_status.py "${{ github.event.issue.number }}" "${{ github.repository }}"
+          python3 .github/actions/chatops/post_status.py "$ISSUE" "$REPO"
 
       - name: Dispatch deploy
-        if: steps.parse.outputs.command == 'deploy'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'deploy'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
           WEB_SERVER: ${{ steps.parse.outputs.web_server }}
+          MODE: ${{ steps.parse.outputs.mode }}
           IP: ${{ steps.parse.outputs.ip }}
           ISSUE: ${{ github.event.issue.number }}
           USER: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
         run: |
           FIELDS=()
           FIELDS+=("--field" "environment=$TARGET")
           FIELDS+=("--field" "action=deploy")
           FIELDS+=("--field" "web_server=$WEB_SERVER")
+          FIELDS+=("--field" "mode=${MODE:-parallel}")
           [[ -n "$IP" ]] && FIELDS+=("--field" "server_ip=$IP")
 
           gh workflow run deploy.yml \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --ref main \
             "${FIELDS[@]}"
 
           gh issue comment "$ISSUE" \
-            --repo "${{ github.repository }}" \
-            --body "Deploy **$TARGET** ($WEB_SERVER) triggered by @$USER"
+            --repo "$REPO" \
+            --body "Deploy **$TARGET** ($WEB_SERVER, ${MODE:-parallel}) triggered by @$USER"
 
       - name: Dispatch destroy
-        if: steps.parse.outputs.command == 'destroy'
+        if: steps.check.outputs.allowed == 'true' && steps.parse.outputs.command == 'destroy'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
           ISSUE: ${{ github.event.issue.number }}
           USER: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
         run: |
           CONFIRM="destroy $TARGET"
 
           gh workflow run deploy.yml \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --ref main \
             --field "environment=$TARGET" \
             --field "action=destroy" \
             --field "confirm=$CONFIRM"
 
           gh issue comment "$ISSUE" \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --body "Destroy **$TARGET** triggered by @$USER"

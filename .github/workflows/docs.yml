@@ -2,7 +2,7 @@ name: "[Docs] Code Map + Wiki Sync"
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'terraform/**'
       - 'ansible/**'
@@ -18,15 +18,23 @@ permissions:
 
 jobs:
   publish-code-map:
+    # Pages site stays main-only; dev only syncs the wiki (see sync-wiki).
+    if: github.ref_name == 'main'
     name: Publish Code Map
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
+      contents: read
       pages: write
       id-token: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Regenerate code map
         run: python3 docs/codemap/gen_codemap.py
@@ -57,16 +65,21 @@ jobs:
     name: Sync to Wiki
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: wiki-sync
+      cancel-in-progress: false
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           path: repo
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ github.repository }}.wiki
           path: wiki
 
@@ -87,6 +100,6 @@ jobs:
           fi
 
           git add -A
-          git commit -m "Sync docs/ from main (${{ github.sha }})"
+          git commit -m "Sync docs/ from ${GITHUB_REF_NAME} (${GITHUB_SHA})"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
           git push

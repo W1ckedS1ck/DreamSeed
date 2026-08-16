@@ -106,7 +106,7 @@ groups:
         annotations:
           summary: MariaDB service is not running
 
-{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
+{{ alert_body('phpfpm-down', 'PHP-FPM Down', 'php_fpm_up', 60, 1, 'lt', '2m', 'OK', 'Error', 'critical') }}
         annotations:
           summary: PHP-FPM socket/process check failed
 
@@ -122,7 +122,9 @@ groups:
           summary: Nginx service is not running
 {% endif %}
 
-{{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'Alerting', 'Error', 'critical') }}
+# Pushed by check_site.sh — fire only on real 0 value; dead checker => check-site-cron canary.
+# victoria-down keeps execErr=Alerting so a VM outage (query error) still fires.
+{{ alert_body('site-down', 'Site Down', 'site_up', 120, 1, 'lt', '2m', 'OK', 'Error', 'critical') }}
         annotations:
           summary: Website is not responding (HTTP != 200)
 
@@ -139,7 +141,7 @@ groups:
         annotations:
           summary: MODX cache directory (core/cache/) is not writable
 
-{{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'Alerting', 'Alerting', 'critical') }}
+{{ alert_body('victoria-down', 'VictoriaMetrics Down', 'victoria_up', 60, 1, 'lt', '1m', 'OK', 'Alerting', 'critical') }}
         annotations:
           summary: VictoriaMetrics health check failed
 
@@ -147,17 +149,18 @@ groups:
         annotations:
           summary: Redis service is not running (sessions will be lost)
 
-{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 5, 'gt', '5m', 'OK', 'Error', 'warning') }}
+{{ alert_body('cron-backup', 'Backup Cron Not Running', '(time() - max_over_time(cron_last_run_backup[1d])) / 60', 86400, 90, 'gt', '10m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
-            {% raw %}Backup cron hasn't run for 5 min on {{ $labels.instance }} — check systemd/scheduler{% endraw %}
+            {% raw %}Backup cron hasn't started for 90 min on {{ $labels.instance }} — backups run hourly, check systemd/scheduler{% endraw %}
 
 {{ alert_body('upload-failed', 'Cloud Upload Failed', '(time() - upload_last_success_timestamp) / 3600', 86400, 2, 'gt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}No successful cloud upload in >2h (last: {{ $labels.instance }}) — check rclone/GDrive{% endraw %}
 
-{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '1m', 'OK', 'Error', 'warning') }}
+# Canary — fires & stays firing when check_site.sh dies.
+{{ alert_body('check-site-cron', 'Site Health Check Not Running', '(time() - max_over_time(check_site_last_run[10m]))', 600, 180, 'gt', '1m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: Site health check hasn't run for >3 min
 
@@ -180,15 +183,35 @@ groups:
           summary: >-
             {% raw %}Database {{ $labels.database }} has {{ $values.A.Value }} tables (expected ≥50){% endraw %}
 
-{{ alert_body('backup-verify', 'Backup Verification Failed', 'backup_verification_ok', 86400, 1, 'lt', '5m', 'OK', 'Error', 'warning') }}
+# Two series (type=local/cloud) — aggregate: fires if either fails.
+{{ alert_body('backup-verify', 'Backup Verification Failed', 'min by (instance) (backup_verification_ok)', 86400, 1, 'lt', '5m', 'OK', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Backup verification failed on {{ $labels.instance }} ({{ $labels.type }}){% endraw %}
 
-{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[10m]))', 600, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
+# Watchdog: must NEVER forget (no default-0 — that auto-resolves on a broken timer).
+# 2h window >> 10m threshold avoids razor-edge flap; Alerting on noData = VM gone.
+{{ alert_body('check-services-cron', 'Service Check Not Running', '(time() - max_over_time(check_services_last_run[2h]))', 7200, 600, 'gt', '10m', 'Alerting', 'Error', 'warning') }}
         annotations:
           summary: >-
             {% raw %}Service health check hasn't run for >10 min on {{ $labels.instance }} — check check-services.timer{% endraw %}
+
+# --- Support services (pushed by check_services.sh; one alert per service) ---
+{{ alert_body('fail2ban-down', 'Fail2ban Down', 'fail2ban_up', 300, 1, 'lt', '10m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: fail2ban inactive or required jails missing
+
+{{ alert_body('promtail-down', 'Promtail Down', 'promtail_up', 300, 1, 'lt', '10m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: Promtail is not running — logs are not shipping to Loki
+
+{{ alert_body('node-exporter-down', 'Node Exporter Down', 'service_status{service="node_exporter"}', 300, 1, 'lt', '10m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: node_exporter is not running — resource metrics (CPU/RAM/disk) stale
+
+{{ alert_body('telegram-bot-down', 'Telegram Bot Not Running', 'service_status{service="telegram-bot"}', 300, 1, 'lt', '10m', 'OK', 'Error', 'warning') }}
+        annotations:
+          summary: telegram-bot inactive on prod (or duplicate poller running on non-prod)
 
 {% if grafana_cloud_url is defined and grafana_cloud_url | length > 0 %}
 {{ alert_body('vmagent-remote-write', 'VMAgent Remote Write Failing', 'vmagent_remote_write_ok', 300, 1, 'lt', '10m', 'OK', 'Error', 'critical') }}

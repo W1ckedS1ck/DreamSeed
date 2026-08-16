@@ -10,6 +10,10 @@
     cache_valid_time: 0
   become: true
   notify: Restart Promtail
+  register: promtail_install_result
+  retries: 3
+  delay: 5
+  until: promtail_install_result is success
 
 - name: Ensure promtail group exists
   ansible.builtin.group:

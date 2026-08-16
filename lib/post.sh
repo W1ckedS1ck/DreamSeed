@@ -8,8 +8,8 @@ update_dns() {
         update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP" || step_fail "Cloudflare DNS update failed"
         # Grey-cloud (no proxy) — for direct SSH without Cloudflare (dev only)
         if [[ ! "$TARGET" =~ ^prod ]]; then
-            update_cloudflare_dns_direct "ssh.${DEPLOY_DOMAIN}" "$SERVER_IP" \
-                || echo "  ⚠ SSH DNS update failed (non-fatal)"
+            update_cloudflare_dns_direct "ssh.${DEPLOY_DOMAIN}" "$SERVER_IP" ||
+                echo "  ⚠ SSH DNS update failed (non-fatal)"
         fi
         step_ok
     else
@@ -31,8 +31,9 @@ record_deploy() {
             step_ok
         else
             echo "  ⚠ Could not write deploy commit marker (non-fatal)"
-            local d=$(( $(date +%s) - STEP_START ))
-            STEP_NAMES+=("$STEP_LABEL"); STEP_TIMES+=("$d")
+            local d=$(($(date +%s) - STEP_START))
+            STEP_NAMES+=("$STEP_LABEL")
+            STEP_TIMES+=("$d")
         fi
     fi
 }
@@ -40,7 +41,7 @@ record_deploy() {
 print_final_summary() {
     print_summary
     write_deploy_history "SUCCESS"
-    local total=$(( $(date +%s) - DEPLOY_START ))
+    local total=$(($(date +%s) - DEPLOY_START))
     echo ""
     echo "  ✓ Deployment Successful!"
     echo "  Server   $SERVER_IP"

@@ -53,6 +53,16 @@
     },
     {
       "customType": "regex",
+      "description": "Track actionlint version in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["ACTIONLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "rhysd/actionlint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
       "description": "Track tflint plugin versions (.tflint.hcl)",
       "managerFilePatterns": [
         "/^\\.tflint\\.hcl$/"
@@ -72,6 +82,16 @@
     },
     {
       "customType": "regex",
+      "description": "Track Terraform CLI version in CI (ci.yml) — kept in sync with setup-terraform",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["TERRAFORM_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "hashicorp/terraform",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
       "description": "Track tflint version in CI",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
@@ -82,30 +102,13 @@
     },
     {
       "customType": "regex",
-      "description": "Track Terraform CLI version in pre-commit curl URL (ci.yml)",
+      "description": "Track yamllint version in CI",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
-      "matchStrings": ["hashicorp\\.com/terraform/(?<currentValue>[\\d.]+)/terraform[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
-      "description": "Track tflint version in pre-commit curl URL (ci.yml)",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
-      "matchStrings": ["terraform-linters/tflint/releases/download/v(?<currentValue>[\\d.]+)/tflint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
-      "description": "Track actionlint version in pre-commit curl URL (ci.yml)",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
-      "matchStrings": ["rhysd/actionlint/releases/download/v(?<currentValue>[\\d.]+)/actionlint[^\"]+\" # renovate: depName=(?<depName>\\S+)"],
-      "datasourceTemplate": "github-releases"
+      "matchStrings": ["pip install yamllint==(?<currentValue>[\\w.\\-]+)"],
+      "depNameTemplate": "yamllint",
+      "datasourceTemplate": "pypi"
     },
     {
       "customType": "regex",
@@ -118,13 +121,11 @@
     },
     {
       "customType": "regex",
-      "description": "Track PHP version (test-restore.yml input and group_vars default)",
+      "description": "Track PHP version (group_vars default)",
       "managerFilePatterns": [
-        "/^\\.github/workflows/test-restore\\.yml$/",
         "/^ansible/group_vars/all\\.yml$/"
       ],
       "matchStrings": [
-        "php_version:\\s*\"(?<currentValue>[\\d.]+)\"\\s*# renovate: depName=php",
         "default\\('(?<currentValue>[\\d.]+)'[^#]*# renovate: depName=php"
       ],
       "depNameTemplate": "php",
@@ -132,6 +133,22 @@
     }
   ],
   "packageRules": [
+    {
+      "description": "Hard-lock PHP to 8.3 (MODX 2.x incompatible above). More match fields than the 'Dev & monitoring tools' group so it always wins; allowedVersions caps even if enabled flips.",
+      "matchFileNames": ["ansible/group_vars/all.yml"],
+      "matchDatasources": ["endoflife-date"],
+      "matchPackageNames": ["php"],
+      "matchManagers": ["custom.regex"],
+      "allowedVersions": "<8.4",
+      "enabled": false
+    },
+    {
+      "description": "Grafana version is documented only (install uses apt-latest) — keep PR as release radar, no automerge",
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["grafana/grafana"],
+      "groupName": null,
+      "automerge": false
+    },
     {
       "description": "Pin GitHub Actions to commit SHAs for security",
       "matchManagers": ["github-actions"],
@@ -157,7 +174,7 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Group Terraform CLI — setup-terraform action + pre-commit curl in sync",
+      "description": "Group Terraform CLI — setup-terraform action default + ci.yml TERRAFORM_VERSION in sync",
       "matchPackageNames": ["hashicorp/terraform"],
       "groupName": "Terraform CLI",
       "labels": ["terraform"],
@@ -166,7 +183,7 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Group tflint — TFLINT_VERSION env var + pre-commit curl in sync",
+      "description": "Group tflint — TFLINT_VERSION env var + setup-tflint action in sync",
       "matchPackageNames": ["terraform-linters/tflint"],
       "groupName": "tflint",
       "labels": ["dependencies", "linting"],
@@ -175,7 +192,7 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Group actionlint — uses: SHA + pre-commit curl in sync",
+      "description": "Group actionlint — uses: SHA pin updates in sync",
       "matchPackageNames": ["rhysd/actionlint"],
       "groupName": "actionlint",
       "labels": ["dependencies"],
@@ -231,7 +248,10 @@
       "automergeType": "pr",
       "automergeStrategy": "squash",
       "matchPackageNames": [
-        "!VictoriaMetrics/VictoriaMetrics"
+        "!VictoriaMetrics/VictoriaMetrics",
+        "!hashicorp/terraform",
+        "!terraform-linters/tflint",
+        "!rhysd/actionlint"
       ]
     },
     {

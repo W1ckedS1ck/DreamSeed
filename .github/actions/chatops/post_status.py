@@ -11,8 +11,8 @@ def main():
         'gh', 'run', 'list',
         '--workflow', 'deploy.yml',
         '--limit', '5',
-        '--json', 'conclusion,status,displayName,createdAt,htmlUrl',
-        '--jq', r'.[] | "- \(.displayName)  \(.status) / \(.conclusion // "pending")  \(.htmlUrl)"',
+        '--json', 'conclusion,status,displayTitle,createdAt,url',
+        '--jq', r'.[] | "- \(.displayTitle)  \(.status) / \(.conclusion // "pending")  \(.url)"',
     ], capture_output=True, text=True, check=False)
 
     lines = result.stdout.strip()

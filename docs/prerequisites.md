@@ -9,10 +9,10 @@ These are checked by `deploy.sh` on every run:
 | Tool | Required for | Install |
 |------|-------------|---------|
 | `terraform` | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
-| `ansible-playbook` | Configure server (all 8 playbooks) | `pip install ansible==14.2.0` |
+| `ansible-playbook` | Configure server (all 8 playbooks) | `pip install ansible-core==2.21.2 && ansible-galaxy collection install -r ansible/requirements.yml` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
-| `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible` |
+| `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible-core` |
 | `python3` | Run Ansible and scripts | <https://python.org> |
 
 ### Ansible collections & Python deps
@@ -21,8 +21,8 @@ These are checked by `deploy.sh` on every run:
 # Core
 pip install -r ansible/requirements-deploy.txt
 
-# Collections (for MariaDB and POSIX modules)
-ansible-galaxy collection install ansible.mysql ansible.posix
+# Collections (for MariaDB and POSIX modules) — versions pinned in requirements.yml
+ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
 ## Cloud credentials (in secrets/.env)

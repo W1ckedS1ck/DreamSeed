@@ -114,7 +114,7 @@ SSH → sudo journalctl -u vmagent --no-pager -n 20
 
 ### Where alerts are defined
 
-All 23 alert rules live in one file:
+All 27 alert rules live in one file:
 
 ```
 ansible-roles/grafana/templates/grafana-alerts.yaml.j2
@@ -146,9 +146,9 @@ Key fields:
 
 ### Design rules (from CLAUDE.md)
 
-- **`noDataState: Alerting`** — only for critical services with always-on metrics (MySQL, Nginx, PHP-FPM, Site, VM, Backup Cron)
-- **`noDataState: OK`** — for push/probe metrics (admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify)
-- **`for:`** — scraped 15s → 2m, pushed 1m → 10m, probes 15m → 6m, backup-verify 24h → 5m
+- **`noDataState: Alerting`** — only for critical services with always-on metrics (MySQL, Nginx/Apache, PHP-FPM, Site, VM, Redis, check-services-cron)
+- **`noDataState: OK`** — for push/probe metrics (admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify, cron-backup, vmagent)
+- **`for:`** — scraped 2–5m (VM 1m), pushed 2m–1h, probes 6–15m, backup/heartbeat crons 5–10m
 - **`repeat_interval`** — critical: 1h, warning/info: 4h
 
 ### How to add a new alert
@@ -159,8 +159,8 @@ Key fields:
 4. Update the VictoriaMetrics recording rule if needed (`victoria-metrics@.service.j2`)
 5. Bump the alert count in:
    - `ansible/group_vars/all.yml` (if there's a count variable)
-   - `docs/runbook.md` (alert reference table, line ~173)
-   - `docs/architecture.md` (alert rules table, line ~175)
+   - `docs/runbook.md` (alert reference table, line ~143)
+   - `docs/architecture.md` (alert rules table, line ~180)
 6. Deploy: `./deploy.sh <target> -n -i <ip> --no-dns`
 
 ---
@@ -251,10 +251,42 @@ ansible-roles/<name>/
 ### Gotchas (from CLAUDE.md)
 
 - `inject_facts_as_vars = False` — use `{{ ansible_facts['memtotal_mb'] }}`, not `{{ ansible_memtotal_mb }}`
-- `become` is NOT set at playbook level (except 04/05/06) — opt in with `become: true` per task
+- `become` is NOT set at playbook level (all 8 playbooks declare `become: false`) — opt in with `become: true` per task
 - Use `ansible.builtin.` modules, not bare `command:` or `shell:` unless necessary
 - `no_log: true` on any task handling passwords, tokens, keys
-- No collections other than `ansible.mysql` and `ansible.posix`
+- No collections other than `ansible.mariadb` and `ansible.posix`
+
+---
+
+## Terraform Provider Updates
+
+**Routine updates are handled by Renovate** (`renovate.json`): non-major provider bumps
+automerge weekly, major bumps arrive as PRs requiring review. No manual action needed.
+
+Only force-update manually for a major outside the schedule or an urgent security fix.
+
+### How to force-update providers
+
+```bash
+# Per module (aws, cloudflare, grafana, hetzner):
+cd terraform/<module>
+cp .terraform.lock.hcl /tmp/lock.bak
+rm .terraform.lock.hcl          # the lock file PINS the version — keep it and
+                                # `terraform providers lock` will NOT upgrade
+terraform providers lock -platform=linux_amd64 -platform=darwin_arm64
+```
+
+Gotchas learned the hard way:
+
+- The committed `.terraform.lock.hcl` **pins the resolved version**. `terraform providers lock`
+  with an existing lock only adds missing checksums — it does not bump the version. Remove
+  the lock first, then re-run, to resolve the newest version that satisfies the constraint.
+- `terraform init -upgrade` can fail against the Terraform Cloud backend with
+  "Currently selected workspace ... does not exist" when a stale local `.terraform/terraform.tfstate`
+  exists without a matching `.terraform/environment`. `terraform providers lock` avoids the
+  backend entirely (metadata + hashes only).
+- Validate via CI (`Terraform Lint + Validate` job) — runs `init -backend=false`, `tflint`,
+  and `terraform validate` with the new lock.
 
 ---
 
@@ -309,17 +341,27 @@ ssh-keygen -t ed25519 -f ~/.ssh/new_deploy_key -C "github-actions@dreamseed"
 ./deploy.sh prod -n -i <ip>
 ```
 
-### Scenario D: MariaDB root password leaked
+### Scenario D: MariaDB credentials leaked
 
-The root password is NOT stored in secrets/.env — it's generated during deploy and stored in `/root/.my.cnf` on the server. If the server itself is compromised:
+DB root authenticates via `auth_socket` (no password, local root only). The app user's password (`DB_PASS`) lives in `secrets/.env` and in `/home/ubuntu/.my.cnf` (mode 0600) on the server. If `DB_PASS` leaks:
 
 ```bash
-# 1. Rebuild the server (cannot just change password — there's no access)
+# 1. Update the password
+ansible-vault edit secrets/.env   # change DB_PASS
+
+# 2. Redeploy to push the new password to the server + update /home/ubuntu/.my.cnf
+./deploy.sh prod -n -i <ip>
+```
+
+If the server itself is compromised (attacker has root → can read `/home/ubuntu/.my.cnf` and everything else):
+
+```bash
+# 1. Rebuild the server (root access == game over, don't patch)
 ./deploy.sh prod -x   # destroy
 ./deploy.sh prod -n   # rebuild
 
 # 2. All data is restored from backup during deploy
-# 3. New root password is auto-generated
+# 3. Rotate ALL secrets (DB_PASS, GRAFANA_PASS, TG_TOKEN, CLOUDFLARE_API_TOKEN, ...)
 ```
 
 If only the backup user credentials leaked:
@@ -358,6 +400,34 @@ If an attacker gains root access to the server:
 sudo journalctl -u sshd --no-pager | grep "Failed password"
 sudo cat /var/log/fail2ban.log
 ```
+
+### Manual restore: prod from a dev environment's cloud backups
+
+> **Never automatic.** Dev backups live in per-env cloud paths and are normally write-only
+> (dev is an ephemeral copy of prod). To pull a dev environment's data into prod by hand:
+
+```bash
+# On the PROD server. Suffix = full env name: dev-hetz, dev-aws, test.
+# 1. List available dev backups:
+rclone lsf gdrive-crypt:DreamSeed/backups/db-dev-hetz/
+rclone lsf gdrive-crypt:DreamSeed/backups/project-dev-hetz/
+
+# 2. Download the chosen dev backups:
+rclone copy gdrive-crypt:DreamSeed/backups/db-dev-hetz/db_modx_db_<date>.sql.gz /tmp/
+rclone copy gdrive-crypt:DreamSeed/backups/project-dev-hetz/DreamSeed_<date>.tar.gz /tmp/
+
+# 3. Apply (stops services, restores DB + files, clears cache):
+bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest   # then verify it picked the local files
+# or manually:
+sudo systemctl stop nginx php*-fpm
+gunzip -c /tmp/db_modx_db_<date>.sql.gz | mysql modx_db
+sudo tar -xzf /tmp/DreamSeed_<date>.tar.gz -C /var/www
+sudo chown -R www-data:www-data /var/www/html
+sudo rm -rf /var/www/html/core/cache/*
+sudo systemctl start nginx php*-fpm
+```
+
+All servers share one crypt key (canonical `RCLONE_CONF_BASE64`), so dev paths decrypt on prod.
 
 ### Prerequisites for recovery
 

@@ -12,7 +12,10 @@ acquire_lock() {
         # vs hetzner) can run in parallel — they share nothing.
         local lock_file="$lock_dir/deploy-${TF_PROVIDER}.lock"
         exec 200>"$lock_file"
-        flock -w 5 200 || { echo "Error: another deploy already running for provider '$TF_PROVIDER' (could not acquire lock)"; exit 1; }
+        flock -w 5 200 || {
+            echo "Error: another deploy already running for provider '$TF_PROVIDER' (could not acquire lock)"
+            exit 1
+        }
     fi
 }
 
@@ -46,20 +49,24 @@ run_check_mode() {
     echo "  ✓ All playbooks present"
     if [[ "$SKIP_TERRAFORM" == "false" ]]; then
         export_tf_env
-        terraform_init_if_needed || { echo "Terraform init failed"; step_fail "Terraform init failed"; }
-        if _tf validate -no-color >> "$LOG" 2>&1; then
+        terraform_init_if_needed || {
+            echo "Terraform init failed"
+            step_fail "Terraform init failed"
+        }
+        if _tf validate -no-color >>"$LOG" 2>&1; then
             echo "  ✓ Terraform config valid"
         else
-            echo "  ✗ Terraform config invalid (see $LOG)"; exit 1
+            echo "  ✗ Terraform config invalid (see $LOG)"
+            exit 1
         fi
     fi
     for entry in "${PLAYBOOK_LIST[@]}"; do
         local pb="${entry%%:*}" label="${entry##*:}"
-        if "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$pb" > /dev/null 2>&1; then
+        if _ansible_syntax "$pb" >/dev/null 2>&1; then
             echo "  ✓ $label"
         else
             echo "  ✗ $label syntax error"
-            ansible-playbook --syntax-check "$SCRIPT_DIR/ansible/$pb" 2>&1
+            _ansible_syntax "$pb" 2>&1
             exit 1
         fi
     done
@@ -103,8 +110,14 @@ confirm_production() {
         if [[ "${CI:-}" == "true" ]]; then
             echo "  CI mode — confirmation skipped"
         else
-            read -rp "  Continue? [y/N] " confirm < /dev/tty 2>/dev/null || { echo "  Error: no TTY available. Use CI mode or --dry-run."; exit 1; }
-            [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
+            read -rp "  Continue? [y/N] " confirm </dev/tty 2>/dev/null || {
+                echo "  Error: no TTY available. Use CI mode or --dry-run."
+                exit 1
+            }
+            [[ ! "${confirm:-}" =~ ^[Yy]$ ]] && {
+                echo "Aborted."
+                exit 0
+            }
         fi
     fi
 }

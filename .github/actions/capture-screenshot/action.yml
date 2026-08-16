@@ -1,0 +1,41 @@
+name: Capture Site Screenshot
+description: Headless-chrome screenshot of a URL with graceful fallback. Never fails the job.
+
+inputs:
+  url:
+    description: Full URL to capture (https://domain/)
+    required: true
+  output:
+    description: Output PNG path (default /tmp/pages-screenshot/site.png)
+    required: false
+    default: /tmp/pages-screenshot/site.png
+
+runs:
+  using: composite
+  steps:
+    - name: Capture screenshot
+      shell: bash
+      env:
+        URL: ${{ inputs.url }}
+        OUTPUT: ${{ inputs.output }}
+      run: |
+        mkdir -p "$(dirname "$OUTPUT")"
+        if command -v google-chrome-stable &>/dev/null; then
+          if google-chrome-stable --headless --disable-gpu --no-sandbox \
+            --screenshot="$OUTPUT" --window-size=1280,720 \
+            --virtual-time-budget=5000 "$URL" &>/dev/null; then
+            echo "Screenshot saved: $OUTPUT"
+          else
+            echo "::warning::Screenshot failed (non-fatal)"
+          fi
+        elif command -v chromium-browser &>/dev/null; then
+          if chromium-browser --headless --disable-gpu --no-sandbox \
+            --screenshot="$OUTPUT" --window-size=1280,720 \
+            --virtual-time-budget=5000 "$URL" &>/dev/null; then
+            echo "Screenshot saved: $OUTPUT"
+          else
+            echo "::warning::Screenshot failed (non-fatal)"
+          fi
+        else
+          echo "::warning::No headless browser available — screenshot skipped"
+        fi

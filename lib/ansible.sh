@@ -7,13 +7,23 @@ _ansible_cmd() {
     # let the pipeline fail so its exit code can be captured — deploy.sh enables `set -e`.
     set +e
     ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
-    ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
-    ANSIBLE_NOCOLOR=1 \
-    "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_FILE}" \
+        ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
+        ANSIBLE_NOCOLOR=1 \
+        "$ANSIBLE_PLAYBOOK" -i "$INVENTORY_FILE" --extra-vars "@${DEPLOY_VARS_FILE}" \
         "$SCRIPT_DIR/ansible/$1" 2>&1 | tee -a "$LOG"
     local rc=${PIPESTATUS[0]}
     set -e
     return "$rc"
+}
+
+# Syntax-check a playbook with the same config as a real run. check mode
+# previously invoked ansible-playbook WITHOUT ANSIBLE_CONFIG/ROLES_PATH, so
+# every playbook failed with "role not found" and `deploy.sh -c` was broken.
+_ansible_syntax() {
+    ANSIBLE_CONFIG="$SCRIPT_DIR/ansible/ansible.cfg" \
+        ANSIBLE_ROLES_PATH="$SCRIPT_DIR/ansible-roles" \
+        ANSIBLE_NOCOLOR=1 \
+        "$ANSIBLE_PLAYBOOK" --syntax-check "$SCRIPT_DIR/ansible/$1"
 }
 
 run_ansible() {
@@ -27,24 +37,36 @@ run_ansible() {
 }
 
 run_parallel() {
-    local phase="$1"; shift
+    local phase="$1"
+    shift
     [[ "$TTY" == "false" ]] && echo "::group::${phase}"
     echo "    ▶ ${phase}"
     local pids=() ok=true
     for entry in "$@"; do
         local pb="${entry%%:*}" label="${entry##*:}"
+        local fallback=false
+        [[ "$pb" == "~"* ]] && { fallback=true; pb="${pb#\~}"; }
         echo "      ├ ${label}"
-        ( _ansible_cmd "$pb" ) &
+        if [[ "$fallback" == "true" ]]; then
+            ( _ansible_cmd "$pb" || {
+                echo "  ⚠ ${label} failed — continuing (fallback, non-fatal)"
+                echo "  ⚠ GRAFANA_FALLBACK_FAILED=true"
+              } ) &
+        else
+            (_ansible_cmd "$pb") &
+        fi
         pids+=("$!")
     done
     for pid in "${pids[@]}"; do
         if ! wait "$pid"; then
             ok=false
-            # A sibling playbook failed: kill and reap the remaining
-            # background runners so an orphaned ansible-playbook doesn't
-            # keep mutating the server after the deploy aborts.
+            # A sibling playbook failed: kill the remaining background runners so
+            # an orphaned ansible-playbook doesn't keep mutating the server after
+            # the deploy aborts. $other is a SUBSHELL pid — kill its children
+            # (ansible-playbook | tee) first, then the subshell itself.
             for other in "${pids[@]}"; do
                 [[ "$other" == "$pid" ]] && continue
+                pkill -P "$other" 2>/dev/null || true
                 kill "$other" 2>/dev/null || true
             done
         fi
@@ -55,29 +77,13 @@ run_parallel() {
 
 resolve_scripts_dir_remote() {
     local dir
-    dir=$(python3 - "$SCRIPT_DIR/ansible/group_vars/all.yml" <<'PYEOF' 2>/dev/null
+    dir=$(
+        python3 - "$SCRIPT_DIR/ansible/group_vars/all.yml" <<'PYEOF' 2>/dev/null
 import yaml, sys
 d = yaml.safe_load(open(sys.argv[1]))
 print(d.get('scripts_dir_remote', '/home/ubuntu/Scripts'))
 PYEOF
-)
-    dir="${dir:-/home/ubuntu/Scripts}"
-    # Validate path is safe before passing to SSH remote command
-    if [[ ! "$dir" =~ ^/[A-Za-z0-9/_-]+$ ]]; then
-        echo "  ⚠ scripts_dir_remote has unexpected chars, using default" >&2
-        dir="/home/ubuntu/Scripts"
-    fi
-    printf '%s' "$dir"
-}
-
-resolve_scripts_dir_remote() {
-    local dir
-    dir=$(python3 - "$SCRIPT_DIR/ansible/group_vars/all.yml" <<'PYEOF' 2>/dev/null
-import yaml, sys
-d = yaml.safe_load(open(sys.argv[1]))
-print(d.get('scripts_dir_remote', '/home/ubuntu/Scripts'))
-PYEOF
-)
+    )
     dir="${dir:-/home/ubuntu/Scripts}"
     # Validate path is safe before passing to SSH remote command
     if [[ ! "$dir" =~ ^/[A-Za-z0-9/_-]+$ ]]; then
@@ -96,6 +102,12 @@ check_services() {
 
     local output rc
     [[ -n "${DEBUG:-}" ]] && echo "    [DEBUG] SSH to ubuntu@$SERVER_IP — running check_services.sh..."
+    # Clear the deploy-in-progress marker (written by playbook-01) so this
+    # final authoritative check runs and the 5-min timer resumes immediately.
+    ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+        -o LogLevel=ERROR \
+        -i "$SSH_KEY" "ubuntu@$SERVER_IP" \
+        "rm -f /tmp/.dreamseed_deploying" 2>/dev/null || true
     set +e
     output=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         -o LogLevel=ERROR \
