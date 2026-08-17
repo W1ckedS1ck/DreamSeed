@@ -137,8 +137,8 @@ jobs:
           set -e
 
           echo "=== Before: available updates ==="
-          BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
-          TOTAL=$(echo "$BEFORE" | grep -c .)
+          BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...' || true")
+          TOTAL=$(echo "$BEFORE" | grep -c . || true)
           SECURITY=$($SSH "apt list --upgradable 2>/dev/null | grep -c '\-security' || true")
           echo "Total: $TOTAL ($SECURITY security)"
 
@@ -152,8 +152,8 @@ jobs:
           echo "$UPGRADED"
 
           echo "=== After: remaining updates ==="
-          AFTER=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
-          AFTER_COUNT=$(echo "$AFTER" | grep -c .)
+          AFTER=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...' || true")
+          AFTER_COUNT=$(echo "$AFTER" | grep -c . || true)
           echo "Remaining: $AFTER_COUNT"
 
           echo "=== Reboot required ==="
@@ -245,6 +245,8 @@ jobs:
             MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
           elif [ "$STATUS" = "apt-failed" ]; then
             MSG="❌ *Server Update FAILED* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${{ steps.update.outputs.apt_rc }})${N}Remaining: ${AFTER}${TG_REBOOT}"
+          elif [ "${{ steps.update.outcome }}" != "success" ]; then
+            MSG="❌ *Server Update FAILED* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ update step aborted (${{ steps.update.outcome }})${TG_REBOOT}"
           elif [ "$U" = "0" ] && [ "$AFTER" = "0" ]; then
             MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
           else
