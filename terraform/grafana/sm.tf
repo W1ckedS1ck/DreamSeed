@@ -46,9 +46,7 @@ resource "grafana_synthetic_monitoring_check" "http_main" {
     domain = var.domain
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+
 }
 
 # --- MultiHTTP check — user flow (homepage → manager, 2 US probes) ---
@@ -103,9 +101,7 @@ resource "grafana_synthetic_monitoring_check" "multi_main" {
     domain = var.domain
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+
 }
 
 # --- HTTP check — Grafana endpoint (2 US probes, every 30 min) ---
@@ -136,9 +132,7 @@ resource "grafana_synthetic_monitoring_check" "http_grafana" {
     domain = var.domain
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+
 }
 
 # --- SSL check — Cloudflare cert validation (1 probe, every hour — max SM interval) ---
@@ -167,7 +161,5 @@ resource "grafana_synthetic_monitoring_check" "ssl_main" {
     domain = var.domain
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+
 }

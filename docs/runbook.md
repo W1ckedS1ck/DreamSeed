@@ -1060,9 +1060,9 @@ sudo systemctl status vmagent
 # Check vmagent logs
 sudo journalctl -u vmagent --no-pager -n 50
 
-# Test connectivity to Grafana Cloud
+# Test connectivity to Grafana Cloud (token via --config, never in argv)
 curl -s -o /dev/null -w "%{http_code}" \
-  -H "Authorization: Bearer $GRAFANA_CLOUD_TOKEN" \
+  --config <(printf 'header = "Authorization: Bearer %s"\n' "$GRAFANA_CLOUD_TOKEN") \
   "$GRAFANA_CLOUD_URL"
 ```
 

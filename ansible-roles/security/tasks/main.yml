@@ -104,6 +104,7 @@
     owner: root
     group: root
     mode: "0640"  # contains CF firewall token (cloudflare-token action)
+  no_log: true
   notify: Restart Fail2ban
 
 - name: Test Fail2ban config

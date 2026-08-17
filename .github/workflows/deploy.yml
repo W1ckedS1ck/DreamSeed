@@ -198,13 +198,22 @@ jobs:
           perl -pe 's/\e\[[\d;]*[mK]//g' /tmp/deploy.log > /tmp/deploy-summary.txt
           exit "$rc"
 
+      - name: Scrub secrets from deploy log
+        if: always() && inputs.action == 'deploy' && failure()
+        uses: ./.github/actions/scrub-log
+        with:
+          log-path: /tmp/deploy.log
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
       - name: Upload deploy log (debug)
         if: always() && inputs.action == 'deploy' && failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: deploy-log-${{ inputs.environment }}
           path: /tmp/deploy.log
-          retention-days: 7
+          retention-days: 2
 
       - name: Post-deploy
         if: always() && inputs.action == 'deploy'
@@ -358,13 +367,22 @@ jobs:
 
           exit "$rc"
 
+      - name: Scrub secrets from destroy log
+        if: always() && inputs.action == 'destroy' && failure()
+        uses: ./.github/actions/scrub-log
+        with:
+          log-path: /tmp/deploy.log
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
       - name: Upload deploy log (debug)
         if: always() && inputs.action == 'destroy' && failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: deploy-destroy-log-${{ inputs.environment }}
           path: /tmp/deploy.log
-          retention-days: 7
+          retention-days: 2
           if-no-files-found: ignore
 
       - name: Notify failure

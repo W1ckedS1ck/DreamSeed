@@ -57,8 +57,8 @@ ssl: mode=MODE → details
 If SSL fails → check:
 
 ```bash
-# Is Cloudflare token valid?
-curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+# Is Cloudflare token valid? (token via --config, never in argv)
+curl -s --config <(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN") \
   https://api.cloudflare.com/client/v4/user/tokens/verify
 
 # Does DNS point to server?
