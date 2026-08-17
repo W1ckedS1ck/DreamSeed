@@ -29,9 +29,9 @@ ansible-galaxy collection install -r ansible/requirements.yml
 
 | Target | Current backend | Required env vars |
 |--------|-----------------|-------------------|
-| `prod` | AWS EC2 | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION`, `PROD_EIP` |
+| `prod` | AWS EC2 | `PROD_ACCESS_KEY`, `PROD_SECRET_KEY`, `PROD_REGION` |
 | `prod-hetz` | Hetzner Cloud | `PROD_HETZ_HCLOUD_TOKEN` (falls back to `HCLOUD_TOKEN`) |
-| `dev-aws` | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION`, `DEV_AWS_EIP` |
+| `dev-aws` | AWS EC2 | `DEV_AWS_ACCESS_KEY`, `DEV_AWS_SECRET_KEY`, `DEV_AWS_REGION` |
 | `dev-hetz` | Hetzner Cloud | `HCLOUD_TOKEN` |
 
 All targets require:

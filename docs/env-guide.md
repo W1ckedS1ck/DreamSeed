@@ -250,19 +250,6 @@ Password is the same Access Policy token as vmagent (`grafana_cloud_token`).
 
 ---
 
-## EIP (Elastic IP)
-
-Used for prod (AWS) and dev-aws to attach pre-allocated Elastic IP.
-
-```
-# PROD_EIP="eipalloc-xxx"     # Real allocation ID = attach this EIP
-# DEV_AWS_EIP="eipalloc-xxx"
-```
-
-Set to an allocation ID to attach a specific Elastic IP. Set to any non-empty value (e.g. `"true"`) to disable auto-public-IP allocation in Terraform (use when managing EIP outside TF).
-
----
-
 ## Legacy
 
 The following variables are no longer used but kept for reference:

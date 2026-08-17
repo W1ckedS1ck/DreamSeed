@@ -114,10 +114,6 @@ inputs:
     description: AWS Region (dev)
     required: false
     default: ""
-  dev_aws_eip:
-    description: AWS Elastic IP Allocation ID (dev)
-    required: false
-    default: ""
   prod_access_key:
     description: AWS Access Key (prod)
     required: false
@@ -128,10 +124,6 @@ inputs:
     default: ""
   prod_region:
     description: AWS Region (prod)
-    required: false
-    default: ""
-  prod_eip:
-    description: AWS Elastic IP Allocation ID (prod)
     required: false
     default: ""
   user_ssh_public_key:
@@ -242,11 +234,9 @@ runs:
         DEV_AWS_ACCESS_KEY: ${{ inputs.dev_aws_access_key }}
         DEV_AWS_SECRET_KEY: ${{ inputs.dev_aws_secret_key }}
         DEV_AWS_REGION: ${{ inputs.dev_aws_region }}
-        DEV_AWS_EIP: ${{ inputs.dev_aws_eip }}
         PROD_ACCESS_KEY: ${{ inputs.prod_access_key }}
         PROD_SECRET_KEY: ${{ inputs.prod_secret_key }}
         PROD_REGION: ${{ inputs.prod_region }}
-        PROD_EIP: ${{ inputs.prod_eip }}
         USER_SSH_PUBLIC_KEY: ${{ inputs.user_ssh_public_key }}
         VITALI_SSH_PUBLIC_KEY: ${{ inputs.vitali_ssh_public_key }}
         RCLONE_CRYPT_PASSWORD: ${{ inputs.rclone_crypt_password }}
@@ -292,11 +282,9 @@ runs:
           emit_env DEV_AWS_ACCESS_KEY "$DEV_AWS_ACCESS_KEY"
           emit_env DEV_AWS_SECRET_KEY "$DEV_AWS_SECRET_KEY"
           emit_env DEV_AWS_REGION "$DEV_AWS_REGION"
-          emit_env DEV_AWS_EIP "$DEV_AWS_EIP"
           emit_env PROD_ACCESS_KEY "$PROD_ACCESS_KEY"
           emit_env PROD_SECRET_KEY "$PROD_SECRET_KEY"
           emit_env PROD_REGION "$PROD_REGION"
-          emit_env PROD_EIP "$PROD_EIP"
           emit_env RCLONE_CRYPT_PASSWORD "$RCLONE_CRYPT_PASSWORD"
           emit_env UBUNTU_PRO_TOKEN "$UBUNTU_PRO_TOKEN"
         } > secrets/.env

@@ -54,14 +54,6 @@ jobs:
       - name: Get server IP
         id: server-ip
         env:
-          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
-          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
-          PROD_REGION: ${{ secrets.PROD_REGION }}
-          PROD_EIP: ${{ secrets.PROD_EIP }}
-          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
-          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
-          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
-          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
           TF_TOKEN="$TF_API_TOKEN"
@@ -70,32 +62,20 @@ jobs:
 
           case "$ENV" in
             prod)
-              IP="$PROD_EIP"
-              if [[ "$IP" == eipalloc-* ]]; then
-                export AWS_ACCESS_KEY_ID="$PROD_ACCESS_KEY"
-                export AWS_SECRET_ACCESS_KEY="$PROD_SECRET_KEY"
-                export AWS_DEFAULT_REGION="$PROD_REGION"
-                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
-                     --query 'Addresses[0].PublicIp' --output text)
-              fi
+              export TF_TOKEN_app_terraform_io="$TF_TOKEN"
+              export TF_WORKSPACE="prod"
+              cd terraform/aws
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
               ;;
             dev-aws)
-              IP="$DEV_AWS_EIP"
-              if [[ "$IP" == eipalloc-* ]]; then
-                export AWS_ACCESS_KEY_ID="$DEV_AWS_ACCESS_KEY"
-                export AWS_SECRET_ACCESS_KEY="$DEV_AWS_SECRET_KEY"
-                export AWS_DEFAULT_REGION="$DEV_AWS_REGION"
-                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
-                     --query 'Addresses[0].PublicIp' --output text)
-              fi
-              if [ -z "$IP" ]; then
-                export TF_TOKEN_app_terraform_io="$TF_TOKEN"
-                export TF_WORKSPACE="$ENV"
-                cd terraform/aws
-                terraform init -upgrade=false > /dev/null
-                IP=$(terraform output -raw server_ipv4 2>/dev/null || echo "")
-                cd ../..
-              fi
+              export TF_TOKEN_app_terraform_io="$TF_TOKEN"
+              export TF_WORKSPACE="dev-aws"
+              cd terraform/aws
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4 2>/dev/null || echo "")
+              cd ../..
               ;;
             dev-hetz|prod-hetz)
               export TF_TOKEN_app_terraform_io="$TF_TOKEN"

@@ -61,7 +61,6 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 | `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
 | `PROD_SECRET_KEY` | AWS Secret Key | Same |
 | `PROD_REGION` | AWS region (`us-west-1`) | Same |
-| `PROD_EIP` | Elastic IP allocation ID (`eipalloc-xxx`) | Same |
 
 ### dev-aws
 
@@ -70,7 +69,6 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 | `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
 | `DEV_AWS_SECRET_KEY` | AWS Secret Key | Same |
 | `DEV_AWS_REGION` | AWS region (`us-west-1`) | Same |
-| `DEV_AWS_EIP` | Elastic IP allocation ID | Same |
 
 ---
 

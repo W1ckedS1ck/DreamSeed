@@ -115,11 +115,9 @@ jobs:
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
           dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
-          dev_aws_eip: ${{ secrets.DEV_AWS_EIP }}
           prod_access_key: ${{ secrets.PROD_ACCESS_KEY }}
           prod_secret_key: ${{ secrets.PROD_SECRET_KEY }}
           prod_region: ${{ secrets.PROD_REGION }}
-          prod_eip: ${{ secrets.PROD_EIP }}
           user_ssh_public_key: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           vitali_ssh_public_key: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
           rclone_crypt_password: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
