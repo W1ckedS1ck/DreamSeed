@@ -54,7 +54,7 @@ run_terraform() {
         [[ "$SERVER_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || step_fail "Invalid IP from Terraform: $SERVER_IP"
         export SERVER_IP
 
-        declare -g TF_STATE_BACKUP_TMP
+        local TF_STATE_BACKUP_TMP
         TF_STATE_BACKUP_TMP=$(mktemp)
         chmod 600 "$TF_STATE_BACKUP_TMP"
         if _tf state pull >"$TF_STATE_BACKUP_TMP" 2>/dev/null && [[ -s "$TF_STATE_BACKUP_TMP" ]]; then
