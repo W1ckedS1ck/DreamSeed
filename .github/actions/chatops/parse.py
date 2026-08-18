@@ -16,12 +16,12 @@ def main():
     elif re.search(r'^/deploy\s+status', comment):
         keys['command'] = 'status'
 
-    elif m := re.search(r'^/destroy\s+(prod-hetz|dev-aws|dev-hetz|prod)\b', comment):
+    elif m := re.search(r'^/destroy\s+(prod-hetz|dev-aws|dev-hetz|prod)(?=\s|$)', comment):
         keys['command'] = 'destroy'
         keys['target'] = m.group(1)
         keys['action'] = 'destroy'
 
-    elif m := re.search(r'^/deploy\s+(prod-hetz|dev-aws|dev-hetz|prod)\b', comment):
+    elif m := re.search(r'^/deploy\s+(prod-hetz|dev-aws|dev-hetz|prod)(?=\s|$)', comment):
         keys['command'] = 'deploy'
         keys['target'] = m.group(1)
         keys['action'] = 'deploy'

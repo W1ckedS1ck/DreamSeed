@@ -48,6 +48,31 @@ jobs:
             fi
           fi
 
+      - name: Write job summary
+        env:
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          python3 - "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, os, sys
+          with open("docs/codemap/codemap.json") as fh:
+              doc = json.load(fh)
+          nodes = len(doc["nodes"])
+          edges = len(doc["edges"])
+          flows = len(doc["flows"])
+          graph = doc["graph_hash"]
+          sha = doc["generated_from_commit"][:12]
+          owner, name = os.environ["REPO"].split("/")
+          generator = f"{os.environ['SERVER_URL']}/{os.environ['REPO']}/blob/main/docs/codemap/gen_codemap.py"
+          summary = (
+              f"**Codemap:** {nodes} nodes · {edges} edges · {flows} flows\n\n"
+              f"`graph {graph}` · commit `{sha}`\n\n"
+              f"[Pages site](https://{owner}.github.io/{name}/) · [generator]({generator})\n"
+          )
+          with open(sys.argv[1], "a") as out:
+              out.write(summary)
+          PY
+
       - name: Build site
         run: |
           mkdir -p _site
@@ -84,6 +109,7 @@ jobs:
           path: wiki
 
       - name: Sync docs
+        id: sync
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -96,10 +122,18 @@ jobs:
 
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes"
+            echo "count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          echo "count=$(git status --porcelain | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
           git add -A
           git commit -m "Sync docs/ from ${GITHUB_REF_NAME} (${GITHUB_SHA})"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
           git push
+
+      - name: Write job summary
+        run: |
+          {
+            echo "**Wiki sync:** ${{ steps.sync.outputs.count }} file(s) pushed to the wiki from \`${GITHUB_REF_NAME}\` (\`${GITHUB_SHA:0:12}\`)"
+          } >> "$GITHUB_STEP_SUMMARY"

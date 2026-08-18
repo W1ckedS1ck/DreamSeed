@@ -91,6 +91,17 @@
     login_unix_socket: /run/mysqld/mysqld.sock
   no_log: true
 
+- name: Create database user (TCP 127.0.0.1)
+  become: true
+  ansible.mariadb.mariadb_user:
+    name: "{{ db_user }}"
+    password: "{{ db_pass }}"
+    priv: "{{ db_name }}.*:ALL"
+    host: "127.0.0.1"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  no_log: true
+
 - name: Deploy .my.cnf for ubuntu user
   ansible.builtin.template:
     src: my.cnf.j2
