@@ -33,11 +33,6 @@ jobs:
             tf_workspace: prod-hetz
             environment: prod-hetz
             provider: prod
-          - target: prod
-            tf_dir: terraform/aws
-            tf_workspace: prod
-            environment: prod
-            provider: prod
           - target: dev-aws
             tf_dir: terraform/aws
             tf_workspace: dev-aws

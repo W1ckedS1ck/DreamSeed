@@ -293,7 +293,7 @@ Manual dispatch    Deploy                Setup → secrets → deploy.sh / destr
                                           → Telegram
 
 Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
-  daily                                  (6 targets: prod-hetz, prod, dev-aws,
+  daily                                  (5 targets: prod-hetz, dev-aws,
                                            dev-hetz, cloudflare, cloudflare-prod)
 
 Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy (target `test`)

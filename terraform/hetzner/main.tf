@@ -37,6 +37,15 @@ resource "hcloud_firewall" "web" {
   name   = "dreamseed-fw-${var.environment}"
   labels = local.labels
 
+  # Rules reference live Cloudflare edge ranges (data.http cf_ips_v4/v6).
+  # The provider returns rule order/content in a non-stable sequence, so a plain
+  # plan would report every rule as replaced (false drift). Rules are managed
+  # declaratively here and applied on real changes via explicit apply — ignore
+  # the order noise for daily drift detection.
+  lifecycle {
+    ignore_changes = [rule]
+  }
+
   rule {
     direction  = "in"
     protocol   = "tcp"

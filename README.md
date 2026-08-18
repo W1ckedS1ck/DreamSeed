@@ -263,7 +263,7 @@ Grafana dashboards, datasources, **and 27 alert rules** deployed automatically �
 | **CI** — 11 jobs, 8 required | Every PR + push to main/dev |
 | **Deploy** — single-click deploy | Manual dispatch (all targets, prod requires approval) |
 | **Restore Test** — full backup/restore drill | Weekly Monday 10:00 UTC + manual |
-| **Drift Detection** — terraform plan on 6 targets | Daily 07:05 UTC |
+| **Drift Detection** — terraform plan on 5 targets | Daily 07:05 UTC |
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch (prod requires approval) |
 | **Health Check** — weekly server update | Weekly Monday + manual |
