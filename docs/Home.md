@@ -21,7 +21,9 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 
 The authoritative stack list lives in the [repository README](https://github.com/W1ckedS1ck/DreamSeed#-tech-stack) — kept in sync with the code, not duplicated here.
 
-In one line: **Terraform + Ansible on AWS EC2 / Hetzner Cloud**, serving **MODX** (Nginx/Apache + PHP 8.3 + MariaDB + Redis) behind **Cloudflare**, with **VictoriaMetrics + Grafana** observability, **Promtail → Loki** logs, **Faro RUM**, **Better Stack** uptime, and **rclone → Google Drive** encrypted backups.
+In one line: **Terraform + Ansible on AWS EC2 / Hetzner Cloud**, serving **MODX** (Nginx/Apache + PHP 8.3 + MariaDB + Redis) behind **Cloudflare**, with **VictoriaMetrics + Grafana** observability, **Promtail → Loki** logs, **Faro RUM**, **multi-region** monitoring (Grafana Cloud SM from 3 continents + Better Stack from 4 regions), and **rclone → Google Drive** encrypted backups.
+
+> 🌍 **Global by default** — the site is watched from 4 continents via two independent cloud layers, plus a local on-server Grafana stack. See the [README's Global Observability section](https://github.com/W1ckedS1ck/DreamSeed#-global-observability) for the full coverage map.
 
 ## Key Architecture Decisions
 

@@ -29,6 +29,7 @@
 - [About the Product](#about-the-product)
 - [Quick Start](#quick-start)
 - [By the Numbers](#by-the-numbers)
+- [Global Observability](#-global-observability)
 - [My Role](#my-role)
 - [Tech Stack](#tech-stack)
 - [Architecture at a Glance](#architecture-at-a-glance)
@@ -78,6 +79,21 @@
 | Uptime coverage | 27 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
 | CI checks per push | 11 jobs, 8 required for merge (lint → security → validate) |
 | Security | Hardened Ubuntu 24.04 — SSH hardening, 5 fail2ban jails (edge bans via Cloudflare API), sysctl/PAM hardening |
+
+---
+
+## 🌍 Global Observability
+
+**Two independent watchdog layers** monitor the site from **4 continents / 9 probe locations** — nothing is left to a single vantage point, and no single provider's outage blinds us.
+
+| Layer | Probes / regions | Frequency | Checks | Coverage |
+|-------|------------------|-----------|--------|----------|
+| **Grafana Cloud Synthetic Monitoring** | 5 probes — NorthCalifornia, Ohio, Montreal, **London, Singapore** | every **10 min** | HTTP main, MultiHTTP user-flow, Grafana, SSL | 3 continents (NA · EU · Asia) |
+| **Better Stack** (external) | 4 regions — EU · US · Asia · Australia | every 3 min | Main site (+keyword), admin `/manager/`, Grafana | 4 continents |
+| **Grafana on-server** (local) | 127.0.0.1 | 15s scrape / 1m site check | 27 alert rules → Telegram | survives only if server lives |
+| **Better Stack heartbeats** | 6 cron heartbeats | 5m – 7d | backup, upload, reports, verify, check-services | dead-man switch |
+
+> 🌐 The **cloud-hosted** layers (SM + Better Stack) keep watch even if the server dies — real multi-region resilience, not just redundancy for show.
 
 ---
 
@@ -239,7 +255,7 @@ Grafana dashboards, datasources, **and 27 alert rules** deployed automatically �
 - **Promtail** (`:9080`) — log agent, ships nginx + php-fpm + syslog to Loki (Grafana Cloud)
 - **Faro RUM** — real user monitoring: Core Web Vitals (LCP/CLS/INP), JS errors, sessions by browser/country. Injected via nginx `sub_filter`, proxied through same domain to avoid adblockers
 - **Grafana Cloud dashboards** — 5 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Redis 763, Nginx 17452, VictoriaMetrics 10229)
-- **Synthetic Monitoring** — Terraform-provisioned checks from **5 global probes** (US, Canada, Europe, Asia): HTTP main, MultiHTTP user-flow, Grafana endpoint, SSL
+- **Synthetic Monitoring** — 🌍 **multi-region, every 10 min**: HTTP main from **5 global probes** (US, Canada, Europe, Asia), SSL from 3 probes, plus MultiHTTP user-flow and Grafana endpoint
 
 **External (Better Stack cloud-hosted):**
 

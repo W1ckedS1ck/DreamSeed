@@ -237,7 +237,7 @@ Better Stack (cloud)
 |------|----------|-------|----------|
 | Uptime | Better Stack | 3 monitors, 6 heartbeats, status page | Telegram webhooks |
 | Real User Monitoring | Grafana Cloud (Faro) | LCP/CLS/INP/TTFB, JS errors, sessions by browser/country | Grafana Cloud dashboard |
-| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP main from 5 global probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 3 global probes) ~22k/mo | Grafana Cloud dashboard |
+| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP main every 10 min from 5 global probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 3 global probes) | Grafana Cloud dashboard |
 
 ---
 
