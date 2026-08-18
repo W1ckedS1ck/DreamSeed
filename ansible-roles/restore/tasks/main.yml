@@ -176,7 +176,7 @@
 
 - name: Check if DB already has tables
   ansible.builtin.shell:
-    cmd: mysql -N "{{ db_name | quote }}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()" 2>/dev/null
+    cmd: mysql -N "{{ db_name }}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()" 2>/dev/null
   register: restore_db_tables
   changed_when: false
   failed_when: false
@@ -228,7 +228,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          gunzip -c "/home/ubuntu/backups/.restore_cache/{{ restore_latest_db.stdout | trim }}" | mysql "{{ db_name | quote }}"
+          gunzip -c "/home/ubuntu/backups/.restore_cache/{{ restore_latest_db.stdout | trim }}" | mysql "{{ db_name }}"
         executable: /bin/bash
       register: restore_db_result
       changed_when: true
@@ -239,7 +239,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          mysql "{{ db_name | quote }}" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
+          mysql "{{ db_name }}" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}';"
         executable: /bin/bash
       register: restore_db_table_count
       changed_when: false
@@ -260,7 +260,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          mysql "{{ db_name | quote }}" -e "UPDATE {{ db_prefix | default('modx_') }}system_settings SET value='' WHERE key='session_handler_class'" 2>/dev/null || true
+          mysql "{{ db_name }}" -e "UPDATE {{ db_prefix | default('modx_') }}system_settings SET value='' WHERE key='session_handler_class'" 2>/dev/null || true
         executable: /bin/bash
       changed_when: true
       when: restore_latest_db.stdout | trim != ""
