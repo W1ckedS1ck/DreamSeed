@@ -1,6 +1,19 @@
 # Architecture
 
 > Interactive map of this codebase: [codemap.html](../codemap/codemap.html). This page is the static prose version; the map is the machine-generated visual layer (nodes, weighted edges, flows). Regenerate it with the codemap generator, never hand-edit the outputs.
+>
+> 🗓 **Last updated:** 2026-08-18
+
+## Table of Contents
+
+- [Deployment Flow](#deployment-flow)
+- [Infrastructure Layers](#infrastructure-layers)
+- [Secrets Flow](#secrets-flow)
+- [Backup Pipeline](#backup-pipeline)
+- [Monitoring & Alerting](#monitoring--alerting)
+- [Security Layers](#security-layers)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [Project Layout](#project-layout)
 
 ## Deployment Flow
 
@@ -16,7 +29,7 @@ flowchart TD
     G --> H[Generate inventory + vars]
 
     H --> I["Phase 1<br>Base packages<br>swap, PHP"]
-    I --> J["Phase 2<br>Web + DB"]
+    I --> J["Phase 2<br>Web + DB<br>+ Ubuntu Pro"]
     J --> K["Phase 2.5<br>Security"]
     K --> L["Phase 3<br>Monitor + Backup<br>+ Grafana + Promtail"]
 
@@ -162,7 +175,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 ```
 Better Stack (cloud)
    │
-   ├─ 3 HTTP monitors ──── https://dreamseed.online (3min, 4 regions)
+   ├─ 3 HTTP monitors ── main site + /manager/ + /grafana (3min, 4 regions: EU/US/Asia/AU)
    ├─ 6 cron heartbeats ── backup, gdrive, report-daily, report-weekly, verify-backups, check-services
    └─ Status page ──────── status.dreamseed.online
    │
@@ -224,7 +237,7 @@ Better Stack (cloud)
 |------|----------|-------|----------|
 | Uptime | Better Stack | 3 monitors, 6 heartbeats, status page | Telegram webhooks |
 | Real User Monitoring | Grafana Cloud (Faro) | LCP/CLS/INP/TTFB, JS errors, sessions by browser/country | Grafana Cloud dashboard |
-| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP main from 3 America probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 1 probe) ~15k/mo | Grafana Cloud dashboard |
+| Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP main from 5 global probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 3 global probes) ~22k/mo | Grafana Cloud dashboard |
 
 ---
 
@@ -280,15 +293,15 @@ Manual dispatch    Deploy                Setup → secrets → deploy.sh / destr
                                           → Telegram
 
 Schedule 07:05     Drift Detection       terraform plan -detailed-exitcode
-  daily                                  (6 targets: prod-hetz, prod, dev-aws,
+  daily                                  (5 targets: prod-hetz, dev-aws,
                                            dev-hetz, cloudflare, cloudflare-prod)
 
-Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy
-   manual                                 → Tests (DB/Web/MODX/cart/SMTP/vmagent/GDrive)
-                                           → check_services (timers, fail2ban, exporters)
-                                            → Grafana alert rules check (≥27)
-                                           → GDrive backup check
-                                          → Destroy → Telegram report (P/F/W summary)
+Schedule Mon 10:00 Restore Test          Provision Hetzner → Ansible deploy (target `test`)
+   manual                                 → Restore paths: local + cloud (GDrive)
+                                            → Tests (DB/Web/MODX/cart/vmagent/GDrive/
+                                              Redis/Promtail) — P/F/W summary
+                                            → GDrive backup check
+                                          → Destroy → job summary
 
 Bot events         Renovate              Dependency updates (auto PRs)
 
@@ -301,49 +314,6 @@ Push / manual      Docs                  Pages site (code map) + wiki sync
 
 ## Project Layout
 
-```
-DreamSeed/
-├── deploy.sh              # Orchestrator (Terraform → Ansible → checks)
-├── lib/                   # Modules: cli.sh, env.sh, helpers.sh, preflight.sh,
-│   │                      # terraform.sh, ansible.sh, stages.sh, provision.sh,
-│   │                      # wait.sh, inventory.sh, playbooks.sh, post.sh, gen_vars.py
-│   └── helpers.sh          # _bearer_auth() + _cf_zone_id() — shared Cloudflare helpers
-├── .github/
-│   ├── actions/
-│   │   ├── setup-terraform/  # Composite: install tf + plugin cache
-│   │   ├── setup-ansible/    # Composite: install ansible + galaxy collections
-│   │   ├── setup-secrets/    # Composite: SSH deploy key, vault password, rclone config
-│   │   ├── setup-env/        # Composite: mask + write secrets/.env from GH secrets
-│   │   ├── setup-gitleaks/   # Composite: install pinned gitleaks binary
-│   │   ├── capture-screenshot/ # Composite: site screenshot for Pages preview
-│   │   └── chatops/          # Python parsers for /deploy chat commands
-│   ├── scripts/
-│   │   └── test-restored-server.sh  # Post-restore verification suite
-│   └── workflows/           # 10 workflows (see CI/CD section)
-├── scripts/
-│   ├── audit_deep.sh        # Full server audit — covers all AUDIT_CHECKLIST sections
-│   ├── smart_backup.sh      # Local backup (project, DB, Redis)
-│   ├── upload_backups_to_gdrive.sh  # Cloud upload via rclone (gdrive or gdrive-crypt)
-│   ├── RESTORE_ALL.sh               # Interactive restore from GDrive (supports encrypted backups)
-│   └── verify_backups.sh            # Cloud backup integrity verification
-├── terraform/
-│   ├── aws/               # EC2 + SG + key_pair + optional EIP
-│   ├── hetzner/           # Server + firewall + primary IP
-│   ├── grafana/           # Grafana Cloud dashboard provisioning via Terraform
-│   ├── cloudflare/        # WAF rulesets, cache rules, rate limiting
-├── ansible/
-│   ├── playbook-01-base.yml     # System packages, swap
-│   ├── playbook-02-web.yml      # Nginx + PHP-FPM + Redis + SSL
-│   ├── playbook-03-db.yml       # MariaDB + restore from backup
-│   ├── playbook-04-security.yml # Fail2ban, SSH, sysctl hardening
-│   ├── playbook-05-monitor.yml  # VictoriaMetrics, exporters, vmagent
-│   ├── playbook-06-backup.yml   # Cron jobs, rclone, telegram bot
-│   ├── playbook-07-grafana.yml  # Grafana + alerting + dashboards
-│   └── playbook-08-promtail.yml # Promtail log shipping (Loki)
-│   └── group_vars/all.yml
-├── ansible-roles/         # 17 custom roles (including promtail)
-├── scripts/               # Backup, restore, Telegram bot, health checks
-├── .tflint.hcl            # Terraform linter config (root, drives all providers)
-├── secrets/               # gitignored: .env, rclone.conf, tfstate-backup, ssl/
-└── .github/workflows/
-```
+The canonical directory tree lives in the [repository README](https://github.com/W1ckedS1ck/DreamSeed#-project-layout) — kept in sync with the code rather than duplicated here.
+
+For a machine-verified, clickable version of the same structure (modules, edges, flows), use the [interactive code map](../codemap/codemap.html) or the [published site](https://w1ckeds1ck.github.io/DreamSeed/).

@@ -64,7 +64,7 @@ repos:
     hooks:
       - id: gitleaks
         name: Check for hardcoded secrets
-        entry: gitleaks detect --source . --no-git -v
+        entry: gitleaks protect --staged -v
         language: system
         pass_filenames: false
 

@@ -13,9 +13,15 @@ description = "Grafana Synthetic Monitoring API Key (JWT)"
 regex = '''eyJrIjoi[A-Za-z0-9_-]{40,}={0,2}'''
 tags = ["grafana", "secret"]
 
+[[rules]]
+id = "grafana-cloud-access-policy"
+description = "Grafana Cloud Access Policy Token (glc_)"
+regex = '''glc_[A-Za-z0-9]{20,}'''
+keywords = ["glc_"]
+tags = ["grafana", "secret"]
+
 [allowlist]
 paths = [
   '''\.claude/''',
   '''\.terraform\.lock\.hcl''',
-  '''secrets/''',
 ]

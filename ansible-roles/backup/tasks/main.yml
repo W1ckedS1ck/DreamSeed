@@ -47,7 +47,7 @@
   become: true
   ansible.builtin.pip:
     name: python-telegram-bot
-    version: ">=20,<22"
+    version: "{{ telegram_bot_version }}"
     state: present
     extra_args: --break-system-packages
 

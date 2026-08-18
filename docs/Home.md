@@ -2,6 +2,8 @@
 
 Documentation for the DreamSeed infrastructure — a multi-cloud production deployment serving [dreamseed.online](https://dreamseed.online).
 
+> 🗓 **Last updated:** 2026-08-18
+
 ## Pages
 
 | Page | Description |
@@ -17,23 +19,9 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 
 ## Tech Stack
 
-| Layer | Tool |
-|-------|------|
-| Cloud | AWS EC2, Hetzner Cloud |
-| Provisioning | Terraform Cloud (remote state, runs, Sentinel) |
-| Configuration | Ansible (8 playbooks, 17 custom roles) |
-| Web | Nginx + PHP-FPM + Redis + MariaDB |
-| CMS | MODX Revolution |
-| SSL | Cloudflare (Full SSL), certbot DNS-Cloudflare fallback |
-| Monitoring | VictoriaMetrics + vmagent, Node/MySQLd/Redis/Nginx exporters |
-| Dashboards | Grafana (on-server, 6 on Nginx / 5 on Apache, 27 alerts) |
-| Remote Write | Grafana Cloud (Prometheus remote_write) |
-| Logs | Promtail → Grafana Cloud Loki |
-| RUM | Grafana Faro |
-| Uptime | Better Stack (3 monitors, 6 heartbeats) |
-| Backup | Local + rclone → Google Drive (AES-256 encrypted) |
-| Secret Storage | Ansible Vault at rest, GitHub Secrets in CI |
-| Docs Generator | Python (gen_codemap.py) — machine-verified flows and relationships |
+The authoritative stack list lives in the [repository README](https://github.com/W1ckedS1ck/DreamSeed#-tech-stack) — kept in sync with the code, not duplicated here.
+
+In one line: **Terraform + Ansible on AWS EC2 / Hetzner Cloud**, serving **MODX** (Nginx/Apache + PHP 8.3 + MariaDB + Redis) behind **Cloudflare**, with **VictoriaMetrics + Grafana** observability, **Promtail → Loki** logs, **Faro RUM**, **Better Stack** uptime, and **rclone → Google Drive** encrypted backups.
 
 ## Key Architecture Decisions
 

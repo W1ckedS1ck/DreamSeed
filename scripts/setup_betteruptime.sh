@@ -192,6 +192,7 @@ for item in data.get('data', []):
 
 for spec in \
     "https://${DOMAIN}/|Main site|The Dreamers|180" \
+    "https://${DOMAIN}/manager/|Admin panel|MODX|180" \
     "https://${DOMAIN}/grafana|Grafana|Grafana|180"; do
 
     IFS='|' read -r url name keyword freq <<<"$spec"
@@ -254,7 +255,8 @@ for r in json.load(sys.stdin).get('data', []):
 
     for spec in \
         "Monitor|🌐 ${DOMAIN}|https://${DOMAIN}/|0" \
-        "Monitor|📊 Grafana|https://${DOMAIN}/grafana|1"; do
+        "Monitor|🔐 Admin panel|https://${DOMAIN}/manager/|1" \
+        "Monitor|📊 Grafana|https://${DOMAIN}/grafana|2"; do
 
         IFS='|' read -r rtype name url pos <<<"$spec"
 

@@ -1,0 +1,78 @@
+name: Scrub secrets from log
+description: >-
+  Replaces known secret values with '***' in a log file before it is uploaded
+  as a GitHub Actions artifact. Values are read from secrets/.env (curated key
+  list) plus three optional inputs for secrets that live outside .env
+  (vault password, SSH private key, rclone config base64).
+inputs:
+  log-path:
+    description: Path to the log file to scrub (in place).
+    required: true
+  vault-password:
+    description: Value to scrub (not present in secrets/.env).
+    required: false
+  ssh-private-key:
+    description: Value to scrub (not present in secrets/.env).
+    required: false
+  rclone-conf-base64:
+    description: Value to scrub (not present in secrets/.env).
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Scrub secrets
+      shell: bash
+      env:
+        LOG_PATH: ${{ inputs.log-path }}
+        VAULT_PASSWORD: ${{ inputs.vault-password }}
+        SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+        RCLONE_CONF_BASE64: ${{ inputs.rclone-conf-base64 }}
+      run: |
+        python3 - "$LOG_PATH" <<'PY'
+        import os
+        import sys
+
+        path = sys.argv[1]
+        extras = {
+            os.environ[n]
+            for n in ("VAULT_PASSWORD", "SSH_PRIVATE_KEY", "RCLONE_CONF_BASE64")
+            if len(os.environ.get(n, "")) >= 8
+        }
+
+        # Curated list of secret keys written to secrets/.env by setup-env.
+        # Non-secret vars (region, URLs, chat IDs, public keys, EIPs) are
+        # intentionally excluded — masking them would degrade the log.
+        SECRET_KEYS = {
+            "TG_TOKEN", "DB_PASS", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_FIREWALL_TOKEN",
+            "HCLOUD_TOKEN", "PROD_HETZ_HCLOUD_TOKEN", "GRAFANA_PASS",
+            "BETTERUPTIME_API_TOKEN", "BETTERUPTIME_BACKUP_KEY", "BETTERUPTIME_GDRIVE_KEY",
+            "BETTERUPTIME_REPORT_DAILY_KEY", "BETTERUPTIME_REPORT_WEEKLY_KEY",
+            "BETTERUPTIME_VERIFY_KEY", "BETTERUPTIME_CHECK_SERVICES_KEY",
+            "DEV_GRAFANA_CLOUD_TOKEN", "PROD_GRAFANA_CLOUD_TOKEN",
+            "DEV_AWS_ACCESS_KEY", "DEV_AWS_SECRET_KEY", "PROD_ACCESS_KEY", "PROD_SECRET_KEY",
+            "UBUNTU_PRO_TOKEN", "RCLONE_CRYPT_PASSWORD",
+        }
+
+        vals = set(extras)
+        try:
+            lines = open("secrets/.env").read().splitlines()
+        except FileNotFoundError:
+            lines = []
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if key in SECRET_KEYS and len(value) >= 8:
+                vals.add(value)
+
+        try:
+            data = open(path).read()
+        except FileNotFoundError:
+            raise SystemExit(0)
+        for v in vals:
+            data = data.replace(v, "***")
+        open(path, "w").write(data)
+        PY

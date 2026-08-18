@@ -65,27 +65,17 @@ jobs:
       - name: Resolve server IP
         id: server-ip
         env:
-          PROD_EIP: ${{ secrets.PROD_EIP }}
-          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
-          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
-          PROD_REGION: ${{ secrets.PROD_REGION }}
-          DEV_AWS_EIP: ${{ secrets.DEV_AWS_EIP }}
-          DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
-          DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
-          DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
           ENV="${{ matrix.target }}"
           case "$ENV" in
             prod)
-              IP="$PROD_EIP"
-              if [[ "$IP" == eipalloc-* ]]; then
-                export AWS_ACCESS_KEY_ID="$PROD_ACCESS_KEY"
-                export AWS_SECRET_ACCESS_KEY="$PROD_SECRET_KEY"
-                export AWS_DEFAULT_REGION="$PROD_REGION"
-                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
-                     --query 'Addresses[0].PublicIp' --output text)
-              fi
+              export TF_TOKEN_app_terraform_io="$TF_API_TOKEN"
+              export TF_WORKSPACE="prod"
+              cd terraform/aws
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
               DOMAIN="dreamseed.online"
               ;;
             prod-hetz)
@@ -107,14 +97,12 @@ jobs:
               DOMAIN="hetz.vitalikuts.online"
               ;;
             dev-aws)
-              IP="$DEV_AWS_EIP"
-              if [[ "$IP" == eipalloc-* ]]; then
-                export AWS_ACCESS_KEY_ID="$DEV_AWS_ACCESS_KEY"
-                export AWS_SECRET_ACCESS_KEY="$DEV_AWS_SECRET_KEY"
-                export AWS_DEFAULT_REGION="$DEV_AWS_REGION"
-                IP=$(aws ec2 describe-addresses --allocation-ids "$IP" \
-                     --query 'Addresses[0].PublicIp' --output text)
-              fi
+              export TF_TOKEN_app_terraform_io="$TF_API_TOKEN"
+              export TF_WORKSPACE="dev-aws"
+              cd terraform/aws
+              terraform init -upgrade=false > /dev/null
+              IP=$(terraform output -raw server_ipv4)
+              cd ../..
               DOMAIN="aws.vitalikuts.online"
               ;;
           esac
@@ -137,8 +125,8 @@ jobs:
           set -e
 
           echo "=== Before: available updates ==="
-          BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
-          TOTAL=$(echo "$BEFORE" | grep -c .)
+          BEFORE=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...' || true")
+          TOTAL=$(echo "$BEFORE" | grep -c . || true)
           SECURITY=$($SSH "apt list --upgradable 2>/dev/null | grep -c '\-security' || true")
           echo "Total: $TOTAL ($SECURITY security)"
 
@@ -152,8 +140,8 @@ jobs:
           echo "$UPGRADED"
 
           echo "=== After: remaining updates ==="
-          AFTER=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...'")
-          AFTER_COUNT=$(echo "$AFTER" | grep -c .)
+          AFTER=$($SSH "apt list --upgradable 2>/dev/null | grep -v 'Listing...' || true")
+          AFTER_COUNT=$(echo "$AFTER" | grep -c . || true)
           echo "Remaining: $AFTER_COUNT"
 
           echo "=== Reboot required ==="
@@ -245,6 +233,8 @@ jobs:
             MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
           elif [ "$STATUS" = "apt-failed" ]; then
             MSG="❌ *Server Update FAILED* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${{ steps.update.outputs.apt_rc }})${N}Remaining: ${AFTER}${TG_REBOOT}"
+          elif [ "${{ steps.update.outcome }}" != "success" ]; then
+            MSG="❌ *Server Update FAILED* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ update step aborted (${{ steps.update.outcome }})${TG_REBOOT}"
           elif [ "$U" = "0" ] && [ "$AFTER" = "0" ]; then
             MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
           else

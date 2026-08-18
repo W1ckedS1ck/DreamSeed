@@ -221,7 +221,7 @@ CRON_COUNT=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null | grep -v '^#' | gr
 echo "cron_jobs=$CRON_COUNT"
 [ "${CRON_COUNT:-0}" -ge 5 ] && pass "Cron jobs: $CRON_COUNT" || warn "Cron jobs: ${CRON_COUNT:-0} (expected 5+)"
 
-GRAFANA_LOGIN=$(ssh ubuntu@"$SERVER_IP" 'PW=$(sudo grep -oP "(?<=GF_SECURITY_ADMIN_PASSWORD=).*" /etc/grafana/grafana.env 2>/dev/null || true); if [ -z "$PW" ]; then echo "no-env"; exit 0; fi; curl -sf -X POST -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "user=admin" --data-urlencode "password=$PW" -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/login 2>/dev/null || echo "000"' 2>/dev/null || echo "000")
+GRAFANA_LOGIN=$(ssh ubuntu@"$SERVER_IP" 'PW=$(sudo grep -oP "(?<=GF_SECURITY_ADMIN_PASSWORD=).*" /etc/grafana/grafana.env 2>/dev/null || true); if [ -z "$PW" ]; then echo "no-env"; exit 0; fi; F=$(mktemp); chmod 600 "$F"; printf "%s" "$PW" > "$F"; R=$(curl -sf -X POST -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "user=admin" --data-urlencode "password@$F" -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/login 2>/dev/null || echo "000"); rm -f "$F"; echo "$R"' 2>/dev/null || echo "000")
 [ "${GRAFANA_LOGIN:-000}" = "200" ] && pass "Grafana admin login OK (HTTP 200)" || warn "Grafana admin login: HTTP ${GRAFANA_LOGIN:-000}"
 
 # ==== Checks end ====

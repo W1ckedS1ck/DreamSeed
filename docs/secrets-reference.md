@@ -2,6 +2,8 @@
 
 Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com/W1ckedS1ck/DreamSeed) repository.
 
+> 🗓 **Last updated:** 2026-08-18
+
 ---
 
 ## Required (all targets)
@@ -58,19 +60,17 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
+| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `terraform-apply.yml`, `drift-detection.yml` |
 | `PROD_SECRET_KEY` | AWS Secret Key | Same |
 | `PROD_REGION` | AWS region (`us-west-1`) | Same |
-| `PROD_EIP` | Elastic IP allocation ID (`eipalloc-xxx`) | Same |
 
 ### dev-aws
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
+| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `terraform-apply.yml`, `drift-detection.yml` |
 | `DEV_AWS_SECRET_KEY` | AWS Secret Key | Same |
 | `DEV_AWS_REGION` | AWS region (`us-west-1`) | Same |
-| `DEV_AWS_EIP` | Elastic IP allocation ID | Same |
 
 ---
 
@@ -103,10 +103,15 @@ The URL points to the Prometheus endpoint, **not** the Grafana instance.
 Uses the Grafana **instance** URL (`*.grafana.net`), NOT the Prometheus endpoint.
 Instance URL is hardcoded in `grafana-cloud.yml`, not stored in secrets.
 
+> ⚠ **Source of truth = GitHub Secrets.** The `grafana-cloud.yml` workflow reads these from
+> GitHub Secrets, NOT from `secrets/.env`. The vault copies can drift out of date (Grafana Cloud
+> tokens are routinely rotated) — if a manual/local check returns `401 Invalid API key`, verify
+> the GitHub Secret first. They are kept in `secrets/.env` only for reference and manual checks.
+
 | Secret | Env | Purpose | Used in |
 |--------|-----|---------|---------|
-| `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token for Terraform (`glsa_*`, role=Admin) | `grafana-cloud.yml` |
-| `PROD_GRAFANA_CLOUD_SA_TOKEN` | prod | Service Account token for Terraform | `grafana-cloud.yml` |
+| `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token for Terraform (`glsa_*`, role=Admin) | `grafana-cloud.yml`, `drift-detection.yml` (wake check) |
+| `PROD_GRAFANA_CLOUD_SA_TOKEN` | prod | Service Account token for Terraform | `grafana-cloud.yml`, `drift-detection.yml` (wake check) |
 | `PROD_GRAFANA_CLOUD_TOKEN` | prod | Fallback if SA_TOKEN is empty | `grafana-cloud.yml` |
 | `DEV_SM_ACCESS_TOKEN` | dev | Synthetic Monitoring token | `grafana-cloud.yml` |
 | `PROD_SM_ACCESS_TOKEN` | prod | Synthetic Monitoring token | `grafana-cloud.yml` |

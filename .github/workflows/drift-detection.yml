@@ -33,11 +33,6 @@ jobs:
             tf_workspace: prod-hetz
             environment: prod-hetz
             provider: prod
-          - target: prod
-            tf_dir: terraform/aws
-            tf_workspace: prod
-            environment: prod
-            provider: prod
           - target: dev-aws
             tf_dir: terraform/aws
             tf_workspace: dev-aws
@@ -217,3 +212,75 @@ jobs:
             echo "| **Commit** | ${{ github.sha }} |"
             echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  wake-grafana:
+    name: Wake Grafana Cloud instances
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Grafana Cloud free/paid instances can fall into a "Loading" state after a
+    # long idle period — the API returns 503 {"code":"Loading",...} until someone
+    # activates it in the web UI. This daily ping wakes both dev and prod so the
+    # grafana-cloud.yml workflow doesn't fail on a sleeping instance. It also
+    # surfaces invalid tokens (401) early, before an apply run.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Wake dev instance
+        id: dev-wake
+        env:
+          DEV_SA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+        run: |
+          if [ -z "$DEV_SA_TOKEN" ]; then
+            echo "dev_http=NO_TOKEN" >> "$GITHUB_OUTPUT"
+            echo "dev dev_http=NO_TOKEN"
+            exit 0
+          fi
+          CODE=$(curl -sS --max-time 30 -o /tmp/gc-dev.json -w "%{http_code}" \
+            -H "Authorization: Bearer $DEV_SA_TOKEN" \
+            "https://vitalikuts.grafana.net/api/folders" || echo "000")
+          echo "dev_http=$CODE" >> "$GITHUB_OUTPUT"
+          echo "dev dev_http=$CODE"
+      - name: Wake prod instance
+        id: prod-wake
+        env:
+          PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+        run: |
+          if [ -z "$PROD_SA_TOKEN" ]; then
+            echo "prod_http=NO_TOKEN" >> "$GITHUB_OUTPUT"
+            echo "prod prod_http=NO_TOKEN"
+            exit 0
+          fi
+          CODE=$(curl -sS --max-time 30 -o /tmp/gc-prod.json -w "%{http_code}" \
+            -H "Authorization: Bearer $PROD_SA_TOKEN" \
+            "https://dreamseed.grafana.net/api/folders" || echo "000")
+          echo "prod_http=$CODE" >> "$GITHUB_OUTPUT"
+          echo "prod prod_http=$CODE"
+      - name: Notify on sleeping/invalid instance
+        if: steps.dev-wake.outputs.dev_http != '200' || steps.prod-wake.outputs.prod_http != '200'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          DEV_HTTP: ${{ steps.dev-wake.outputs.dev_http }}
+          PROD_HTTP: ${{ steps.prod-wake.outputs.prod_http }}
+        run: |
+          MSG="⚠️ *Grafana Cloud wake check* — instance not responding
+          dev: HTTP ${DEV_HTTP:-000} (expect 200)
+          prod: HTTP ${PROD_HTTP:-000} (expect 200)
+          HTTP 503 'Loading' = instance asleep — activate in grafana.com UI
+          HTTP 401 = token invalid — rotate in GitHub Secrets"
+          bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
+      - name: Write job summary
+        if: always()
+        run: |
+          M="$GITHUB_STEP_SUMMARY"
+          [[ -z "$M" ]] && exit 0
+          {
+            echo "## Grafana Cloud wake check"
+            echo ""
+            echo "| Instance | HTTP |"
+            echo "|---|---|"
+            echo "| dev (vitalikuts.grafana.net) | ${{ steps.dev-wake.outputs.dev_http }} |"
+            echo "| prod (dreamseed.grafana.net) | ${{ steps.prod-wake.outputs.prod_http }} |"
+          } >> "$M"

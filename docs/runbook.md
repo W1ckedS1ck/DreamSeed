@@ -3,7 +3,21 @@
 > For **junior support staff**. Covers all alerts from all layers (Grafana, Better Stack, Scripts).
 > All notifications arrive in a single Telegram chat.
 >
-> Last updated: 2026-08-15
+> Last updated: 2026-08-18
+
+## Table of Contents
+
+- [Prerequisites — before you start](#prerequisites--before-you-start)
+- [First 5 minutes](#first-5-minutes)
+- [How to connect](#how-to-connect)
+- [Alert Channels Overview](#alert-channels-overview)
+- [Layer 1: Grafana Alerts (G1–G29)](#layer-1-grafana-alerts)
+- [Layer 2: Better Stack Alerts (B1–B10)](#layer-2-better-stack-alerts)
+- [Layer 3: Script Direct Alerts (S1–S2)](#layer-3-script-direct-alerts)
+- [Layer 4: CI/CD & Infrastructure Alerts (D1)](#layer-4-cicd-and-infrastructure-alerts)
+- [Quick Reference — What to do first](#quick-reference--what-to-do-first)
+- [Emergency contacts](#emergency-contacts)
+- [Last resort — full restore](#last-resort--full-restore)
 
 ---
 
@@ -141,14 +155,14 @@ Use cloud console to restart:
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
 | 1 | G1–G29 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx/Apache, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent, Cloud Upload, Fail2ban, Promtail, Node Exporter, Telegram Bot (+ 2 metric-only sections) | ❌ No |
-| 2 | B1–B8 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (6 heartbeats) | ✅ Yes |
+| 2 | B1–B10 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (6 heartbeats), Grafana Cloud SM | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
 All alerts → same Telegram topic.
 
 ---
 
-## ━━━━━━ LAYER 1: GRAFANA ALERTS ━━━━━━
+## 🔴 Layer 1: Grafana Alerts {#layer-1-grafana-alerts}
 
 ---
 
@@ -270,7 +284,8 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
 
   ```bash
   sudo du -sh /var/lib/victoria-metrics/
-  # Retention is 3 days by default (vm_retention: 3)
+  # Retention is 3 months by default (vm_retention: 3 — VictoriaMetrics
+  # treats a unitless value as months)
   ```
 
 - **Find unexpected large files:**
@@ -1060,9 +1075,9 @@ sudo systemctl status vmagent
 # Check vmagent logs
 sudo journalctl -u vmagent --no-pager -n 50
 
-# Test connectivity to Grafana Cloud
+# Test connectivity to Grafana Cloud (token via --config, never in argv)
 curl -s -o /dev/null -w "%{http_code}" \
-  -H "Authorization: Bearer $GRAFANA_CLOUD_TOKEN" \
+  --config <(printf 'header = "Authorization: Bearer %s"\n' "$GRAFANA_CLOUD_TOKEN") \
   "$GRAFANA_CLOUD_URL"
 ```
 
@@ -1197,20 +1212,21 @@ sudo systemctl restart telegram-bot
 
 ---
 
-## ━━━━━━ LAYER 2: BETTER STACK ALERTS ━━━━━━
+## 🔴 Layer 2: Better Stack Alerts {#layer-2-better-stack-alerts}
 
 ---
 
-### B1. 🔴 BetterStack Alert — dreamseed.online (HTTP)
+### B1. 🔴 BetterStack Alert — dreamseed.online (Main site monitor)
 
-**What triggered:** Better Stack (from 4 global regions) cannot reach `https://dreamseed.online`
+**What triggered:** Better Stack (from 4 global regions — EU, US, Asia, Australia) cannot reach `https://dreamseed.online` — either the HTTP check failed or the keyword **"The Dreamers"** is missing from the response
 **Severity:** CRITICAL — server may be down
 **Causes (from most to least likely):**
 
 1. Server is down entirely (AWS/Hetzner issue)
 2. Nginx/PHP-FPM crashed (see Layer 1 alerts)
-3. Network issue / firewall blocks port 443
-4. Cloudflare SSL issue
+3. Site returns 502/503 / maintenance page (keyword not found)
+4. Network issue / firewall blocks port 443
+5. Cloudflare SSL issue
 
 **Diagnose — try in order:**
 
@@ -1230,7 +1246,17 @@ sudo systemctl restart telegram-bot
 
    If 200 → DNS/routing issue (not server). If not 200 → web server issue.
 
-3. **Check Cloudflare status:**
+3. **Check what the site actually returns (keyword trigger):**
+
+   ```bash
+   # Check HTTP status
+   curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online/
+
+   # Check keyword presence
+   curl -sS https://dreamseed.online/ | grep -o "The Dreamers" || echo "NOT FOUND"
+   ```
+
+4. **Check Cloudflare status:**
    Visit `https://www.cloudflarestatus.com/` or check if DNS resolves correctly:
 
    ```bash
@@ -1241,34 +1267,34 @@ sudo systemctl restart telegram-bot
 
 - If server is down → restart via cloud console (AWS EC2 / Hetzner Cloud)
 - If web server is down → see Nginx/PHP-FPM/MySQL alerts
+- If HTTP is fine but keyword missing → site is up but serving a wrong page → see Site Down alert (#7)
+- If MODX content changed → update the keyword in Better Stack dashboard
 - If only Better Stack sees it down but site works locally → Cloudflare issue or routing problem
 
 ---
 
-### B2. 🔴 BetterStack Alert — dreamseed.online (Keyword "The Dreamers")
+### B2. 🔴 BetterStack Alert — dreamseed.online/manager (Admin panel)
 
-**What triggered:** Better Stack checked `https://dreamseed.online/` but text "The Dreamers" was not found in the response
-**Severity:** High — site may be returning a different page (error, maintenance, redirect)
+**What triggered:** Better Stack (from 4 global regions) cannot reach `https://dreamseed.online/manager/`, or the keyword **"MODX"** is missing (login page not served)
+**Severity:** Medium — admin panel down, public site may still work
 **Causes:**
 
-1. Site returned 502/503 instead of HTML
-2. MODX changed the page content
-3. Maintenance mode enabled
+1. Nginx vhost / MODX manager route broken
+2. PHP-FPM crashed (login page is rendered by PHP)
+3. MODX core/session issue (see Admin Login alert G14)
 
 **Diagnose:**
 
 ```bash
-# Check what the site actually returns
-curl -sS https://dreamseed.online/ | grep -o "The Dreamers" || echo "NOT FOUND"
-
-# Check HTTP status
-curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online/
+ssh prod "sudo systemctl status nginx php8.3-fpm"
+ssh prod "curl -sk --resolve dreamseed.online:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://dreamseed.online/manager/"
 ```
 
 **Fix:**
 
-- If HTTP != 200 → see Site Down alert (#7)
-- If MODX content changed → update the keyword in Better Stack dashboard (or remove this monitor if outdated)
+- If PHP-FPM down → see PHP-FPM Down alert (G5)
+- If nginx config broken → see Web Server Down alert (G6)
+- If admin page broken but site works → see Admin Login Failed alert (G14)
 
 ---
 
@@ -1409,14 +1435,14 @@ ssh prod "bash /home/ubuntu/Scripts/send_report.sh daily 2>&1"
 
 ### B8. 🔴 Synthetic Monitoring Failure (Grafana Cloud)
 
-**What triggered:** Grafana Cloud Synthetic Monitoring HTTP checks from 4 global regions (us-east, eu-west, ap-southeast, sa-east) detected downtime, slow response, or SSL issues
-**Severity:** CRITICAL — external visibility across global regions is degraded
+**What triggered:** Grafana Cloud Synthetic Monitoring checks (4 checks: HTTP main, MultiHTTP, Grafana, SSL) from global probes (US, Canada, Europe, Asia) detected downtime, slow response, or SSL issues
+**Severity:** CRITICAL — external visibility is degraded
 **Causes:**
 
-1. Server is down in one or more regions (regional routing issue, cloud provider problem)
+1. Server is down (cloud provider issue)
 2. Cloudflare edge issue
 3. SSL certificate expired at Cloudflare edge
-4. Latency spike or packet loss to specific regions
+4. Latency spike or packet loss
 
 **Diagnose:**
 
@@ -1430,15 +1456,14 @@ ssh prod "curl -sS -o /dev/null -w '%{http_code}' https://localhost/"
 # 3. Check the SM check details in Grafana Cloud:
 #    https://vitalikuts.grafana.net → Synthetic Monitoring → Checks
 
-# 4. Check if only specific regions fail → cloud provider regional issue
+# 4. Check provider status pages
 open https://health.aws.amazon.com
 # or https://status.hetzner.com
 ```
 
 **Fix:**
 
-- If only 1-2 regions fail → likely cloud provider regional issue. Wait, check status page.
-- If all regions fail but localhost works → Cloudflare issue (DDoS protection, edge cert, routing)
+- If all checks fail but localhost works → Cloudflare issue (DDoS protection, edge cert, routing)
 - If localhost also fails → server is down (see Layer 1 alerts)
 - If SSL check fails → check Cloudflare SSL/TLS settings (should be Full, not Flexible)
 
@@ -1446,7 +1471,56 @@ open https://health.aws.amazon.com
 
 ---
 
-## ━━━━━━ LAYER 3: SCRIPT DIRECT ALERTS ━━━━━━
+### B9. 🔴 BetterStack Alert — verify-backups heartbeat missed
+
+**What triggered:** `verify_backups.sh` did not ping within 24h + 10m grace
+**Severity:** Warning — daily backup integrity verification may have failed
+**Causes:**
+
+1. `verify_backups.sh` failed (corrupted backup, rclone error)
+2. `BETTERUPTIME_VERIFY_KEY` missing from server `.env`
+3. Network issue prevented curl to Better Stack
+
+**Diagnose:**
+
+```bash
+ssh prod "cat /home/ubuntu/backups/logs/verify_$(date +%Y-%m-%d).log 2>/dev/null"
+```
+
+**Fix:**
+
+- Run manually to see the error: `ssh prod "bash /home/ubuntu/Scripts/verify_backups.sh"`
+- If rclone/auth expired → update rclone config and redeploy
+- Check GDrive quota (`rclone lsd gdrive-crypt:`)
+
+---
+
+### B10. 🔴 BetterStack Alert — check-services heartbeat missed
+
+**What triggered:** `check_services.sh` did not ping within 5min + 60s grace
+**Severity:** Warning — the health-check watchdog may be down
+**Causes:**
+
+1. `check-services.timer`/service stopped
+2. Server overloaded or deployed (marker suppresses checks during deploy)
+3. `BETTERUPTIME_CHECK_SERVICES_KEY` missing from server `.env`
+
+**Diagnose:**
+
+```bash
+ssh prod "sudo systemctl status check-services.timer"
+ssh prod "bash /home/ubuntu/Scripts/check_services.sh"
+```
+
+**Fix:**
+
+```bash
+ssh prod "sudo systemctl restart check-services.timer"
+```
+
+---
+
+## 🔴 Layer 3: Script Direct Alerts {#layer-3-script-direct-alerts}
 
 ---
 
@@ -1528,7 +1602,7 @@ ssh prod "rclone delete gdrive-crypt:DreamSeed/backups/old_file --dry-run 2>&1"
 
 ---
 
-## ━━━━━━ LAYER 4: CI/CD & INFRASTRUCTURE ALERTS ━━━━━━
+## 🔴 Layer 4: CI/CD and Infrastructure Alerts {#layer-4-cicd-and-infrastructure-alerts}
 
 ---
 

@@ -115,11 +115,9 @@ jobs:
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
           dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
-          dev_aws_eip: ${{ secrets.DEV_AWS_EIP }}
           prod_access_key: ${{ secrets.PROD_ACCESS_KEY }}
           prod_secret_key: ${{ secrets.PROD_SECRET_KEY }}
           prod_region: ${{ secrets.PROD_REGION }}
-          prod_eip: ${{ secrets.PROD_EIP }}
           user_ssh_public_key: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           vitali_ssh_public_key: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
           rclone_crypt_password: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
@@ -198,13 +196,22 @@ jobs:
           perl -pe 's/\e\[[\d;]*[mK]//g' /tmp/deploy.log > /tmp/deploy-summary.txt
           exit "$rc"
 
+      - name: Scrub secrets from deploy log
+        if: always() && inputs.action == 'deploy' && failure()
+        uses: ./.github/actions/scrub-log
+        with:
+          log-path: /tmp/deploy.log
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
       - name: Upload deploy log (debug)
         if: always() && inputs.action == 'deploy' && failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: deploy-log-${{ inputs.environment }}
           path: /tmp/deploy.log
-          retention-days: 7
+          retention-days: 2
 
       - name: Post-deploy
         if: always() && inputs.action == 'deploy'
@@ -358,13 +365,22 @@ jobs:
 
           exit "$rc"
 
+      - name: Scrub secrets from destroy log
+        if: always() && inputs.action == 'destroy' && failure()
+        uses: ./.github/actions/scrub-log
+        with:
+          log-path: /tmp/deploy.log
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
       - name: Upload deploy log (debug)
         if: always() && inputs.action == 'destroy' && failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: deploy-destroy-log-${{ inputs.environment }}
           path: /tmp/deploy.log
-          retention-days: 7
+          retention-days: 2
           if-no-files-found: ignore
 
       - name: Notify failure

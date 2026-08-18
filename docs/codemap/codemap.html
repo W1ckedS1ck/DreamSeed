@@ -69,7 +69,7 @@ button:hover{border-color:var(--accent);color:#fff}
 <header>
   <div class="brand">
     <span class="name">DreamSeed — Interactive Code Map</span>
-    <span class="meta">generated: 2026-08-16T10:52:35Z &nbsp;·&nbsp; commit: <code>96f7a8bca940f5ac5ceb93546227bb3aa07cc633</code></span>
+    <span class="meta">generated: 2026-08-18T08:27:26Z &nbsp;·&nbsp; commit: <code>a9986f3ad188bd558a2aca524f26d96114576d6a</code></span>
   </div>
   <div class="controls">
     <input type="text" id="search" placeholder="Search nodes…" autocomplete="off">
@@ -104,9 +104,9 @@ button:hover{border-color:var(--accent);color:#fff}
 </div>
 <script>
 const DATA = {
- "generated_at": "2026-08-16T10:52:35Z",
- "generated_from_commit": "96f7a8bca940f5ac5ceb93546227bb3aa07cc633",
- "working_tree_changed": false,
+ "generated_at": "2026-08-18T08:27:26Z",
+ "generated_from_commit": "a9986f3ad188bd558a2aca524f26d96114576d6a",
+ "working_tree_changed": true,
  "graph_hash": "9abb63fdf04ba0d2",
  "scope": [
   ".github",
@@ -139,7 +139,7 @@ const DATA = {
    "constraints": [
     "Prod destroy requires interactive 3-step confirm or CI_DESTROY_CONFIRM=yes (lib/terraform.sh:45)",
     "Per-target flock lock prevents concurrent deploys (deploy.sh:159)",
-    "Playbooks run in phases: 01 -> 02+03 -> 04 -> 05+06+07+08 (deploy.sh:421)",
+    "Playbooks run in phases: 01 -> 02+03+09 -> 04 -> 05+06+08+07 (07 = non-fatal fallback)",
     "Sources lib/*.sh at startup \u2014 never exec'd directly (deploy.sh:41-45)"
    ],
    "evidence": [
@@ -591,7 +591,7 @@ const DATA = {
    "constraints": [
     "GRAFANA_CLOUD_URL must be regional prometheus-* URL (lib/preflight.sh:58-68)",
     "vmagent metric token must be glc_* (Cloud Access Policy), not glsa_* (lib/preflight.sh:69-74)",
-    "vm_retention=3d (group_vars/all.yml:66)",
+    "vm_retention=3mo (group_vars/all.yml:69)",
     "Grafana alerts send to Telegram contact point (grafana-alerts.yaml.j2:54-61)"
    ],
    "evidence": [
@@ -1601,7 +1601,7 @@ const DATA = {
      "terraform-hetzner"
     ]
    ],
-   "outcome": "Server provisioned on AWS/Hetzner, configured by 8 playbooks, DNS A record points domain -> server, check_services passes, Telegram 'Deploy complete' notification."
+   "outcome": "Server provisioned on AWS/Hetzner, configured by 9 playbooks, DNS A record points domain -> server, check_services passes, Telegram 'Deploy complete' notification."
   },
   {
    "id": "flow-backup",
