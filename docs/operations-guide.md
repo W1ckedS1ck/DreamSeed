@@ -2,6 +2,8 @@
 
 > Day-to-day maintenance procedures for DreamSeed infrastructure.
 > Not incident response — see `runbook.md` for that.
+>
+> 🗓 **Last updated:** 2026-08-18
 
 ---
 
@@ -88,7 +90,7 @@ Re-run from last success:
 ```bash
 # After fixing the cause, re-deploy config only:
 ./deploy.sh <target> -n -i <ip>
-# This skips Terraform + cloud-init, re-runs all 8 playbooks
+# This skips Terraform + cloud-init, re-runs all 9 playbooks
 ```
 
 ---
@@ -251,7 +253,7 @@ ansible-roles/<name>/
 ### Gotchas (from CLAUDE.md)
 
 - `inject_facts_as_vars = False` — use `{{ ansible_facts['memtotal_mb'] }}`, not `{{ ansible_memtotal_mb }}`
-- `become` is NOT set at playbook level (all 8 playbooks declare `become: false`) — opt in with `become: true` per task
+- `become` is NOT set at playbook level (all 9 playbooks declare `become: false`) — opt in with `become: true` per task
 - Use `ansible.builtin.` modules, not bare `command:` or `shell:` unless necessary
 - `no_log: true` on any task handling passwords, tokens, keys
 - No collections other than `ansible.mariadb` and `ansible.posix`

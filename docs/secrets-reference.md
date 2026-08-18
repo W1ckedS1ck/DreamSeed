@@ -2,6 +2,8 @@
 
 Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com/W1ckedS1ck/DreamSeed) repository.
 
+> 🗓 **Last updated:** 2026-08-18
+
 ---
 
 ## Required (all targets)
@@ -58,7 +60,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
+| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `terraform-apply.yml`, `drift-detection.yml` |
 | `PROD_SECRET_KEY` | AWS Secret Key | Same |
 | `PROD_REGION` | AWS region (`us-west-1`) | Same |
 
@@ -66,7 +68,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `health-check.yml`, `rollback.yml`, `terraform-apply.yml` |
+| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `terraform-apply.yml`, `drift-detection.yml` |
 | `DEV_AWS_SECRET_KEY` | AWS Secret Key | Same |
 | `DEV_AWS_REGION` | AWS region (`us-west-1`) | Same |
 

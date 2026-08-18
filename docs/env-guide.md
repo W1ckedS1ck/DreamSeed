@@ -2,6 +2,8 @@
 
 How to obtain and use every variable in `secrets/.env` and `.env.example`.
 
+> 🗓 **Last updated:** 2026-08-18
+
 ---
 
 ## Cloudflare

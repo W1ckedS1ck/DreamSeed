@@ -2,6 +2,8 @@
 
 Trigger deploys and destroys from any GitHub issue/PR comment — no Actions UI, no local `deploy.sh`.
 
+> 🗓 **Last updated:** 2026-08-18
+
 ```
 /deploy dev-hetz -p
 ```

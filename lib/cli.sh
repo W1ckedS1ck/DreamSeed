@@ -22,7 +22,7 @@ WEB SERVER (required):
 OPTIONS:
   -i IP              Skip Terraform, use existing server
   -x, --destroy      Destroy resources
-  -p, --parallel     Parallel playbook execution (3 phases)
+  -p, --parallel     Parallel playbook execution (4 phases)
   -d, --dry-run      Preview only
   -c, --check        Validate config & syntax only (no deploy)
   --no-dns           Skip Cloudflare DNS update

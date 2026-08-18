@@ -23,11 +23,12 @@ runs:
     - name: Scrub secrets
       shell: bash
       env:
+        LOG_PATH: ${{ inputs.log-path }}
         VAULT_PASSWORD: ${{ inputs.vault-password }}
         SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
         RCLONE_CONF_BASE64: ${{ inputs.rclone-conf-base64 }}
       run: |
-        python3 - "${{ inputs.log-path }}" <<'PY'
+        python3 - "$LOG_PATH" <<'PY'
         import os
         import sys
 

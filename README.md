@@ -8,10 +8,10 @@
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
 ![Terraform](https://img.shields.io/badge/Terraform-1.15-7B42BC?logo=terraform)
-![Ansible](https://img.shields.io/badge/Ansible--core-2.21.2-EE0000?logo=ansible)
+![Ansible](https://img.shields.io/badge/Ansible--core-2.21-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
-![Grafana](https://img.shields.io/badge/Grafana-13.1.3-F46800?logo=grafana)
+![Grafana](https://img.shields.io/badge/Grafana-13.x-F46800?logo=grafana)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 
@@ -19,10 +19,28 @@
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~8–10 min.
 >
 > 📖 **Documentation**: [Wiki](https://github.com/W1ckedS1ck/DreamSeed/wiki) — architecture, runbook, operations guide, and more
+>
+> 🗓 **Last updated**: 2026-08-18
 
 ---
 
-## 🌍 About the Product
+## 📑 Table of Contents
+
+- [About the Product](#about-the-product)
+- [Quick Start](#quick-start)
+- [By the Numbers](#by-the-numbers)
+- [My Role](#my-role)
+- [Tech Stack](#tech-stack)
+- [Architecture at a Glance](#architecture-at-a-glance)
+- [Deploy Commands](#deploy-commands)
+- [Project Layout](#project-layout)
+- [Infrastructure Highlights](#infrastructure-highlights)
+- [Key Engineering Decisions](#key-engineering-decisions)
+- [Live Environments](#live-environments)
+
+---
+
+## 🌍 About the Product {#about-the-product}
 
 **DreamSeed** ([dreamseed.online](https://dreamseed.online)) is a live global social experiment — *"The Dreamers"*. Participants take a **Wheel of Life** self-assessment, choose a virtual bonsai tree symbolising their dream, and pay $1.99 as a personal pledge to pursue it. Trees are placed on a live world map, building a global dataset.
 
@@ -30,7 +48,27 @@
 
 ---
 
-## 📊 By the Numbers
+## ⚡ Quick Start {#quick-start}
+
+```bash
+# 1. Check everything lints clean (2 min)
+./deploy.sh --lint
+
+# 2. Dry-run a deploy (no changes made)
+./deploy.sh dev-hetz -n --dry-run
+
+# 3. Deploy a fresh dev server on Hetzner (Nginx)
+./deploy.sh dev-hetz -n
+
+# 4. Destroy it (one confirmation)
+./deploy.sh dev-hetz -x
+```
+
+> 🛡️ **Production** (`prod` / `prod-hetz`) requires manual confirmation — deploy asks `[y/N]`, destroy requires typing `destroy <target>`. Full reference below in [Deploy Commands](#deploy-commands).
+
+---
+
+## 📊 By the Numbers {#by-the-numbers}
 
 | Metric | Value |
 |--------|-------|
@@ -43,14 +81,14 @@
 
 ---
 
-## 🔧 My Role — Co-founder & CTO
+## 🔧 My Role {#my-role}
 
 I own **everything below the application layer** — provisioning, configuration, SSL, monitoring, backups, security, CI/CD, disaster recovery. The developer builds features; I make sure they reach the world.
 
 ### What I Built
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
-- **Server automation** — 17 idempotent Ansible roles across 8 playbooks (01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana → 08-promtail)
+- **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana → 08-promtail → 09-pro)
 - **Observability** — VictoriaMetrics + Promtail + Grafana stack with 27 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
 - **CI/CD** — 11 GitHub Actions jobs (8 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy and docs workflows
@@ -59,7 +97,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 ---
 
-## 🧰 Tech Stack
+## 🧰 Tech Stack {#tech-stack}
 
 | Layer | Tools |
 |---|---|
@@ -74,36 +112,25 @@ I own **everything below the application layer** — provisioning, configuration
 
 ---
 
-## 🏛️ Architecture at a Glance
+## 🏛️ Architecture at a Glance {#architecture-at-a-glance}
 
-```
-           ┌──────────────────┐
-           │    deploy.sh     │   ← one entry point, two clouds
-           └────────┬─────────┘
-                    │
-        ┌───────────┴───────────┐
-        ▼                       ▼
- ┌─────────────┐         ┌──────────────┐
- │  Terraform  │         │   Ansible    │
- │             │         │              │
- │ • AWS       │ ──────► │ 01 Base      │
- │ • Hetzner   │  SSH    │ 02 Web       │
- └─────────────┘         │ 03 Database  │
-                         │ 04 Security  │
-                         │ 05 Monitoring│
-                         │ 06 Backup    │
-                         │ 07 Grafana   │
-                         └──────────────┘
-                                │
-                                ▼
-                   🌐 https://dreamseed.online
+```mermaid
+flowchart LR
+    CLI[./deploy.sh] --> TF[Terraform]
+    CLI --> ANS[Ansible — 9 playbooks]
+    TF -->|provision| SRV[(Server<br/>AWS EC2 / Hetzner)]
+    ANS -->|configure via SSH| SRV
+    SRV --> CF[Cloudflare CDN + WAF]
+    CF --> SITE["🌐 dreamseed.online"]
+    SRV --> OBS[Grafana + VictoriaMetrics<br/>27 alert rules → Telegram]
+    SRV --> BCK[Backups → Google Drive<br/>rclone crypt AES-256]
 ```
 
 Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). Ansible configures everything on the OS — packages, web server, database, SSL, monitoring stack, backup cron, Grafana dashboards, and security hardening. `deploy.sh` orchestrates both with SSH retry logic, cloud-init validation, parallel Ansible execution, and timestamped logs.
 
 ---
 
-## 🚀 Deploy Commands
+## 🚀 Deploy Commands {#deploy-commands}
 
 ```bash
 # Production on AWS with Nginx (requires confirmation)
@@ -139,48 +166,45 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ---
 
-## 📂 Project Layout
+## 📂 Project Layout {#project-layout}
 
 ```
 DreamSeed/
-├── deploy.sh                 # Main orchestrator (125 lines + 12 modular lib files)
-├── .github/actions/          # Composite actions: setup-terraform, setup-ansible
+├── deploy.sh               # Main orchestrator (~150 lines + 13 modular lib files)
+├── lib/                    # Deploy modules: cli, env, helpers, preflight, terraform,
+│   │                       # ansible, stages, provision, wait, inventory, playbooks,
+│   │                       # post, gen_vars.py
+├── .github/
+│   ├── actions/            # 8 composite actions: setup-* (terraform/ansible/secrets/
+│   │   │                   # env/gitleaks), chatops, scrub-log, capture-screenshot
+│   ├── scripts/            # test-restored-server.sh — post-restore verification suite
+│   └── workflows/          # 10 workflows (see CI/CD section)
 ├── terraform/
-│   ├── aws/                  # EC2 + Elastic IP + Security Group
-│   ├── hetzner/              # Cloud server + firewall + primary IP
-│   ├── cloudflare/            # WAF Managed Ruleset + Cache rules (Cloudflare provider)
-│   └── grafana/              # Grafana Cloud dashboard provisioning via Terraform
+│   ├── aws/                # EC2 + Elastic IP + Security Group
+│   ├── hetzner/            # Cloud server + firewall + primary IP
+│   ├── cloudflare/         # WAF Managed Ruleset + Cache rules (Cloudflare provider)
+│   └── grafana/            # Grafana Cloud dashboards + Synthetic Monitoring
 ├── ansible/
-│   ├── playbook-01-base.yml      # OS packages
-│   ├── playbook-02-web.yml          # Nginx/Apache + PHP + SSL
-│   ├── playbook-03-db.yml        # MariaDB + restore logic
-│   ├── playbook-04-security.yml  # Hardening (fail2ban, SSH)
-│   ├── playbook-05-monitor.yml   # VictoriaMetrics + exporters
-│   ├── playbook-06-backup.yml   # Backup cron + Telegram bot
-│   ├── playbook-07-grafana.yml   # Grafana dashboards + alerts
-│   └── playbook-08-promtail.yml  # Promtail log shipping (Loki)
-├── ansible-roles/            # 17 reusable roles (nginx, mariadb, ssl, redis, …)
-├── scripts/                  # Backup, restore, Telegram bot, health checks
-├── docs/                     # Architecture, runbook, operations guide, linters, secrets ref
-├── secrets/                  # Secrets: .env (ansible-vault encrypted), tfstate-backup/, ssl/ (all gitignored)
-├── .tflint.hcl               # Terraform linter config (root, drives all providers)
-├── renovate.json              # Automated dependency update config
- └── .github/workflows/
-     ├── ci.yml                # Full lint + security + validation pipeline
-     ├── deploy.yml            # One-button deploy/destroy via GitHub Actions
-     ├── drift-detection.yml   # Daily terraform plan against prod
-     ├── test-restore.yml      # Full DR drill (deploy + local & cloud restore)
-     ├── rollback.yml          # Emergency rollback with prod confirmation
-     ├── grafana-cloud.yml     # Grafana Cloud dashboard provisioning
-     ├── health-check.yml      # Weekly server update (apt upgrade + reboot check)
-     ├── terraform-apply.yml   # TF: Infra + Cloudflare apply
-     ├── chatops-deploy.yml    # /deploy and /destroy via GitHub issue comments
-     └── docs.yml              # Docs site + code map publishing + wiki sync
- ```
+│   ├── playbook-01-base.yml       # OS packages, swap, PHP
+│   ├── playbook-02-web.yml        # Nginx/Apache + PHP + SSL
+│   ├── playbook-03-db.yml         # MariaDB + restore logic
+│   ├── playbook-04-security.yml   # Hardening (fail2ban, SSH)
+│   ├── playbook-05-monitor.yml    # VictoriaMetrics + exporters
+│   ├── playbook-06-backup.yml     # Backup cron + Telegram bot
+│   ├── playbook-07-grafana.yml    # Grafana dashboards + alerts
+│   ├── playbook-08-promtail.yml   # Promtail log shipping (Loki)
+│   └── playbook-09-pro.yml        # Ubuntu Pro (ESM) attachment
+├── ansible-roles/          # 17 reusable roles (nginx, mariadb, ssl, redis, …)
+├── scripts/                # Backup, restore, Telegram bot, health checks
+├── docs/                   # Architecture, runbook, operations guide, linters, secrets ref
+├── secrets/                # gitignored: .env (ansible-vault), rclone.conf, tfstate-backup/, ssl/
+├── .tflint.hcl             # Terraform linter config (root, drives all providers)
+└── renovate.json           # Automated dependency update config
+```
 
 ---
 
-## ✨ Infrastructure Highlights
+## ✨ Infrastructure Highlights {#infrastructure-highlights}
 
 ### 🎛️ Multi-Cloud, Single Command
 
@@ -207,7 +231,7 @@ Grafana dashboards, datasources, **and 27 alert rules** deployed automatically �
 - **MySQLd Exporter** (`:9104`) — queries, connections, replication
 - **VictoriaMetrics** (`:8428`) — 3-month retention, 15s scrape interval
 - **Grafana** (`:3000`) — 6 provisioned dashboards on Nginx (5 on Apache), 27 alert rules → Telegram
-- **check_site.sh** (cron, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
+- **check_site.sh** (systemd timer, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
 **Grafana Cloud (hosted telemetry):**
 
@@ -215,11 +239,11 @@ Grafana dashboards, datasources, **and 27 alert rules** deployed automatically �
 - **Promtail** (`:9080`) — log agent, ships nginx + php-fpm + syslog to Loki (Grafana Cloud)
 - **Faro RUM** — real user monitoring: Core Web Vitals (LCP/CLS/INP), JS errors, sessions by browser/country. Injected via nginx `sub_filter`, proxied through same domain to avoid adblockers
 - **Grafana Cloud dashboards** — 5 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Redis 763, Nginx 17452, VictoriaMetrics 10229)
-- **Synthetic Monitoring** — Terraform-provisioned HTTP checks from 3 America probes + SSL checks from 1 probe
+- **Synthetic Monitoring** — Terraform-provisioned checks from **5 global probes** (US, Canada, Europe, Asia): HTTP main, MultiHTTP user-flow, Grafana endpoint, SSL
 
 **External (Better Stack cloud-hosted):**
 
-- **3 HTTP monitors** — `dreamseed.online` (HTTP 200 + keyword check + Grafana endpoint), 3min interval, 4 global regions
+- **3 HTTP monitors** — main site (HTTP 200 + keyword "The Dreamers"), admin panel (`/manager/`), Grafana (`/grafana`) — every monitor checked from **4 global regions** (EU, US, Asia, Australia) at 3min interval
 - **6 cron heartbeats** — backup (1h/5m), gdrive-upload (1h/5m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/60s)
 - **Public status page** — `status.dreamseed.online` with live uptime history
 - **Telegram alerts** via separate webhooks for incident start and resolve
@@ -261,7 +285,7 @@ CI (11 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** 
 
 ---
 
-## 🔍 Key Engineering Decisions
+## 🔍 Key Engineering Decisions {#key-engineering-decisions}
 
 - **Idempotent Ansible roles** — every playbook re-runs safely; updates config without breaking live services
 - **Cloudflare-first SSL** — all environments behind Cloudflare proxy (Full SSL mode); origin uses self-signed cert. This eliminates Let's Encrypt rate limits and certbot failures during provisioning
@@ -272,7 +296,7 @@ CI (11 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** 
 
 ---
 
-## 📸 Live Environments
+## 📸 Live Environments {#live-environments}
 
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|

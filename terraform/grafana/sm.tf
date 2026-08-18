@@ -1,7 +1,7 @@
 # Grafana Cloud Synthetic Monitoring — fit within free tier (100k API checks/mo).
-# Budget: main site (3 America probes×15min ≈ 8.5k) + multi (2 probes×30min ≈ 2.9k)
-#         + grafana (2 probes×30min ≈ 2.9k) + SSL (1 probe×1h ≈ 720)
-#         ≈ 15k checks/mo — well within 100k free tier.
+# Budget: main site (5 global probes×15min ≈ 14.4k) + multi (2 probes×30min ≈ 2.9k)
+#         + grafana (2 probes×30min ≈ 2.9k) + SSL (3 global probes×1h ≈ 2.2k)
+#         ≈ 22k checks/mo — well within 100k free tier (≈78k headroom).
 
 data "grafana_synthetic_monitoring_probes" "main" {
   provider = grafana.sm
@@ -11,14 +11,15 @@ locals {
   # Probe names are map keys into data.grafana_synthetic_monitoring_probes.main.
   # A Grafana-side rename would break `terraform plan` with an "invalid map key"
   # error — loud, not silent. Centralized here so a rename is a one-line fix.
-  # The exact probe set is a budget decision (free tier, ~15k checks/mo).
-  sm_probes_america = ["NorthCalifornia", "Ohio", "Montreal"]
+  # The exact probe set is a budget decision (free tier, ~22k checks/mo).
+  # "global" = North America + Europe + Asia — real multi-continent coverage.
+  sm_probes_global  = ["NorthCalifornia", "Ohio", "Montreal", "London", "Singapore"]
   sm_probes_multi   = ["NorthCalifornia", "Ohio"]
   sm_probes_grafana = ["NorthCalifornia", "Ohio"]
-  sm_probes_ssl     = ["Ohio"]
+  sm_probes_ssl     = ["Ohio", "London", "Singapore"]
 }
 
-# --- HTTP check — main site (US West + Central + Canada, every 15 min) ---
+# --- HTTP check — main site (US West + Central + Canada + Europe + Asia, every 15 min) ---
 resource "grafana_synthetic_monitoring_check" "http_main" {
   count     = var.sm_enabled ? 1 : 0
   provider  = grafana.sm
@@ -39,7 +40,7 @@ resource "grafana_synthetic_monitoring_check" "http_main" {
     }
   }
 
-  probes = [for p in local.sm_probes_america : data.grafana_synthetic_monitoring_probes.main.probes[p]]
+  probes = [for p in local.sm_probes_global : data.grafana_synthetic_monitoring_probes.main.probes[p]]
 
   labels = {
     env    = terraform.workspace
