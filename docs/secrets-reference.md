@@ -103,10 +103,15 @@ The URL points to the Prometheus endpoint, **not** the Grafana instance.
 Uses the Grafana **instance** URL (`*.grafana.net`), NOT the Prometheus endpoint.
 Instance URL is hardcoded in `grafana-cloud.yml`, not stored in secrets.
 
+> ⚠ **Source of truth = GitHub Secrets.** The `grafana-cloud.yml` workflow reads these from
+> GitHub Secrets, NOT from `secrets/.env`. The vault copies can drift out of date (Grafana Cloud
+> tokens are routinely rotated) — if a manual/local check returns `401 Invalid API key`, verify
+> the GitHub Secret first. They are kept in `secrets/.env` only for reference and manual checks.
+
 | Secret | Env | Purpose | Used in |
 |--------|-----|---------|---------|
-| `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token for Terraform (`glsa_*`, role=Admin) | `grafana-cloud.yml` |
-| `PROD_GRAFANA_CLOUD_SA_TOKEN` | prod | Service Account token for Terraform | `grafana-cloud.yml` |
+| `DEV_GRAFANA_CLOUD_SA_TOKEN` | dev | Service Account token for Terraform (`glsa_*`, role=Admin) | `grafana-cloud.yml`, `drift-detection.yml` (wake check) |
+| `PROD_GRAFANA_CLOUD_SA_TOKEN` | prod | Service Account token for Terraform | `grafana-cloud.yml`, `drift-detection.yml` (wake check) |
 | `PROD_GRAFANA_CLOUD_TOKEN` | prod | Fallback if SA_TOKEN is empty | `grafana-cloud.yml` |
 | `DEV_SM_ACCESS_TOKEN` | dev | Synthetic Monitoring token | `grafana-cloud.yml` |
 | `PROD_SM_ACCESS_TOKEN` | prod | Synthetic Monitoring token | `grafana-cloud.yml` |
