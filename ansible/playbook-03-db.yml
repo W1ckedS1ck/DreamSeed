@@ -9,6 +9,9 @@
       ansible.builtin.set_fact:
         php_version: "{{ ansible_facts['php_version'] | default(php_version) }}"
 
+    - name: Validate db_prefix and db_name format
+      ansible.builtin.include_tasks: ../ansible-roles/backup/tasks/validate_db_vars.yml
+
   roles:
     - mariadb
     - restore

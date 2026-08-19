@@ -1,0 +1,13 @@
+---
+# Validate db_prefix/db_name before any SQL/shell/template use — a bad value
+# would inject into server.env, cron, and SQL (defense-in-depth).
+# Shared by playbook-03 pre_tasks (runs before mariadb/restore consume these
+# vars) and the backup role itself (in case backup ever runs standalone).
+- name: Validate db_prefix and db_name format
+  ansible.builtin.assert:
+    that:
+      - db_prefix is regex('^[a-z0-9_]+$')
+      - db_name is regex('^[A-Za-z0-9_]+$')
+    fail_msg: >-
+      Invalid db_prefix='{{ db_prefix }}' (must be lowercase alphanumeric + underscore)
+      or db_name='{{ db_name }}' (must be alphanumeric + underscore)
