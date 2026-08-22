@@ -19,8 +19,9 @@
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~8–10 min.
 >
 > 📖 **Documentation**: [Wiki](https://github.com/W1ckedS1ck/DreamSeed/wiki) — architecture, runbook, operations guide, and more
+> 📐 **Decisions**: [ADRs](docs/adr/README.md) — the "why" behind the infrastructure · 🔒 [Security policy](.github/SECURITY.md)
 >
-> 🗓 **Last updated**: 2026-08-18
+> 🗓 Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog
 
 ---
 

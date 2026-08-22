@@ -2,7 +2,7 @@
 
 Documentation for the DreamSeed infrastructure — a multi-cloud production deployment serving [dreamseed.online](https://dreamseed.online).
 
-> 🗓 **Last updated:** 2026-08-18
+> 🗓 Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
 ## Pages
 
@@ -16,6 +16,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 | [Secrets Reference](secrets-reference) | Complete secret inventory, scope, and rotation |
 | [Linters](linters) | Local and CI linting tools and configuration |
 | [Code Map](https://w1ckeds1ck.github.io/DreamSeed/) | Interactive map of the codebase — modules, edges, flows |
+| [ADRs](adr/) | Architecture Decision Records — the "why" behind the infrastructure |
 
 ## Tech Stack
 
