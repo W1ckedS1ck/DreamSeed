@@ -114,6 +114,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cp repo/docs/*.md wiki/ 2>/dev/null || true
+          rm -rf wiki/adr && cp -r repo/docs/adr wiki/adr 2>/dev/null || true
           rm -f wiki/private.md wiki/.DS_Store 2>/dev/null || true
 
           cd wiki
