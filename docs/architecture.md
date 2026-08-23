@@ -260,9 +260,11 @@ Layer 2 — SSH:
   Key-only auth: 00-hardening.conf.d prefix wins via sshd first-match
 
 Layer 3 — Application:
-  fail2ban: modx-admin (POST /connectors/ — 25 retries) → bans at Cloudflare edge
+  fail2ban: modx-admin (POST /connectors/ — 25 retries; browser manager AJAX
+            with /manager/ Referer + UA exempted) → bans at Cloudflare edge
   fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits) → edge ban 12h
   fail2ban: dreamseed-bad-request (HTTP 400 — 6 hits) → edge ban 1h
+  Web-jail whitelist per env: FAIL2BAN_IGNOREIP_<TARGET> (secrets/.env)
   MODX core dirs: 0750, config: 0640 root:www-data
 
 Layer 4 — System:

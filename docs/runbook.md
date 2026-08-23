@@ -1152,6 +1152,27 @@ sudo systemctl restart fail2ban
 sudo fail2ban-client status
 ```
 
+#### Unbanning a blocked developer (false positive)
+
+The `modx-admin` jail counts `POST /connectors/index.php` as brute-force
+attempts. Authenticated manager AJAX (element trees, media browser) is excluded
+via the filter's `ignoreregex` (Referer `/manager/` + browser UA), but a
+scripted client without those headers can still trip the jail — e.g. an AI
+agent driving the manager API directly.
+
+```bash
+# Who is banned right now?
+sudo fail2ban-client status modx-admin
+
+# Unban immediately (ban lives at the Cloudflare edge)
+sudo fail2ban-client set modx-admin unbanip 203.0.113.10
+```
+
+Permanent whitelist for known developer/AI-agent IPs: set
+`FAIL2BAN_IGNOREIP_<TARGET>` (e.g. `FAIL2BAN_IGNOREIP_DEV_AWS`, space-separated
+IPs/CIDRs) in `secrets/.env`. It lands in the web jails' `ignoreip` (modx-admin,
+botsearch, bad-request) on next deploy; sshd is never whitelisted.
+
 ---
 
 ### G27. 🔴 Promtail Down

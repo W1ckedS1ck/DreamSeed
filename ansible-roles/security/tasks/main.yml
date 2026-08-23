@@ -107,6 +107,14 @@
   no_log: true
   notify: Restart Fail2ban
 
+# Legacy hand-patched single-IP exemption, superseded by fail2ban_ignoreip.
+- name: Remove legacy dev-exempt jail override
+  become: true
+  ansible.builtin.file:
+    path: /etc/fail2ban/jail.d/zz-dev-exempt.conf
+    state: absent
+  notify: Restart Fail2ban
+
 - name: Test Fail2ban config
   become: true
   ansible.builtin.command: fail2ban-client -t
