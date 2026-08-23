@@ -2,7 +2,7 @@
 
 Trigger deploys and destroys from any GitHub issue/PR comment — no Actions UI, no local `deploy.sh`.
 
-> 🗓 **Last updated:** 2026-08-18
+> Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
 ```
 /deploy dev-hetz -p
@@ -33,7 +33,7 @@ issue comment ──▶ [chatops] Deploy workflow ──▶ parse.py ──▶ d
 |---------|--------|
 | `/deploy <target>` | Deploy the target (Nginx, sequential by default) |
 | `/deploy <target> -a` | Deploy with Apache |
-| `/deploy <target> -p` | Parallel playbook execution (3 phases) |
+| `/deploy <target> -p` | Parallel playbook execution (4 phases) |
 | `/deploy <target> -i <ip>` | Skip Terraform — reconfigure an existing server IP |
 | `/destroy <target>` | Destroy the environment (with confirmation) |
 | `/deploy status` | Show the 5 most recent `deploy.yml` runs |

@@ -136,7 +136,7 @@ resource "grafana_synthetic_monitoring_check" "http_grafana" {
 
 }
 
-# --- SSL check — Cloudflare cert validation (1 probe, every hour — max SM interval) ---
+# --- SSL check — Cloudflare cert validation (3 probes, hourly — max SM interval) ---
 resource "grafana_synthetic_monitoring_check" "ssl_main" {
   count     = var.sm_enabled ? 1 : 0
   provider  = grafana.sm

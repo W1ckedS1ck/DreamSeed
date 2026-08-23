@@ -27,22 +27,22 @@
 
 ## 📑 Table of Contents
 
-- [About the Product](#about-the-product)
-- [Quick Start](#quick-start)
-- [By the Numbers](#by-the-numbers)
+- [About the Product](#-about-the-product)
+- [Quick Start](#-quick-start)
+- [By the Numbers](#-by-the-numbers)
 - [Global Observability](#-global-observability)
-- [My Role](#my-role)
-- [Tech Stack](#tech-stack)
-- [Architecture at a Glance](#architecture-at-a-glance)
-- [Deploy Commands](#deploy-commands)
-- [Project Layout](#project-layout)
-- [Infrastructure Highlights](#infrastructure-highlights)
-- [Key Engineering Decisions](#key-engineering-decisions)
-- [Live Environments](#live-environments)
+- [My Role](#-my-role)
+- [Tech Stack](#-tech-stack)
+- [Architecture at a Glance](#-architecture-at-a-glance)
+- [Deploy Commands](#-deploy-commands)
+- [Project Layout](#-project-layout)
+- [Infrastructure Highlights](#-infrastructure-highlights)
+- [Key Engineering Decisions](#-key-engineering-decisions)
+- [Live Environments](#-live-environments)
 
 ---
 
-## 🌍 About the Product {#about-the-product}
+## 🌍 About the Product
 
 **DreamSeed** ([dreamseed.online](https://dreamseed.online)) is a live global social experiment — *"The Dreamers"*. Participants take a **Wheel of Life** self-assessment, choose a virtual bonsai tree symbolising their dream, and pay $1.99 as a personal pledge to pursue it. Trees are placed on a live world map, building a global dataset.
 
@@ -50,7 +50,7 @@
 
 ---
 
-## ⚡ Quick Start {#quick-start}
+## ⚡ Quick Start
 
 ```bash
 # 1. Check everything lints clean (2 min)
@@ -66,11 +66,11 @@
 ./deploy.sh dev-hetz -x
 ```
 
-> 🛡️ **Production** (`prod` / `prod-hetz`) requires manual confirmation — deploy asks `[y/N]`, destroy requires typing `destroy <target>`. Full reference below in [Deploy Commands](#deploy-commands).
+> 🛡️ **Production** (`prod` / `prod-hetz`) requires manual confirmation — deploy asks `[y/N]`, destroy requires typing `destroy <target>`. Full reference below in [Deploy Commands](#-deploy-commands).
 
 ---
 
-## 📊 By the Numbers {#by-the-numbers}
+## 📊 By the Numbers
 
 | Metric | Value |
 |--------|-------|
@@ -89,7 +89,7 @@
 
 | Layer | Probes / regions | Frequency | Checks | Coverage |
 |-------|------------------|-----------|--------|----------|
-| **Grafana Cloud Synthetic Monitoring** | 5 probes — NorthCalifornia, Ohio, Montreal, **London, Singapore** | every **10 min** | HTTP main, MultiHTTP user-flow, Grafana, SSL | 3 continents (NA · EU · Asia) |
+| **Grafana Cloud Synthetic Monitoring** | 5 probes — NorthCalifornia, Ohio, Montreal, **London, Singapore** | 10 min main · 30 min user-flow + Grafana · 1 h SSL | HTTP main, MultiHTTP user-flow, Grafana, SSL | 3 continents (NA · EU · Asia) |
 | **Better Stack** (external) | 4 regions — EU · US · Asia · Australia | every 3 min | Main site (+keyword), admin `/manager/`, Grafana | 4 continents |
 | **Grafana on-server** (local) | 127.0.0.1 | 15s scrape / 1m site check | 27 alert rules → Telegram | survives only if server lives |
 | **Better Stack heartbeats** | 6 cron heartbeats | 5m – 7d | backup, upload, reports, verify, check-services | dead-man switch |
@@ -98,7 +98,7 @@
 
 ---
 
-## 🔧 My Role {#my-role}
+## 🔧 My Role
 
 I own **everything below the application layer** — provisioning, configuration, SSL, monitoring, backups, security, CI/CD, disaster recovery. The developer builds features; I make sure they reach the world.
 
@@ -114,7 +114,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 ---
 
-## 🧰 Tech Stack {#tech-stack}
+## 🧰 Tech Stack
 
 | Layer | Tools |
 |---|---|
@@ -129,7 +129,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 ---
 
-## 🏛️ Architecture at a Glance {#architecture-at-a-glance}
+## 🏛 Architecture at a Glance
 
 ```mermaid
 flowchart LR
@@ -147,7 +147,7 @@ Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). 
 
 ---
 
-## 🚀 Deploy Commands {#deploy-commands}
+## 🚀 Deploy Commands
 
 ```bash
 # Production on AWS with Nginx (requires confirmation)
@@ -183,7 +183,7 @@ Any `prod` command — deploy or destroy — requires manual confirmation. Produ
 
 ---
 
-## 📂 Project Layout {#project-layout}
+## 📂 Project Layout
 
 ```
 DreamSeed/
@@ -197,7 +197,7 @@ DreamSeed/
 │   ├── scripts/            # test-restored-server.sh — post-restore verification suite
 │   └── workflows/          # 10 workflows (see CI/CD section)
 ├── terraform/
-│   ├── aws/                # EC2 + Elastic IP + Security Group
+│   ├── aws/                # EC2 instance + key pair + Security Group
 │   ├── hetzner/            # Cloud server + firewall + primary IP
 │   ├── cloudflare/         # WAF Managed Ruleset + Cache rules (Cloudflare provider)
 │   └── grafana/            # Grafana Cloud dashboards + Synthetic Monitoring
@@ -221,7 +221,7 @@ DreamSeed/
 
 ---
 
-## ✨ Infrastructure Highlights {#infrastructure-highlights}
+## ✨ Infrastructure Highlights
 
 ### 🎛️ Multi-Cloud, Single Command
 
@@ -256,7 +256,7 @@ Grafana dashboards, datasources, **and 27 alert rules** deployed automatically �
 - **Promtail** (`:9080`) — log agent, ships nginx + php-fpm + syslog to Loki (Grafana Cloud)
 - **Faro RUM** — real user monitoring: Core Web Vitals (LCP/CLS/INP), JS errors, sessions by browser/country. Injected via nginx `sub_filter`, proxied through same domain to avoid adblockers
 - **Grafana Cloud dashboards** — 5 community dashboards provisioned via Terraform (Node Exporter 1860, MySQL 7362, Redis 763, Nginx 17452, VictoriaMetrics 10229)
-- **Synthetic Monitoring** — 🌍 **multi-region, every 10 min**: HTTP main from **5 global probes** (US, Canada, Europe, Asia), SSL from 3 probes, plus MultiHTTP user-flow and Grafana endpoint
+- **Synthetic Monitoring** — 🌍 **multi-region**: HTTP main from **5 global probes** every 10 min (US, Canada, Europe, Asia), SSL from 3 probes hourly, MultiHTTP user-flow and Grafana endpoint every 30 min
 
 **External (Better Stack cloud-hosted):**
 
@@ -302,7 +302,7 @@ CI (11 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** 
 
 ---
 
-## 🔍 Key Engineering Decisions {#key-engineering-decisions}
+## 🔍 Key Engineering Decisions
 
 - **Idempotent Ansible roles** — every playbook re-runs safely; updates config without breaking live services
 - **Cloudflare-first SSL** — all environments behind Cloudflare proxy (Full SSL mode); origin uses self-signed cert. This eliminates Let's Encrypt rate limits and certbot failures during provisioning
@@ -313,7 +313,7 @@ CI (11 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** 
 
 ---
 
-## 📸 Live Environments {#live-environments}
+## 📸 Live Environments
 
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|

@@ -1,6 +1,6 @@
 # Code Map
 
-Interactive visual reference of the DreamSeed codebase — modules, relationships and end-to-end flows. A companion to the static [Architecture](../architecture) page.
+Interactive visual reference of the DreamSeed codebase — modules, relationships and end-to-end flows. A companion to the static [Architecture](../architecture.md) page.
 
 ## What is it
 

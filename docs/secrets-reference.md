@@ -2,7 +2,7 @@
 
 Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com/W1ckedS1ck/DreamSeed) repository.
 
-> 🗓 **Last updated:** 2026-08-18
+> Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
 ---
 
@@ -15,19 +15,16 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `TG_THREAD_ID` (var) | Telegram thread/topic ID | Same |
 | `DB_PASS` | MySQL password for MODX | `deploy.yml`, `test-restore.yml` |
 | `GRAFANA_PASS` | Grafana admin password | `deploy.yml`, `test-restore.yml` |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS certbot + auto DNS update) | `deploy.yml`, `test-restore.yml` |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API (DNS certbot + auto DNS update) | `deploy.yml`, `test-restore.yml`, `drift-detection.yml`, `terraform-apply.yml` |
 | `CLOUDFLARE_FIREWALL_TOKEN` | Cloudflare API (fail2ban edge bans, `Zone → Firewall Services → Edit`) | `deploy.yml`, `test-restore.yml` → `security` role |
 | `SSH_PRIVATE_KEY` | Deploy SSH key (Ansible) | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `ci.yml` |
-| `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `test-restore.yml`, `rollback.yml`, `ci.yml` |
+| `VAULT_PASSWORD` | Ansible-vault password | `deploy.yml`, `test-restore.yml`, `rollback.yml`, `health-check.yml`, `ci.yml` |
 | `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml`, `chatops-deploy.yml`, `docs.yml` |
 | `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
-| `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml` → `rclone_config.yml` |
-| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml` |
-| `UBUNTU_PRO_TOKEN` | Ubuntu Pro subscription token | `deploy.yml`, `setup-env` → Ansible (playbook-01) — not in Terraform/cloud-init |
-| `EMAIL_USER` | SMTP username for mail.privateemail.com | `deploy.yml` → server .env |
-| `EMAIL_PASS` | SMTP password | `deploy.yml` → server .env |
-| `SMTP_SERVER` | SMTP host | `deploy.yml` → server .env |
-| `SMTP_PORT` | SMTP port (587) | `deploy.yml` → server .env |
+| `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml`, `test-restore.yml` → `rclone_config.yml` |
+| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml`, `test-restore.yml` |
+| `UBUNTU_PRO_TOKEN` | Ubuntu Pro subscription token | `deploy.yml`, `test-restore.yml`, `setup-env` → Ansible (playbook-01/09) — not in Terraform/cloud-init |
+| `EMAIL_USER` / `EMAIL_PASS` / `SMTP_SERVER` / `SMTP_PORT` | Legacy SMTP credentials — **reserved, not consumed anywhere** (present in `.env.example` and exported by preflight, but no workflow or role reads them) | — |
 
 ---
 
@@ -38,7 +35,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 | Variable | Purpose | Used in |
 |----------|---------|---------|
 | `FARO_COLLECTOR_URL` | Grafana Faro collector URL for frontend telemetry | `deploy.yml` |
-| `FARO_APP_NAME` | Grafana Faro application name | `deploy.yml` |
+| `FARO_APP_NAME` | Grafana Faro application name | *(not a secret/var — auto-derived from domain in `group_vars/all.yml`)* |
 | `LOKI_URL` | Loki push endpoint for log shipping | `deploy.yml` |
 | `LOKI_USERNAME` | Loki username (numeric instance ID) | `deploy.yml` |
 
@@ -49,8 +46,8 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 | Secret | Purpose | Used in |
 |--------|---------|---------|
 | `SSH_PRIVATE_KEY` | Deploy key (Ansible) | See above |
-| `USER_SSH_PUBLIC_KEY` | Developer's public key → `ADDITIONAL_SSH_KEYS` | `deploy.yml` |
-| `VITALI_SSH_PUBLIC_KEY` | Vitali's public key → `ADDITIONAL_SSH_KEYS` + AWS prod Terraform | `deploy.yml`, `terraform-apply.yml` |
+| `USER_SSH_PUBLIC_KEY` | Developer's public key → `ADDITIONAL_SSH_KEYS` | `deploy.yml`, `test-restore.yml` |
+| `VITALI_SSH_PUBLIC_KEY` | Vitali's public key → `ADDITIONAL_SSH_KEYS` + AWS prod Terraform | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml` |
 
 ---
 
@@ -60,7 +57,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `terraform-apply.yml`, `drift-detection.yml` |
+| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml`, `drift-detection.yml` |
 | `PROD_SECRET_KEY` | AWS Secret Key | Same |
 | `PROD_REGION` | AWS region (`us-west-1`) | Same |
 
@@ -68,7 +65,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `terraform-apply.yml`, `drift-detection.yml` |
+| `DEV_AWS_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml`, `drift-detection.yml` |
 | `DEV_AWS_SECRET_KEY` | AWS Secret Key | Same |
 | `DEV_AWS_REGION` | AWS region (`us-west-1`) | Same |
 
@@ -78,8 +75,8 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Target | Purpose | Used in |
 |--------|--------|---------|---------|
-| `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml`, `ci.yml` |
-| `PROD_HETZ_HCLOUD_TOKEN` | prod-hetz | Hetzner Cloud API token | `deploy.yml`, `drift-detection.yml`, `terraform-apply.yml` |
+| `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `drift-detection.yml`, `terraform-apply.yml`, `ci.yml` |
+| `PROD_HETZ_HCLOUD_TOKEN` | prod-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `drift-detection.yml`, `terraform-apply.yml` |
 
 ---
 

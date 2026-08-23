@@ -2,7 +2,7 @@
 
 How to obtain and use every variable in `secrets/.env` and `.env.example`.
 
-> 🗓 **Last updated:** 2026-08-18
+> Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
 ---
 
@@ -116,7 +116,7 @@ Known permission group IDs (vitalikuts.online account, zone scope):
 
 ## Grafana Cloud
 
-Three separate stacks exist:
+Two separate stacks exist:
 
 - **prod** — `dreamseed.grafana.net` (org id 1)
 - **dev** — `vitalikuts.grafana.net` (org id 2, shared by dev-aws + dev-hetz)
@@ -208,7 +208,7 @@ Where to get: https://uptime.betterstack.com → Heartbeats → create → copy 
 
 ## Frontend Observability (Faro RUM)
 
-Set per-target as GitHub Variables (not secrets):
+GitHub Variable (not a secret): `FARO_COLLECTOR_URL`. `FARO_APP_NAME` needs no setup — auto-derived from the domain in `group_vars/all.yml`.
 
 | Variable | Value (dev) | Value (prod) |
 |----------|------------|-------------|
