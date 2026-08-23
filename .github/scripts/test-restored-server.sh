@@ -142,8 +142,11 @@ fi
 REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l")
 echo "redis_cloud_backups=$REDIS_CLOUD"
 
-SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N \"$DB_NAME\" -e \"SELECT value FROM modx_system_settings WHERE key = 'session_handler_class'\" 2>/dev/null || true")
-if [ -z "$SHC" ]; then
+SHC=$(ssh ubuntu@"$SERVER_IP" "mysql -N \"$DB_NAME\" -e \"SELECT value FROM modx_system_settings WHERE \\\`key\\\` = 'session_handler_class'\" 2>/dev/null" || echo QUERY_FAILED)
+if [ "$SHC" = "QUERY_FAILED" ]; then
+    fail "session_handler_class: query failed (mysql error)"
+    echo "session_handler_ok=query_error"
+elif [ -z "$SHC" ]; then
     pass "session_handler_class empty (Redis sessions)"
     echo "session_handler_ok=yes"
 else

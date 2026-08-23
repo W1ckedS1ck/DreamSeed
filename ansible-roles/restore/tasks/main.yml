@@ -257,12 +257,14 @@
         msg: "✓ Restored DB: {{ restore_latest_db.stdout | trim }} ({{ restore_db_table_count.stdout | default('?') }} tables)"
 
     - name: Configure Redis as session handler in MODX
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          mysql "{{ db_name }}" -e "UPDATE {{ db_prefix | default('modx_') }}system_settings SET value='' WHERE key='session_handler_class'" 2>/dev/null || true
-        executable: /bin/bash
-      changed_when: true
+      ansible.mariadb.mariadb_query:
+        login_unix_socket: /run/mysqld/mysqld.sock
+        login_user: root
+        query: >
+          UPDATE `{{ db_name }}`.`{{ db_prefix | default('modx_') }}system_settings`
+          SET `value` = ''
+          WHERE `key` = 'session_handler_class'
+      become: true
       when: restore_latest_db.stdout | trim != ""
 
     - name: Clear MODX system settings cache and restart FPM to apply Redis session handler

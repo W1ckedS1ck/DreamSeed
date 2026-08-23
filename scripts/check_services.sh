@@ -390,14 +390,18 @@ fi
 # --- Heartbeat ---
 export_metric "check_services_last_run{instance=\"$DOMAIN\"} $(date +%s)"
 
-# --- Ping external heartbeat ---
-ping_heartbeat "${BETTERUPTIME_CHECK_SERVICES_KEY:-}" || true
-
 # --- Export overall health status ---
 if [[ $fail -eq 0 && $_local_fail -eq 0 ]]; then
     export_metric "dreamseed_health_overall 1"
 else
     export_metric "dreamseed_health_overall 0"
+fi
+
+# --- Ping external heartbeat ONLY when all checks passed (same condition as
+#     dreamseed_health_overall): silence = alert in Better Stack.
+#     Mirrors smart_backup / verify_backups / upload_backups_to_gdrive. ---
+if [[ $fail -eq 0 && $_local_fail -eq 0 ]]; then
+    ping_heartbeat "${BETTERUPTIME_CHECK_SERVICES_KEY:-}" || true
 fi
 
 # --- Exit status ---
