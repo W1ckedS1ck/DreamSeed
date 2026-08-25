@@ -56,6 +56,14 @@ def main():
     if additional_keys.strip():
         data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
 
+    # Fail2ban web-jail whitelist, per target (falls back to generic var).
+    # Space-separated IPs/CIDRs; bans at the CF edge would otherwise lock out
+    # known developers/AI agents whose dynamic ISP IPs trip the jails.
+    env_key = f"FAIL2BAN_IGNOREIP_{target.upper().replace('-', '_')}"
+    ignoreip = os.environ.get(env_key, '') or os.environ.get('FAIL2BAN_IGNOREIP', '')
+    if ignoreip.strip():
+        data['fail2ban_ignoreip'] = ' '.join(ignoreip.split())
+
     for key, val in data.items():
         _check_jinja(key, val)
 

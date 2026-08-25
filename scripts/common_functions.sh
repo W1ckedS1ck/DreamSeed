@@ -207,17 +207,19 @@ ping_heartbeat() {
     if curl -fsS -m 10 --retry 3 -o /dev/null "https://uptime.betterstack.com/api/v1/heartbeat/$key"; then
         return 0
     else
-        echo "WARNING: Better Stack heartbeat failed (previous heartbeat will expire): $key" >&2
+        # Prefix only: the full key would let log readers fake heartbeats and
+        # mask real downtime; the prefix is enough to identify which monitor.
+        echo "WARNING: Better Stack heartbeat failed (previous heartbeat will expire): ${key:0:8}…" >&2
         return 1
     fi
 }
 
 rclone_retry() {
-    local max_attempts="${RCLONE_RETRIES:-3}"
+    local max_attempts="${RCLONE_RETRIES:-5}"
     local attempt=1 rc timeout_secs="${RCLONE_CMD_TIMEOUT:-600}"
     while [ "$attempt" -le "$max_attempts" ]; do
         if [ "$attempt" -gt 1 ]; then
-            local delay=$((attempt * 5))
+            local delay=$(((attempt - 1) * 5))
             echo "[rclone_retry] attempt $attempt/$max_attempts — waiting ${delay}s" >&2
             sleep "$delay"
         fi

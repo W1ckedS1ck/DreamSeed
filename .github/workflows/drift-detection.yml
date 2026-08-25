@@ -216,16 +216,22 @@ jobs:
   wake-grafana:
     name: Wake Grafana Cloud instances
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     # Grafana Cloud free/paid instances can fall into a "Loading" state after a
     # long idle period — the API returns 503 {"code":"Loading",...} until someone
     # activates it in the web UI. This daily ping wakes both dev and prod so the
     # grafana-cloud.yml workflow doesn't fail on a sleeping instance. It also
     # surfaces invalid tokens (401) early, before an apply run.
+    #
+    # IMPORTANT: the FIRST request to a sleeping instance triggers the async
+    # wake-up and still returns 503. Retrying (5× / 20s) lets the wake complete
+    # inside this job — without retries every idle night produced a false
+    # "instance not responding" Telegram alert, then recovered by itself.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+
       - name: Wake dev instance
         id: dev-wake
         env:
@@ -236,11 +242,18 @@ jobs:
             echo "dev dev_http=NO_TOKEN"
             exit 0
           fi
-          CODE=$(curl -sS --max-time 30 -o /tmp/gc-dev.json -w "%{http_code}" \
-            -H "Authorization: Bearer $DEV_SA_TOKEN" \
-            "https://vitalikuts.grafana.net/api/folders" || echo "000")
+          CODE=000
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sS --max-time 30 -o /tmp/gc-dev.json -w "%{http_code}" \
+              -H "Authorization: Bearer $DEV_SA_TOKEN" \
+              "https://vitalikuts.grafana.net/api/folders" || echo "000")
+            echo "dev attempt $i: HTTP $CODE"
+            [ "$CODE" = "200" ] && break
+            [ "$i" -lt 5 ] && sleep 20 # first hit starts async wake; give it time
+          done
           echo "dev_http=$CODE" >> "$GITHUB_OUTPUT"
           echo "dev dev_http=$CODE"
+
       - name: Wake prod instance
         id: prod-wake
         env:
@@ -251,9 +264,15 @@ jobs:
             echo "prod prod_http=NO_TOKEN"
             exit 0
           fi
-          CODE=$(curl -sS --max-time 30 -o /tmp/gc-prod.json -w "%{http_code}" \
-            -H "Authorization: Bearer $PROD_SA_TOKEN" \
-            "https://dreamseed.grafana.net/api/folders" || echo "000")
+          CODE=000
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sS --max-time 30 -o /tmp/gc-prod.json -w "%{http_code}" \
+              -H "Authorization: Bearer $PROD_SA_TOKEN" \
+              "https://dreamseed.grafana.net/api/folders" || echo "000")
+            echo "prod attempt $i: HTTP $CODE"
+            [ "$CODE" = "200" ] && break
+            [ "$i" -lt 5 ] && sleep 20
+          done
           echo "prod_http=$CODE" >> "$GITHUB_OUTPUT"
           echo "prod prod_http=$CODE"
       - name: Notify on sleeping/invalid instance

@@ -1,5 +1,11 @@
 ; Managed by Ansible — DreamSeed PHP-FPM pool
 ; pm.max_children auto-calculated as 60% RAM / 50MB per process
+; start/min-spare/max-spare are clamped to max_children — php-fpm refuses to
+; start if any of them exceeds it (relevant on hosts < 1GB RAM).
+{%- set pm_children = [((ansible_facts['memtotal_mb'] | int) * 0.6 / 50) | int, 2] | max %}
+{%- set pm_min_spare = [3, pm_children] | min %}
+{%- set pm_start = [[5, pm_min_spare] | max, pm_children] | min %}
+{%- set pm_max_spare = [[pm_start, pm_min_spare] | max, pm_children] | min %}
 [www]
 user = www-data
 group = www-data
@@ -7,10 +13,10 @@ listen = /run/php/php{{ php_version }}-fpm.sock
 listen.owner = www-data
 listen.group = www-data
 pm = dynamic
-pm.max_children = {{ ([((ansible_facts['memtotal_mb'] | int) * 0.6 / 50) | int, 2] | max) }}
-pm.start_servers = 5
-pm.min_spare_servers = 3
-pm.max_spare_servers = 10
+pm.max_children = {{ pm_children }}
+pm.start_servers = {{ pm_start }}
+pm.min_spare_servers = {{ pm_min_spare }}
+pm.max_spare_servers = {{ pm_max_spare }}
 pm.max_requests = 500
 
 ; Session storage via Redis

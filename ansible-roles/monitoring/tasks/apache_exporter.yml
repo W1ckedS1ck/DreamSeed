@@ -7,6 +7,7 @@
     monitor_version: "{{ monitoring_apache_version }}"
     monitor_download_url: "https://github.com/Lusitaniae/apache_exporter/releases/download/v{{ monitoring_apache_version }}/apache_exporter-{{ monitoring_apache_version }}.linux-amd64.tar.gz"
     monitor_extracted_binary: "/tmp/apache_exporter-{{ monitoring_apache_version }}.linux-amd64/apache_exporter"
+    monitor_checksum_url: "https://github.com/Lusitaniae/apache_exporter/releases/download/v{{ monitoring_apache_version }}/sha256sums.txt"
 
 - name: Create apache_exporter user
   ansible.builtin.user:

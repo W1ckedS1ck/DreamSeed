@@ -1,8 +1,8 @@
 # Architecture
 
-> Interactive map of this codebase: [codemap.html](../codemap/codemap.html). This page is the static prose version; the map is the machine-generated visual layer (nodes, weighted edges, flows). Regenerate it with the codemap generator, never hand-edit the outputs.
+> Interactive map of this codebase: [w1ckeds1ck.github.io/DreamSeed](https://w1ckeds1ck.github.io/DreamSeed/) (`docs/codemap/codemap.html` in the repo). This page is the static prose version; the map is the machine-generated visual layer (nodes, weighted edges, flows). Regenerate it with the codemap generator, never hand-edit the outputs.
 >
-> 🗓 **Last updated:** 2026-08-18
+> Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
 ## Table of Contents
 
@@ -116,6 +116,8 @@ smart_backup.sh (hourly via cron)
    │
    ├─ Database: mysqldump via ~/.my.cnf → gzip → rotate keep 15
    │
+   ├─ Redis: redis-cli --rdb dump → rotate keep 5
+   │
    ├─ Push cron_last_run_backup to VictoriaMetrics
    │
    └─ Ping Better Stack heartbeat → uptime.betterstack.com/api/v1/heartbeat
@@ -227,7 +229,7 @@ Better Stack (cloud)
 | Fail2ban Down | warning | fail2ban_up == 0 | check_services 5m, for: 10m |
 | Promtail Down | warning | promtail_up == 0 | check_services 5m, for: 10m |
 | Node Exporter Down | warning | service_status{node_exporter} == 0 | check_services 5m, for: 10m |
-| Telegram Bot Down | warning | service_status{telegram-bot} == 0 | check_services 5m, for: 10m |
+| Telegram Bot Not Running | warning | service_status{telegram-bot} == 0 | check_services 5m, for: 10m |
 | VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | check_services 5m, for: 10m |
 | Cloud Upload Failed | warning | upload_last_success_timestamp >2h | upload script 1h, for: 5m |
 
@@ -254,13 +256,15 @@ Layer 1 — Network:
   Hetzner Firewall / AWS SG: port 22 (world) + 80/443 (Cloudflare edge ranges only)
 
 Layer 2 — SSH:
-  PermitRootLogin no, MaxAuthTries 3, LogLevel VERBOSE
-  Disable EC2 Instance Connect (AuthorizedKeysCommand none, 00 prefix wins via sshd first-wins)
+  PermitRootLogin no (cloud-init), MaxAuthTries 3, LogLevel VERBOSE
+  Key-only auth: 00-hardening.conf.d prefix wins via sshd first-match
 
 Layer 3 — Application:
-  fail2ban: modx-admin (POST /connectors/ — 25 retries) → bans at Cloudflare edge
+  fail2ban: modx-admin (POST /connectors/ — 25 retries; browser manager AJAX
+            with /manager/ Referer + UA exempted) → bans at Cloudflare edge
   fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits) → edge ban 12h
   fail2ban: dreamseed-bad-request (HTTP 400 — 6 hits) → edge ban 1h
+  Web-jail whitelist per env: FAIL2BAN_IGNOREIP_<TARGET> (secrets/.env)
   MODX core dirs: 0750, config: 0640 root:www-data
 
 Layer 4 — System:
@@ -316,4 +320,4 @@ Push / manual      Docs                  Pages site (code map) + wiki sync
 
 The canonical directory tree lives in the [repository README](https://github.com/W1ckedS1ck/DreamSeed#-project-layout) — kept in sync with the code rather than duplicated here.
 
-For a machine-verified, clickable version of the same structure (modules, edges, flows), use the [interactive code map](../codemap/codemap.html) or the [published site](https://w1ckeds1ck.github.io/DreamSeed/).
+For a machine-verified, clickable version of the same structure (modules, edges, flows), use the [interactive code map](https://w1ckeds1ck.github.io/DreamSeed/) or browse `docs/codemap/codemap.html` in the repo.

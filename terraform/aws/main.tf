@@ -162,8 +162,14 @@ resource "aws_instance" "web" {
   lifecycle {
     # user_data: cloud-init runs once at first boot. Changing template has no effect.
     # Without this, any change to cloud-init.tftpl triggers an EC2 stop/start.
+    #
+    # ami: data.aws_ami tracks "most_recent" Ubuntu 24.04 point-release. Without
+    # this, a fresh Canonical AMI would silently plan an instance REPLACE on the
+    # next deploy (downtime + new ephemeral state). Pin at creation; upgrade
+    # deliberately via taint/rebuild.
     ignore_changes = [
       user_data,
+      ami,
     ]
   }
 

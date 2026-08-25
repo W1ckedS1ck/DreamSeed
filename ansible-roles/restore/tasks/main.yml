@@ -156,11 +156,18 @@
     owner: www-data
     group: www-data
 
+- name: Check if MODX cache tmpfs is already mounted
+  become: true
+  ansible.builtin.command: mountpoint -q {{ web_root }}/core/cache
+  register: restore_cache_mounted
+  failed_when: false
+  changed_when: false
+
 - name: Mount tmpfs for MODX cache (fstab entry exists from PHP role)
   become: true
-  ansible.builtin.shell:
-    cmd: mount {{ web_root }}/core/cache 2>/dev/null || true
-    executable: /bin/bash
+  ansible.builtin.command: mount {{ web_root }}/core/cache
+  when: restore_cache_mounted.rc != 0
+  failed_when: false # preserve original tolerance — verify task below reports state
   changed_when: true
 
 - name: Verify tmpfs mount for MODX cache

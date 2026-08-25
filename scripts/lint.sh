@@ -291,7 +291,10 @@ run_terraform_validate() {
 
     for i in "${!dirs[@]}"; do
         d="${dirs[$i]}"
-        wait "${pids[$i]}"
+        # || true: a failed terraform validate exits the subshell non-zero;
+        # bare wait would abort the whole lint under set -e before other
+        # dirs are reported (status is read from res_files below).
+        wait "${pids[$i]}" || true
         if grep -q '^tf_validate_status=ok$' "${res_files[$i]}" 2>/dev/null; then
             print_ok "$d — valid"
         else

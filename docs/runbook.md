@@ -3,7 +3,7 @@
 > For **junior support staff**. Covers all alerts from all layers (Grafana, Better Stack, Scripts).
 > All notifications arrive in a single Telegram chat.
 >
-> Last updated: 2026-08-18
+> Continuously updated. Changelog: [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases).
 
 ## Table of Contents
 
@@ -11,10 +11,10 @@
 - [First 5 minutes](#first-5-minutes)
 - [How to connect](#how-to-connect)
 - [Alert Channels Overview](#alert-channels-overview)
-- [Layer 1: Grafana Alerts (G1–G29)](#layer-1-grafana-alerts)
-- [Layer 2: Better Stack Alerts (B1–B10)](#layer-2-better-stack-alerts)
-- [Layer 3: Script Direct Alerts (S1–S2)](#layer-3-script-direct-alerts)
-- [Layer 4: CI/CD & Infrastructure Alerts (D1)](#layer-4-cicd-and-infrastructure-alerts)
+- [Layer 1: Grafana Alerts (G1–G29)](#-layer-1-grafana-alerts)
+- [Layer 2: Better Stack Alerts (B1–B10)](#-layer-2-better-stack-alerts)
+- [Layer 3: Script Direct Alerts (S1–S2)](#-layer-3-script-direct-alerts)
+- [Layer 4: CI/CD & Infrastructure Alerts (D1)](#-layer-4-cicd-and-infrastructure-alerts)
 - [Quick Reference — What to do first](#quick-reference--what-to-do-first)
 - [Emergency contacts](#emergency-contacts)
 - [Last resort — full restore](#last-resort--full-restore)
@@ -77,10 +77,12 @@ ssh prod "echo OK"
 | DreamSeed (prod) | <https://dreamseed.online> | Check if site is up |
 | DreamSeed (dev) | <https://hetz.vitalikuts.online> | Dev/testing environment |
 | Grafana (on-server) | <https://dreamseed.online/grafana/> | View dashboards + alerts |
-| Grafana Cloud | <https://vitalikuts.grafana.net> | Hosted metrics + Synthetic Monitoring |
+| Grafana Cloud (prod) | <https://dreamseed.grafana.net> | Hosted metrics + Synthetic Monitoring for prod |
+| Grafana Cloud (dev) | <https://vitalikuts.grafana.net> | Hosted metrics + SM for dev-aws / dev-hetz |
 | Better Stack | <https://status.dreamseed.online> | Uptime status page |
+| Telegram bot | DM to the bot | `/status`, `/backups`, `/start` — live server/backup status without SSH |
 | Hetzner Cloud | <https://console.hetzner.cloud> | Server console + restart |
-| AWS Console | <https://console.aws.amazon.com> | EC2 management (prod) |
+| Hetzner Cloud (prod) | <https://console.hetzner.cloud> | Server console + restart (prod-hetz = live prod) |
 | Cloudflare | <https://dash.cloudflare.com> | DNS + SSL |
 | GitHub | <https://github.com/W1ckedS1ck/DreamSeed> | CI/CD runs, workflows, secrets |
 
@@ -114,7 +116,7 @@ If you're not in the chat — ask to be added.
 ## First 5 minutes
 
 1. **Check Telegram** — which alert fired? Look at the title.
-2. **Open the alert in Grafana** — follow the link from Telegram or go to `https://vitalikuts.grafana.net/alerting/list`
+2. **Open the alert in Grafana** — follow the link from Telegram or go to the on-server alert list: `https://dreamseed.online/grafana/alerting/list` (Grafana Cloud `https://dreamseed.grafana.net/alerting/list` hosts only Synthetic Monitoring rules)
 3. **Find the server IP** — the alert message shows the domain or instance label
 4. **SSH into the server** — see below for connection details
 5. **Follow the section below** that matches your alert title
@@ -146,7 +148,7 @@ Use cloud console to restart:
 | Cloud | Console |
 |-------|---------|
 | Hetzner (dev) | <https://console.hetzner.cloud> |
-| AWS (prod) | <https://console.aws.amazon.com> |
+| Hetzner Cloud (prod-hetz) | <https://console.hetzner.cloud> |
 
 ---
 
@@ -162,7 +164,7 @@ All alerts → same Telegram topic.
 
 ---
 
-## 🔴 Layer 1: Grafana Alerts {#layer-1-grafana-alerts}
+## 🔴 Layer 1: Grafana Alerts
 
 ---
 
@@ -379,7 +381,7 @@ sudo tail -20 /var/log/php*-fpm.log 2>/dev/null
 sudo systemctl restart php*-fpm
 
 # If it fails to start → check config
-sudo php-fpm* -t
+sudo php-fpm$(ls /etc/php | head -1) -t
 
 # Check for OOM in dmesg
 sudo dmesg | grep -i "oom\|php" | tail -10
@@ -387,7 +389,7 @@ sudo dmesg | grep -i "oom\|php" | tail -10
 
 ---
 
-### G6. 🔴 Web Server Down (Nginx or Apache)
+### G6. 🔴 Nginx Down / Apache Down
 
 **Metric:** `nginx_up` = 0 _or_ `apache_up` = 0 (which one fired depends on what's deployed)
 **Severity:** CRITICAL — site is down
@@ -777,7 +779,8 @@ sudo certbot renew
 # If behind Cloudflare with DNS-01:
 sudo certbot renew --preferred-challenges dns-01
 
-# If no local cert (Cloudflare edge only) — ignore, metric is pushed as 365d default
+# If neither local nor edge cert is reachable, nothing is pushed and
+# noDataState: OK keeps the alert silent (by design)
 ```
 
 ---
@@ -997,8 +1000,10 @@ ss -tlnp | grep 6379
 # Restart Redis
 sudo systemctl restart redis-server
 
-# If it fails to start → check config
-sudo redis-server /etc/redis/redis.conf --test-config
+# If it fails to start → check config errors in the journal,
+# then verify Redis answers
+sudo journalctl -u redis-server --no-pager -n 50
+redis-cli ping
 ```
 
 ---
@@ -1075,10 +1080,11 @@ sudo systemctl status vmagent
 # Check vmagent logs
 sudo journalctl -u vmagent --no-pager -n 50
 
-# Test connectivity to Grafana Cloud (token via --config, never in argv)
-curl -s -o /dev/null -w "%{http_code}" \
-  --config <(printf 'header = "Authorization: Bearer %s"\n' "$GRAFANA_CLOUD_TOKEN") \
-  "$GRAFANA_CLOUD_URL"
+# vmagent holds the Grafana Cloud credentials itself (from Ansible vault),
+# so test through it: a healthy vmagent = connectivity + token are fine.
+# On-server Grafana alerting API (no cloud token needed):
+curl -s -u "$GRAFANA_ADMIN_USER:$GRAFANA_ADMIN_PASS" \
+  http://127.0.0.1:3000/api/v1/provisioning/alert-rules | head -c 200
 ```
 
 **Fix:**
@@ -1146,6 +1152,27 @@ sudo systemctl restart fail2ban
 sudo fail2ban-client status
 ```
 
+#### Unbanning a blocked developer (false positive)
+
+The `modx-admin` jail counts `POST /connectors/index.php` as brute-force
+attempts. Authenticated manager AJAX (element trees, media browser) is excluded
+via the filter's `ignoreregex` (Referer `/manager/` + browser UA), but a
+scripted client without those headers can still trip the jail — e.g. an AI
+agent driving the manager API directly.
+
+```bash
+# Who is banned right now?
+sudo fail2ban-client status modx-admin
+
+# Unban immediately (ban lives at the Cloudflare edge)
+sudo fail2ban-client set modx-admin unbanip 203.0.113.10
+```
+
+Permanent whitelist for known developer/AI-agent IPs: set
+`FAIL2BAN_IGNOREIP_<TARGET>` (e.g. `FAIL2BAN_IGNOREIP_DEV_AWS`, space-separated
+IPs/CIDRs) in `secrets/.env`. It lands in the web jails' `ignoreip` (modx-admin,
+botsearch, bad-request) on next deploy; sshd is never whitelisted.
+
 ---
 
 ### G27. 🔴 Promtail Down
@@ -1212,7 +1239,7 @@ sudo systemctl restart telegram-bot
 
 ---
 
-## 🔴 Layer 2: Better Stack Alerts {#layer-2-better-stack-alerts}
+## 🔴 Layer 2: Better Stack Alerts
 
 ---
 
@@ -1336,12 +1363,12 @@ ssh prod "sudo systemctl restart grafana-server"
 **Diagnose:**
 
 ```bash
-ssh prod "tail -5 /home/ubuntu/backups/logs/backup_$(date +%Y-%m-%d).log"
+ssh dream "tail -5 /home/ubuntu/backups/logs/backup_$(date +%Y-%m-%d).log"
 ```
 
 Look for one of these last lines:
 
-- `Heartbeat: ❌ curl failed` → network issue on server
+- `Heartbeat: ❌ failed` → network issue on server
 - `Heartbeat: ⏭ skipped (no BETTERUPTIME_BACKUP_KEY)` → missing key in `.env`
 - `Heartbeat: ⏭ skipped (backup failed)` → backup itself failed (check earlier lines for ❌)
 
@@ -1520,7 +1547,7 @@ ssh prod "sudo systemctl restart check-services.timer"
 
 ---
 
-## 🔴 Layer 3: Script Direct Alerts {#layer-3-script-direct-alerts}
+## 🔴 Layer 3: Script Direct Alerts
 
 ---
 
@@ -1580,7 +1607,7 @@ Look for errors:
 
 ```
 🔴 UPLOAD FAILED — dreamseed.online
-❌ Upload to GDrive failed
+❌ Project upload error: `<file base name>`   *(per-file line; also DB/Redis variants)*
 ```
 
 **Diagnose:**
@@ -1602,7 +1629,7 @@ ssh prod "rclone delete gdrive-crypt:DreamSeed/backups/old_file --dry-run 2>&1"
 
 ---
 
-## 🔴 Layer 4: CI/CD and Infrastructure Alerts {#layer-4-cicd-and-infrastructure-alerts}
+## 🔴 Layer 4: CI/CD and Infrastructure Alerts
 
 ---
 
@@ -1737,16 +1764,16 @@ It will:
 7. Start services back
 8. HTTP 200 health check
 
-Pre-restore snapshots are preserved for manual recovery if needed. Cleanup happens on next restore run.
+Pre-restore snapshots (`~/.tmp_pre_restore_*`) are preserved for manual recovery. Each run cleans up only **its own** directory and only on success — snapshots from failed runs accumulate until deleted manually.
 
 ### B) Server is dead — rebuild from scratch via CLI
 
 ```bash
 # Local machine
-./deploy.sh prod -n -i <NEW_IP>
+./deploy.sh prod-hetz -n -i <NEW_IP>
 
 # After deploy completes, SSH in and restore data from cloud:
-ssh prod "bash /home/ubuntu/Scripts/RESTORE_ALL.sh"
+ssh dream "bash /home/ubuntu/Scripts/RESTORE_ALL.sh"
 ```
 
 ### C) Rebuild from scratch via GitHub Actions
@@ -1756,7 +1783,7 @@ Go to <https://github.com/W1ckedS1ck/DreamSeed/actions>
 
 Trigger the **Deploy** workflow:
 
-1. Environment: `prod`
+1. Environment: `prod-hetz`
 2. Action: `deploy`
 3. Web server: `nginx`
 4. Optionally provide existing IP (to skip Terraform)
@@ -1767,7 +1794,7 @@ Trigger the **Deploy** workflow:
 After Deploy completes, run restore interactively:
 
 ```bash
-ssh prod "bash /home/ubuntu/Scripts/RESTORE_ALL.sh"
+ssh dream "bash /home/ubuntu/Scripts/RESTORE_ALL.sh"
 ```
 
 To restore the latest backup non-interactively:

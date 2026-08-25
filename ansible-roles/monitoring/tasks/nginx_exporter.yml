@@ -8,6 +8,8 @@
     monitor_download_url: "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v{{ monitoring_nginx_version }}/nginx-prometheus-exporter_{{ monitoring_nginx_version }}_linux_amd64.tar.gz"
     monitor_extracted_binary: "/tmp/nginx-prometheus-exporter"
     monitor_extracted_dir: "/tmp/nginx-prometheus-exporter"
+    # No monitor_checksum_url: nginxinc publishes no checksum assets for its
+    # releases (verified 2026-08-24) — download stays HTTPS-only, accepted risk.
     monitor_service_name: nginx_exporter
 
 - name: Create nginx_exporter user

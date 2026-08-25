@@ -63,7 +63,9 @@ done
 fail=0
 
 # --- Services ---
-for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "node_exporter" "mysqld_exporter" "nginx_exporter" "redis_exporter" "victoria-metrics" "grafana-server"; do
+# grafana-server is intentionally ABSENT from this loop: it installs LAST as a
+# fallback (see check #2) and must never gate the deploy or the heartbeat.
+for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "node_exporter" "mysqld_exporter" "nginx_exporter" "redis_exporter" "victoria-metrics"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"
@@ -346,11 +348,15 @@ fi
 # 2. Grafana /api/health (LOCAL — WARN: grafana is a fallback, deploy must not fail)
 # Grafana installs LAST as a fallback; if it's absent/broken the deploy still
 # succeeds. /api/health is public (used by LB probes) — no auth, no password in argv.
+# Warn-only: a broken Grafana must NOT suppress the Better Stack heartbeat below,
+# otherwise a healthy site pages as "down". service_status metric still flips to
+# 0 so dashboard alerting keeps visibility without paging.
 if curl -sf --max-time 5 "http://127.0.0.1:3000/api/health" 2>/dev/null | grep -q '"database": "ok"'; then
     echo "  ✓ Grafana: healthy"
+    export_metric 'service_status{service="grafana-server"} 1'
 else
     echo "  ⚠ Grafana: not healthy (fallback — non-fatal)"
-    fail=1
+    export_metric 'service_status{service="grafana-server"} 0'
 fi
 
 # 3. Promtail → Loki connectivity (EXTERNAL — check via Promtail metrics)
@@ -390,14 +396,18 @@ fi
 # --- Heartbeat ---
 export_metric "check_services_last_run{instance=\"$DOMAIN\"} $(date +%s)"
 
-# --- Ping external heartbeat ---
-ping_heartbeat "${BETTERUPTIME_CHECK_SERVICES_KEY:-}" || true
-
 # --- Export overall health status ---
 if [[ $fail -eq 0 && $_local_fail -eq 0 ]]; then
     export_metric "dreamseed_health_overall 1"
 else
     export_metric "dreamseed_health_overall 0"
+fi
+
+# --- Ping external heartbeat ONLY when all checks passed (same condition as
+#     dreamseed_health_overall): silence = alert in Better Stack.
+#     Mirrors smart_backup / verify_backups / upload_backups_to_gdrive. ---
+if [[ $fail -eq 0 && $_local_fail -eq 0 ]]; then
+    ping_heartbeat "${BETTERUPTIME_CHECK_SERVICES_KEY:-}" || true
 fi
 
 # --- Exit status ---

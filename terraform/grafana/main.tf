@@ -10,11 +10,11 @@ locals {
   }
 
   raw = {
-    for k, v in local.dashboards :
-    k => try(
-      jsondecode(data.http.dashboard[k].body),
-      { id = null, title = k, gnetId = v.gid, templating = { list = [] } }
-    )
+    for k, v in local.dashboards : k => jsondecode(data.http.dashboard[k].body)
+    # NOTE: no try() fallback here. A silent stub (id=null, empty templating)
+    # combined with grafana_dashboard.overwrite=true would WIPE the live
+    # dashboard if grafana.com ever returns an error page. Failures must
+    # abort the plan — enforced by the data source postcondition below.
   }
 
   config = {
@@ -70,6 +70,13 @@ locals {
 data "http" "dashboard" {
   for_each = local.dashboards
   url      = "https://grafana.com/api/dashboards/${each.value.gid}/revisions/latest/download"
+
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "Grafana.com returned non-200 for dashboard ${each.key} (gid ${each.value.gid}) — refusing to overwrite live dashboards with garbage."
+    }
+  }
 }
 
 resource "grafana_folder" "dreamseed" {

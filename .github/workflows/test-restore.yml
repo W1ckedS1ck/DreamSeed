@@ -200,6 +200,7 @@ jobs:
         if: steps.restore_local.outcome == 'success'
         env:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+          REDIS_SESSIONS_BEFORE: ${{ steps.artifact_hash.outputs.redis_sessions_before }}
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
@@ -211,7 +212,7 @@ jobs:
           echo "local_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }})"
           echo "local_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
-          echo "local_redis_sessions=$REDIS_AFTER (before destroy: ${{ steps.artifact_hash.outputs.redis_sessions_before }})"
+          echo "local_redis_sessions=$REDIS_AFTER (before destroy: $REDIS_SESSIONS_BEFORE)"
           echo "local_redis_sessions=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
           if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ]; then
             echo "local_restore=pass"
@@ -253,6 +254,7 @@ jobs:
         if: steps.restore_cloud.outcome == 'success'
         env:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+          REDIS_SESSIONS_BEFORE: ${{ steps.artifact_hash.outputs.redis_sessions_before }}
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -i "$SSH_KEY" "$@"; }
@@ -264,7 +266,7 @@ jobs:
           echo "cloud_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }})"
           echo "cloud_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
-          echo "cloud_redis_sessions=$REDIS_AFTER (before destroy: ${{ steps.artifact_hash.outputs.redis_sessions_before }})"
+          echo "cloud_redis_sessions=$REDIS_AFTER (before destroy: $REDIS_SESSIONS_BEFORE)"
           echo "cloud_redis_sessions=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
           if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ]; then
             echo "cloud_restore=pass"
@@ -282,7 +284,7 @@ jobs:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          DB_NAME=modx_db .github/scripts/test-restored-server.sh "${{ steps.server-ip.outputs.ip }}" 2>&1 | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
+          DB_NAME=modx_db .github/scripts/test-restored-server.sh "$SERVER_IP" 2>&1 | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
 
       # --- Phase 3: screenshot (taken right before teardown; shown inline in the
       #     publish-preview job below, like deploy.yml — no download link) ---
@@ -340,6 +342,13 @@ jobs:
 
       - name: Write job summary
         if: always()
+        env:
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+          REDIS_SESSIONS_BEFORE: ${{ steps.artifact_hash.outputs.redis_sessions_before }}
+          LOCAL_REDIS_SESSIONS: ${{ steps.verify_local.outputs.local_redis_sessions }}
+          CLOUD_REDIS_SESSIONS: ${{ steps.verify_cloud.outputs.cloud_redis_sessions }}
+          TEST_SUMMARY: ${{ steps.service_tests.outputs.test_summary }}
+          TEST_FAILS: ${{ steps.service_tests.outputs.test_fails }}
         run: |
           RESTORE_LOCAL="${{ steps.restore_local.outcome }}"
           RESTORE_CLOUD="${{ steps.restore_cloud.outcome }}"
@@ -356,7 +365,7 @@ jobs:
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| **Server** | ${{ steps.server-ip.outputs.ip }} |"
+            echo "| **Server** | $SERVER_IP |"
             echo "| **Domain** | ${{ env.DOMAIN }} |"
             echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
             echo "| **Commit** | ${{ github.sha }} |"
@@ -365,21 +374,21 @@ jobs:
             echo "### Restore paths"
             echo "| Path | Status | HTTP | Hash match | Redis sessions |"
             echo "|---|---|---|---|---|"
-            echo "| **Local** | ${{ steps.restore_local.outcome }} | ${{ steps.verify_local.outputs.local_http }} | ${{ steps.verify_local.outputs.local_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | ${{ steps.verify_local.outputs.local_redis_sessions }} |"
-            echo "| **Cloud (GDrive, rollback path)** | ${{ steps.restore_cloud.outcome }} | ${{ steps.verify_cloud.outputs.cloud_http }} | ${{ steps.verify_cloud.outputs.cloud_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | ${{ steps.verify_cloud.outputs.cloud_redis_sessions }} |"
+            echo "| **Local** | ${{ steps.restore_local.outcome }} | ${{ steps.verify_local.outputs.local_http }} | ${{ steps.verify_local.outputs.local_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $LOCAL_REDIS_SESSIONS |"
+            echo "| **Cloud (GDrive, rollback path)** | ${{ steps.restore_cloud.outcome }} | ${{ steps.verify_cloud.outputs.cloud_http }} | ${{ steps.verify_cloud.outputs.cloud_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $CLOUD_REDIS_SESSIONS |"
             echo ""
             echo "### Artifacts (pre-disaster)"
             echo "| | |"
             echo "|---|---|"
             echo "| **Project hash** | \`${{ steps.artifact_hash.outputs.project_hash }}\` |"
             echo "| **DB hash** | \`${{ steps.artifact_hash.outputs.db_hash }}\` |"
-            echo "| **Redis sessions before** | ${{ steps.artifact_hash.outputs.redis_sessions_before }} |"
+            echo "| **Redis sessions before** | $REDIS_SESSIONS_BEFORE |"
             echo ""
             echo "### Service tests (after cloud restore)"
             echo "| Metric | Value |"
             echo "|---|---|"
-            echo "| Summary | ${{ steps.service_tests.outputs.test_summary }} |"
-            echo "| Failures | ${{ steps.service_tests.outputs.test_fails }} |"
+            echo "| Summary | $TEST_SUMMARY |"
+            echo "| Failures | $TEST_FAILS |"
             echo ""
             echo "### Evidence"
             echo "📸 Screenshot preview published inline in the **Publish screenshot preview** job below — refresh in ~1 min"

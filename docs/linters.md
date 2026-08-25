@@ -122,4 +122,6 @@ PROJECT CODE
 
 ---
 
-### Last updated: 2026-08-18
+### Changelog
+
+See [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases).

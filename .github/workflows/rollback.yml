@@ -108,13 +108,15 @@ jobs:
 
       - name: Restore latest backup
         id: restore
+        env:
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
         run: |
           SCRIPTS_DIR=$(grep -E '^scripts_dir_remote:' ansible/group_vars/all.yml | sed "s/.*: *\"//;s/\"$//")
           SCRIPTS_DIR="${SCRIPTS_DIR:-/home/ubuntu/Scripts}"
           OUTPUT=$(ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=10 \
               -i ~/.ssh/deploy_key \
-              ubuntu@${{ steps.server-ip.outputs.ip }} \
+              ubuntu@"$SERVER_IP" \
               "bash ${SCRIPTS_DIR}/RESTORE_ALL.sh --auto-latest" 2>&1)
           echo "$OUTPUT"
           # Parse summary lines (last occurrence of each)
@@ -178,6 +180,13 @@ jobs:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          RESTORE_PROJECT: ${{ steps.restore.outputs.project }}
+          RESTORE_DB: ${{ steps.restore.outputs.db }}
+          RESTORE_REDIS: ${{ steps.restore.outputs.redis }}
+          RESTORE_SITE: ${{ steps.restore.outputs.site }}
+          RESTORE_TIME: ${{ steps.restore.outputs.time }}
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"
@@ -191,18 +200,25 @@ jobs:
           MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\n📝 Project: %s\n🗄️ DB: %s\n♻️ Redis: %s\n🌐 Site: %s\n⏱️ Time: %s\n🖥 %s %s' \
             "$STATUS" \
             "$(date '+%Y-%m-%d %H:%M')" \
-            "${{ steps.restore.outputs.project }}" \
-            "${{ steps.restore.outputs.db }}" \
-            "${{ steps.restore.outputs.redis }}" \
-            "${{ steps.restore.outputs.site }}" \
-            "${{ steps.restore.outputs.time }}" \
-            "${{ steps.server-ip.outputs.ip }}" \
-            "${{ inputs.environment }}")
+            "$RESTORE_PROJECT" \
+            "$RESTORE_DB" \
+            "$RESTORE_REDIS" \
+            "$RESTORE_SITE" \
+            "$RESTORE_TIME" \
+            "$SERVER_IP" \
+            "$ENVIRONMENT")
 
           bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
 
       - name: Write job summary
         if: always()
+        env:
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+          RESTORE_PROJECT: ${{ steps.restore.outputs.project }}
+          RESTORE_DB: ${{ steps.restore.outputs.db }}
+          RESTORE_REDIS: ${{ steps.restore.outputs.redis }}
+          RESTORE_SITE: ${{ steps.restore.outputs.site }}
+          RESTORE_TIME: ${{ steps.restore.outputs.time }}
         run: |
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"
@@ -223,7 +239,7 @@ jobs:
             echo "| | |"
             echo "|---|---|"
             echo "| **Environment** | ${{ inputs.environment }} |"
-            echo "| **Server** | ${{ steps.server-ip.outputs.ip }} |"
+            echo "| **Server** | $SERVER_IP |"
             echo "| **Domain** | ${{ steps.domain.outputs.domain }} |"
             echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
             echo "| **Commit** | ${{ github.sha }} |"
@@ -232,11 +248,11 @@ jobs:
             echo "### Restore"
             echo "| Metric | Value |"
             echo "|---|---|"
-            echo "| Project | ${{ steps.restore.outputs.project }} |"
-            echo "| DB | ${{ steps.restore.outputs.db }} |"
-            echo "| Redis | ${{ steps.restore.outputs.redis }} |"
-            echo "| Site | ${{ steps.restore.outputs.site }} |"
-            echo "| Duration | ${{ steps.restore.outputs.time }} |"
+            echo "| Project | $RESTORE_PROJECT |"
+            echo "| DB | $RESTORE_DB |"
+            echo "| Redis | $RESTORE_REDIS |"
+            echo "| Site | $RESTORE_SITE |"
+            echo "| Duration | $RESTORE_TIME |"
           } >> "$M"
 
       - name: Cleanup secrets

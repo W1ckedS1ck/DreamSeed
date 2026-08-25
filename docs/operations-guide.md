@@ -3,7 +3,7 @@
 > Day-to-day maintenance procedures for DreamSeed infrastructure.
 > Not incident response — see `runbook.md` for that.
 >
-> 🗓 **Last updated:** 2026-08-18
+> Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
 ---
 
@@ -25,7 +25,7 @@ Common causes:
 - **AWS:** Security group not attached, wrong VPC, EBS volume stuck
 - **Hetzner:** Firewall blocking your IP, image not found
 
-Fix: `./deploy.sh <target> -x` → fix the issue → repeat deploy.
+Fix: destroy the broken box (`gh workflow run deploy.yml --ref dev -f environment=<target> -f action=destroy -f confirm="destroy <target>"` or `./deploy.sh <target> -x` locally) → fix the issue → repeat deploy.
 
 ### cloud-init hang (step waits 5+ min)
 
@@ -148,8 +148,8 @@ Key fields:
 
 ### Design rules (from CLAUDE.md)
 
-- **`noDataState: Alerting`** — only for critical services with always-on metrics (MySQL, Nginx/Apache, PHP-FPM, Site, VM, Redis, check-services-cron)
-- **`noDataState: OK`** — for push/probe metrics (admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify, cron-backup, vmagent)
+- **`noDataState: Alerting`** — only for critical services with always-on metrics (MySQL, Nginx/Apache, Redis, check-services-cron). PHP-FPM, Site and VictoriaMetrics use `noDataState: OK` + `execErrState: Alerting` where applicable
+- **`noDataState: OK`** — for push/probe metrics (php-fpm, site-down, victoria, admin-login, ms2, db-tables, modx-core, ssl-expiry, backup-verify, cron-backup, vmagent)
 - **`for:`** — scraped 2–5m (VM 1m), pushed 2m–1h, probes 6–15m, backup/heartbeat crons 5–10m
 - **`repeat_interval`** — critical: 1h, warning/info: 4h
 
@@ -158,11 +158,11 @@ Key fields:
 1. Open `ansible-roles/grafana/templates/grafana-alerts.yaml.j2`
 2. Add a new rule under `rules:` in the appropriate group
 3. If it needs a new metric → update the script that pushes it (e.g., `check_services.sh` for service checks, `smart_backup.sh` for backup metrics)
-4. Update the VictoriaMetrics recording rule if needed (`victoria-metrics@.service.j2`)
+4. Update the VictoriaMetrics recording rule if needed (`victoria-metrics.service.j2`)
 5. Bump the alert count in:
    - `ansible/group_vars/all.yml` (if there's a count variable)
-   - `docs/runbook.md` (alert reference table, line ~143)
-   - `docs/architecture.md` (alert rules table, line ~180)
+   - `docs/runbook.md` ("Layer 1: Grafana Alerts" section)
+   - `docs/architecture.md` ("Monitoring & Alerting" section)
 6. Deploy: `./deploy.sh <target> -n -i <ip> --no-dns`
 
 ---

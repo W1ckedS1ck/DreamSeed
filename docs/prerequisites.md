@@ -2,7 +2,7 @@
 
 Tools required to work with this project locally.
 
-> 🗓 **Last updated:** 2026-08-18
+> Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
 ## Core (required to deploy)
 
@@ -10,12 +10,13 @@ These are checked by `deploy.sh` on every run:
 
 | Tool | Required for | Install |
 |------|-------------|---------|
-| `terraform` | Provision cloud servers (AWS EC2 / Hetzner) | <https://developer.hashicorp.com/terraform/install> |
+| `terraform` (or `tofu`) | Provision cloud servers (AWS EC2 / Hetzner) — `deploy.sh` falls back to OpenTofu if `terraform` is absent | <https://developer.hashicorp.com/terraform/install> |
 | `ansible-playbook` | Configure server (all 9 playbooks) | `pip install ansible-core==2.21.2 && ansible-galaxy collection install -r ansible/requirements.yml` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible-core` |
-| `python3` | Run Ansible and scripts | <https://python.org> |
+
+> `python3` is also required (Ansible and several scripts run on it) but is not explicitly checked by the preflight — most systems ship it by default.
 
 ### Ansible collections & Python deps
 

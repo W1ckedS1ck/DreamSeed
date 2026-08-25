@@ -29,6 +29,9 @@ PROJECT_BACKUP="$BACKUP_DIR/project/DreamSeed_$DATE.tar.gz"
 DB_BACKUP="$BACKUP_DIR/db/db_${DB_NAME}_$DATE.sql.gz"
 
 mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db" "$BACKUP_DIR/logs"
+# Local archives hold an UNENCRYPTED DB dump + site files; cloud copies are
+# rclone-crypt but local ones are not. Restrict to owner as a minimum bar.
+chmod 700 "$BACKUP_DIR"
 LOG_FILE="$BACKUP_DIR/logs/backup_$(date +%Y-%m-%d).log"
 
 ENV=$(detect_env)
