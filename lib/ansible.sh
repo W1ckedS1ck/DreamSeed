@@ -123,7 +123,11 @@ check_services() {
     echo "$output"
 
     if [[ "$rc" -eq 0 ]]; then
-        echo "    All checks passed"
+        # The script's own verdict line (✅/❌) is already in $output — don't
+        # append a blanket "All checks passed": TIER-2 failures exit 0 with a
+        # "Critical checks passed (warnings above)" verdict, and the extra line
+        # made that look like a full pass.
+        :
     else
         step_fail "Some checks failed (see above)"
     fi

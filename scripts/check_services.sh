@@ -82,6 +82,8 @@ done
 # On prod it must be active; on any non-prod host it must be inactive (a running
 # poller there would kill the prod instance via Conflict).
 # ENV matches both "prod" and "prod-hetz" — prod targets carry suffixed names.
+# A dead bot on prod means NO alerting channel at all → TIER 1 (_local_fail),
+# it must block the deploy, not just warn.
 _tbg=$(systemctl is-active telegram-bot 2>/dev/null || echo "inactive")
 if [[ "${ENV:-}" == prod* ]]; then
     if [[ "$_tbg" == "active" ]]; then
@@ -90,7 +92,7 @@ if [[ "${ENV:-}" == prod* ]]; then
     else
         echo "  ✗ telegram-bot — $_tbg"
         export_metric 'service_status{service="telegram-bot"} 0'
-        fail=1
+        _local_fail=1
     fi
 else
     if [[ "$_tbg" == "active" ]]; then
