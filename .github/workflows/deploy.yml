@@ -425,6 +425,64 @@ jobs:
             echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
           } >> "$M"
 
+      - name: Grafana deployment annotation
+        # Vertical marker on all Grafana dashboards — correlate incidents with
+        # releases. Non-fatal by design: a failed annotation never fails deploy.
+        if: >-
+          ${{ always() && ((inputs.action == 'deploy' && steps.deploy.outcome == 'success')
+              || (inputs.action == 'destroy' && steps.destroy.outcome == 'success')) }}
+        env:
+          ENV_NAME: ${{ inputs.environment }}
+          ACTION: ${{ inputs.action }}
+          WEB_SERVER: ${{ inputs.web_server }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_IP: ${{ steps.deploy.outputs.server_ip }}
+          PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          DEV_SA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+        run: |
+          case "$ENV_NAME" in
+            prod|prod-hetz)
+              GRAFANA_URL="https://dreamseed.grafana.net"; TOKEN="$PROD_SA_TOKEN" ;;
+            *)
+              GRAFANA_URL="https://vitalikuts.grafana.net"; TOKEN="$DEV_SA_TOKEN" ;;
+          esac
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::No Grafana SA token for $ENV_NAME — annotation skipped"
+            exit 0
+          fi
+
+          IP_PART=""
+          [ -n "$SERVER_IP" ] && IP_PART=", ip $SERVER_IP"
+          VERB="Deploy"; [ "$ACTION" = "destroy" ] && VERB="Destroy"
+
+          TAGS=$(jq -nc --arg e "$ENV_NAME" --arg a "$ACTION" \
+            '["dreamseed", $a, $e] + (if $a == "deploy" then ["web"] else [] end)')
+          PAYLOAD=$(jq -nc \
+            --argjson tags "$TAGS" \
+            --arg text "$(printf '%s %s (%s%s) — commit %.7s · run #%s' "$VERB" "$ENV_NAME" "$WEB_SERVER" "$IP_PART" "$GIT_SHA" "$RUN_ID")" \
+            --argjson time "$(date +%s000)" \
+            '{tags: $tags, text: $text, time: $time}')
+
+          CFG=$(mktemp); chmod 600 "$CFG"
+          printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" > "$CFG"
+          CODE=000
+          for i in 1 2 3; do
+            CODE=$(curl -sS --max-time 15 -o /tmp/ga-resp.json -w '%{http_code}' \
+              -X POST --config "$CFG" -H 'Content-Type: application/json' \
+              -d "$PAYLOAD" "$GRAFANA_URL/api/annotations" || echo 000)
+            echo "annotation attempt $i: HTTP $CODE"
+            grep -q '"id"' /tmp/ga-resp.json 2>/dev/null && break
+            # First hit on a sleeping instance returns 503 Loading but wakes it.
+            [ "$i" -lt 3 ] && sleep 20
+          done
+          shred -u "$CFG" 2>/dev/null || rm -f "$CFG"
+          if grep -q '"id"' /tmp/ga-resp.json 2>/dev/null; then
+            echo "::notice::Grafana annotation created ($(jq -r '.id' /tmp/ga-resp.json))"
+          else
+            echo "::warning::Grafana annotation failed after retries (HTTP $CODE) — non-fatal"
+          fi
+
       - name: Cleanup secrets
         if: always()
         run: |
