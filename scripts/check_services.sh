@@ -81,8 +81,9 @@ done
 # Telegram allows ONE getUpdates poller per token, so the bot runs on prod only.
 # On prod it must be active; on any non-prod host it must be inactive (a running
 # poller there would kill the prod instance via Conflict).
+# ENV matches both "prod" and "prod-hetz" — prod targets carry suffixed names.
 _tbg=$(systemctl is-active telegram-bot 2>/dev/null || echo "inactive")
-if [[ "${ENV:-}" == "prod" ]]; then
+if [[ "${ENV:-}" == prod* ]]; then
     if [[ "$_tbg" == "active" ]]; then
         echo "  ✓ telegram-bot"
         export_metric 'service_status{service="telegram-bot"} 1'

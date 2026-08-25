@@ -5,7 +5,9 @@ import logging
 import os
 import socket
 import sys
+import threading
 from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from env_loader import load_env
 from telegram import Update
@@ -169,6 +171,36 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Use /status or /backups")
 
 
+# --- Health endpoint (Better Stack "Telegram Bot" monitor probes /bot-health,
+#     nginx proxies it here). Must stay up for the whole bot lifetime. ---
+HEALTH_PORT = 8553
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        log.debug("health: %s", format % args)
+
+
+def start_health_server():
+    try:
+        server = HTTPServer(("127.0.0.1", HEALTH_PORT), HealthHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        log.info("Health endpoint listening on http://127.0.0.1:%d/health", HEALTH_PORT)
+    except OSError as e:
+        log.warning("Health endpoint not started: %s", e)
+
+
 def main() -> None:
     if not TG_TOKEN:
         log.error("TG_TOKEN not set")
@@ -176,6 +208,8 @@ def main() -> None:
     if not TG_CHAT_ID:
         log.error("TG_CHAT_ID not set")
         return
+
+    start_health_server()
 
     app = (
         ApplicationBuilder()

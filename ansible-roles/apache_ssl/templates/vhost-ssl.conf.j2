@@ -71,6 +71,9 @@ frame-ancestors 'self';"
     RewriteEngine On
     RewriteRule ^/grafana$ /grafana/ [R=301,L]
     ProxyPreserveHost On
+    # --- Telegram Bot Health (Better Stack monitor probes /bot-health) ---
+    ProxyPass /bot-health http://127.0.0.1:8553/health
+    ProxyPassReverse /bot-health http://127.0.0.1:8553/health
     ProxyPass /grafana/api/live/ws ws://127.0.0.1:{{ grafana_port }}/grafana/api/live/ws
     ProxyPassReverse /grafana/api/live/ws ws://127.0.0.1:{{ grafana_port }}/grafana/api/live/ws
     ProxyPass /grafana/ http://127.0.0.1:{{ grafana_port }}/grafana/

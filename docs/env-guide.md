@@ -264,6 +264,13 @@ Set per-target as GitHub Variables (not secrets):
 
 Password is the same Access Policy token as vmagent (`grafana_cloud_token`).
 
+**Per-target wiring:** `setup-env` picks `LOKI_URL_PROD`/`LOKI_USERNAME_PROD` on `prod*`
+targets (fallback: shared `LOKI_*`), so promtail always ships to its own stack's tenant.
+Local runs get the same via `PROD_LOKI_URL`/`PROD_LOKI_USERNAME` overrides in
+`lib/preflight.sh`. Historical note: before Aug 2026 prod had no `_PROD` vars and
+promtail shipped (401-looped) into the dev tenant — keep the pairs in sync with the
+datasource settings of each stack.
+
 ---
 
 ## Legacy

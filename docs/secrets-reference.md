@@ -36,8 +36,10 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 |----------|---------|---------|
 | `FARO_COLLECTOR_URL` | Grafana Faro collector URL for frontend telemetry | `deploy.yml` |
 | `FARO_APP_NAME` | Grafana Faro application name | *(not a secret/var — auto-derived from domain in `group_vars/all.yml`)* |
-| `LOKI_URL` | Loki push endpoint for log shipping | `deploy.yml` |
-| `LOKI_USERNAME` | Loki username (numeric instance ID) | `deploy.yml` |
+| `LOKI_URL` | Loki push endpoint for log shipping (dev tenant; prod uses `LOKI_URL_PROD`) | `deploy.yml` |
+| `LOKI_USERNAME` | Loki username — numeric instance ID of the **dev** stack's Loki | `deploy.yml` |
+| `LOKI_URL_PROD` | Loki push endpoint for the **prod** stack (`logs-prod-036`) | `deploy.yml` |
+| `LOKI_USERNAME_PROD` | Loki instance ID of the **prod** stack (`1630689`) | `deploy.yml` |
 
 ---
 
