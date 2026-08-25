@@ -91,11 +91,23 @@ inputs:
     required: false
     default: ""
   loki_url:
-    description: Loki URL
+    description: Loki URL (dev; overridden by loki_url_prod on prod targets)
     required: false
     default: ""
   loki_username:
-    description: Loki Username
+    description: Loki Username (dev; overridden by loki_username_prod on prod targets)
+    required: false
+    default: ""
+  loki_url_prod:
+    description: Loki URL for prod targets (dreamseed stack tenant)
+    required: false
+    default: ""
+  loki_username_prod:
+    description: Loki Username for prod targets (dreamseed Loki instance ID)
+    required: false
+    default: ""
+  environment:
+    description: 'Deploy target environment (prod, prod-hetz, dev-aws, dev-hetz)'
     required: false
     default: ""
   faro_collector_url:
@@ -230,6 +242,9 @@ runs:
         PROD_GRAFANA_CLOUD_TOKEN: ${{ inputs.prod_grafana_cloud_token }}
         LOKI_URL: ${{ inputs.loki_url }}
         LOKI_USERNAME: ${{ inputs.loki_username }}
+        LOKI_URL_PROD: ${{ inputs.loki_url_prod }}
+        LOKI_USERNAME_PROD: ${{ inputs.loki_username_prod }}
+        ENVIRONMENT: ${{ inputs.environment }}
         FARO_COLLECTOR_URL: ${{ inputs.faro_collector_url }}
         DEV_AWS_ACCESS_KEY: ${{ inputs.dev_aws_access_key }}
         DEV_AWS_SECRET_KEY: ${{ inputs.dev_aws_secret_key }}
@@ -249,6 +264,15 @@ runs:
         # outermost pair). Only used for tokens — never for shell interpolation.
         emit_env() { [ -n "$2" ] && printf "%s='%s'\n" "$1" "$2" || true; }
         {
+          # Loki tenant is per-stack (dev=vitalikuts, prod=dreamseed): pick URL/ID
+          # by target so promtail never ships prod logs into the dev tenant. Falls
+          # back to the shared LOKI_* values when prod vars are not configured.
+          case "$ENVIRONMENT" in
+            prod*) emit_env LOKI_URL "${LOKI_URL_PROD:-$LOKI_URL}"
+                   emit_env LOKI_USERNAME "${LOKI_USERNAME_PROD:-$LOKI_USERNAME}" ;;
+            *)     emit_env LOKI_URL "$LOKI_URL"
+                   emit_env LOKI_USERNAME "$LOKI_USERNAME" ;;
+          esac
           emit_env TG_TOKEN "$TG_TOKEN"
           emit_env TG_CHAT_ID "$TG_CHAT_ID"
           emit_env TG_THREAD_ID "$TG_THREAD_ID"
@@ -276,8 +300,7 @@ runs:
           emit_env PROD_GRAFANA_CLOUD_URL "$PROD_GRAFANA_CLOUD_URL"
           emit_env PROD_GRAFANA_CLOUD_USERNAME "$PROD_GRAFANA_CLOUD_USERNAME"
           emit_env PROD_GRAFANA_CLOUD_TOKEN "$PROD_GRAFANA_CLOUD_TOKEN"
-          emit_env LOKI_URL "$LOKI_URL"
-          emit_env LOKI_USERNAME "$LOKI_USERNAME"
+          # LOKI_URL / LOKI_USERNAME are emitted earlier, selected by environment.
           emit_env FARO_COLLECTOR_URL "$FARO_COLLECTOR_URL"
           emit_env DEV_AWS_ACCESS_KEY "$DEV_AWS_ACCESS_KEY"
           emit_env DEV_AWS_SECRET_KEY "$DEV_AWS_SECRET_KEY"

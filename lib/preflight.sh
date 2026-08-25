@@ -92,6 +92,15 @@ preflight_checks() {
     GRAFANA_CLOUD_TOKEN="${!gc_token:-}"
     export GRAFANA_CLOUD_URL GRAFANA_CLOUD_USERNAME GRAFANA_CLOUD_TOKEN
 
+    # Loki tenant is per-stack (dev=vitalikuts logs-prod-025/1630695,
+    # prod=dreamseed logs-prod-036/1630689): on prod targets prefer the
+    # PROD_LOKI_* overrides so promtail doesn't ship prod logs into dev's tenant.
+    if [[ "$TARGET" =~ ^prod && -n "${PROD_LOKI_URL:-}" ]]; then
+        LOKI_URL="$PROD_LOKI_URL"
+        [[ -n "${PROD_LOKI_USERNAME:-}" ]] && LOKI_USERNAME="$PROD_LOKI_USERNAME"
+        export LOKI_URL LOKI_USERNAME
+    fi
+
     # Sanity checks — remote_write to Grafana Cloud has 3 easy ways to fail silently.
     # Cheap format hints so a bad value doesn't ship a 401-loop to the server.
     if [[ -n "$GRAFANA_CLOUD_URL" ]]; then

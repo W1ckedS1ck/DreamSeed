@@ -111,6 +111,9 @@ jobs:
           prod_grafana_cloud_token: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
           loki_url: ${{ vars.LOKI_URL }}
           loki_username: ${{ vars.LOKI_USERNAME }}
+          loki_url_prod: ${{ vars.LOKI_URL_PROD }}
+          loki_username_prod: ${{ vars.LOKI_USERNAME_PROD }}
+          environment: ${{ inputs.environment }}
           faro_collector_url: ${{ vars.FARO_COLLECTOR_URL }}
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
