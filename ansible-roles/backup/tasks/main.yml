@@ -56,9 +56,6 @@
 # Singleton enforcement — Telegram allows ONE getUpdates poller per token.
 # Prod targets: running + enabled (survives reboot). Non-prod: hard-off,
 # otherwise a dev poller kills the prod instance via Conflict error.
-# NOTE: exactly ONE such task may exist — a second variant comparing
-# `deploy_env == 'prod'` stopped+disabled the bot on prod-hetz right after
-# this task started it (fixed 2026-08-25).
 - name: Ensure telegram-bot runs on prod only
   become: true
   ansible.builtin.systemd:
@@ -75,6 +72,10 @@
     group: ubuntu
     mode: "0600"
   no_log: true
+
+# NOTE: exactly ONE telegram-bot singleton task may exist. A second variant
+# comparing `deploy_env == 'prod'` used to sit below and stop+disable the bot
+# on prod-hetz right after the startswith() task started it (fixed 2026-08-25).
 
 - name: Setup hourly backup cron
   ansible.builtin.cron:
