@@ -623,8 +623,14 @@ fi
 sudo -u "$_CRON_USER" crontab -l 2>/dev/null | grep "^[0-9]" | while read -r _c; do echo "    $_c"; done
 
 # Rclone config
-if [[ -f ~/.config/rclone/rclone.conf ]]; then
-    ok "Rclone config present" "rclone_config"
+# rclone config: the script is typically run under sudo, where ~ is /root —
+# the real config lives in the deploy user's home. Check both.
+_rc_conf=""
+for _rc_path in "${HOME}/.config/rclone/rclone.conf" "/home/ubuntu/.config/rclone/rclone.conf" "/root/.config/rclone/rclone.conf"; do
+    [[ -f "$_rc_path" ]] && _rc_conf="$_rc_path" && break
+done
+if [[ -n "$_rc_conf" ]]; then
+    ok "Rclone config present ($_rc_conf)" "rclone_config"
 else
     fail "Rclone config MISSING" "rclone_config"
 fi
@@ -655,19 +661,22 @@ echo "── 14. Telegram Bot ──"
 # telegram-bot is a long-polling singleton: Telegram allows ONE getUpdates
 # poller per token. It intentionally runs on prod only (see backup role);
 # "not active" on a non-prod host is expected, not a fault.
+# ENV matches both "prod" and "prod-hetz" — prod targets carry suffixed names.
 _tg_env_prod=0
-[[ "${ENV:-}" == "prod" ]] && _tg_env_prod=1
+[[ "${ENV:-}" == prod* ]] && _tg_env_prod=1
 
 if systemctl is-active telegram-bot &>/dev/null; then
     ok "Telegram bot active" "tg_bot_active"
     # sudo: ubuntu user is not in adm/systemd-journal, plain journalctl silently omits entries
-    _tg_conflict=$(sudo journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'Conflict: terminated by other getUpdates' || true)
+    # Window: last 7 days only — a full-journal scan reports stale conflicts
+    # (e.g. from before a duplicate-poller fix) for weeks afterwards.
+    _tg_conflict=$(sudo journalctl -u telegram-bot --since "-7days" --no-pager 2>/dev/null | grep -ci 'Conflict: terminated by other getUpdates' || true)
     if [[ "$_tg_conflict" -eq 0 ]]; then
         ok "Telegram bot: single poller (no Conflict)" "tg_bot_conflict"
     else
         warn "Telegram bot: $_tg_conflict Conflict(s) - duplicate poller detected" "tg_bot_conflict"
     fi
-    _tg_errors=$(sudo journalctl -u telegram-bot --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
+    _tg_errors=$(sudo journalctl -u telegram-bot --since "-7days" --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
     if [[ "$_tg_errors" -eq 0 ]]; then
         ok "Telegram bot: 0 errors" "tg_bot_errors"
     else
