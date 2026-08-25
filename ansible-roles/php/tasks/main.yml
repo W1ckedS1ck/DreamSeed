@@ -140,7 +140,15 @@
     - php_site_exists.stat.exists
 
 # Race-tolerant vs parallel restore (playbook-03 mv's web_root away): always
-# ensure fstab, but only mount if the dir exists right now — else restore mounts.
+# ensure fstab (idempotent module), but only mount if the dir exists right
+# now — else restore mounts.
+- name: Ensure fstab entry for MODX cache tmpfs
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "tmpfs {{ web_root }}/core/cache tmpfs size={{ modx_cache_tmpfs_size }},mode=0755,uid=33,gid=33,nofail 0 0"
+    state: present
+
 - name: Mount tmpfs for MODX cache (race-tolerant)
   become: true
   ansible.builtin.shell:
@@ -148,8 +156,6 @@
       set -e
       _cache="{{ web_root }}/core/cache"
       [ -d "{{ web_root }}" ] && mkdir -p "$_cache"
-      grep -qF "$_cache " /etc/fstab || \
-        printf 'tmpfs %s tmpfs size={{ modx_cache_tmpfs_size }},mode=0755,uid=33,gid=33,nofail 0 0\n' "$_cache" >> /etc/fstab
       mountpoint -q "$_cache" || mount "$_cache" >/dev/null 2>&1 || true
     executable: /bin/bash
   changed_when: false

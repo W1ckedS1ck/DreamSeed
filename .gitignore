@@ -51,4 +51,6 @@ CLAUDE.md
 docs/private/
 AUDIT_*
 vanilla/
-secrets/ssl/
+
+# ─── Generated tool artifacts ────────────────────────────────────────
+docs/codemie/analytics/

@@ -222,7 +222,10 @@ select_backup_cloud() {
         local temp_dir
         temp_dir=$(mktemp -d "${HOME:?}/.tmp_restore_XXXXXX")
         RESTORE_TEMP_DIRS+=("$temp_dir")
-        rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" 2>&1
+        # >&2 keeps rclone chatter off stdout — this function's stdout IS the
+        # return value when called via command substitution. rclone_retry adds
+        # linear-backoff retries like every other rclone call in this repo.
+        rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" >&2
         local temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
             echo -e "${GREEN}✓ Downloaded to $temp_file${NC}" >&2

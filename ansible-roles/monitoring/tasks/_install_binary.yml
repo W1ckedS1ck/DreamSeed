@@ -9,8 +9,12 @@
 #     monitor_download_url: "https://github.com/org/foo_exporter/releases/download/..."
 #     monitor_extracted_binary: "/tmp/foo_exporter-{{ monitor_version }}.linux-amd64/foo_exporter"
 #
-# Note: HTTPS-only, no checksum verification — accepted risk for this project.
-# Add SHA256 if you need stronger supply-chain guarantees.
+# Optional supply-chain verification:
+#   monitor_checksum_url: URL of an upstream checksums file in standard
+#   sha256sum format ("<hash>  <filename>"). The entry whose filename matches
+#   the basename of monitor_download_url is compared against the downloaded
+#   tarball; mismatch or missing entry = hard failure BEFORE install.
+#   Omit only when upstream publishes no checksum asset (nginx-exporter).
 - name: "Check installation: {{ monitor_bin_name }}"
   ansible.builtin.stat:
     path: "{{ monitor_bin_path }}"
@@ -41,6 +45,35 @@
         mode: "0644"
         timeout: 60
       register: _monitor_download
+
+    # get_url's checksum:<URL> form is unusable here: it matches the sums-file
+    # entry against the basename of `dest` (/tmp/<bin>.tar.gz), which never
+    # equals the versioned release filename. Verify explicitly instead — a
+    # mismatch or missing entry aborts before extraction/install.
+    - name: "Verify SHA256 checksum: {{ monitor_bin_name }}"
+      when: monitor_checksum_url is defined
+      block:
+        - name: "Fetch checksum list {{ monitor_bin_name }}"
+          ansible.builtin.get_url:
+            url: "{{ monitor_checksum_url }}"
+            dest: "/tmp/{{ monitor_bin_name }}.sha256sums"
+            mode: "0644"
+            timeout: 60
+
+        - name: "Compare SHA256 {{ monitor_bin_name }}"
+          vars:
+            _monitor_asset: "{{ monitor_download_url | urlsplit('path') | basename }}"
+          ansible.builtin.shell:
+            cmd: |
+              set -o pipefail
+              expected=$(awk -v f='{{ _monitor_asset }}' '$2 == f || $2 == "*"f {print $1}' '/tmp/{{ monitor_bin_name }}.sha256sums')
+              if [ -z "$expected" ]; then
+                echo "ERROR: no SHA256 entry for '{{ _monitor_asset }}' in {{ monitor_checksum_url }}" >&2
+                exit 1
+              fi
+              printf '%s  %s\n' "$expected" '/tmp/{{ monitor_bin_name }}.tar.gz' | sha256sum -c - >/dev/null
+            executable: /bin/bash
+          changed_when: false
 
     - name: "Extract {{ monitor_bin_name }}"
       ansible.builtin.unarchive:
@@ -74,4 +107,5 @@
         state: absent
       loop:
         - "/tmp/{{ monitor_bin_name }}.tar.gz"
+        - "/tmp/{{ monitor_bin_name }}.sha256sums"
         - "{{ monitor_extracted_dir | default(monitor_extracted_binary | dirname) }}"

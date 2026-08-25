@@ -150,7 +150,8 @@
     query: >
       INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
       VALUES ('session_gc_maxlifetime', '86400', 'textfield', 'core', 'session', NOW())
-      ON DUPLICATE KEY UPDATE `value` = '86400', `editedon` = NOW()
+      ON DUPLICATE KEY UPDATE `value` = '86400',
+        `editedon` = IF(`value` <> '86400', NOW(), `editedon`)
   become: true
   when:
     - modx_check.query_result is defined
@@ -163,7 +164,7 @@
     query: >
       UPDATE `{{ db_name }}`.`{{ db_prefix }}system_settings`
       SET `value` = ''
-      WHERE `key` = 'session_handler_class'
+      WHERE `key` = 'session_handler_class' AND `value` <> ''
   become: true
   when:
     - modx_check.query_result is defined
@@ -190,26 +191,32 @@
     - modx_check.query_result is defined
 
 - name: Set MODX database query caching (cache_db)
+  vars:
+    _cache_db: "{{ modx_cache_db | default('0') | regex_replace('[^01]', '0') }}"
   ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
       INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
-      VALUES ('cache_db', '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
-      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
+      VALUES ('cache_db', '{{ _cache_db }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ _cache_db }}',
+        `editedon` = IF(`value` <> '{{ _cache_db }}', NOW(), `editedon`)
   become: true
   when:
     - modx_check.query_result is defined
     - modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
 - name: Set MODX session data caching (cache_db_session)
+  vars:
+    _cache_db_session: "{{ modx_cache_db_session | default('0') | regex_replace('[^01]', '0') }}"
   ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
     login_user: root
     query: >
       INSERT INTO `{{ db_name }}`.`{{ db_prefix }}system_settings` (`key`, `value`, `xtype`, `namespace`, `area`, `editedon`)
-      VALUES ('cache_db_session', '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', 'combo-boolean', 'core', 'caching', NOW())
-      ON DUPLICATE KEY UPDATE `value` = '{{ modx_cache_db_session | default("0") | regex_replace("[^01]", "0") }}', `editedon` = NOW()
+      VALUES ('cache_db_session', '{{ _cache_db_session }}', 'combo-boolean', 'core', 'caching', NOW())
+      ON DUPLICATE KEY UPDATE `value` = '{{ _cache_db_session }}',
+        `editedon` = IF(`value` <> '{{ _cache_db_session }}', NOW(), `editedon`)
   become: true
   when:
     - modx_check.query_result is defined

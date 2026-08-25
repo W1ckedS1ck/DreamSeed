@@ -207,7 +207,9 @@ ping_heartbeat() {
     if curl -fsS -m 10 --retry 3 -o /dev/null "https://uptime.betterstack.com/api/v1/heartbeat/$key"; then
         return 0
     else
-        echo "WARNING: Better Stack heartbeat failed (previous heartbeat will expire): $key" >&2
+        # Prefix only: the full key would let log readers fake heartbeats and
+        # mask real downtime; the prefix is enough to identify which monitor.
+        echo "WARNING: Better Stack heartbeat failed (previous heartbeat will expire): ${key:0:8}…" >&2
         return 1
     fi
 }

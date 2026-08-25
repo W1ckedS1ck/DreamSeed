@@ -16,6 +16,9 @@ acquire_lock() {
             echo "Error: another deploy already running for provider '$TF_PROVIDER' (could not acquire lock)"
             exit 1
         }
+    else
+        # No silent degradation: without flock two same-provider deploys race.
+        echo "WARNING: flock not available — deploy lock disabled (${TF_PROVIDER:?})" >&2
     fi
 }
 

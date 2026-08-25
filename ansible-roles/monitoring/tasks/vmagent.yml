@@ -12,6 +12,7 @@
     monitor_download_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}.tar.gz"
     monitor_extracted_binary: /tmp/vmagent-prod
     monitor_extracted_dir: /tmp/vmagent-prod
+    monitor_checksum_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}_checksums.txt"
   when: _vmagent_enabled
 
 - name: Create vmagent user

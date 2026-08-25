@@ -172,10 +172,13 @@
     creates: /etc/ssl/private/selfsigned.key
   when: not ssl_has_cert
 
+# -days 36500: this cert is created once via `creates:` and never rotated —
+# a 1-year expiry would silently rot while Cloudflare Full(strict) rejects it.
+# Long-lived by design; replace with real cert via certbot as soon as possible.
 - name: Generate self-signed certificate
   become: true
   ansible.builtin.command:
-    cmd: "openssl req -new -x509 -key /etc/ssl/private/selfsigned.key -out /etc/ssl/certs/selfsigned.crt -days 365 -nodes -subj /CN={{ domain }}"
+    cmd: "openssl req -new -x509 -key /etc/ssl/private/selfsigned.key -out /etc/ssl/certs/selfsigned.crt -days 36500 -nodes -subj /CN={{ domain }}"
     creates: /etc/ssl/certs/selfsigned.crt
   when: not ssl_has_cert
 

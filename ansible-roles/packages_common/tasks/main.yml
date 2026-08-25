@@ -11,6 +11,9 @@
     name:
       - certbot
       - fail2ban
+      # fail2ban-custom.jail.j2 sets backend=pyinotify; the module is only a
+      # Suggests of fail2ban — without an explicit install jails ERROR at start.
+      - python3-pyinotify
       - jq
       - rclone
       - ssl-cert
