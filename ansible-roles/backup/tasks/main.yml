@@ -73,14 +73,9 @@
     mode: "0600"
   no_log: true
 
-- name: Ensure bot service runs on prod only (long-polling is single-instance on the shared token)
-  ansible.builtin.systemd:
-    name: telegram-bot
-    enabled: "{{ deploy_env == 'prod' }}"
-    state: "{{ 'started' if deploy_env == 'prod' else 'stopped' }}"
-    daemon_reload: true
-  become: true
-
+# NOTE: exactly ONE telegram-bot singleton task may exist. A second variant
+# comparing `deploy_env == 'prod'` used to sit below and stop+disable the bot
+# on prod-hetz right after the startswith() task started it (fixed 2026-08-25).
 
 - name: Setup hourly backup cron
   ansible.builtin.cron:
