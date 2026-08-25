@@ -53,6 +53,17 @@
   become: true
   notify: Reload systemd and restart bot
 
+# Singleton enforcement — Telegram allows ONE getUpdates poller per token.
+# Prod targets: running + enabled (survives reboot). Non-prod: hard-off,
+# otherwise a dev poller kills the prod instance via Conflict error.
+- name: Ensure telegram-bot runs on prod only
+  become: true
+  ansible.builtin.systemd:
+    name: telegram-bot
+    state: "{{ 'started' if deploy_env.startswith('prod') else 'stopped' }}"
+    enabled: "{{ deploy_env.startswith('prod') }}"
+    daemon_reload: true
+
 - name: Render server .env (whitelist only — no cloud credentials)
   ansible.builtin.template:
     src: server.env.j2
