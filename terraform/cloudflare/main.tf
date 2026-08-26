@@ -127,10 +127,13 @@ resource "cloudflare_zone_setting" "always_use_https" {
   value      = "on"
 }
 
+# "strict" is free here: both origins terminate on Let's Encrypt certs (see
+# ansible-roles/ssl), so full validation passes and MITM downgrade via a
+# self-signed/mismatched origin cert is closed.
 resource "cloudflare_zone_setting" "ssl" {
   zone_id    = data.cloudflare_zone.this.id
   setting_id = "ssl"
-  value      = "full"
+  value      = "strict"
 }
 
 resource "cloudflare_zone_setting" "min_tls_version" {

@@ -61,6 +61,11 @@ done
 [[ -z "$PHP_VER" ]] && PHP_VER="8.3"
 
 fail=0
+# Init BOTH tier flags here, before ANY check can write them. They used to be
+# reset in the TIER section below — silently wiping the telegram-bot Tier-1
+# verdict set earlier in the script (dead prod bot then never blocked deploys).
+_local_fail=0
+_external_warn=0
 
 # --- Services ---
 # grafana-server is intentionally ABSENT from this loop: it installs LAST as a
@@ -336,9 +341,8 @@ fi
 # --- TIER 1 CRITICAL CHECKS ---
 # LOCAL services (FAIL deploy if broken)
 # EXTERNAL services (WARN if broken — cloud issues shouldn't block deploy)
-
-_local_fail=0
-_external_warn=0
+# NOTE: _local_fail/_external_warn are initialized at the top of the script,
+# next to $fail — do NOT re-init them here (would wipe the telegram-bot verdict).
 
 # 1. Redis connectivity (LOCAL — CRITICAL for sessions)
 if redis-cli ping >/dev/null 2>&1; then

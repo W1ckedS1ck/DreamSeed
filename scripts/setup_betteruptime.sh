@@ -104,7 +104,7 @@ write_key_to_env() {
     encrypted=$(mktemp)
     chmod 600 "$encrypted"
     _SETUP_TMPFILES+=("$encrypted")
-    if ! ansible-vault encrypt "$tmpfile" --vault-password-file "${HOME}/.vault_pass_dreamseed" --output="$encrypted"; then
+    if ! ansible-vault encrypt "$tmpfile" --vault-password-file "$VAULT_PW_FILE" --output="$encrypted"; then
         rm -f "$tmpfile" "$encrypted"
         echo "Error: failed to encrypt secrets/.env" >&2
         return 1
