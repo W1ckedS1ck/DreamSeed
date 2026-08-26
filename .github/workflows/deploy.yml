@@ -115,6 +115,7 @@ jobs:
           loki_username_prod: ${{ vars.LOKI_USERNAME_PROD }}
           environment: ${{ inputs.environment }}
           faro_collector_url: ${{ vars.FARO_COLLECTOR_URL }}
+          faro_collector_url_prod: ${{ vars.FARO_COLLECTOR_URL_PROD }}
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
           dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
