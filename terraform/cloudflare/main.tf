@@ -101,8 +101,12 @@ resource "cloudflare_ruleset" "cache" {
     action_parameters = {
       cache = true
       edge_ttl = {
-        mode    = "override_origin"
-        default = var.edge_ttl
+        # respect_origin: honor origin Cache-Control (no-store from MODX/nginx),
+        # fall back to CF default (HTML not cached; static assets with
+        # public,immutable stay cached). override_origin previously forced a
+        # TTL that ignored origin headers -> stale cached homepage -> guests
+        # re-took the questionnaire -> duplicate LifeBalance rows.
+        mode = "respect_origin"
       }
     }
     expression  = "(not starts_with(http.request.uri.path, \"/manager/\")) and (not http.cookie contains \"PHPSESSID\")"
