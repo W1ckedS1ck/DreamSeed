@@ -101,27 +101,13 @@ resource "cloudflare_ruleset" "cache" {
     action_parameters = {
       cache = true
       edge_ttl = {
-        # MODX sets a PHPSESSID on every page, so respect_origin would never
-        # cache (Set-Cookie -> BYPASS). override_origin caches despite the
-        # cookie. The cookie-split expression below is what actually prevents
-        # LifeBalance duplicates: any visitor who has PHPSESSID or
-        # lifebalance_guest_completed always bypasses cache and gets a fresh
-        # page, so only the generic not-yet-filled page state is ever cached.
-        # TTL=1800 (30min) chosen 2026-08-27: 10x Better Stack's 180s check
-        # interval (avoids near-constant per-PoP MISS against monitoring) and
-        # matches Grafana Cloud synthetic monitor cadence (terraform/grafana/sm.tf).
-        # Escalated 120 -> 300 -> 1800 same day after the initial 120s value
-        # (set in PR #150) still latency-regressed some Better Stack regions.
-        # Exists-check in the live LifeBalanceForm snippet (core/cache/includes/
-        # elements/modsnippet/117.include.cache.php) additionally guards against
-        # duplicate rows even if a guest resubmits from a briefly stale page.
+        # override_origin: caches despite PHPSESSID; cookie-split expression
+        # below excludes filled/logged-in visitors, so only the generic page
+        # is cached. 1800s = 10x Better Stack's check interval.
         mode    = "override_origin"
         default = 1800
       }
       browser_ttl = {
-        # Browsers honor whatever Cache-Control nginx/MODX actually sends
-        # instead of a fixed zone default, so a filled guest's browser doesn't
-        # serve a stale 'unfilled' page.
         mode = "respect_origin"
       }
     }
