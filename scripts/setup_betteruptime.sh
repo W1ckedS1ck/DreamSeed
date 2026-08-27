@@ -192,30 +192,34 @@ for item in data.get('data', []):
 }
 
 for spec in \
-    "https://${DOMAIN}/|Main site|The Dreamers|180" \
-    "https://${DOMAIN}/manager/|Admin panel|MODX|180" \
-    "https://${DOMAIN}/grafana|Grafana|Grafana|180"; do
+    "https://${DOMAIN}/|Main site|The Dreamers|180|keyword" \
+    "https://${DOMAIN}/manager/|Admin panel|MODX|300|keyword" \
+    "https://${DOMAIN}/grafana|Grafana|Grafana|180|keyword" \
+    "https://${DOMAIN}/catalog/bamboo|Product Lucky Bamboo|Lucky Bamboo Bonsai|180|keyword" \
+    "https://${DOMAIN}/personal-account/registration|Registration Page||180|status"; do
 
-    IFS='|' read -r url name keyword freq <<<"$spec"
+    IFS='|' read -r url name keyword freq mtype <<<"$spec"
 
     mid=$(monitor_exists "$url" "$existing_mon")
 
     json=$(python3 -c "
 import json, sys
 
-url, name, keyword = sys.argv[1], sys.argv[2], sys.argv[3]
+url, name, keyword, mtype = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[5]
 freq = int(sys.argv[4])
 
 payload = {
     'url': url,
     'pronounceable_name': name,
+    'monitor_type': mtype,
     'check_frequency': freq,
     'request_timeout': 30,
     'regions': ['eu', 'us', 'as', 'au'],
-    'required_keyword': keyword,
 }
+if mtype == 'keyword':
+    payload['required_keyword'] = keyword
 print(json.dumps(payload))
-" "$url" "$name" "$keyword" "$freq")
+" "$url" "$name" "$keyword" "$freq" "$mtype")
 
     if [[ -n "$mid" ]]; then
         curl -s -X PATCH "$API/monitors/$mid" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" >/dev/null
