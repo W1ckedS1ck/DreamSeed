@@ -33,7 +33,7 @@ logpath  = /var/log/nginx/{{ domain }}-ssl-access.log
 logpath  = /var/log/apache2/{{ domain }}-ssl-access.log
 {% endif %}
 ignoreip = 127.0.0.1/8 ::1{{ (" " ~ fail2ban_ignoreip) if (fail2ban_ignoreip | default('', true)) | length > 0 else '' }}
-maxretry = 25
+maxretry = 150
 findtime = 600
 bantime  = 3600
 
