@@ -111,7 +111,11 @@ inputs:
     required: false
     default: ""
   faro_collector_url:
-    description: Faro Collector URL
+    description: Faro Collector URL (dev; overridden by faro_collector_url_prod on prod targets)
+    required: false
+    default: ""
+  faro_collector_url_prod:
+    description: Faro Collector URL for prod targets (dreamseed Faro app, us-east-2)
     required: false
     default: ""
   dev_aws_access_key:
@@ -246,6 +250,7 @@ runs:
         LOKI_USERNAME_PROD: ${{ inputs.loki_username_prod }}
         ENVIRONMENT: ${{ inputs.environment }}
         FARO_COLLECTOR_URL: ${{ inputs.faro_collector_url }}
+        FARO_COLLECTOR_URL_PROD: ${{ inputs.faro_collector_url_prod }}
         DEV_AWS_ACCESS_KEY: ${{ inputs.dev_aws_access_key }}
         DEV_AWS_SECRET_KEY: ${{ inputs.dev_aws_secret_key }}
         DEV_AWS_REGION: ${{ inputs.dev_aws_region }}
@@ -269,9 +274,11 @@ runs:
           # back to the shared LOKI_* values when prod vars are not configured.
           case "$ENVIRONMENT" in
             prod*) emit_env LOKI_URL "${LOKI_URL_PROD:-$LOKI_URL}"
-                   emit_env LOKI_USERNAME "${LOKI_USERNAME_PROD:-$LOKI_USERNAME}" ;;
+                   emit_env LOKI_USERNAME "${LOKI_USERNAME_PROD:-$LOKI_USERNAME}"
+                   emit_env FARO_COLLECTOR_URL "${FARO_COLLECTOR_URL_PROD:-$FARO_COLLECTOR_URL}" ;;
             *)     emit_env LOKI_URL "$LOKI_URL"
-                   emit_env LOKI_USERNAME "$LOKI_USERNAME" ;;
+                   emit_env LOKI_USERNAME "$LOKI_USERNAME"
+                   emit_env FARO_COLLECTOR_URL "$FARO_COLLECTOR_URL" ;;
           esac
           emit_env TG_TOKEN "$TG_TOKEN"
           emit_env TG_CHAT_ID "$TG_CHAT_ID"
@@ -300,8 +307,7 @@ runs:
           emit_env PROD_GRAFANA_CLOUD_URL "$PROD_GRAFANA_CLOUD_URL"
           emit_env PROD_GRAFANA_CLOUD_USERNAME "$PROD_GRAFANA_CLOUD_USERNAME"
           emit_env PROD_GRAFANA_CLOUD_TOKEN "$PROD_GRAFANA_CLOUD_TOKEN"
-          # LOKI_URL / LOKI_USERNAME are emitted earlier, selected by environment.
-          emit_env FARO_COLLECTOR_URL "$FARO_COLLECTOR_URL"
+          # LOKI_* / FARO_COLLECTOR_URL are emitted earlier, selected by environment.
           emit_env DEV_AWS_ACCESS_KEY "$DEV_AWS_ACCESS_KEY"
           emit_env DEV_AWS_SECRET_KEY "$DEV_AWS_SECRET_KEY"
           emit_env DEV_AWS_REGION "$DEV_AWS_REGION"

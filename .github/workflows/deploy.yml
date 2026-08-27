@@ -115,6 +115,7 @@ jobs:
           loki_username_prod: ${{ vars.LOKI_USERNAME_PROD }}
           environment: ${{ inputs.environment }}
           faro_collector_url: ${{ vars.FARO_COLLECTOR_URL }}
+          faro_collector_url_prod: ${{ vars.FARO_COLLECTOR_URL_PROD }}
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
           dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
@@ -149,12 +150,16 @@ jobs:
           PYTHONUNBUFFERED: 1
           GIT_REF: ${{ github.ref_name }}
           SERVER_IP: ${{ inputs.server_ip }}
+          DEPLOY_ENV: ${{ inputs.environment }}
+          WEB_SRV_INPUT: ${{ inputs.web_server }}
+          SKIP_DNS_INPUT: ${{ inputs.skip_dns }}
+          MODE_INPUT: ${{ inputs.mode }}
         run: |
           chmod +x deploy.sh
           : > /tmp/deploy.log
 
-          ENV="${{ inputs.environment }}"
-          WEB_SRV="${{ inputs.web_server }}"
+          ENV="$DEPLOY_ENV"
+          WEB_SRV="$WEB_SRV_INPUT"
 
           [[ -z "$ENV" ]] && { echo "Missing environment"; exit 1; }
 
@@ -174,8 +179,8 @@ jobs:
           DEPLOY_ARGS=("$ENV")
           [[ "$WEB_SRV" == "apache" ]] && DEPLOY_ARGS+=("-a") || DEPLOY_ARGS+=("-n")
           [[ -n "$SERVER_IP" ]] && DEPLOY_ARGS+=("-i" "$SERVER_IP")
-          [[ "${{ inputs.skip_dns }}" == "true" ]] && DEPLOY_ARGS+=("--no-dns")
-          [[ "${{ inputs.mode }}" == "parallel" ]] && DEPLOY_ARGS+=("-p")
+          [[ "$SKIP_DNS_INPUT" == "true" ]] && DEPLOY_ARGS+=("--no-dns")
+          [[ "$MODE_INPUT" == "parallel" ]] && DEPLOY_ARGS+=("-p")
 
           set +e
           stdbuf -oL ./deploy.sh "${DEPLOY_ARGS[@]}" 2>&1 | tee /tmp/deploy.log
@@ -223,10 +228,13 @@ jobs:
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
           SERVER_IP_INPUT: ${{ inputs.server_ip }}
+          DEPLOY_ENV: ${{ inputs.environment }}
+          WEB_INPUT: ${{ inputs.web_server }}
+          SKIP_DNS_INPUT: ${{ inputs.skip_dns }}
         run: |
-          ENV="${{ inputs.environment }}"
-          WEB="${{ inputs.web_server }}"
-          SKIP_DNS="${{ inputs.skip_dns }}"
+          ENV="$DEPLOY_ENV"
+          WEB="$WEB_INPUT"
+          SKIP_DNS="$SKIP_DNS_INPUT"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           DEPLOY_STATUS="${{ steps.deploy.outcome }}"
 
@@ -329,13 +337,14 @@ jobs:
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
           DESTROY_CONFIRM: ${{ inputs.confirm }}
+          DEPLOY_ENV: ${{ inputs.environment }}
         run: |
           ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
           export SSH_PUBLIC_KEY_PATH=~/.ssh/deploy_key.pub
 
           chmod +x deploy.sh
 
-          ENV="${{ inputs.environment }}"
+          ENV="$DEPLOY_ENV"
 
           if [[ "$DESTROY_CONFIRM" != "destroy $ENV" ]]; then
             echo "ERROR: To destroy $ENV you must set confirm = 'destroy $ENV' (exactly)"
@@ -392,16 +401,20 @@ jobs:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          FAIL_ENV: ${{ inputs.environment }}
+          FAIL_ACTION: ${{ inputs.action }}
         run: |
-          MSG="❌ *Deploy failed* — ${{ inputs.environment }}
-          Action: ${{ inputs.action }}
+          MSG="❌ *Deploy failed* — $FAIL_ENV
+          Action: $FAIL_ACTION
           📅 $(date '+%Y-%m-%d %H:%M')"
           bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
 
       - name: Write destroy summary
         if: always() && inputs.action == 'destroy'
+        env:
+          DESTROY_ENV: ${{ inputs.environment }}
         run: |
-          ENV="${{ inputs.environment }}"
+          ENV="$DESTROY_ENV"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
           IP="${{ steps.destroy.outputs.server_ip }}"
@@ -513,13 +526,15 @@ jobs:
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
 
       - name: Write preview summary
+        env:
+          PREVIEW_ENV: ${{ inputs.environment }}
         run: |
           M="${GITHUB_STEP_SUMMARY:-}"
           [[ -z "$M" ]] && exit 0
           {
-            echo "<details><summary>📸 Screenshot — ${{ inputs.environment }}</summary>"
+            echo "<details><summary>📸 Screenshot — $PREVIEW_ENV</summary>"
             echo ""
-            echo "![${{ inputs.environment }}](${{ steps.pages.outputs.page_url }}${{ inputs.environment }}.png?t=${{ github.run_id }})"
+            echo "![$PREVIEW_ENV](${{ steps.pages.outputs.page_url }}$PREVIEW_ENV.png?t=${{ github.run_id }})"
             echo ""
             echo "</details>"
             echo ""

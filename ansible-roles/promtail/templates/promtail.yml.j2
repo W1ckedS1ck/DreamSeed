@@ -61,7 +61,7 @@ scrape_configs:
         labels:
           job: php-fpm
           instance: {{ domain }}
-          __path__: /var/log/php*-fpm.log
+          __path__: /var/log/php[0-9]*-fpm.log
 
   - job_name: syslog
     pipeline_stages:

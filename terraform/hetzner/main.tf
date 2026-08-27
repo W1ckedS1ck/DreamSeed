@@ -18,8 +18,8 @@ locals {
     service     = "DreamSeed"
     managed_by  = "terraform"
   }
-  cf_ipv4 = compact(split("\n", trimspace(data.http.cf_ips_v4.response_body)))
-  cf_ipv6 = compact(split("\n", trimspace(data.http.cf_ips_v6.response_body)))
+  cf_ipv4 = sort(compact(split("\n", trimspace(data.http.cf_ips_v4.response_body))))
+  cf_ipv6 = sort(compact(split("\n", trimspace(data.http.cf_ips_v6.response_body))))
 }
 
 data "hcloud_ssh_key" "default" {
@@ -37,14 +37,12 @@ resource "hcloud_firewall" "web" {
   name   = "dreamseed-fw-${var.environment}"
   labels = local.labels
 
-  # Rules reference live Cloudflare edge ranges (data.http cf_ips_v4/v6).
-  # The provider returns rule order/content in a non-stable sequence, so a plain
-  # plan would report every rule as replaced (false drift). Rules are managed
-  # declaratively here and applied on real changes via explicit apply — ignore
-  # the order noise for daily drift detection.
-  lifecycle {
-    ignore_changes = [rule]
-  }
+  # Rules reference live Cloudflare edge ranges (data.http cf_ips_v4/v6),
+  # sorted locally so ordering is deterministic across plan/apply.
+  # Do NOT re-add lifecycle.ignore_changes = [rule] here: it freezes the rules
+  # forever (apply would never update them, even explicitly). If drift-detection
+  # shows pure reordering noise again, fix the sort — don't freeze the resource.
+  # One-off resync (if ever needed): terraform apply -replace="hcloud_firewall.web"
 
   rule {
     direction  = "in"

@@ -35,7 +35,14 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
 
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com; frame-ancestors 'self';" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com https://cloudflareinsights.com; frame-ancestors 'self';" always;
+
+    # Short edge HTML cache (CF respect_origin honors this). Keeps pages fast for
+    # anonymous visitors; the CF cache rule additionally excludes users with the
+    # lifebalance_guest_completed cookie so the questionnaire "filled" state is
+    # always rendered fresh. Locations that declare their own add_header override
+    # this (static assets -> public,immutable; manager/connectors -> none).
+    add_header Cache-Control "public, max-age=120" always;
 
     client_max_body_size 64M;
 
@@ -47,6 +54,8 @@ server {
         proxy_pass http://127.0.0.1:8553/health;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        # must stay fresh for the uptime monitor — never cached
+        add_header Cache-Control "no-store" always;
         access_log off;
     }
 

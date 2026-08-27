@@ -55,10 +55,11 @@ jobs:
         id: server-ip
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          ROLLBACK_ENV: ${{ inputs.environment }}
         run: |
           TF_TOKEN="$TF_API_TOKEN"
 
-          ENV="${{ inputs.environment }}"
+          ENV="$ROLLBACK_ENV"
 
           case "$ENV" in
             prod)
@@ -135,8 +136,10 @@ jobs:
 
       - name: Set domain
         id: domain
+        env:
+          DOMAIN_ENV: ${{ inputs.environment }}
         run: |
-          ENV="${{ inputs.environment }}"
+          ENV="$DOMAIN_ENV"
           case "$ENV" in
             prod)       DOMAIN="dreamseed.online" ;;
             prod-hetz)  DOMAIN="dreamseed.online" ;;
@@ -219,6 +222,7 @@ jobs:
           RESTORE_REDIS: ${{ steps.restore.outputs.redis }}
           RESTORE_SITE: ${{ steps.restore.outputs.site }}
           RESTORE_TIME: ${{ steps.restore.outputs.time }}
+          SUMMARY_ENV: ${{ inputs.environment }}
         run: |
           RESTORE="${{ steps.restore.outcome }}"
           HEALTH="${{ steps.health.outcome }}"
@@ -238,7 +242,7 @@ jobs:
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| **Environment** | ${{ inputs.environment }} |"
+            echo "| **Environment** | $SUMMARY_ENV |"
             echo "| **Server** | $SERVER_IP |"
             echo "| **Domain** | ${{ steps.domain.outputs.domain }} |"
             echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"

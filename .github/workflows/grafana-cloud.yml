@@ -113,10 +113,12 @@ jobs:
       - name: Generate Summary
         working-directory: terraform/grafana
         if: always()
+        env:
+          WORKSPACE_INPUT: ${{ inputs.workspace }}
         run: |
           M="$GITHUB_STEP_SUMMARY"
 
-          if [[ "${{ inputs.workspace }}" == "prod" ]]; then
+          if [[ "$WORKSPACE_INPUT" == "prod" ]]; then
             TARGET="PROD"
             GRAFANA_URL="dreamseed.grafana.net"
           else

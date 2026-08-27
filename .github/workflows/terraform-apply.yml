@@ -139,30 +139,37 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         env:
           SSH_KEY_SECRET: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
+          TF_MODE: ${{ inputs.mode }}
+          PROV: ${{ inputs.provider }}
+          WS: ${{ inputs.workspace }}
         run: |
           MODE_FLAG=""
-          [ "${{ inputs.mode }}" = "refresh-only" ] && MODE_FLAG="-refresh-only"
-          if [ "${{ inputs.provider }}" = "aws" ]; then
-            case "${{ inputs.workspace }}" in
+          [ "$TF_MODE" = "refresh-only" ] && MODE_FLAG="-refresh-only"
+          if [ "$PROV" = "aws" ]; then
+            case "$WS" in
               prod)    : ;;
               dev-aws) : ;;
-              *)       echo "::error::Unknown workspace ${{ inputs.workspace }} for AWS provider"; exit 1 ;;
+              *)       echo "::error::Unknown workspace $WS for AWS provider"; exit 1 ;;
             esac
             echo "$SSH_KEY_SECRET" > /tmp/key.pub
             terraform apply -auto-approve -input=false $MODE_FLAG \
               -var="ssh_public_key_path=/tmp/key.pub" \
-              -var="environment=${{ inputs.workspace }}"
-          elif [ "${{ inputs.provider }}" = "cloudflare" ]; then
+              -var="environment=$WS"
+          elif [ "$PROV" = "cloudflare" ]; then
             terraform apply -auto-approve -input=false $MODE_FLAG
           else
             terraform apply -auto-approve -input=false $MODE_FLAG \
-              -var="environment=${{ inputs.workspace }}"
+              -var="environment=$WS"
           fi
 
       - name: Write job summary
         if: always()
+        env:
+          TF_MODE: ${{ inputs.mode }}
+          TF_PROVIDER: ${{ inputs.provider }}
+          TF_WORKSPACE_IN: ${{ inputs.workspace }}
         run: |
-          MODE="${{ inputs.mode }}"
+          MODE="$TF_MODE"
           ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
           RESULT="${{ job.status == 'success' && '✅' || '❌' }}"
 
@@ -172,8 +179,8 @@ jobs:
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| **Provider** | ${{ inputs.provider }} |"
-            echo "| **Workspace** | ${{ inputs.workspace }} |"
+            echo "| **Provider** | $TF_PROVIDER |"
+            echo "| **Workspace** | $TF_WORKSPACE_IN |"
             echo "| **Mode** | ${MODE} |"
             echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
             echo "| **Commit** | ${{ github.sha }} |"

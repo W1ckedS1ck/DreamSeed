@@ -282,6 +282,7 @@ jobs:
         if: steps.restore_cloud.outcome == 'success'
         env:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+        shell: bash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           DB_NAME=modx_db .github/scripts/test-restored-server.sh "$SERVER_IP" 2>&1 | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
