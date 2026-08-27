@@ -111,8 +111,8 @@ resource "cloudflare_ruleset" "cache" {
         mode = "respect_origin"
       }
     }
-    expression  = "(not starts_with(http.request.uri.path, \"/manager/\")) and (not http.cookie contains \"PHPSESSID\") and (not http.cookie contains \"lifebalance_guest_completed\")"
-    description = "Cache: all except admin and logged-in users"
+    expression  = "(not starts_with(http.request.uri.path, \"/manager/\")) and (not starts_with(http.request.uri.path, \"/connectors/\")) and (not http.cookie contains \"PHPSESSID\") and (not http.cookie contains \"lifebalance_guest_completed\")"
+    description = "Cache: all except admin, connector AJAX, and logged-in users"
     enabled     = true
   }]
 
