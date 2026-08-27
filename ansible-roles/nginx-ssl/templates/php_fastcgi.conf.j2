@@ -9,5 +9,10 @@ location ~ \.php$ {
     fastcgi_send_timeout 300s;
     fastcgi_read_timeout 300s;
     fastcgi_hide_header X-Powered-By;
+    # MODX/PHP sends 'Cache-Control: no-store, no-cache, must-revalidate'
+    # (session cache_limiter) which conflicts with the server-level
+    # 'public, max-age=120' and blocks the Cloudflare edge cache. Strip the
+    # upstream header so only the nginx-managed Cache-Control survives.
+    fastcgi_hide_header Cache-Control;
     fastcgi_param HTTP_HOST $host;
 }
