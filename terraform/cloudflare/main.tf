@@ -101,11 +101,20 @@ resource "cloudflare_ruleset" "cache" {
     action_parameters = {
       cache = true
       edge_ttl = {
-        # respect_origin: honor origin Cache-Control (no-store from MODX/nginx),
-        # fall back to CF default (HTML not cached; static assets with
-        # public,immutable stay cached). override_origin previously forced a
-        # TTL that ignored origin headers -> stale cached homepage -> guests
-        # re-took the questionnaire -> duplicate LifeBalance rows.
+        # Short edge TTL. MODX sets a PHPSESSID on every page, so
+        # respect_origin would never cache (Set-Cookie -> BYPASS). override_origin
+        # caches despite the cookie but only for 120s (was 4h before the audit
+        # fix -> stale questionnaire). The cookie-split below keeps visitors who
+        # already filled (lifebalance_guest_completed) always fresh; the D
+        # exists-check in LifeBalanceForm prevents duplicate rows even if a
+        # guest re-submits from a briefly stale page.
+        mode    = "override_origin"
+        default = 120
+      }
+      browser_ttl = {
+        # Browsers honor the origin's 'public, max-age=120' instead of the zone
+        # 4h default, so a filled guest's browser doesn't serve a stale
+        # 'unfilled' page for hours.
         mode = "respect_origin"
       }
     }
