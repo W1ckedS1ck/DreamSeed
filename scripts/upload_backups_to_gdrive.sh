@@ -20,7 +20,7 @@ exec >>"$LOG_FILE" 2>&1
 START_TIME=$(date +%s)
 DOMAIN="${DOMAIN:-$(hostname -f 2>/dev/null || echo "unknown")}"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Upload started — environment suffix: $(detect_env)"
+log_ts "⏱ Upload started — environment suffix: $(detect_env)"
 
 # Dev mirrors prod exactly (monitoring/backups/alerting); restore pulls prod paths.
 # Do NOT add dev-vs-prod logic.
@@ -119,12 +119,11 @@ fi
 find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
 
 if [[ "$HAS_ERROR" -eq 0 ]]; then
-    echo "upload_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)" |
-        curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true
+    export_metric "upload_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)"
     [[ -n "${BETTERUPTIME_GDRIVE_KEY:-}" ]] && { ping_heartbeat "$BETTERUPTIME_GDRIVE_KEY" || true; }
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All uploads successful"
+    log_ts "✅ All uploads successful"
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Upload completed with errors"
+    log_ts "⚠️ Upload completed with errors"
 fi
 
 # ==== Suppress alert on fresh servers (<1h uptime — backup cron races with manual steps) ====

@@ -80,7 +80,7 @@ resource "cloudflare_ruleset" "rate_limit" {
       mitigation_timeout  = 10
     }
     expression  = "(starts_with(http.request.uri.path, \"/manager/\"))"
-    description = "Rate limit /manager/ — 20 req/10s, block 10s (Free plan minimum; primary defense is fail2ban modx-admin jail: 25 failures → 1h ban)"
+    description = "Rate limit /manager/ — 20 req/10s, block 10s (Free plan minimum; primary defense is fail2ban modx-admin jail: 150 failures/10min → 1h ban)"
     enabled     = true
   }]
 

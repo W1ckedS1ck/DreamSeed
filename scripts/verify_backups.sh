@@ -12,7 +12,7 @@ DOMAIN="${DOMAIN:-unknown}"
 LOG_FILE="$BACKUP_DIR/logs/verify_$(date +%Y-%m-%d).log"
 mkdir -p "$BACKUP_DIR/logs"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏱ Backup verification started" >>"$LOG_FILE"
+log_ts "⏱ Backup verification started"
 
 LOCAL_PROJ_OK=0
 LOCAL_DB_OK=0
@@ -25,10 +25,10 @@ PROJ_MISSING=0
 
 if [[ -n "$PROJ_BACKUP" && -f "$PROJ_BACKUP" ]]; then
     if timeout 300 tar -tzf "$PROJ_BACKUP" >/dev/null 2>&1; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Project backup OK: $(basename "$PROJ_BACKUP")" >>"$LOG_FILE"
+        log_ts "✓ Project backup OK: $(basename "$PROJ_BACKUP")"
         LOCAL_PROJ_OK=1
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Project backup CORRUPTED: $(basename "$PROJ_BACKUP")" >>"$LOG_FILE"
+        log_ts "✗ Project backup CORRUPTED: $(basename "$PROJ_BACKUP")"
         ALERTS+="❌ Project backup corrupted: $(basename "$PROJ_BACKUP")
 "
     fi
@@ -37,7 +37,7 @@ else
     # so absence is EXPECTED on low-churn sites. Don't hard-fail here — resolve
     # against DB freshness below (a fresh DB dump proves the pipeline runs).
     PROJ_MISSING=1
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠ No project backup found (expected when site files unchanged)" >>"$LOG_FILE"
+    log_ts "⚠ No project backup found (expected when site files unchanged)"
 fi
 
 # ==== Verify local DB backup ====
@@ -47,20 +47,20 @@ if [[ -n "$DB_BACKUP" && -f "$DB_BACKUP" ]]; then
     if gunzip -t "$DB_BACKUP" >/dev/null 2>&1; then
         sql_head=$(zcat "$DB_BACKUP" 2>/dev/null | head -1000) || true
         if grep -q "CREATE TABLE\|INSERT INTO" <<<"$sql_head" 2>/dev/null; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ DB backup OK: $(basename "$DB_BACKUP")" >>"$LOG_FILE"
+            log_ts "✓ DB backup OK: $(basename "$DB_BACKUP")"
             LOCAL_DB_OK=1
         else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ DB backup INVALID SQL: $(basename "$DB_BACKUP")" >>"$LOG_FILE"
+            log_ts "✗ DB backup INVALID SQL: $(basename "$DB_BACKUP")"
             ALERTS+="❌ DB backup invalid SQL: $(basename "$DB_BACKUP")
 "
         fi
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ DB backup CORRUPTED: $(basename "$DB_BACKUP")" >>"$LOG_FILE"
+        log_ts "✗ DB backup CORRUPTED: $(basename "$DB_BACKUP")"
         ALERTS+="❌ DB backup corrupted: $(basename "$DB_BACKUP")
 "
     fi
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ No DB backup found" >>"$LOG_FILE"
+    log_ts "✗ No DB backup found"
     ALERTS+="❌ No DB backup found in $BACKUP_DIR/db
 "
 fi
@@ -71,7 +71,7 @@ fi
 if [[ -n "$DB_BACKUP" && "$LOCAL_DB_OK" -eq 1 ]]; then
     DB_AGE_H=$((($(date +%s) - $(stat -c %Y "$DB_BACKUP")) / 3600))
     if [[ "$DB_AGE_H" -ge 12 ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ DB backup STALE (${DB_AGE_H}h): $(basename "$DB_BACKUP")" >>"$LOG_FILE"
+        log_ts "✗ DB backup STALE (${DB_AGE_H}h): $(basename "$DB_BACKUP")"
         ALERTS+="❌ DB backup stale (${DB_AGE_H}h): $(basename "$DB_BACKUP")
 "
         LOCAL_DB_OK=0
@@ -112,7 +112,7 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
     fi
 
     if [[ "$_rclone_err" -eq 1 ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Cloud backup listing failed (rclone error)" >>"$LOG_FILE"
+        log_ts "✗ Cloud backup listing failed (rclone error)"
         ALERTS+="❌ Cloud backup listing failed (rclone error)
 "
         CLOUD_OK=0
@@ -127,16 +127,16 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
             DB_CLOUD_AGE=$((($(date +%s) - _ts) / 3600))
         fi
         if [[ "$DB_CLOUD_AGE" -ge 12 ]]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Cloud DB backup STALE (${DB_CLOUD_AGE}h): $DB_CLOUD_NEWEST" >>"$LOG_FILE"
+            log_ts "✗ Cloud DB backup STALE (${DB_CLOUD_AGE}h): $DB_CLOUD_NEWEST"
             ALERTS+="❌ Cloud DB backup stale (${DB_CLOUD_AGE}h): $DB_CLOUD_NEWEST
 "
             CLOUD_OK=0
         else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Cloud backups OK: $PROJ_CLOUD_COUNT project, $DB_CLOUD_COUNT DB (newest ${DB_CLOUD_AGE}h)" >>"$LOG_FILE"
+            log_ts "✓ Cloud backups OK: $PROJ_CLOUD_COUNT project, $DB_CLOUD_COUNT DB (newest ${DB_CLOUD_AGE}h)"
             CLOUD_OK=1
         fi
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Cloud backups MISSING: project=$PROJ_CLOUD_COUNT, db=$DB_CLOUD_COUNT" >>"$LOG_FILE"
+        log_ts "✗ Cloud backups MISSING: project=$PROJ_CLOUD_COUNT, db=$DB_CLOUD_COUNT"
         ALERTS+="❌ Cloud backups missing or empty
 "
         CLOUD_OK=0
@@ -144,7 +144,7 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
 
     export_metric "backup_verification_ok{type=\"cloud\",instance=\"$DOMAIN\"} $CLOUD_OK"
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏭ Cloud verification skipped (rclone not configured)" >>"$LOG_FILE"
+    log_ts "⏭ Cloud verification skipped (rclone not configured)"
 fi
 
 # ==== Send alerts if verification failed ====
@@ -156,12 +156,12 @@ $ALERTS
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
     send_tg "$MSG" || true
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Alert sent to Telegram" >>"$LOG_FILE"
+    log_ts "Alert sent to Telegram"
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All verifications passed" >>"$LOG_FILE"
+    log_ts "✅ All verifications passed"
     if [[ -n "${BETTERUPTIME_VERIFY_KEY:-}" ]]; then
         if ping_heartbeat "$BETTERUPTIME_VERIFY_KEY"; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: ✅ sent" >>"$LOG_FILE"
+            log_ts "Heartbeat: ✅ sent"
         fi
     fi
 fi

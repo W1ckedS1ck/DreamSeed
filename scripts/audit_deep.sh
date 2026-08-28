@@ -58,7 +58,7 @@ ok() {
 fail() {
     echo "  $F $1"
     export_metric "audit_$2 0"
-    fail_count=1
+    fail_count=$((fail_count + 1))
 }
 warn() {
     echo "  $W $1"
@@ -232,7 +232,7 @@ if [[ $_sp_ok -eq 4 ]]; then
     export_metric "audit_sensitive_paths_blocked 1"
 else
     export_metric "audit_sensitive_paths_blocked 0"
-    fail_count=1
+    fail_count=$((fail_count + 1))
 fi
 
 # Cloudflare real IP
