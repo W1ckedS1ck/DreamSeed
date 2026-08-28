@@ -52,7 +52,7 @@ cloudflare_zone_id: "{{ lookup('env', 'CLOUDFLARE_ZONE_ID') | default('', true) 
 
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented
 # expected version — Renovate PRs are the release radar, deploy log shows drift.
-grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.1.3', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.2.0', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.12.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
@@ -61,7 +61,7 @@ monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | defa
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.20.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
 monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.150.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
 monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.150.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.89.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
+monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.90.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
 loki_username: "{{ lookup('env', 'LOKI_USERNAME') | default('', true) }}"
@@ -109,7 +109,7 @@ additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per lin
 faro_enabled: true
 faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
 faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
-faro_sdk_version: "2.9.0"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
+faro_sdk_version: "2.11.0"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
 
 # ==== SSL ====
 
