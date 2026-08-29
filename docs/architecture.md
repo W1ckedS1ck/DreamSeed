@@ -248,8 +248,8 @@ Better Stack (cloud)
 ```
 Layer 0 — Edge (Cloudflare):
   Free Managed Ruleset (OWASP Top 10, protocol attacks) — block mode
-  Cache Rules (respect_origin — nginx sends no-store on / so HTML is
-              never edge-cached; static assets cache via their own headers)
+  Cache Rules (override_origin, TTL=3600; cookie-split bypasses
+              logged-in/session visitors so only the fresh-visitor page is cached)
   DDoS protection (always-on)
 
 Layer 1 — Network:
