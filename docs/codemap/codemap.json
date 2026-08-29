@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-29T15:17:46Z",
-  "generated_from_commit": "b0fbb13ee5a3ec587ade1bf05b6850c4f52e4255",
-  "working_tree_changed": false,
+  "generated_at": "2026-08-29T15:35:40Z",
+  "generated_from_commit": "ea8906726172dd6574e78edf75f8b41d727f2ecb",
+  "working_tree_changed": true,
   "graph_hash": "9abb63fdf04ba0d2",
   "scope": [
     ".github",
@@ -439,7 +439,7 @@
       "includes": [
         "ansible-roles/security"
       ],
-      "role": "Security hardening: sshd hardening + sshd -t validation, fail2ban jails (modx-admin 25 failures -> 1h ban, botsearch, bad-request), sysctl hardening, restrictive cron/sshd file permissions.",
+      "role": "Security hardening: sshd hardening + sshd -t validation, fail2ban jails (modx-admin 150 failures/10min -> 1h ban, no Referer/UA exemption, botsearch, bad-request), sysctl hardening, restrictive cron/sshd file permissions.",
       "entrypoints": [
         "ansible-roles/security/tasks/main.yml"
       ],

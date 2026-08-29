@@ -182,7 +182,7 @@ NODES = [
                    {"path": "ansible-roles/restore/tasks/main.yml", "symbol": "Upload rclone config"}]},
     {"id": "ansible-roles-security", "type": "ansible", "path": "ansible-roles/security",
          "includes": ["ansible-roles/security"],
-         "role": "Security hardening: sshd hardening + sshd -t validation, fail2ban jails (modx-admin 25 failures -> 1h ban, botsearch, bad-request), sysctl hardening, restrictive cron/sshd file permissions.",
+         "role": "Security hardening: sshd hardening + sshd -t validation, fail2ban jails (modx-admin 150 failures/10min -> 1h ban, no Referer/UA exemption, botsearch, bad-request), sysctl hardening, restrictive cron/sshd file permissions.",
          "entrypoints": ["ansible-roles/security/tasks/main.yml"],
          "tests": ["scripts/lint.sh"],
          "constraints": ["fail2ban modx-admin jail pairs with Cloudflare /manager/ rate limit as second defense (CLAUDE.md)", "sshd config validated with sshd -t before reload; test tolerates missing log files (security/tasks/main.yml:19-24,111-114)"],

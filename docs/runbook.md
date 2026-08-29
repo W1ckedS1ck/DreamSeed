@@ -1155,10 +1155,12 @@ sudo fail2ban-client status
 #### Unbanning a blocked developer (false positive)
 
 The `modx-admin` jail counts `POST /connectors/index.php` as brute-force
-attempts. Authenticated manager AJAX (element trees, media browser) is excluded
-via the filter's `ignoreregex` (Referer `/manager/` + browser UA), but a
-scripted client without those headers can still trip the jail — e.g. an AI
-agent driving the manager API directly.
+attempts, with a high `maxretry` (150/10min) so normal manager AJAX traffic
+doesn't trip it. There is no `ignoreregex` exemption anymore — an earlier
+Referer/UA-based exemption was removed because it was spoofable (any client
+could send `/manager/` Referer + a browser UA to bypass the jail). A false
+positive now means genuinely high-volume AJAX from one IP, or a scripted
+client (e.g. an AI agent) driving the manager API directly.
 
 ```bash
 # Who is banned right now?
