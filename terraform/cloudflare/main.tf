@@ -80,7 +80,7 @@ resource "cloudflare_ruleset" "rate_limit" {
       mitigation_timeout  = 10
     }
     expression  = "(starts_with(http.request.uri.path, \"/manager/\"))"
-    description = "Rate limit /manager/ — 20 req/10s, block 10s (Free plan minimum; primary defense is fail2ban modx-admin jail: 25 failures → 1h ban)"
+    description = "Rate limit /manager/ — 20 req/10s, block 10s (Free plan minimum; primary defense is fail2ban modx-admin jail: 150 failures/10min → 1h ban)"
     enabled     = true
   }]
 
@@ -101,25 +101,19 @@ resource "cloudflare_ruleset" "cache" {
     action_parameters = {
       cache = true
       edge_ttl = {
-        # Short edge TTL. MODX sets a PHPSESSID on every page, so
-        # respect_origin would never cache (Set-Cookie -> BYPASS). override_origin
-        # caches despite the cookie but only for 120s (was 4h before the audit
-        # fix -> stale questionnaire). The cookie-split below keeps visitors who
-        # already filled (lifebalance_guest_completed) always fresh; the D
-        # exists-check in LifeBalanceForm prevents duplicate rows even if a
-        # guest re-submits from a briefly stale page.
-        mode    = "override_origin"
-        default = 120
+        # respect_origin: honors origin Cache-Control. nginx sends no-store
+        # on / (single MODX entrypoint, covers LifeBalance + ЛК) so HTML is
+        # never edge-cached -> no stale-homepage duplicate-row risk, and no
+        # TTL/purge tradeoff to tune. Static assets (public,immutable) still
+        # cache normally since they set their own Cache-Control.
+        mode = "respect_origin"
       }
       browser_ttl = {
-        # Browsers honor the origin's 'public, max-age=120' instead of the zone
-        # 4h default, so a filled guest's browser doesn't serve a stale
-        # 'unfilled' page for hours.
         mode = "respect_origin"
       }
     }
-    expression  = "(not starts_with(http.request.uri.path, \"/manager/\")) and (not http.cookie contains \"PHPSESSID\") and (not http.cookie contains \"lifebalance_guest_completed\")"
-    description = "Cache: all except admin and logged-in users"
+    expression  = "(not starts_with(http.request.uri.path, \"/manager/\")) and (not starts_with(http.request.uri.path, \"/connectors/\")) and (not http.cookie contains \"PHPSESSID\") and (not http.cookie contains \"lifebalance_guest_completed\")"
+    description = "Cache: all except admin, connector AJAX, and logged-in users"
     enabled     = true
   }]
 

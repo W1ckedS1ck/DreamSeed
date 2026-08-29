@@ -203,7 +203,9 @@ export_tf_env() {
         local ssh_keys
         ssh_keys="$(
             local arr=()
-            while IFS= read -r k; do [[ -n "${k// /}" ]] && arr+=("$k"); done <<<"${ADDITIONAL_SSH_KEYS:-}"
+            # [[:space:]] not just " ": a tab-only line would otherwise survive
+            # the emptiness test and reach Terraform as a bogus key.
+            while IFS= read -r k; do [[ -n "${k//[[:space:]]/}" ]] && arr+=("$k"); done <<<"${ADDITIONAL_SSH_KEYS:-}"
             if [[ ${#arr[@]} -gt 0 ]]; then
                 printf '%s\n' "${arr[@]}" | jq -R . | jq -s .
             else
@@ -235,9 +237,12 @@ export_tf_env() {
             fi
             local additional="${ADDITIONAL_SSH_KEYS:-}"
             if [[ -n "$additional" ]]; then
+                # Test emptiness on a whitespace-stripped copy, but push the
+                # key VERBATIM — stripping spaces from $k itself mangles it
+                # ("ssh-ed25519 AAAA… user@host" -> one unusable token).
+                # Same form as the AWS branch above.
                 while IFS= read -r k; do
-                    k="${k// /}"
-                    [[ -n "$k" ]] && arr+=("$k")
+                    [[ -n "${k//[[:space:]]/}" ]] && arr+=("$k")
                 done <<<"$additional"
             fi
             if [[ ${#arr[@]} -gt 0 ]]; then

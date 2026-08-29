@@ -259,9 +259,7 @@ else
     _f2b_jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
     _f2b_missing=0
     for _j in sshd modx-admin dreamseed-botsearch dreamseed-bad-request recidive; do
-        if echo "$_f2b_jails" | grep -q "$_j"; then
-            :
-        else
+        if ! echo "$_f2b_jails" | grep -q "$_j"; then
             _f2b_missing=1
         fi
     done
@@ -302,10 +300,11 @@ done
 # --- vmagent (Grafana Cloud metrics agent) ---
 if systemctl is-active vmagent &>/dev/null; then
     _raw=$(curl -sf --max-time 5 "http://127.0.0.1:8429/metrics" 2>/dev/null || echo "")
-    _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {print $2}')
-    _blocks=${_blocks:-0}
-    _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {print $2}')
-    _errors=${_errors:-0}
+    # These counters are per-remote-write-URL, so sum across all of them
+    # (matches the aggregation used by audit_deep.sh) instead of taking only
+    # the first URL's value.
+    _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {sum+=$2} END {print sum+0}')
+    _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {sum+=$2} END {print sum+0}')
 
     _errfile="/var/tmp/.vmagent_errors_last"
     # Baseline for the errors delta. Robust to: file lost (first run / tmp cleaner)
@@ -369,7 +368,7 @@ fi
 # 3. Promtail → Loki connectivity (EXTERNAL — check via Promtail metrics)
 # Loki is Grafana Cloud SaaS, not local. Check if Promtail has sent data to cloud.
 _prom_metrics=$(curl -sf --max-time 5 "http://127.0.0.1:9080/metrics" 2>/dev/null || echo "")
-_prom_sent=$(echo "$_prom_metrics" | awk '/^promtail_sent_bytes_total/ {print $2}' || echo "0")
+_prom_sent=$(echo "$_prom_metrics" | awk '/^promtail_sent_bytes_total/ {print $2}' | head -1 || echo "0")
 _prom_sent=$(printf "%.0f" "$_prom_sent" 2>/dev/null || echo "0")
 if [[ "${_prom_sent:-0}" -gt 0 ]]; then
     echo "  ✓ Promtail → Loki: ${_prom_sent} bytes sent"
@@ -425,9 +424,11 @@ if [[ $_local_fail -eq 1 ]]; then
 else
     # TIER 1 checks passed. Old checks may have warnings, but don't block deploy.
     echo ""
+    # _local_fail is 0 here by construction (this is the else of `-eq 1`),
+    # so the only distinction left is whether $fail raised any warnings.
     if [[ $fail -eq 0 ]]; then
         echo "✅ All checks passed"
-    elif [[ $_local_fail -eq 0 ]]; then
+    else
         echo "✅ Critical checks passed (warnings above)"
     fi
     if [[ $_external_warn -eq 1 ]]; then

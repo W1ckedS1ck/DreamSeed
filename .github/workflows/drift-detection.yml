@@ -79,9 +79,6 @@ jobs:
 
       - name: Set up credentials
         env:
-          PROD_ACCESS_KEY: ${{ secrets.PROD_ACCESS_KEY }}
-          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
-          PROD_REGION: ${{ secrets.PROD_REGION }}
           DEV_AWS_ACCESS_KEY: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           DEV_AWS_SECRET_KEY: ${{ secrets.DEV_AWS_SECRET_KEY }}
           DEV_AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
@@ -90,14 +87,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           case "${{ matrix.target }}" in
-            prod)
-              echo "AWS_ACCESS_KEY_ID=$PROD_ACCESS_KEY" >> "$GITHUB_ENV"
-              echo "AWS_SECRET_ACCESS_KEY=$PROD_SECRET_KEY" >> "$GITHUB_ENV"
-              echo "AWS_DEFAULT_REGION=$PROD_REGION" >> "$GITHUB_ENV"
-              echo "TF_VAR_aws_region=$PROD_REGION" >> "$GITHUB_ENV"
-              echo "TF_VAR_environment=prod" >> "$GITHUB_ENV"
-              echo "TF_VAR_ssh_public_key_path=/tmp/ssh.pub" >> "$GITHUB_ENV"
-              ;;
             dev-aws)
               echo "AWS_ACCESS_KEY_ID=$DEV_AWS_ACCESS_KEY" >> "$GITHUB_ENV"
               echo "AWS_SECRET_ACCESS_KEY=$DEV_AWS_SECRET_KEY" >> "$GITHUB_ENV"
@@ -245,7 +234,7 @@ jobs:
           CODE=000
           for i in 1 2 3 4 5; do
             CODE=$(curl -sS --max-time 30 -o /tmp/gc-dev.json -w "%{http_code}" \
-              -H "Authorization: Bearer $DEV_SA_TOKEN" \
+              --config <(printf 'header = "Authorization: Bearer %s"\n' "$DEV_SA_TOKEN") \
               "https://vitalikuts.grafana.net/api/folders" || echo "000")
             echo "dev attempt $i: HTTP $CODE"
             [ "$CODE" = "200" ] && break
@@ -267,7 +256,7 @@ jobs:
           CODE=000
           for i in 1 2 3 4 5; do
             CODE=$(curl -sS --max-time 30 -o /tmp/gc-prod.json -w "%{http_code}" \
-              -H "Authorization: Bearer $PROD_SA_TOKEN" \
+              --config <(printf 'header = "Authorization: Bearer %s"\n' "$PROD_SA_TOKEN") \
               "https://dreamseed.grafana.net/api/folders" || echo "000")
             echo "prod attempt $i: HTTP $CODE"
             [ "$CODE" = "200" ] && break

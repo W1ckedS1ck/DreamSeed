@@ -703,7 +703,7 @@ else
 fi
 echo ""
 
-# ==== STEP 7: Restore Redis (if available) ====
+# ==== STEP 7.5: Restore Redis (if available) ====
 
 REDIS_STATUS="⏭️ Skipped"
 

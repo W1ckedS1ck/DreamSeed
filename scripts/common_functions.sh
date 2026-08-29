@@ -265,6 +265,13 @@ list_backups() {
     find "$1" -maxdepth 1 -name "$2" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2- || true
 }
 
+# Timestamped line into the caller's $LOG_FILE (stdout if unset). The
+# "[YYYY-MM-DD HH:MM:SS] msg" shape is what smart_backup/verify_backups have
+# always written — this only removes ~32 hand-repeated copies of it.
+log_ts() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >>"${LOG_FILE:-/dev/stdout}"
+}
+
 export_metric() {
     local payload="$1"
     echo "$payload" | timeout 10 curl -s --data-binary @- "http://127.0.0.1:8428/api/v1/import/prometheus" >/dev/null 2>&1 || true

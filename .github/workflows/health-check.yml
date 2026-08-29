@@ -116,7 +116,6 @@ jobs:
           IP="${{ steps.server-ip.outputs.ip }}"
           SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
 
-          $SSH "true" 2>/dev/null
           if ! $SSH "true" 2>/dev/null; then
             echo "::notice::SSH unreachable"
             echo "status=unreachable" >> "$GITHUB_OUTPUT"

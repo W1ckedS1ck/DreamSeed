@@ -37,12 +37,12 @@ server {
 
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com https://cloudflareinsights.com; frame-ancestors 'self';" always;
 
-    # Short edge HTML cache (CF respect_origin honors this). Keeps pages fast for
-    # anonymous visitors; the CF cache rule additionally excludes users with the
-    # lifebalance_guest_completed cookie so the questionnaire "filled" state is
-    # always rendered fresh. Locations that declare their own add_header override
-    # this (static assets -> public,immutable; manager/connectors -> none).
-    add_header Cache-Control "public, max-age=120" always;
+    # No edge/browser cache for HTML (CF respect_origin honors this) -> no
+    # stale-homepage window -> no duplicate LifeBalance rows on repeat
+    # questionnaire loads, and nothing to purge on deploy. Locations that
+    # declare their own add_header override this (static assets ->
+    # public,immutable; manager/connectors already had their own no-store).
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
 
     client_max_body_size 64M;
 
@@ -69,6 +69,7 @@ server {
 
     location ^~ /manager {
         limit_req zone=modx_admin burst=30 nodelay;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
@@ -82,6 +83,7 @@ server {
 
     location ^~ /connectors {
         limit_req zone=modx_login burst=120 nodelay;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         try_files $uri $uri/ @modx;
 
         {% include 'php_fastcgi.conf.j2' %}

@@ -1,15 +1,12 @@
-# Fail2ban filter for MODX admin panel brute-force attempts
-# MODX returns HTTP 200 even on failed login (error in JSON body).
-# Tracks repeated POST requests to the login connector.
+# Fail2ban filter for MODX admin panel brute-force attempts.
+# MODX returns HTTP 200 even on failed login; tracks POST to the login connector.
 #
-# ignoreregex: authenticated manager AJAX (element trees, media browser,
-# saves) also POSTs /connectors/index.php — dozens of times per 10 min
-# during normal work. Those requests always carry a Referer from /manager/
-# and a browser User-Agent; brute-force scripts typically send neither.
-# Excluding them here stops the jail from banning real developers while
-# still catching header-less login brute force (maxretry 25).
+# No ignoreregex: Referer/UA are attacker-controlled, so they can't gate this
+# jail. Real per-account brute-force defense is MODX's own login lockout
+# (failed_login_attempts/blocked_minutes). This jail is just a per-IP
+# volumetric cap — maxretry set above legitimate AJAX burst levels.
 
 [Definition]
 failregex = ^<HOST> .* "POST /connectors/index.php.*"$
 # NOTE: fail2ban strips the timestamp before matching — [time] arrives as [].
-ignoreregex = ^<HOST> .* "POST /connectors/index\.php[^"]*" [0-9]{3} [0-9]+ "https?://[^"]+/manager[^"]*" "[^"]*Mozilla[^"]*"$
+ignoreregex =
