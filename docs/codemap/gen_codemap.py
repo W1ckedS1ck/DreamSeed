@@ -295,7 +295,7 @@ NODES = [
          "tests": [],
          "constraints": ["TG_TOKEN/TG_CHAT_ID/TG_THREAD_ID consumed across workflows + scripts; masked in CI", "telegram_bot.py only responds to allowed chat, ignores bot replies (telegram_bot.py:39)"],
          "evidence": [{"path": "scripts/common_functions.sh", "symbol": "send_tg"},
-                   {"path": "scripts/send_tg.sh", "symbol": "api.telegram.org"},
+                   {"path": "scripts/common_functions.sh", "symbol": "api.telegram.org"},
                    {"path": "scripts/telegram_bot.py", "symbol": "main"},
                    {"path": "ansible-roles/grafana/templates/grafana-alerts.yaml.j2", "symbol": "type: telegram"}]},
     {"id": "ext-betterstack", "type": "external", "path": "scripts/setup_betteruptime.sh",
@@ -383,7 +383,7 @@ EDGES = [
                    {"path": ".github/workflows/test-restore.yml", "symbol": "bash /home/ubuntu/Scripts/smart_backup.sh"}],
          "note": "Workflows SSH into the server and execute deployed scripts (rollback, DR test, health checks)."},
     {"from_id": "github-ci", "to": "ext-telegram", "type": "publishes",
-        "evidence": [{"path": "scripts/send_tg.sh", "symbol": "api.telegram.org"}],
+        "evidence": [{"path": "scripts/common_functions.sh", "symbol": "api.telegram.org"}],
          "note": "Deploy/rollback/health-check notify Telegram with status summaries."},
     # --- terraform -> external ---
     {"from_id": "terraform-saas", "to": "ext-cloudflare", "type": "writes",
