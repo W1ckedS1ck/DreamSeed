@@ -1,7 +1,7 @@
 {
-  "commit": "99639a51ee53c749252a20a12b83dbba08ae6b0f",
+  "commit": "003ec943123b1b48d2ad6778ade1a66ed145f0b2",
   "working_tree_changed": false,
-  "generated_at": "2026-08-29T16:17:54Z",
+  "generated_at": "2026-08-29T16:18:10Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -48,7 +48,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "docs": {
-      "fingerprint": "219e13e002888cfd8e57749c7914bae4044b4361538d6529852891416a0cfe56",
+      "fingerprint": "9d6b2579004cc3cd68a0feb1454200da54ffbd6ab15ccd52d65f3900548b8dd2",
       "files": 22,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
