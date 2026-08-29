@@ -248,7 +248,8 @@ Better Stack (cloud)
 ```
 Layer 0 — Edge (Cloudflare):
   Free Managed Ruleset (OWASP Top 10, protocol attacks) — block mode
-  Cache Rules (bypass admin, bypass logged-in, 1h TTL)
+  Cache Rules (respect_origin — nginx sends no-store on / so HTML is
+              never edge-cached; static assets cache via their own headers)
   DDoS protection (always-on)
 
 Layer 1 — Network:
@@ -260,8 +261,9 @@ Layer 2 — SSH:
   Key-only auth: 00-hardening.conf.d prefix wins via sshd first-match
 
 Layer 3 — Application:
-  fail2ban: modx-admin (POST /connectors/ — 25 retries; browser manager AJAX
-            with /manager/ Referer + UA exempted) → bans at Cloudflare edge
+  fail2ban: modx-admin (POST /connectors/ — 150 retries/10min, no exemption;
+            an earlier Referer/UA exemption was removed as spoofable) →
+            bans at Cloudflare edge
   fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits) → edge ban 12h
   fail2ban: dreamseed-bad-request (HTTP 400 — 6 hits) → edge ban 1h
   Web-jail whitelist per env: FAIL2BAN_IGNOREIP_<TARGET> (secrets/.env)
