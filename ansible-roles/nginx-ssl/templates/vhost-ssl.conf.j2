@@ -37,12 +37,8 @@ server {
 
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com https://cloudflareinsights.com; frame-ancestors 'self';" always;
 
-    # No edge/browser cache for HTML (CF respect_origin honors this) -> no
-    # stale-homepage window -> no duplicate LifeBalance rows on repeat
-    # questionnaire loads, and nothing to purge on deploy. Locations that
-    # declare their own add_header override this (static assets ->
-    # public,immutable; manager/connectors already had their own no-store).
-    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    # Short browser cache for HTML; CF edge_ttl (override_origin) caches longer separately.
+    add_header Cache-Control "public, max-age=120" always;
 
     client_max_body_size 64M;
 

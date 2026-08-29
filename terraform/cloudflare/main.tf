@@ -101,14 +101,12 @@ resource "cloudflare_ruleset" "cache" {
     action_parameters = {
       cache = true
       edge_ttl = {
-        # respect_origin: honors origin Cache-Control. nginx sends no-store
-        # on / (single MODX entrypoint, covers LifeBalance + ЛК) so HTML is
-        # never edge-cached -> no stale-homepage duplicate-row risk, and no
-        # TTL/purge tradeoff to tune. Static assets (public,immutable) still
-        # cache normally since they set their own Cache-Control.
-        mode = "respect_origin"
+        # override_origin ignores PHPSESSID; cookie-split expression below covers duplicates.
+        mode    = "override_origin"
+        default = 3600
       }
       browser_ttl = {
+        # Browser honors nginx's own Cache-Control (short), not this zone default.
         mode = "respect_origin"
       }
     }
