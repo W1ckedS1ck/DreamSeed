@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-ExecStart={{ scripts_dir_remote }}/telegram_bot.py
+ExecStart={{ bot_venv_dir }}/bin/python {{ scripts_dir_remote }}/telegram_bot.py
 Restart=always
 RestartSec=10
 

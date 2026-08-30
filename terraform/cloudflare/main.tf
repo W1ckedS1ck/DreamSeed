@@ -141,8 +141,12 @@ resource "cloudflare_zone_setting" "ssl" {
   value      = "strict"
 }
 
+# TLS 1.3 floor (2026): pre-2019 clients are a negligible share of a paying
+# audience; keeps the edge handshake at 1-RTT and closes the 1.2 window.
+# Affects the visitor->CF edge only; the CF->origin leg is governed by nginx
+# ssl_protocols, not this setting.
 resource "cloudflare_zone_setting" "min_tls_version" {
   zone_id    = data.cloudflare_zone.this.id
   setting_id = "min_tls_version"
-  value      = "1.2"
+  value      = "1.3"
 }

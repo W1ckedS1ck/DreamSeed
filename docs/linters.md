@@ -4,7 +4,7 @@
 
 There are 2 layers of linting:
 
-- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
+- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
 - **CI on GitHub**: `ci.yml` (11 jobs, 8 required for merge)
 
 ---
@@ -16,7 +16,7 @@ There are 2 layers of linting:
 | 1 | **ShellCheck** | local + CI | `deploy.sh`, `scripts/*.sh`, `.github/scripts/*.sh` | Bash |
 | 2 | **ruff** | local | `scripts/telegram_bot.py`, `scripts/env_loader.py` | Python |
 | 3 | **ansible-lint** | local + CI | `ansible/playbook-*.yml`, `ansible-roles/*/tasks/*.yml` | YAML/Ansible |
-| 4 | **tflint** | local + CI | `terraform/aws/*.tf`, `terraform/hetzner/*.tf`, `terraform/grafana/*.tf` | HCL/Terraform |
+| 4 | **tflint** | local + CI | `terraform/aws/*.tf`, `terraform/hetzner/*.tf`, `terraform/grafana/*.tf`, `terraform/cloudflare/*.tf` | HCL/Terraform |
 | 5 | **terraform validate** | CI | `*.tf` syntax | HCL |
 | 6 | **Trivy** | CI | Security misconfigurations in `terraform/` | IaC Security |
 | 7 | **gitleaks** | CI | Secret scanning across full git history | Git |
@@ -30,6 +30,8 @@ There are 2 layers of linting:
 | 15 | **Cloudflare IP ranges** | local | vendored `cloudflare-realip.conf` vs live `cloudflare.com/ips` (runs in `--fast`) | Data |
 | 16 | **Secrets audit** | local (full) | `.gitignore` excludes (`secrets/`, `.env`, `*.service`), `secrets/` not tracked in git, required env vars present | Secrets |
 | 17 | **Deploy Check** | CI | real `deploy.sh -c` smoke test (env parse, vault, playbook syntax) | orchestration |
+| 18 | **Env parser contract** | local (manual) | `scripts/check_env_contract.sh` — all 3 .env parsers produce identical output on contract fixtures (`tests/env/`); run before editing `lib/env.sh`, `scripts/common_functions.sh` or `scripts/env_loader.py` | bash+python |
+| 19 | **terraform-docs** | local (pre-commit) | regenerates per-root `terraform/<root>/README.md` from module docs; one hook per root (aws/hetzner/grafana/cloudflare), graceful skip when binary is absent | HCL → Markdown |
 
 ---
 
@@ -82,7 +84,7 @@ There are 2 layers of linting:
 
 **Type:** Markdown linter.
 **Catches:** missing blank lines around headings/lists, multiple consecutive blank lines, inline HTML, bare URLs, inconsistent formatting.
-**Config:** `markdownlint-cli2.jsonc` at repo root (used by `lint.sh`). `.markdownlint.yml` is a legacy copy kept for the pre-commit hook — keep both in sync.
+**Config:** `markdownlint-cli2.jsonc` at repo root — single source of truth, used by both `lint.sh` and the pre-commit hook.
 
 ### 10. Checkov (IaC Security)
 
@@ -100,6 +102,12 @@ There are 2 layers of linting:
 
 **Type:** dependency-update config validator.
 **Catches:** invalid `renovate.json` schema, broken custom manager regex patterns (e.g. double-slash wrapping after config migration). Run with `npx --yes --package renovate@44 -- renovate-config-validator`. See the Renovate section in CLAUDE.md for the `managerFilePatterns` caveat.
+
+### 18. Env parser contract (bash + python3)
+
+**Type:** cross-parser behavioral check (not a linter — no static analysis).
+**Purpose:** the same `secrets/.env` flows through three independent parsers (`lib/env.sh` on the deploy controller, `common_functions.sh load_env` in server scripts, `env_loader.py` in the telegram bot). This script runs all three against the fixtures in `tests/env/` and asserts identical `KEY=VALUE` output, plus freezes the documented divergences (blocked vars / malformed lines / `ENV=`: lib/env.sh fails loudly, server side skips silently).
+**Run:** `./scripts/check_env_contract.sh` — **before editing any of the three parsers**. Zero dependencies (bash + python3), not wired into CI by design.
 
 ---
 

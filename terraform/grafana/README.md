@@ -5,15 +5,13 @@
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5 |
 | <a name="requirement_grafana"></a> [grafana](#requirement\_grafana) | ~> 4.0 |
-| <a name="requirement_http"></a> [http](#requirement\_http) | ~> 3.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 4.45.1 |
-| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 4.45.1 |
-| <a name="provider_http"></a> [http](#provider\_http) | 3.6.1 |
+| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 4.45.2 |
+| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 4.45.2 |
 
 ## Modules
 
@@ -30,7 +28,6 @@ No modules.
 | [grafana_synthetic_monitoring_check.multi_main](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/synthetic_monitoring_check) | resource |
 | [grafana_synthetic_monitoring_check.ssl_main](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/synthetic_monitoring_check) | resource |
 | [grafana_synthetic_monitoring_probes.main](https://registry.terraform.io/providers/grafana/grafana/latest/docs/data-sources/synthetic_monitoring_probes) | data source |
-| [http_http.dashboard](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
 
 ## Inputs
 

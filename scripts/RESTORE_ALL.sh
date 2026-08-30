@@ -226,7 +226,8 @@ select_backup_cloud() {
         # return value when called via command substitution. rclone_retry adds
         # linear-backoff retries like every other rclone call in this repo.
         rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/$(basename "$selected_name")" "$temp_dir/" >&2
-        local temp_file="$temp_dir/$(basename "$selected_name")"
+        local temp_file
+        temp_file="$temp_dir/$(basename "$selected_name")"
         if [ -f "$temp_file" ]; then
             echo -e "${GREEN}✓ Downloaded to $temp_file${NC}" >&2
             echo "$temp_file"

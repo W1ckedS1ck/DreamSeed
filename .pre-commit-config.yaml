@@ -31,7 +31,7 @@ repos:
     rev: v0.23.2
     hooks:
       - id: markdownlint-cli2
-        args: ["--config", ".markdownlint.yml"]
+        args: ["--config", "markdownlint-cli2.jsonc"]
         files: \.(md|markdown)$
 
   - repo: https://github.com/adrienverge/yamllint
@@ -59,6 +59,12 @@ repos:
         language: system
         files: ^terraform/grafana/.*\.tf$
         pass_filenames: false
+      - id: terraform-docs-cloudflare
+        name: terraform-docs (cloudflare)
+        entry: bash -c "command -v terraform-docs >/dev/null 2>&1 && cd terraform/cloudflare && terraform-docs markdown table --output-file README.md . || echo 'skip (unavailable)'"
+        language: system
+        files: ^terraform/cloudflare/.*\.tf$
+        pass_filenames: false
 
   - repo: local
     hooks:
@@ -72,14 +78,16 @@ repos:
     hooks:
       - id: terraform-fmt
         name: Terraform fmt
-        entry: bash -c 'for d in terraform/aws terraform/hetzner terraform/grafana; do (cd "$d" && terraform fmt -check -recursive .); done'
+        # Delegates to scripts/lint.sh so pre-commit, CI and local
+        # `deploy.sh --lint` share ONE implementation (single source of truth).
+        entry: bash scripts/lint.sh --fmt
         language: system
         files: ^terraform/.*\.tf$
         pass_filenames: false
 
       - id: tflint
         name: TFLint (Terraform)
-        entry: bash -c 'for d in terraform/aws terraform/hetzner terraform/grafana; do (cd "$d" && tflint --format=compact); done'
+        entry: bash scripts/lint.sh --tflint
         language: system
         files: ^terraform/.*\.tf$
         pass_filenames: false

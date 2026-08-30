@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-29T16:18:10Z",
-  "generated_from_commit": "003ec943123b1b48d2ad6778ade1a66ed145f0b2",
+  "generated_at": "2026-08-30T17:12:24Z",
+  "generated_from_commit": "fee77a75dddde2658fad1275cf8610478ef172e8",
   "working_tree_changed": false,
   "graph_hash": "9abb63fdf04ba0d2",
   "scope": [
@@ -630,17 +630,28 @@
       "path": "scripts/lint.sh",
       "includes": [
         "scripts/lint.sh",
+        "scripts/check_env_contract.sh",
         "renovate.json",
         ".pre-commit-config.yaml",
         ".gitleaks.toml",
         ".gitleaksignore",
         ".tflint.hcl",
-        ".markdownlint.yml",
-        ".editorconfig"
+        "markdownlint-cli2.jsonc",
+        ".editorconfig",
+        "tests/env/basic.env",
+        "tests/env/expansion.env",
+        "tests/env/multiline.env",
+        "tests/env/blocked.env",
+        "tests/env/malformed.env",
+        "tests/env/env_key.env",
+        "tests/env/inject.env",
+        "tests/env/unterminated.env",
+        "tests/env/cycle.env"
       ],
-      "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), plus Renovate/pre-commit/gitleaks/tflint config.",
+      "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), cross-parser .env contract check, plus Renovate/pre-commit/gitleaks/tflint config.",
       "entrypoints": [
-        "scripts/lint.sh"
+        "scripts/lint.sh",
+        "scripts/check_env_contract.sh"
       ],
       "tests": [
         "scripts/smoke_orchestration.sh",
@@ -649,7 +660,8 @@
       "constraints": [
         "lint.sh is the single source of truth for CI + local linting (CLAUDE.md)",
         "renovate pinned to renovate@44; managerFilePatterns must stay single-slash to avoid config-migration noise (CLAUDE.md)",
-        "run_terraform_validate temporarily stashes vaulted terraform.tfvars (lint.sh:168-182)"
+        "run_terraform_validate temporarily stashes vaulted terraform.tfvars (lint.sh:168-182)",
+        "3 .env parsers share one contract \u2014 run scripts/check_env_contract.sh BEFORE editing lib/env.sh, scripts/common_functions.sh or scripts/env_loader.py"
       ],
       "evidence": [
         {
@@ -667,6 +679,10 @@
         {
           "path": "scripts/lint.sh",
           "symbol": "run_shellcheck"
+        },
+        {
+          "path": "scripts/check_env_contract.sh",
+          "symbol": "check_fixture"
         },
         {
           "path": "renovate.json",

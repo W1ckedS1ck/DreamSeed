@@ -62,7 +62,7 @@ jobs:
           tflint_version: ${{ env.TFLINT_VERSION }}
           cache: true
       - name: Check terraform formatting
-        run: terraform fmt -check -recursive terraform/
+        run: bash scripts/lint.sh --ci --fmt
       - name: Run tflint
         run: bash scripts/lint.sh --ci --tflint
       - name: Validate all providers

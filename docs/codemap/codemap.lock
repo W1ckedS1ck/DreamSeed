@@ -1,7 +1,7 @@
 {
-  "commit": "003ec943123b1b48d2ad6778ade1a66ed145f0b2",
+  "commit": "fee77a75dddde2658fad1275cf8610478ef172e8",
   "working_tree_changed": false,
-  "generated_at": "2026-08-29T16:18:10Z",
+  "generated_at": "2026-08-30T17:12:24Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,43 +33,48 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "778a2952458fcb85448594148f0f1ad472186127128238cd2ed0fb7d9e61f6a4",
+      "fingerprint": "e087ff60970eada184fd33eccd250425ef0083a0fd9d5181d5523c70792f0ddb",
       "files": 23,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "ansible": {
-      "fingerprint": "12493295a321404f9769fe397ce2fb185c3f4ec667830895f2fb88f4b53a742d",
+      "fingerprint": "88459f0a120d4c34233af71152b7202f64bd96e01e00be589e17afafb8709aee",
       "files": 14,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "ansible-roles": {
-      "fingerprint": "249a959e99d996dd4eca793bfe77bc65a7d67fcbb3c2b8cbe82fe1a3a7d77554",
+      "fingerprint": "dbe17c8fa5acc093c35abc27c992699fa7119f8254e7a7a865efce6f122029c9",
       "files": 89,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "docs": {
-      "fingerprint": "9d6b2579004cc3cd68a0feb1454200da54ffbd6ab15ccd52d65f3900548b8dd2",
+      "fingerprint": "9f987bd9adaf0aa23b56c287aebdabed7cb4fa2cae520fcbb84b23fc4b2cc267",
       "files": 22,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "lib": {
-      "fingerprint": "f0bd484d56838e1783507e8156315f5c50d826800b4a6950e68cbac7460ff66f",
+      "fingerprint": "1ab06ed8c11c9af9d3838fc025a83be616fb86bf75d897beec70e25c9da0dbe8",
       "files": 13,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "root": {
-      "fingerprint": "8c1c388370ecf074d0c830421a6b20e18f75e135afac9f59cc399cf590dcf4a3",
-      "files": 17,
+      "fingerprint": "f1e684af50cc8507778d7e90fde2692808794adb3d1ba68c87ddeed459c77eb3",
+      "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "scripts": {
-      "fingerprint": "408d7871eee3c682e86f798f5eb6856977083e2f1db7cea595d903e75ce79ee4",
-      "files": 15,
+      "fingerprint": "6fa26dfce7dd79f8a7b379e38a21f778dfb510ee5d1ff5b189369661302d2561",
+      "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "terraform": {
-      "fingerprint": "c5628c5aa6d1201578f8afb748173aea5de3b1612176c0d6cd14511785fb6a64",
-      "files": 27,
+      "fingerprint": "5918250cb224c5236c4419183f0f683887ce6ddc57a7a9082feba1aa76c784b8",
+      "files": 28,
+      "algorithm": "sha256(sorted 'relpath\\tblobsha')"
+    },
+    "tests": {
+      "fingerprint": "6802f86752a6de76aebc6f3b9f11f1999ced1b820a2762b3517c5513291d3a45",
+      "files": 9,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     }
   }
