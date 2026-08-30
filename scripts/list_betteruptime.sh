@@ -32,8 +32,8 @@ load_env "$ENV_PLAIN"
 API="https://uptime.betterstack.com/api/v2"
 bu_auth() { printf 'header = "Authorization: Bearer %s"\n' "$BETTERUPTIME_API_TOKEN"; }
 
-CYAN='\033[0;36m'
-NC='\033[0m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
 
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 echo -e "${CYAN}  Better Stack — Uptime Inventory${NC}"

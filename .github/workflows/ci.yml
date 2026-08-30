@@ -30,7 +30,7 @@ jobs:
       - name: Install ShellCheck
         run: pip install shellcheck-py
       - name: Run ShellCheck
-        run: find . -path ./.git -prune -o -name '*.sh' -print -exec shellcheck --severity=error {} +
+        run: bash scripts/lint.sh --ci --shellcheck
 
   ansible-lint:
     name: Ansible Lint
@@ -157,10 +157,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Install yamllint
-        run: pip install yamllint==1.38.0
+      - name: 🚀 Start
+        run: echo "yamllint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Run yamllint
-        run: yamllint --strict .
+        run: bash scripts/lint.sh --ci --yamllint
 
   pre-commit:
     name: Pre-commit
@@ -317,4 +321,4 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Run zizmor
-        run: uvx zizmor --min-confidence high .
+        run: bash scripts/lint.sh --ci --zizmor

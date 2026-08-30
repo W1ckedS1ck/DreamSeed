@@ -46,15 +46,18 @@ jobs:
         run: echo "Terraform apply started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Mask secrets
+        uses: ./.github/actions/mask-secrets
         env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HETZ_PROD: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
-          HETZ_DEV: ${{ secrets.HCLOUD_TOKEN }}
-          SSH_KEY: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
-        run: |
-          for v in "$CF_TOKEN" "$HETZ_PROD" "$HETZ_DEV" "$SSH_KEY"; do
-            [ -n "$v" ] && echo "::add-mask::$v" || true
-          done
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PROD_HETZ_HCLOUD_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          VITALI_SSH_PUBLIC_KEY: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
+        with:
+          vars: |
+            CLOUDFLARE_API_TOKEN
+            PROD_HETZ_HCLOUD_TOKEN
+            HCLOUD_TOKEN
+            VITALI_SSH_PUBLIC_KEY
 
       - uses: ./.github/actions/setup-terraform
 

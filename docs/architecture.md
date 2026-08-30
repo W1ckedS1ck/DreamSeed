@@ -164,7 +164,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                               ┌─────────────────┐     ┌─────────────────────┐
                                               │   Grafana       │     │  Grafana Cloud      │
                                               │  :3000          │     │  hosted metrics     │
-                                              │  27 alerts      │     │  5 community        │
+                                              │  29 alerts      │     │  5 community        │
                                               │ 6/5 dashboards  │     │  (gnet 1860/...)    │
                                               └────────┬────────┘     └─────────────────────┘
                                                        │ Telegram point
@@ -187,7 +187,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 27 rules)
+### Alert Rules (Grafana — 29 rules)
 
 > Two classes:
 >

@@ -175,7 +175,7 @@ runs:
   using: composite
   steps:
     - name: Mask secrets
-      shell: bash
+      uses: ./.github/actions/mask-secrets
       env:
         TG_TOKEN: ${{ inputs.tg_token }}
         DB_PASS: ${{ inputs.db_pass }}
@@ -202,22 +202,36 @@ runs:
         SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
         VAULT_PASSWORD: ${{ inputs.vault_password }}
         RCLONE_CONF_BASE64: ${{ inputs.rclone_conf_base64 }}
-      run: |
-        for v in \
-          "$TG_TOKEN" "$DB_PASS" "$CLOUDFLARE_API_TOKEN" "$CLOUDFLARE_FIREWALL_TOKEN" "$HCLOUD_TOKEN" \
-          "$PROD_HETZ_HCLOUD_TOKEN" "$GRAFANA_PASS" "$BETTERUPTIME_API_TOKEN" \
-          "$BETTERUPTIME_BACKUP_KEY" "$BETTERUPTIME_GDRIVE_KEY" \
-          "$BETTERUPTIME_REPORT_DAILY_KEY" "$BETTERUPTIME_REPORT_WEEKLY_KEY" \
-          "$BETTERUPTIME_VERIFY_KEY" "$BETTERUPTIME_CHECK_SERVICES_KEY" \
-          "$DEV_GRAFANA_CLOUD_TOKEN" "$PROD_GRAFANA_CLOUD_TOKEN" \
-          "$DEV_AWS_ACCESS_KEY" "$DEV_AWS_SECRET_KEY" "$PROD_ACCESS_KEY" \
-          "$PROD_SECRET_KEY" "$UBUNTU_PRO_TOKEN" "$LOKI_USERNAME" \
-          "$SSH_PRIVATE_KEY" "$VAULT_PASSWORD" "$RCLONE_CONF_BASE64"; do
-          [ -n "$v" ] && echo "::add-mask::$v" || true
-        done
-        # NOTE: only actual secrets are masked above. Non-secret vars (region, chat IDs,
-        # URLs, SSH public keys, etc.) are NOT masked — masking them causes GitHub to
-        # auto-mask any output containing those strings (e.g. IP addresses).
+      with:
+        vars: |
+          TG_TOKEN
+          DB_PASS
+          CLOUDFLARE_API_TOKEN
+          CLOUDFLARE_FIREWALL_TOKEN
+          HCLOUD_TOKEN
+          PROD_HETZ_HCLOUD_TOKEN
+          GRAFANA_PASS
+          BETTERUPTIME_API_TOKEN
+          BETTERUPTIME_BACKUP_KEY
+          BETTERUPTIME_GDRIVE_KEY
+          BETTERUPTIME_REPORT_DAILY_KEY
+          BETTERUPTIME_REPORT_WEEKLY_KEY
+          BETTERUPTIME_VERIFY_KEY
+          BETTERUPTIME_CHECK_SERVICES_KEY
+          DEV_GRAFANA_CLOUD_TOKEN
+          PROD_GRAFANA_CLOUD_TOKEN
+          DEV_AWS_ACCESS_KEY
+          DEV_AWS_SECRET_KEY
+          PROD_ACCESS_KEY
+          PROD_SECRET_KEY
+          UBUNTU_PRO_TOKEN
+          LOKI_USERNAME
+          SSH_PRIVATE_KEY
+          VAULT_PASSWORD
+          RCLONE_CONF_BASE64
+      # NOTE: only actual secrets are masked above. Non-secret vars (region, chat IDs,
+      # URLs, SSH public keys, etc.) are NOT masked — masking them causes GitHub to
+      # auto-mask any output containing those strings (e.g. IP addresses).
 
     - name: Write secrets/.env
       shell: bash

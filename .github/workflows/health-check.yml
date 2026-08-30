@@ -40,16 +40,20 @@ jobs:
         run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Mask secrets
+        uses: ./.github/actions/mask-secrets
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          VAULT: ${{ secrets.VAULT_PASSWORD }}
-        run: |
-          for v in "$TG_TOKEN" "$TG_CHAT_ID" "$TG_THREAD_ID" "$SSH_KEY" "$VAULT"; do
-            [ -n "$v" ] && echo "::add-mask::$v" || true
-          done
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+        with:
+          vars: |
+            TG_TOKEN
+            TG_CHAT_ID
+            TG_THREAD_ID
+            SSH_PRIVATE_KEY
+            VAULT_PASSWORD
 
       - uses: ./.github/actions/setup-terraform
 
