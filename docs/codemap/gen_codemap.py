@@ -55,7 +55,11 @@ def module_fingerprints():
             # differ between a fresh build and the committed copy.
             if f.startswith("docs/codemap/"):
                 continue
-            sha = run(["git", "rev-parse", f"HEAD:{f}"]).strip()
+            # Read from the index (staged) so a regeneration right before
+            # committing codemap + code together reflects the code being
+            # committed, not the previous HEAD. On a fresh CI checkout the
+            # index equals HEAD, so --check stays consistent.
+            sha = run(["git", "rev-parse", f":{f}"]).strip()
             lines.append(f"{f}\t{sha}")
         digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
         fps[mod] = {"fingerprint": digest, "files": len(files), "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"}
