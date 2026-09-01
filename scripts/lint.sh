@@ -117,7 +117,9 @@ run_actionlint() {
         return 0
     fi
 
-    if actionlint; then
+    # Ignore self-repository uses ($/...) — GitHub feature (2026-07), not yet
+    # supported by actionlint (rhysd/actionlint#711).
+    if actionlint -ignore 'specifying action "\$/.+" in invalid format because ref is missing'; then
         print_ok "No issues"
         ci_annotation "actionlint" "pass"
     else
@@ -135,8 +137,8 @@ run_zizmor() {
         return 0
     fi
 
-    if uvx zizmor --min-confidence high .; then
-        print_ok "No high-confidence issues"
+    if uvx zizmor --min-confidence medium .; then
+        print_ok "No medium+ confidence issues"
         ci_annotation "zizmor" "pass"
     else
         print_fail "Issues found"
@@ -304,6 +306,30 @@ run_terraform_validate() {
         rm -f "${res_files[$i]}"
     done
     ci_annotation "Terraform Validate" "$([[ $FAILED == false ]] && echo pass || echo fail)"
+    group_end
+}
+
+run_terraform_fmt() {
+    group_start "Terraform fmt"
+    if ! tool_available terraform && ! tool_available tofu; then
+        print_skip "terraform/tofu not installed"
+        group_end
+        return 0
+    fi
+    local tf
+    tf=$(command -v tofu || command -v terraform)
+
+    # Single recursive pass over the whole terraform/ tree (all provider roots).
+    # This is the same scope ci.yml used to check with a raw
+    # `terraform fmt -check -recursive terraform/` — now one code path for CI,
+    # pre-commit and local.
+    if "$tf" fmt -check -recursive terraform/; then
+        print_ok "All formatted"
+        ci_annotation "Terraform fmt" "pass"
+    else
+        print_fail "Formatting drift (fix: $tf fmt -recursive terraform/)"
+        ci_annotation "Terraform fmt" "fail"
+    fi
     group_end
 }
 
@@ -573,6 +599,7 @@ OPTIONS:
   --yamllint          Run only yamllint (YAML)
   --renovate          Run only renovate config validator
   --tflint            Run only tflint
+  --fmt               Run only terraform fmt
   --validate-terraform Run only terraform validate
   --gitleaks          Run only gitleaks (working tree)
   --gitleaks-full-history Run only gitleaks (full git history, slower)
@@ -605,6 +632,7 @@ run_fast() {
 
 run_full() {
     run_fast
+    run_terraform_fmt
     run_tflint
     run_terraform_validate
     run_gitleaks
@@ -662,6 +690,10 @@ while [[ $# -gt 0 ]]; do
             MODE="tflint"
             shift
             ;;
+        --fmt)
+            MODE="terraform-fmt"
+            shift
+            ;;
         --validate-terraform)
             MODE="terraform-validate"
             shift
@@ -717,6 +749,7 @@ case "$MODE" in
     yamllint) run_yamllint ;;
     renovate) run_renovate_validate ;;
     tflint) run_tflint ;;
+    terraform-fmt) run_terraform_fmt ;;
     terraform-validate) run_terraform_validate ;;
     gitleaks) run_gitleaks ;;
     gitleaks-full-history) run_gitleaks "full-history" ;;

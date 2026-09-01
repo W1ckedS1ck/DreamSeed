@@ -50,10 +50,15 @@ def module_fingerprints():
     for mod, files in sorted(mods.items()):
         lines = []
         for f in sorted(files):
+            # Generated artifacts must not feed back into the fingerprint —
+            # otherwise the docs module (which contains codemap.*) would always
+            # differ between a fresh build and the committed copy.
+            if f.startswith("docs/codemap/"):
+                continue
             sha = run(["git", "rev-parse", f"HEAD:{f}"]).strip()
             lines.append(f"{f}\t{sha}")
         digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
-        fps[mod] = {"fingerprint": digest, "files": len(files), "algorithm": "sha256(sorted 'relpath\\tblobsha')"}
+        fps[mod] = {"fingerprint": digest, "files": len(files), "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"}
     return fps
 
 
@@ -73,9 +78,30 @@ def commit():
     return run(["git", "rev-parse", "HEAD"]).strip()
 
 
+def list_workflows():
+    """Return workflow basenames from tracked files under .github/workflows/."""
+    return sorted(
+        os.path.basename(p)[:-len(".yml")]
+        for p in tracked_files()
+        if p.startswith(".github/workflows/") and p.endswith(".yml")
+    )
+
+
+def list_composite_actions():
+    """Return composite action names from tracked files under .github/actions/."""
+    return sorted(
+        p.split("/")[2]
+        for p in tracked_files()
+        if p.startswith(".github/actions/") and p.endswith("/action.yml")
+    )
+
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
+
+workflows = list_workflows()
+actions = list_composite_actions()
 
 NODES = [
     # --- deploy machinery ---
@@ -231,21 +257,25 @@ NODES = [
                    {"path": "scripts/telegram_bot.py", "symbol": "cmd_backups"},
                    {"path": "scripts/env_loader.py", "symbol": "load_env"}]},
     {"id": "tooling", "type": "scripts", "path": "scripts/lint.sh",
-         "includes": ["scripts/lint.sh", "renovate.json", ".pre-commit-config.yaml",
-                   ".gitleaks.toml", ".gitleaksignore", ".tflint.hcl", ".markdownlint.yml", ".editorconfig"],
-         "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), plus Renovate/pre-commit/gitleaks/tflint config.",
-         "entrypoints": ["scripts/lint.sh"],
+         "includes": ["scripts/lint.sh", "scripts/check_env_contract.sh", "renovate.json", ".pre-commit-config.yaml",
+                   ".gitleaks.toml", ".gitleaksignore", ".tflint.hcl", "markdownlint-cli2.jsonc", ".editorconfig",
+                   "tests/env/basic.env", "tests/env/expansion.env", "tests/env/multiline.env",
+                   "tests/env/blocked.env", "tests/env/malformed.env", "tests/env/env_key.env",
+                   "tests/env/inject.env", "tests/env/unterminated.env", "tests/env/cycle.env"],
+         "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), cross-parser .env contract check, plus Renovate/pre-commit/gitleaks/tflint config.",
+         "entrypoints": ["scripts/lint.sh", "scripts/check_env_contract.sh"],
          "tests": ["scripts/smoke_orchestration.sh", ".github/workflows/ci.yml"],
-         "constraints": ["lint.sh is the single source of truth for CI + local linting (CLAUDE.md)", "renovate pinned to renovate@44; managerFilePatterns must stay single-slash to avoid config-migration noise (CLAUDE.md)", "run_terraform_validate temporarily stashes vaulted terraform.tfvars (lint.sh:168-182)"],
+         "constraints": ["lint.sh is the single source of truth for CI + local linting (CLAUDE.md)", "renovate pinned to renovate@44; managerFilePatterns must stay single-slash to avoid config-migration noise (CLAUDE.md)", "run_terraform_validate temporarily stashes vaulted terraform.tfvars (lint.sh:168-182)", "3 .env parsers share one contract — run scripts/check_env_contract.sh BEFORE editing lib/env.sh, scripts/common_functions.sh or scripts/env_loader.py"],
          "evidence": [{"path": "scripts/lint.sh", "symbol": "run_ansible_lint"},
                    {"path": "scripts/lint.sh", "symbol": "run_renovate_validate"},
                    {"path": "scripts/lint.sh", "symbol": "run_gitleaks"},
                    {"path": "scripts/lint.sh", "symbol": "run_shellcheck"},
+                   {"path": "scripts/check_env_contract.sh", "symbol": "check_fixture"},
                    {"path": "renovate.json", "symbol": "managerFilePatterns"}]},
     # --- ci ---
     {"id": "github-ci", "type": "ci", "path": ".github",
          "includes": [".github/workflows", ".github/actions", ".github/scripts", ".github/CODEOWNERS"],
-         "role": "CI/CD: 10 workflows (deploy, ci, chatops-deploy, rollback, drift-detection, health-check, terraform-apply, grafana-cloud, test-restore, docs-to-wiki), 4 composite actions (setup-env, setup-secrets, setup-terraform, setup-ansible) and chatops bots. Triggers deploys/destroys/rollbacks and weekly maintenance.",
+         "role": f"CI/CD: {len(workflows)} workflows ({', '.join(workflows)}), {len(actions)} composite actions ({', '.join(actions)}) and chatops bots. Triggers deploys/destroys/rollbacks and weekly maintenance.",
          "entrypoints": [".github/workflows/deploy.yml", ".github/workflows/ci.yml", ".github/workflows/health-check.yml",
                       ".github/workflows/test-restore.yml", ".github/workflows/rollback.yml"],
          "tests": [".github/workflows/ci.yml"],
@@ -1104,10 +1134,102 @@ applyHighlight();
 """
 
 
+def render_html(doc):
+    """Render the interactive HTML page for a codemap doc."""
+    data_json = json.dumps(doc, indent=1)
+    data_json = data_json.replace("</", "<\\/")
+    return (HTML_TEMPLATE
+            .replace("__GEN_TIME__", doc["generated_at"])
+            .replace("__COMMIT__", doc["generated_from_commit"])
+            .replace("__DATA__", data_json)
+            .replace("__COLORS__", json.dumps({t: v["color"] for t, v in NODE_TYPES.items()}))
+            .replace("__TYPES__", json.dumps(NODE_TYPES)))
+
+
+def write_all(doc, lock):
+    """Write codemap.json, codemap.lock and codemap.html."""
+    os.makedirs(OUT, exist_ok=True)
+
+    with open(os.path.join(OUT, "codemap.json"), "w") as fh:
+        json.dump(doc, fh, indent=2)
+        fh.write("\n")
+
+    with open(os.path.join(OUT, "codemap.lock"), "w") as fh:
+        json.dump(lock, fh, indent=2)
+        fh.write("\n")
+
+    with open(os.path.join(OUT, "codemap.html"), "w") as fh:
+        fh.write(render_html(doc))
+
+
+# Fields that differ on every regeneration (ignored in freshness check).
+VOLATILE_KEYS = {"generated_at", "generated_from_commit", "working_tree_changed", "commit"}
+
+
+def check():
+    """Verify committed codemap matches a fresh build (ignoring VOLATILE_KEYS)."""
+    doc, lock = build()
+    problems = validate(doc)
+    if problems:
+        print("VALIDATION PROBLEMS:")
+        for p in problems:
+            print("  -", p)
+        sys.exit(1)
+
+    def strip(d):
+        return {k: v for k, v in d.items() if k not in VOLATILE_KEYS}
+
+    mismatches = []
+
+    json_path = os.path.join(OUT, "codemap.json")
+    lock_path = os.path.join(OUT, "codemap.lock")
+    html_path = os.path.join(OUT, "codemap.html")
+
+    if not all(os.path.exists(p) for p in (json_path, lock_path, html_path)):
+        print("codemap files not found — run `python3 docs/codemap/gen_codemap.py` first")
+        sys.exit(1)
+
+    with open(json_path) as fh:
+        committed_doc = json.load(fh)
+    if strip(doc) != strip(committed_doc):
+        mismatches.append("codemap.json")
+
+    with open(lock_path) as fh:
+        committed_lock = json.load(fh)
+    if strip(lock) != strip(committed_lock):
+        mismatches.append("codemap.lock")
+
+    with open(html_path) as fh:
+        committed_html = fh.read()
+    # Normalize volatile strings in both copies before comparing.
+    def norm_html(h, doc_):
+        for key in ("generated_at", "generated_from_commit"):
+            val = doc_.get(key, "")
+            if val:
+                h = h.replace(val, "☠")
+        # Normalize booleans in both copies (HTML embeds the JSON data blob).
+        for k in ("working_tree_changed", "generated_from_commit"):
+            for val in (True, False):
+                h = h.replace(f'"{k}": {str(val).lower()}', f'"{k}": ☠')
+        return h
+
+    if norm_html(committed_html, committed_doc) != norm_html(render_html(doc), doc):
+        mismatches.append("codemap.html")
+
+    if mismatches:
+        print("CODEPMAP IS STALE — regenerated content differs from committed copy:")
+        for m in mismatches:
+            print(f"  - {m} differs (ignoring generated_at / generated_from_commit / working_tree_changed)")
+        print("Run `python3 docs/codemap/gen_codemap.py` locally and commit the result.")
+        sys.exit(1)
+
+    print("codemap is up to date")
+    print(f"  nodes={len(doc['nodes'])} edges={len(doc['edges'])} flows={len(doc['flows'])}")
+
+
 def main():
     doc, lock = build()
     problems = validate(doc)
-    os.makedirs(OUT, exist_ok=True)
 
     if problems:
         print("VALIDATION PROBLEMS:")
@@ -1115,30 +1237,7 @@ def main():
             print("  -", p)
         sys.exit(1)
 
-    # --- write json ---
-    json_path = os.path.join(OUT, "codemap.json")
-    with open(json_path, "w") as fh:
-        json.dump(doc, fh, indent=2)
-        fh.write("\n")
-
-    # --- write lock ---
-    lock_path = os.path.join(OUT, "codemap.lock")
-    with open(lock_path, "w") as fh:
-        json.dump(lock, fh, indent=2)
-        fh.write("\n")
-
-    # --- write html ---
-    data_json = json.dumps(doc, indent=1)
-    data_json = data_json.replace("</", "<\\/")
-    html = (HTML_TEMPLATE
-            .replace("__GEN_TIME__", doc["generated_at"])
-            .replace("__COMMIT__", doc["generated_from_commit"])
-            .replace("__DATA__", data_json)
-            .replace("__COLORS__", json.dumps({t: v["color"] for t, v in NODE_TYPES.items()}))
-            .replace("__TYPES__", json.dumps(NODE_TYPES)))
-    html_path = os.path.join(OUT, "codemap.html")
-    with open(html_path, "w") as fh:
-        fh.write(html)
+    write_all(doc, lock)
 
     print("OK — wrote codemap.json, codemap.lock, codemap.html")
     print(f"  nodes={len(doc['nodes'])} edges={len(doc['edges'])} flows={len(doc['flows'])}")
@@ -1146,4 +1245,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys as _sys
+    if len(_sys.argv) > 1 and _sys.argv[1] == "--check":
+        check()
+    else:
+        main()

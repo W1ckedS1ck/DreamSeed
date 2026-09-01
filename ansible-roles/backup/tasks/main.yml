@@ -35,13 +35,71 @@
     - env_loader.py
     - telegram_bot.py
 
-- name: Install python-telegram-bot for async bot
+# ---- uv (pinned, SHA256-verified) ----
+# Shared binary installer (checksum = release .sha256 asset, same pattern as
+# the monitoring exporters). uv is deploy-time only: the bot itself runs the
+# plain venv python (no network at runtime). All targets are x86_64 (same
+# convention as the monitoring exporter URLs).
+- name: Install uv
+  ansible.builtin.include_tasks: ../monitoring/tasks/_install_binary.yml
+  vars:
+    monitor_bin_name: "uv"
+    monitor_bin_path: "/usr/local/bin/uv"
+    monitor_version: "{{ uv_version }}"
+    monitor_download_url: "https://github.com/astral-sh/uv/releases/download/{{ uv_version }}/uv-x86_64-unknown-linux-gnu.tar.gz"
+    monitor_checksum_url: "https://github.com/astral-sh/uv/releases/download/{{ uv_version }}/uv-x86_64-unknown-linux-gnu.tar.gz.sha256"
+    monitor_extracted_binary: "/tmp/uv-x86_64-unknown-linux-gnu/uv"
+    monitor_restart_service: false
+
+# ---- Bot venv (uv-managed) ----
+# Venv breakage (e.g. OS upgrade removes CPython 3.12) is detected on the
+# next deploy by the stat check below and self-heals: remove + recreate, uv
+# fetches a standalone CPython into .uv-pythons when the system one is gone.
+
+- name: Check bot venv interpreter
+  ansible.builtin.stat:
+    path: "{{ bot_venv_dir }}/bin/python"
+    follow: true
+  register: bot_venv_stat
+
+- name: Remove broken bot venv
+  ansible.builtin.file:
+    path: "{{ bot_venv_dir }}"
+    state: absent
+  when: not bot_venv_stat.stat.exists
+
+- name: Create bot venv
+  ansible.builtin.command: /usr/local/bin/uv venv "{{ bot_venv_dir }}" --python "{{ bot_python_version }}"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ scripts_dir_remote }}/.uv-pythons"
+  when: not bot_venv_stat.stat.exists
+  changed_when: true
+
+- name: Check installed python-telegram-bot in bot venv
+  ansible.builtin.command: >-
+    /usr/local/bin/uv pip show python-telegram-bot
+    --python "{{ bot_venv_dir }}/bin/python"
+  register: ptb_show
+  failed_when: false
+  changed_when: false
+
+- name: Install python-telegram-bot into bot venv
+  ansible.builtin.command: >-
+    /usr/local/bin/uv pip install
+    --python "{{ bot_venv_dir }}/bin/python"
+    python-telegram-bot=={{ telegram_bot_version }}
+  when: >-
+    (ptb_show.rc | default(1)) != 0 or
+    (ptb_show.stdout | default('') | regex_search('Version:\s*([0-9.]+)', '\\1') | first | default('')) != telegram_bot_version
+  changed_when: true
+
+- name: Remove legacy system-wide python-telegram-bot
   become: true
   ansible.builtin.pip:
     name: python-telegram-bot
-    version: "{{ telegram_bot_version }}"
-    state: present
+    state: absent
     extra_args: --break-system-packages
+  failed_when: false
 
 - name: Deploy Telegram bot systemd service
   ansible.builtin.template:

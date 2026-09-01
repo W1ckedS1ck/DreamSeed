@@ -45,21 +45,21 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
 
-      - uses: ./.github/actions/setup-ansible
+      - uses: $/.github/actions/setup-ansible
 
       - name: Record start time
         id: start_time
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/setup-secrets
+      - uses: $/.github/actions/setup-secrets
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault-password: ${{ secrets.VAULT_PASSWORD }}
           rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
 
-      - uses: ./.github/actions/setup-env
+      - uses: $/.github/actions/setup-env
         with:
           tg_token: ${{ secrets.TG_TOKEN }}
           tg_chat_id: ${{ vars.TG_CHAT_ID }}
@@ -291,7 +291,7 @@ jobs:
       #     publish-preview job below, like deploy.yml — no download link) ---
       - name: Capture site screenshot
         if: always() && steps.server-ip.outputs.ip != ''
-        uses: ./.github/actions/capture-screenshot
+        uses: $/.github/actions/capture-screenshot
         with:
           url: "https://${{ env.DOMAIN }}/"
           output: /tmp/pages-screenshot/test-restore.png

@@ -1,8 +1,0 @@
-default: true
-MD013: false    # line-length — tables and code blocks make this impractical
-MD024: false    # no-duplicate-heading — runbook has repeated section patterns
-MD034: false    # no-bare-urls — docs reference URLs inline intentionally
-MD040: false    # fenced-code-language — bash snippets without lang specifier
-MD033: false    # no-inline-html — terraform-docs generates anchor tags for inputs/outputs
-MD041: false    # first-line-h1 — terraform-docs starts with ## Requirements
-MD060: false    # table-column-style — compact tables without pipe spacing

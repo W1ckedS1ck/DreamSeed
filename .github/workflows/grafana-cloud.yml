@@ -34,18 +34,22 @@ jobs:
         run: echo "Grafana Cloud workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Mask secrets
+        uses: $/.github/actions/mask-secrets
         env:
-          SA_PROD: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
-          SA_DEV: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
-          TOKEN_PROD: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
-          TOKEN_DEV: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
-          SM_PROD: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
-        run: |
-          for v in "$SA_PROD" "$SA_DEV" "$TOKEN_PROD" "$TOKEN_DEV" "$SM_PROD"; do
-            [ -n "$v" ] && echo "::add-mask::$v" || true
-          done
+          PROD_GRAFANA_CLOUD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+          DEV_GRAFANA_CLOUD_SA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+          PROD_GRAFANA_CLOUD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          DEV_SM_ACCESS_TOKEN: ${{ secrets.DEV_SM_ACCESS_TOKEN }}
+          PROD_SM_ACCESS_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
+        with:
+          vars: |
+            PROD_GRAFANA_CLOUD_SA_TOKEN
+            DEV_GRAFANA_CLOUD_SA_TOKEN
+            PROD_GRAFANA_CLOUD_TOKEN
+            DEV_SM_ACCESS_TOKEN
+            PROD_SM_ACCESS_TOKEN
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
         with:
           cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
 

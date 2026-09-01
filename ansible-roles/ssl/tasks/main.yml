@@ -42,10 +42,11 @@
     - /etc/letsencrypt/archive
     - /etc/letsencrypt/live
 
-- name: Secure private keys in archive and live (files only)
+- name: Secure cert files (0640) and private keys (0600) in archive and live
   become: true
-  ansible.builtin.shell: >
-    find {{ item }} -type f ! -perm 0640 -exec chmod 0640 {} \; -print
+  ansible.builtin.shell: |
+    find {{ item }} -type f ! -name 'privkey*.pem' ! -perm 0640 -exec chmod 0640 {} \; -print
+    find {{ item }} -type f  -name 'privkey*.pem' ! -perm 0600 -exec chmod 0600 {} \; -print
   register: _ssl_perm
   changed_when: _ssl_perm.stdout_lines | length > 0
   loop:

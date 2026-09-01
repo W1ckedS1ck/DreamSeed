@@ -1,20 +1,25 @@
 locals {
   cloud_prom = "grafanacloud-prom"
 
+  # Pinned community dashboards (gid 1860/7362/17452/763/10229) — single
+  # source of truth: the same JSON files provision the on-server Grafana
+  # (ansible-roles/grafana). Reading them locally removes the plan-time
+  # grafana.com dependency and the "revisions/latest" upstream drift that
+  # used to silently rewrite live dashboards. Upstream refresh = re-download
+  # into ansible-roles/grafana/files (a reviewable diff).
   dashboards = {
-    node_exporter    = { gid = 1860 }
-    mysql            = { gid = 7362 }
-    nginx            = { gid = 17452 }
-    redis            = { gid = 763 }
-    victoria_metrics = { gid = 10229 }
+    node_exporter    = "node-exporter-full.json"
+    mysql            = "mysql-database.json"
+    nginx            = "nginx.json"
+    redis            = "redis.json"
+    victoria_metrics = "victoria-metrics-single-node.json"
   }
 
   raw = {
-    for k, v in local.dashboards : k => jsondecode(data.http.dashboard[k].body)
-    # NOTE: no try() fallback here. A silent stub (id=null, empty templating)
-    # combined with grafana_dashboard.overwrite=true would WIPE the live
-    # dashboard if grafana.com ever returns an error page. Failures must
-    # abort the plan — enforced by the data source postcondition below.
+    # No try() fallback: a missing/corrupt file must abort the plan, never
+    # overwrite live dashboards with a stub (same guarantee the old
+    # data.http postcondition gave).
+    for k, v in local.dashboards : k => jsondecode(file("${path.module}/../../ansible-roles/grafana/files/${v}"))
   }
 
   config = {
@@ -32,25 +37,35 @@ locals {
       "$${DS_PROMETHEUS}", local.cloud_prom
     )
     nginx = replace(
-      jsonencode(merge(local.raw["nginx"], {
-        id       = null
-        __inputs = []
-        templating = merge(local.raw["nginx"].templating, {
-          list = [for v in local.raw["nginx"].templating.list : v if v.name != "DS_PROMETHEUS"]
-        })
-      })),
-      "$${DS_PROMETHEUS}", local.cloud_prom
+      replace(
+        jsonencode(merge(local.raw["nginx"], {
+          id       = null
+          __inputs = []
+          templating = merge(local.raw["nginx"].templating, {
+            list = [for v in local.raw["nginx"].templating.list : v if v.name != "DS_PROMETHEUS"]
+          })
+        })),
+        "$${DS_PROMETHEUS}", local.cloud_prom
+      ),
+      # On-server Grafana provisions this datasource as name=uid="VictoriaMetrics"
+      # (ansible-roles/grafana); Grafana Cloud only has grafanacloud-prom — rebind.
+      "VictoriaMetrics", local.cloud_prom
     )
     redis = replace(
-      jsonencode(merge(local.raw["redis"], {
-        id = null
-        templating = merge(local.raw["redis"].templating, {
-          list = try([for v in local.raw["redis"].templating.list : merge(v, {
-            query = v.name == "instance" ? "label_values(redis_up, instance)" : v.query
-          }) if v.name != "namespace"], [])
-        })
-      })),
-      "$${DS_PROM}", local.cloud_prom
+      replace(
+        jsonencode(merge(local.raw["redis"], {
+          id = null
+          templating = merge(local.raw["redis"].templating, {
+            list = try([for v in local.raw["redis"].templating.list : merge(v, {
+              query = v.name == "instance" ? "label_values(redis_up, instance)" : v.query
+            }) if v.name != "namespace"], [])
+          })
+        })),
+        "$${DS_PROM}", local.cloud_prom
+      ),
+      # On-server Grafana provisions this datasource as name=uid="VictoriaMetrics"
+      # (ansible-roles/grafana); Grafana Cloud only has grafanacloud-prom — rebind.
+      "VictoriaMetrics", local.cloud_prom
     )
     victoria_metrics = replace(
       replace(
@@ -64,18 +79,6 @@ locals {
       ),
       "$ds", local.cloud_prom
     )
-  }
-}
-
-data "http" "dashboard" {
-  for_each = local.dashboards
-  url      = "https://grafana.com/api/dashboards/${each.value.gid}/revisions/latest/download"
-
-  lifecycle {
-    postcondition {
-      condition     = self.status_code == 200
-      error_message = "Grafana.com returned non-200 for dashboard ${each.key} (gid ${each.value.gid}) — refusing to overwrite live dashboards with garbage."
-    }
   }
 }
 

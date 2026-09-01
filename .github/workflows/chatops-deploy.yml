@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: write
   # Required for `gh workflow run` (deploy/destroy dispatch). Gated below:
   # prod targets additionally require admin collaborator permission.
   actions: write

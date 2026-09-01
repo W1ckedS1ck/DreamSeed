@@ -48,6 +48,12 @@ cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 cloudflare_firewall_token: "{{ lookup('env', 'CLOUDFLARE_FIREWALL_TOKEN') | default('', true) }}"
 cloudflare_zone_id: "{{ lookup('env', 'CLOUDFLARE_ZONE_ID') | default('', true) }}"
 
+# ==== fail2ban ====
+# Space-separated CIDRs whitelisted from ALL jails (sshd, modx-admin, recidive).
+# Empty = no operator/monitoring exemption; tighten per env as needed.
+# Format example: "203.0.113.0/24 192.0.2.5"
+fail2ban_ignoreip: ""
+
 # ==== Monitoring (Grafana + VictoriaMetrics) ====
 
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented
@@ -63,6 +69,10 @@ monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.1
 monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.150.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
 monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.90.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
+# Pinned uv binary — install path: release .sha256 asset -> get_url checksum (same pattern as setup-gitleaks)
+uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.7', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
+# Bot venv: created by uv (system CPython 3.12 on 24.04, uv-managed on later releases)
+bot_python_version: "3.12"
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
 loki_username: "{{ lookup('env', 'LOKI_USERNAME') | default('', true) }}"
 
@@ -88,6 +98,7 @@ modx_cache_db_session: "1"
 web_root: "/var/www/html"
 backup_dir: "/home/ubuntu/backups"
 scripts_dir_remote: "/home/ubuntu/Scripts"
+bot_venv_dir: "{{ scripts_dir_remote }}/.venv"
 scripts_dir: "{{ playbook_dir }}/../scripts"
 secrets_dir: "{{ playbook_dir }}/../secrets"
 

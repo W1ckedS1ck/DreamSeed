@@ -99,7 +99,10 @@
         name: "{{ monitor_service_name | default(monitor_bin_name) }}"
         state: restarted
       become: true
-      when: _monitor_bin.stat.exists
+      when:
+        - _monitor_bin.stat.exists
+        # Not every binary owns a service (uv) — opt out with false.
+        - monitor_restart_service | default(true) | bool
 
     - name: "Cleanup temp files: {{ monitor_bin_name }}"
       ansible.builtin.file:

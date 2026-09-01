@@ -77,7 +77,7 @@
 | Deploy time | ~8-10 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
-| Uptime coverage | 27 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
+| Uptime coverage | 29 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
 | CI checks per push | 11 jobs, 8 required for merge (lint → security → validate) |
 | Security | Hardened Ubuntu 24.04 — SSH hardening, 5 fail2ban jails (edge bans via Cloudflare API), sysctl/PAM hardening |
 
@@ -91,7 +91,7 @@
 |-------|------------------|-----------|--------|----------|
 | **Grafana Cloud Synthetic Monitoring** | 5 probes — NorthCalifornia, Ohio, Montreal, **London, Singapore** | every **10 min** | HTTP main, MultiHTTP user-flow, Grafana, SSL | 3 continents (NA · EU · Asia) |
 | **Better Stack** (external) | 4 regions — EU · US · Asia · Australia | every 3 min | Main site (+keyword), admin `/manager/`, Grafana | 4 continents |
-| **Grafana on-server** (local) | 127.0.0.1 | 15s scrape / 1m site check | 27 alert rules → Telegram | survives only if server lives |
+| **Grafana on-server** (local) | 127.0.0.1 | 15s scrape / 1m site check | 29 alert rules → Telegram | survives only if server lives |
 | **Better Stack heartbeats** | 6 cron heartbeats | 5m – 7d | backup, upload, reports, verify, check-services | dead-man switch |
 
 > 🌐 The **cloud-hosted** layers (SM + Better Stack) keep watch even if the server dies — real multi-region resilience, not just redundancy for show.
@@ -106,7 +106,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana → 08-promtail → 09-pro)
-- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 27 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 29 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
 - **CI/CD** — 11 GitHub Actions jobs (8 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy and docs workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls
@@ -122,7 +122,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Configuration** | Ansible (17 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB · Redis |
 | **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
-| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 27 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 29 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy |
 | **CI/CD** | GitHub Actions (10 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
@@ -139,7 +139,7 @@ flowchart LR
     ANS -->|configure via SSH| SRV
     SRV --> CF[Cloudflare CDN + WAF]
     CF --> SITE["🌐 dreamseed.online"]
-    SRV --> OBS[Grafana + VictoriaMetrics<br/>27 alert rules → Telegram]
+    SRV --> OBS[Grafana + VictoriaMetrics<br/>29 alert rules → Telegram]
     SRV --> BCK[Backups → Google Drive<br/>rclone crypt AES-256]
 ```
 
@@ -239,7 +239,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 
 ### 📊 Full Observability — Auto-Provisioned
 
-Grafana dashboards, datasources, **and 27 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
+Grafana dashboards, datasources, **and 29 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 **Internal (Grafana + VictoriaMetrics on-server):**
 
@@ -247,7 +247,7 @@ Grafana dashboards, datasources, **and 27 alert rules** deployed automatically �
 - **Nginx Prometheus Exporter** (`:9113`) / **Apache Exporter** (`:9117`) — web server health
 - **MySQLd Exporter** (`:9104`) — queries, connections, replication
 - **VictoriaMetrics** (`:8428`) — 3-month retention, 15s scrape interval
-- **Grafana** (`:3000`) — 6 provisioned dashboards on Nginx (5 on Apache), 27 alert rules → Telegram
+- **Grafana** (`:3000`) — 6 provisioned dashboards on Nginx (5 on Apache), 29 alert rules → Telegram
 - **check_site.sh** (systemd timer, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
 **Grafana Cloud (hosted telemetry):**

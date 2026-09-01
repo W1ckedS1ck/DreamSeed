@@ -101,6 +101,13 @@ preflight_checks() {
         export LOKI_URL LOKI_USERNAME
     fi
 
+    # Faro app is per-domain, but the collector URL is per-Grafana-Cloud-stack
+    # (same split as Loki above): on prod targets prefer PROD_FARO_COLLECTOR_URL.
+    if [[ "$TARGET" =~ ^prod && -n "${PROD_FARO_COLLECTOR_URL:-}" ]]; then
+        FARO_COLLECTOR_URL="$PROD_FARO_COLLECTOR_URL"
+        export FARO_COLLECTOR_URL
+    fi
+
     # Sanity checks — remote_write to Grafana Cloud has 3 easy ways to fail silently.
     # Cheap format hints so a bad value doesn't ship a 401-loop to the server.
     if [[ -n "$GRAFANA_CLOUD_URL" ]]; then

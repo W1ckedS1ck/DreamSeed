@@ -4,7 +4,7 @@
   ansible.builtin.systemd:
     name: telegram-bot
     state: restarted
-    enabled: true
+    enabled: "{{ deploy_env.startswith('prod') }}"
     daemon_reload: true
   # telegram-bot is a long-polling singleton: Telegram allows ONE getUpdates
   # poller per bot token, so only prod targets may run it. Dev keeps the

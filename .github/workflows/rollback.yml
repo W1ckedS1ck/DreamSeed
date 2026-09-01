@@ -38,12 +38,12 @@ jobs:
       - name: 🚀 Start
         run: echo "Rollback started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
-      - uses: ./.github/actions/setup-secrets
+      - uses: $/.github/actions/setup-secrets
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault-password: ${{ secrets.VAULT_PASSWORD }}
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
         with:
           cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
 

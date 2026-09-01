@@ -9,13 +9,15 @@ source "$SCRIPT_DIR/common_functions.sh"
 [[ -f "$SCRIPT_DIR/.env" ]] && load_env "$SCRIPT_DIR/.env"
 
 DOMAIN="${DOMAIN:-}"
-CURL_RESOLVE=""
-CURL_RESOLVE_PUBLIC=""
+CURL_RESOLVE=()
+CURL_RESOLVE_PUBLIC=()
 PUBLIC_IP=""
 if [[ -n "$DOMAIN" ]]; then
-    CURL_RESOLVE="--resolve ${DOMAIN}:443:127.0.0.1 --resolve ${DOMAIN}:80:127.0.0.1"
+    CURL_RESOLVE=(--resolve "${DOMAIN}:443:127.0.0.1" --resolve "${DOMAIN}:80:127.0.0.1")
     PUBLIC_IP=$(curl -s --max-time 3 https://checkip.amazonaws.com 2>/dev/null || ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '127\.0\.0\.' | head -1 || true)
-    [[ -n "$PUBLIC_IP" ]] && CURL_RESOLVE_PUBLIC="--resolve ${DOMAIN}:443:${PUBLIC_IP} --resolve ${DOMAIN}:80:${PUBLIC_IP}" || CURL_RESOLVE_PUBLIC=""
+    if [[ -n "$PUBLIC_IP" ]]; then
+        CURL_RESOLVE_PUBLIC=(--resolve "${DOMAIN}:443:${PUBLIC_IP}" --resolve "${DOMAIN}:80:${PUBLIC_IP}")
+    fi
 fi
 fail_count=0
 
@@ -136,17 +138,17 @@ fi
 
 # HTTP→HTTPS redirect
 if [[ -n "$DOMAIN" ]]; then
-    _http_code=$(curl -sI -o /dev/null -w '%{http_code}' --max-time 5 $CURL_RESOLVE "http://${DOMAIN}/" 2>/dev/null || echo "000")
+    _http_code=$(curl -sI -o /dev/null -w '%{http_code}' --max-time 5 "${CURL_RESOLVE[@]}" "http://${DOMAIN}/" 2>/dev/null || echo "000")
     if [[ "$_http_code" == "301" || "$_http_code" == "302" ]]; then
         ok "HTTP→HTTPS redirect ($_http_code)" "http_redirect"
     else
         warn "HTTP redirect: $_http_code (expect 301)" "http_redirect"
     fi
     # Site response
-    _site_ttfb=$(curl -sk -o /dev/null -w '%{http_code} (%{time_total}s)' --max-time 10 $CURL_RESOLVE "https://${DOMAIN}/" 2>/dev/null || echo "error")
+    _site_ttfb=$(curl -sk -o /dev/null -w '%{http_code} (%{time_total}s)' --max-time 10 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/" 2>/dev/null || echo "error")
     echo "    Site: $_site_ttfb"
     # 404 handling
-    _404_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 $CURL_RESOLVE "https://${DOMAIN}/nonexistent" 2>/dev/null || echo "000")
+    _404_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/nonexistent" 2>/dev/null || echo "000")
     if [[ "$_404_code" == "404" ]]; then
         ok "404 handling: $_404_code" "http_404"
     else
@@ -155,8 +157,8 @@ if [[ -n "$DOMAIN" ]]; then
 fi
 
 # Public endpoint check (via server's public IP — simulates external access)
-if [[ -n "$CURL_RESOLVE_PUBLIC" ]]; then
-    _pub_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 $CURL_RESOLVE_PUBLIC "https://${DOMAIN}/" 2>/dev/null || echo "000")
+if [[ ${#CURL_RESOLVE_PUBLIC[@]} -gt 0 ]]; then
+    _pub_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "${CURL_RESOLVE_PUBLIC[@]}" "https://${DOMAIN}/" 2>/dev/null || echo "000")
     if [[ "$_pub_code" == "200" ]]; then
         ok "Public endpoint: $_pub_code" "public_endpoint"
     else
@@ -172,7 +174,7 @@ echo ""
 echo "── 3. Security Perimeter ──"
 
 # Adminer blocked via domain
-_adminer_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 $CURL_RESOLVE "https://${DOMAIN}/adminer-4.8.1-mysql.php" 2>/dev/null || echo "000")
+_adminer_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/adminer-4.8.1-mysql.php" 2>/dev/null || echo "000")
 if [[ "$_adminer_code" == "403" || "$_adminer_code" == "404" ]]; then
     ok "Adminer blocked (via domain) — $_adminer_code" "adminer_domain_blocked"
 else
@@ -220,7 +222,7 @@ fi
 echo "  ── Sensitive paths ──"
 _sp_ok=0
 for _sp in /.env /core/config/config.inc.php /.git/config /backup.sql; do
-    _sp_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 $CURL_RESOLVE "https://${DOMAIN}${_sp}" 2>/dev/null || echo "000")
+    _sp_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "${CURL_RESOLVE[@]}" "https://${DOMAIN}${_sp}" 2>/dev/null || echo "000")
     if [[ "$_sp_code" == "404" || "$_sp_code" == "403" || "$_sp_code" == "000" ]]; then
         echo "    $P $_sp → $_sp_code"
         ((_sp_ok++)) || true
@@ -407,7 +409,7 @@ echo ""
 echo "── 8. SSL ──"
 
 # Cloudflare edge
-if curl -sfk --max-time 5 $CURL_RESOLVE "https://${DOMAIN}/" >/dev/null 2>&1; then
+if curl -sfk --max-time 5 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/" >/dev/null 2>&1; then
     ok "SSL: Cloudflare edge" "ssl_active"
 else
     warn "SSL check failed for $DOMAIN" "ssl_active"
@@ -452,7 +454,7 @@ fi
 _prefix=$(grep 'table_prefix' /var/www/html/core/config/config.inc.php 2>/dev/null | head -1 | cut -d"'" -f2 || echo "")
 echo "    Table prefix: $_prefix"
 
-_manager_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 $CURL_RESOLVE "https://${DOMAIN}/manager/" 2>/dev/null || echo "000")
+_manager_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/manager/" 2>/dev/null || echo "000")
 if [[ "$_manager_code" == "200" || "$_manager_code" == "301" || "$_manager_code" == "302" ]]; then
     ok "Manager: $_manager_code" "modx_manager"
 else
@@ -464,13 +466,13 @@ fi
 echo ""
 echo "── 10. Performance ──"
 
-_site=$(curl -sk -o /dev/null -w 'HTTP %{http_code} | TTFB: %{time_starttransfer}s | Total: %{time_total}s' --max-time 10 $CURL_RESOLVE "https://${DOMAIN}/" 2>/dev/null || echo "error")
+_site=$(curl -sk -o /dev/null -w 'HTTP %{http_code} | TTFB: %{time_starttransfer}s | Total: %{time_total}s' --max-time 10 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/" 2>/dev/null || echo "error")
 echo "    Site: $_site"
 
-_static=$(curl -sk -o /dev/null -w 'HTTP %{http_code} | TTFB: %{time_starttransfer}s | Total: %{time_total}s' --max-time 10 $CURL_RESOLVE "https://${DOMAIN}/theme/css/style.css" 2>/dev/null || echo "error")
+_static=$(curl -sk -o /dev/null -w 'HTTP %{http_code} | TTFB: %{time_starttransfer}s | Total: %{time_total}s' --max-time 10 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/theme/css/style.css" 2>/dev/null || echo "error")
 echo "    Static: $_static"
 
-_size=$(curl -sk -o /dev/null -w '%{size_download} bytes' --max-time 10 $CURL_RESOLVE "https://${DOMAIN}/" 2>/dev/null || echo "error")
+_size=$(curl -sk -o /dev/null -w '%{size_download} bytes' --max-time 10 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/" 2>/dev/null || echo "error")
 echo "    Page size: $_size"
 
 _brotli=$(curl -skI -H 'Accept-Encoding: br' --resolve "${DOMAIN}:443:127.0.0.1" --max-time 5 "https://${DOMAIN}/theme/css/style.css" 2>/dev/null | grep -ci 'content-encoding: br' || true)
@@ -806,7 +808,7 @@ fi
 echo "    sysctl: syncookies=$_syncookies rp_filter=$_rpfilter srcroute=$_sourceroute"
 
 # Faro RUM (nginx sub_filter)
-_faro=$(curl -sk --max-time 5 $CURL_RESOLVE "https://${DOMAIN}/" 2>/dev/null | grep -c 'faro-web-sdk' || true)
+_faro=$(curl -sk --max-time 5 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/" 2>/dev/null | grep -c 'faro-web-sdk' || true)
 if [[ "$_faro" -ge 1 ]]; then
     ok "Faro RUM (sub_filter active)" "functional_faro"
 else

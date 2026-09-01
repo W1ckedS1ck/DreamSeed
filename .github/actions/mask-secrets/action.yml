@@ -1,0 +1,29 @@
+name: Mask Secrets
+description: |
+  Emit ::add-mask:: for the given env-var names. Pass variable names, not
+  values — this keeps secrets out of the action definition (visible in
+  GitHub UI). Callers pass the actual values via `env:` as usual.
+
+  IMPORTANT: every name in `vars:` MUST have a matching `env:` entry, otherwise
+  `${!name}` expands to empty and the step no-ops silently (no error).
+
+  Only masks values that are non-empty. Skips silently on empty vars.
+
+inputs:
+  vars:
+    description: Newline-separated list of env-var names to mask
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Mask
+      shell: bash
+      env:
+        MASK_VARS: ${{ inputs.vars }}
+      run: |
+        while IFS= read -r name; do
+          [[ -z "$name" ]] && continue
+          val="${!name:-}"
+          [[ -n "$val" ]] && echo "::add-mask::$val" || true
+        done <<< "$MASK_VARS"
