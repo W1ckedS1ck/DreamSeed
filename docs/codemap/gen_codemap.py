@@ -1158,7 +1158,7 @@ def write_all(doc, lock):
 
 
 # Fields that differ on every regeneration (ignored in freshness check).
-VOLATILE_KEYS = {"generated_at", "generated_from_commit", "working_tree_changed"}
+VOLATILE_KEYS = {"generated_at", "generated_from_commit", "working_tree_changed", "commit"}
 
 
 def check():
@@ -1202,8 +1202,10 @@ def check():
             val = doc_.get(key, "")
             if val:
                 h = h.replace(val, "☠")
-        h = h.replace("working_tree_changed\": " + str(committed_doc.get("working_tree_changed")), "working_tree_changed\": ☠")
-        h = h.replace("working_tree_changed\": " + str(doc.get("working_tree_changed")), "working_tree_changed\": ☠")
+        # Normalize booleans in both copies (HTML embeds the JSON data blob).
+        for k in ("working_tree_changed", "generated_from_commit"):
+            for val in (True, False):
+                h = h.replace(f'"{k}": {str(val).lower()}', f'"{k}": ☠')
         return h
 
     if norm_html(committed_html, committed_doc) != norm_html(render_html(doc), doc):
