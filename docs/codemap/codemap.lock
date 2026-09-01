@@ -1,7 +1,7 @@
 {
-  "commit": "fee77a75dddde2658fad1275cf8610478ef172e8",
-  "working_tree_changed": false,
-  "generated_at": "2026-08-30T17:12:24Z",
+  "commit": "eaaaaca108aea509673439ad746bbdab08fa359e",
+  "working_tree_changed": true,
+  "generated_at": "2026-09-01T05:35:23Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,8 +33,8 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "e087ff60970eada184fd33eccd250425ef0083a0fd9d5181d5523c70792f0ddb",
-      "files": 23,
+      "fingerprint": "292c8404eb03dd851df2bdc19d571529b16e0687da57003da0178440422395d5",
+      "files": 24,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "ansible": {
@@ -43,12 +43,12 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "ansible-roles": {
-      "fingerprint": "dbe17c8fa5acc093c35abc27c992699fa7119f8254e7a7a865efce6f122029c9",
+      "fingerprint": "6ab90873d7aef5161e1e5d3ea4496c05a49307f261c8ffc421c9be13ae2b049b",
       "files": 89,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "docs": {
-      "fingerprint": "9f987bd9adaf0aa23b56c287aebdabed7cb4fa2cae520fcbb84b23fc4b2cc267",
+      "fingerprint": "4b0a42198c78ef4c52d534a2a9e6266cde94daf6343318f4528206bde167d9f4",
       "files": 22,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
@@ -58,12 +58,12 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "root": {
-      "fingerprint": "f1e684af50cc8507778d7e90fde2692808794adb3d1ba68c87ddeed459c77eb3",
+      "fingerprint": "376cfb3bd1ce3f01c2e22492c70fd1656812c7753ceba1f56ffebc681265c07e",
       "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "scripts": {
-      "fingerprint": "6fa26dfce7dd79f8a7b379e38a21f778dfb510ee5d1ff5b189369661302d2561",
+      "fingerprint": "bd690ea64a3eda506a80291b15b82009aefca2a6ac1df37bb1864befcb1bc59f",
       "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },

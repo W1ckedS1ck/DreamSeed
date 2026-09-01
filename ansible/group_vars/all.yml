@@ -48,6 +48,12 @@ cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
 cloudflare_firewall_token: "{{ lookup('env', 'CLOUDFLARE_FIREWALL_TOKEN') | default('', true) }}"
 cloudflare_zone_id: "{{ lookup('env', 'CLOUDFLARE_ZONE_ID') | default('', true) }}"
 
+# ==== fail2ban ====
+# Space-separated CIDRs whitelisted from ALL jails (sshd, modx-admin, recidive).
+# Empty = no operator/monitoring exemption; tighten per env as needed.
+# Format example: "203.0.113.0/24 192.0.2.5"
+fail2ban_ignoreip: ""
+
 # ==== Monitoring (Grafana + VictoriaMetrics) ====
 
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented

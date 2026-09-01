@@ -17,6 +17,23 @@ permissions:
   contents: read
 
 jobs:
+  codemap-freshness:
+    name: Code Map freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Regenerate code map and verify committed copy matches
+        run: |
+          # --check compares fresh build vs committed, ignoring volatile fields.
+          python3 docs/codemap/gen_codemap.py --check
+
   publish-code-map:
     # Pages site stays main-only; dev only syncs the wiki (see sync-wiki).
     if: github.ref_name == 'main'
@@ -111,7 +128,7 @@ jobs:
       - name: Sync docs
         id: sync
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           cp repo/docs/*.md wiki/ 2>/dev/null || true
           rm -rf wiki/adr && cp -r repo/docs/adr wiki/adr 2>/dev/null || true
