@@ -50,10 +50,15 @@ def module_fingerprints():
     for mod, files in sorted(mods.items()):
         lines = []
         for f in sorted(files):
+            # Generated artifacts must not feed back into the fingerprint —
+            # otherwise the docs module (which contains codemap.*) would always
+            # differ between a fresh build and the committed copy.
+            if f.startswith("docs/codemap/"):
+                continue
             sha = run(["git", "rev-parse", f"HEAD:{f}"]).strip()
             lines.append(f"{f}\t{sha}")
         digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
-        fps[mod] = {"fingerprint": digest, "files": len(files), "algorithm": "sha256(sorted 'relpath\\tblobsha')"}
+        fps[mod] = {"fingerprint": digest, "files": len(files), "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"}
     return fps
 
 
