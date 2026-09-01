@@ -322,6 +322,37 @@ jobs:
           path: /tmp/pages-screenshot/*.png
           retention-days: 30
 
+      # Collect server-side logs before teardown so a mid-test failure (e.g.
+      # SSH refused by fail2ban) leaves evidence instead of a dead server.
+      - name: Collect server logs
+        if: always() && steps.server-ip.outputs.ip != ''
+        env:
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+        run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          mkdir -p /tmp/restore-logs/server
+          set +e
+          for f in /var/log/fail2ban.log /var/log/auth.log /var/log/syslog /var/log/nginx/error.log; do
+            ssh -q -o LogLevel=ERROR -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+              -i "$SSH_KEY" ubuntu@"$SERVER_IP" "sudo tail -n 200 $f" > "/tmp/restore-logs/server/$(basename "$f")" 2>&1
+          done
+          ssh -q -o LogLevel=ERROR -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+            -i "$SSH_KEY" ubuntu@"$SERVER_IP" "sudo fail2ban-client status sshd" > /tmp/restore-logs/server/fail2ban-sshd.txt 2>&1
+          set -e
+          ls -la /tmp/restore-logs/server/
+
+      - name: Upload test logs (deploy/destroy/server)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: restore-test-logs
+          path: |
+            /tmp/deploy.log
+            /tmp/destroy.log
+            /tmp/restore-logs/**
+          if-no-files-found: ignore
+          retention-days: 7
+
       # --- Phase 4: teardown ---
       - name: Destroy test server
         if: always() && inputs.keep_server == false
