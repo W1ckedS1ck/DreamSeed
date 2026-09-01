@@ -1,7 +1,7 @@
 {
-  "commit": "81b7d016024f5438d242ee4223b676b7d626af20",
+  "commit": "e7664d695e1003d5829d8aad833e14322237dae1",
   "working_tree_changed": true,
-  "generated_at": "2026-09-01T05:45:01Z",
+  "generated_at": "2026-09-01T05:46:11Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,7 +33,7 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "58197c2d1bc039ffa8482f23d3a80e666545ac7a0653f0cb084a141801272ea0",
+      "fingerprint": "4177aebe3ca221df422f9c4e6a3026f4469c003cbdd23fe95045a70652184a00",
       "files": 24,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
@@ -48,7 +48,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "docs": {
-      "fingerprint": "835849bab6b2287e531f678f6cf6a631f6ad2833f524f93d2cf3fa3efc1f0910",
+      "fingerprint": "1336020f20a2965798e9b0002f55be189dbc15eb3fe8b21674f9db141be275c1",
       "files": 22,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
@@ -63,7 +63,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },
     "scripts": {
-      "fingerprint": "bd690ea64a3eda506a80291b15b82009aefca2a6ac1df37bb1864befcb1bc59f",
+      "fingerprint": "846821698a42d9bbb582389e06a49f6536418bacf85378ff1029a88c9c2e6468",
       "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha')"
     },

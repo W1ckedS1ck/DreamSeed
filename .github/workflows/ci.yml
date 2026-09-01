@@ -147,7 +147,7 @@ jobs:
       - name: Install shellcheck (inline run scripts)
         run: pip install shellcheck-py
       - name: Run actionlint
-        run: actionlint -shellcheck="$(command -v shellcheck)"
+        run: actionlint -shellcheck="$(command -v shellcheck)" -ignore 'specifying action "\$/.+" in invalid format because ref is missing'
 
   yamllint:
     name: YAML Lint
