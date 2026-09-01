@@ -34,7 +34,7 @@ jobs:
         run: echo "Grafana Cloud workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
+        uses: $/.github/actions/mask-secrets
         env:
           PROD_GRAFANA_CLOUD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
           DEV_GRAFANA_CLOUD_SA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
@@ -49,7 +49,7 @@ jobs:
             DEV_SM_ACCESS_TOKEN
             PROD_SM_ACCESS_TOKEN
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
         with:
           cli-config-credentials-token: ${{ secrets.TF_API_TOKEN }}
 

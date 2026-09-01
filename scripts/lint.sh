@@ -135,8 +135,8 @@ run_zizmor() {
         return 0
     fi
 
-    if uvx zizmor --min-confidence high .; then
-        print_ok "No high-confidence issues"
+    if uvx zizmor --min-confidence medium .; then
+        print_ok "No medium+ confidence issues"
         ci_annotation "zizmor" "pass"
     else
         print_fail "Issues found"

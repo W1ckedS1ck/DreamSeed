@@ -40,7 +40,7 @@ jobs:
         run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
+        uses: $/.github/actions/mask-secrets
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
@@ -55,13 +55,13 @@ jobs:
             SSH_PRIVATE_KEY
             VAULT_PASSWORD
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
 
       - name: Record start time
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/setup-secrets
+      - uses: $/.github/actions/setup-secrets
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault-password: ${{ secrets.VAULT_PASSWORD }}
@@ -70,8 +70,9 @@ jobs:
         id: server-ip
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          TARGET: ${{ matrix.target }}
         run: |
-          ENV="${{ matrix.target }}"
+          ENV="$TARGET"
           case "$ENV" in
             prod)
               export TF_TOKEN_app_terraform_io="$TF_API_TOKEN"
@@ -115,9 +116,10 @@ jobs:
 
       - name: Update all packages
         id: update
+        env:
+          IP: ${{ steps.server-ip.outputs.ip }}
         run: |
           set +e
-          IP="${{ steps.server-ip.outputs.ip }}"
           SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
 
           if ! $SSH "true" 2>/dev/null; then
@@ -199,8 +201,9 @@ jobs:
           fi
 
       - name: Update Cloudflare real IP ranges
+        env:
+          IP: ${{ steps.server-ip.outputs.ip }}
         run: |
-          IP="${{ steps.server-ip.outputs.ip }}"
           SSH="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ubuntu@$IP"
           RESULT=$($SSH "sudo /usr/local/bin/update_cloudflare_ips.sh" 2>&1 || true)
           echo "$RESULT"
@@ -217,15 +220,20 @@ jobs:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ vars.TG_THREAD_ID }}
+          TARGET: ${{ matrix.target }}
+          UPDATE_STATUS: ${{ steps.update.outputs.status }}
+          DOMAIN: ${{ steps.server-ip.outputs.domain }}
+          UPDATED: ${{ steps.update.outputs.updated }}
+          AFTER: ${{ steps.update.outputs.after }}
+          START_EPOCH: ${{ steps.start.outputs.start_epoch }}
+          REBOOT: ${{ steps.update.outputs.reboot }}
+          APT_RC: ${{ steps.update.outputs.apt_rc }}
+          UPDATE_OUTCOME: ${{ steps.update.outcome }}
         run: |
-          STATUS="${{ steps.update.outputs.status }}"
-          DOMAIN="${{ steps.server-ip.outputs.domain }}"
-          U="${{ steps.update.outputs.updated }}"
-          AFTER="${{ steps.update.outputs.after }}"
-          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          STATUS="$UPDATE_STATUS"
+          ELAPSED=$(( $(date +%s) - "$START_EPOCH" ))
 
           N=$'\n'
-          REBOOT="${{ steps.update.outputs.reboot }}"
           if [ "$REBOOT" = "yes" ]; then
             TG_REBOOT="${N}⚠️ Reboot required"
           else
@@ -233,33 +241,42 @@ jobs:
           fi
 
           if [ "$STATUS" = "unreachable" ]; then
-            MSG="❌ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
+            MSG="❌ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
           elif [ "$STATUS" = "apt-failed" ]; then
-            MSG="❌ *Server Update FAILED* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${{ steps.update.outputs.apt_rc }})${N}Remaining: ${AFTER}${TG_REBOOT}"
-          elif [ "${{ steps.update.outcome }}" != "success" ]; then
-            MSG="❌ *Server Update FAILED* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ update step aborted (${{ steps.update.outcome }})${TG_REBOOT}"
+            MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${APT_RC})${N}Remaining: ${AFTER}${TG_REBOOT}"
+          elif [ "$UPDATE_OUTCOME" != "success" ]; then
+            MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ update step aborted (${UPDATE_OUTCOME})${TG_REBOOT}"
           elif [ "$U" = "0" ] && [ "$AFTER" = "0" ]; then
-            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
+            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
           else
-            MSG="✅ *Server Update* — ${{ matrix.target }}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
+            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
           fi
 
           bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
 
       - name: Write job summary
         if: always()
+        env:
+          TARGET: ${{ matrix.target }}
+          DOMAIN: ${{ steps.server-ip.outputs.domain }}
+          IP: ${{ steps.server-ip.outputs.ip }}
+          STATUS: ${{ steps.update.outputs.status }}
+          BEFORE: ${{ steps.update.outputs.before }}
+          AFTER: ${{ steps.update.outputs.after }}
+          SECURITY: ${{ steps.update.outputs.security }}
+          START_EPOCH: ${{ steps.start.outputs.start_epoch }}
+          UPDATED: ${{ steps.update.outputs.updated }}
+          REBOOT: ${{ steps.update.outputs.reboot }}
+          SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          DOMAIN="${{ steps.server-ip.outputs.domain }}"
-          IP="${{ steps.server-ip.outputs.ip }}"
-          STATUS="${{ steps.update.outputs.status }}"
-          BEFORE="${{ steps.update.outputs.before }}"
-          AFTER="${{ steps.update.outputs.after }}"
-          SECURITY="${{ steps.update.outputs.security }}"
-          ELAPSED=$(( $(date +%s) - ${{ steps.start.outputs.start_epoch }} ))
+          ELAPSED=$(( $(date +%s) - "$START_EPOCH" ))
 
           M="$GITHUB_STEP_SUMMARY"
           {
-            echo "## Weekly Server Update — ${{ matrix.target }}"
+            echo "## Weekly Server Update — ${TARGET}"
             echo ""
             echo "| | |"
             echo "|---|---|"
@@ -268,12 +285,12 @@ jobs:
             echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
             echo "| **Status** | ${STATUS} |"
             echo "| **Before** | ${BEFORE:-?} |"
-            echo "| **Updated** | ${{ steps.update.outputs.updated }} packages |"
+            echo "| **Updated** | ${UPDATED} packages |"
             echo "| **Security** | ${SECURITY:-?} |"
             echo "| **Remaining** | ${AFTER:-?} |"
-            echo "| **Reboot** | ${{ steps.update.outputs.reboot }} |"
-            echo "| **Commit** | ${{ github.sha }} |"
-            echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo "| **Reboot** | ${REBOOT} |"
+            echo "| **Commit** | ${SHA} |"
+            echo "| **Run** | [link](${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}) |"
             echo ""
             if [ -n "$UPDATED_LIST" ]; then
               echo "### Updated packages"

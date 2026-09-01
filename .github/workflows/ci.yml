@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "Ansible Lint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - uses: ./.github/actions/setup-ansible
+      - uses: $/.github/actions/setup-ansible
       - name: Run ansible-lint
         run: bash scripts/lint.sh --ci --ansible-lint
 
@@ -56,7 +56,7 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "Terraform checks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
       - uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
@@ -121,7 +121,7 @@ jobs:
           fetch-depth: 0
       - name: 🚀 Start
         run: echo "Gitleaks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - uses: ./.github/actions/setup-gitleaks
+      - uses: $/.github/actions/setup-gitleaks
         with:
           gitleaks-version: ${{ env.GITLEAKS_VERSION }}
       - name: Secret Scan (full history)
@@ -185,7 +185,7 @@ jobs:
           path: ~/.cache/pre-commit
           key: precommit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: precommit-${{ runner.os }}-
-      - uses: ./.github/actions/setup-gitleaks
+      - uses: $/.github/actions/setup-gitleaks
         with:
           gitleaks-version: ${{ env.GITLEAKS_VERSION }}
       - name: Cache pre-commit system deps
@@ -279,13 +279,13 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "Deploy Check started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - uses: ./.github/actions/setup-terraform
-      - uses: ./.github/actions/setup-ansible
-      - uses: ./.github/actions/setup-secrets
+      - uses: $/.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-ansible
+      - uses: $/.github/actions/setup-secrets
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault-password: ${{ secrets.VAULT_PASSWORD }}
-      - uses: ./.github/actions/setup-env
+      - uses: $/.github/actions/setup-env
         with:
           hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
