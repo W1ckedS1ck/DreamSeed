@@ -30,7 +30,7 @@
 - [About the Product](#about-the-product)
 - [Quick Start](#quick-start)
 - [By the Numbers](#by-the-numbers)
-- [Global Observability](#-global-observability)
+- [Global Observability](#global-observability)
 - [My Role](#my-role)
 - [Tech Stack](#tech-stack)
 - [Architecture at a Glance](#architecture-at-a-glance)
@@ -83,7 +83,7 @@
 
 ---
 
-## 🌍 Global Observability
+## 🌍 Global Observability {#global-observability}
 
 **Two independent watchdog layers** monitor the site from **4 continents / 9 probe locations** — nothing is left to a single vantage point, and no single provider's outage blinds us.
 
@@ -121,7 +121,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Infrastructure** | Terraform · Terraform Cloud (remote state) · AWS EC2 · Hetzner Cloud · Cloudflare (CDN / DDoS / SSL) |
 | **Configuration** | Ansible (17 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB · Redis |
-| **SSL** | Cloudflare proxy (Full SSL) · self-signed origin cert · optional Let's Encrypt |
+| **SSL** | Cloudflare proxy (Full SSL) · Let's Encrypt origin cert (certbot) · self-signed fallback |
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 29 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy |
@@ -305,7 +305,7 @@ CI (11 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** 
 ## 🔍 Key Engineering Decisions {#key-engineering-decisions}
 
 - **Idempotent Ansible roles** — every playbook re-runs safely; updates config without breaking live services
-- **Cloudflare-first SSL** — all environments behind Cloudflare proxy (Full SSL mode); origin uses self-signed cert. This eliminates Let's Encrypt rate limits and certbot failures during provisioning
+- **Cloudflare-first SSL** — all environments behind Cloudflare proxy (Full SSL mode); origin cert from **Let's Encrypt via certbot** (primary), local backup restore (fallback), self-signed only as last resort. LE rate limits are avoided by backing up `renewal/` along with the live cert on destroy, so a re-deployed box re-uses its cert instead of re-issuing.
 - **VictoriaMetrics over Prometheus** — single binary, no dependencies, lower memory footprint on t3.small/cx23. Same PromQL, simpler ops
 - **Ansible Vault for secrets** — not GitHub Secrets or AWS Secrets Manager. Secrets are versioned with code, encrypted at rest, decrypted at deploy time. CI has the vault password, prod doesn't need it
 - **No Docker** — MODX is a traditional PHP CMS, containerization adds complexity without benefit here. Ansible handles idempotent provisioning natively

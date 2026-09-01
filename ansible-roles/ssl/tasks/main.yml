@@ -13,51 +13,12 @@
     path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
   register: ssl_cert_file
 
-# Restore from local backup ONLY when the server has no cert for this domain
-# (e.g. fresh server after crash). Never overwrite a live cert that certbot
-# may have re-issued since the backup was taken — that would roll the site
-# back to a stale certificate on every deploy.
-- name: Restore SSL certificates from local backup (server has no cert)
+# Certbot is primary (fresh LE cert, required by strict mode). Backup = fallback only.
+- name: Check if certbot already manages this certificate
   become: true
-  ansible.builtin.copy:
-    src: "{{ secrets_dir }}/ssl/letsencrypt/"
-    dest: /etc/letsencrypt/
-    owner: root
-    group: ssl-cert
-    mode: "0640"
-    directory_mode: "0750"
-  when:
-    - ssl_local_backup.stat.exists
-    - not ssl_cert_file.stat.exists
-
-- name: Secure archive and live directories (traversable)
-  become: true
-  ansible.builtin.file:
-    path: "{{ item }}"
-    owner: root
-    group: ssl-cert
-    mode: "0750"
-    state: directory
-  loop:
-    - /etc/letsencrypt/archive
-    - /etc/letsencrypt/live
-
-- name: Secure cert files (0640) and private keys (0600) in archive and live
-  become: true
-  ansible.builtin.shell: |
-    find {{ item }} -type f ! -name 'privkey*.pem' ! -perm 0640 -exec chmod 0640 {} \; -print
-    find {{ item }} -type f  -name 'privkey*.pem' ! -perm 0600 -exec chmod 0600 {} \; -print
-  register: _ssl_perm
-  changed_when: _ssl_perm.stdout_lines | length > 0
-  loop:
-    - /etc/letsencrypt/archive
-    - /etc/letsencrypt/live
-
-- name: Set ssl_restored fact
-  ansible.builtin.set_fact:
-    ssl_restored: true
-    ssl_has_cert: true
-  when: ssl_local_backup.stat.exists and not ssl_cert_file.stat.exists
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/renewal/{{ domain }}.conf"
+  register: ssl_renewal_conf
 
 # --- Certbot DNS Challenge (CloudFlare) ---
 - name: Obtain or skip Let's Encrypt certificate via DNS-01
@@ -80,6 +41,7 @@
         mode: "0600"
       when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
+    # Run certbot if no cert, or existing one isn't certbot-managed (restored from backup).
     - name: Obtain SSL certificate via DNS CloudFlare
       become: true
       ansible.builtin.command: >
@@ -92,7 +54,7 @@
         --agree-tos
         -m {{ admin_email }}
         --rsa-key-size 4096
-      when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and not ssl_cert_file.stat.exists and not ssl_restored | default(false)
+      when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and (not ssl_cert_file.stat.exists or not ssl_renewal_conf.stat.exists)
       register: ssl_certbot_result
       failed_when: false
       changed_when: ssl_certbot_result is not skipped and ssl_certbot_result.rc is defined and ssl_certbot_result.rc == 0
@@ -119,21 +81,62 @@
     path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
   register: ssl_cert_file_final
 
+# Restore from backup only when certbot produced no cert.
+- name: Restore SSL certificates from local backup (certbot unavailable)
+  become: true
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/ssl/letsencrypt/"
+    dest: /etc/letsencrypt/
+    owner: root
+    group: ssl-cert
+    mode: "0640"
+    directory_mode: "0750"
+  when:
+    - ssl_local_backup.stat.exists
+    - not ssl_cert_file_final.stat.exists
+
+- name: Re-check certificate after restore
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: ssl_cert_file_after_restore
+
+- name: Secure archive and live directories (traversable)
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: ssl-cert
+    mode: "0750"
+    state: directory
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
+
+- name: Secure cert files (0640) and private keys (0600) in archive and live
+  become: true
+  ansible.builtin.shell: |
+    find {{ item }} -type f ! -name 'privkey*.pem' ! -perm 0640 -exec chmod 0640 {} \; -print
+    find {{ item }} -type f  -name 'privkey*.pem' ! -perm 0600 -exec chmod 0600 {} \; -print
+  register: _ssl_perm
+  changed_when: _ssl_perm.stdout_lines | length > 0
+  loop:
+    - /etc/letsencrypt/archive
+    - /etc/letsencrypt/live
+
 - name: Set ssl_has_cert fact
   ansible.builtin.set_fact:
-    ssl_has_cert: "{{ ssl_cert_file_final.stat.exists }}"
+    ssl_has_cert: "{{ ssl_cert_file_after_restore.stat.exists }}"
 
 - name: SSL status
   ansible.builtin.debug:
     msg: |
-      {%- if ssl_restored | default(false) -%}
-      ✓ SSL: Restored from local backup
-      {%- elif ssl_has_cert -%}
+      {%- if ssl_has_cert -%}
       ✓ SSL: Let's Encrypt certificate ready
       {%- elif not ssl_cf_dns_enabled | default(true) | bool -%}
       ⊘ SSL: self-signed (Cloudflare DNS disabled for this environment)
       {%- else -%}
-      ⚠️ SSL: certbot failed — self-signed fallback active. Fix DNS credentials and re-run. Check syslog: journalctl -u ansible-ssl
+      ⚠️ SSL: certbot failed and no local backup — self-signed fallback active. Check syslog: journalctl -u ansible-ssl
       {%- endif -%}
 
 # --- Certbot timer + deploy-hook ---
