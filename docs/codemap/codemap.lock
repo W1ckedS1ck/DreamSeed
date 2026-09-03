@@ -1,7 +1,7 @@
 {
-  "commit": "0b8376cb57df3470f8b866e963e8c5aa6bdf4a80",
+  "commit": "a377fbc148326bf131159bc29d3edd4e15521813",
   "working_tree_changed": false,
-  "generated_at": "2026-09-01T08:22:20Z",
+  "generated_at": "2026-09-03T12:20:12Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,32 +33,32 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "05ac18527eccc275ffa94a194c06c9e97377b08de3d666f9d6a10bb64a969f0e",
+      "fingerprint": "36f35b1a13364d32c32de502e44d51b99519c8061cbba63baba1b9b2383d1143",
       "files": 24,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "ansible": {
-      "fingerprint": "6b379f2e47945673e5787b2f9d70ce1f793bdac43bb3a036e0e5000765a2afa0",
+      "fingerprint": "610a6c377a10d7c59c7ac040167fe94819c69eeb88509927b5a992d4c64e09c4",
       "files": 14,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "ansible-roles": {
-      "fingerprint": "6ab90873d7aef5161e1e5d3ea4496c05a49307f261c8ffc421c9be13ae2b049b",
+      "fingerprint": "e0ec18fcc3e175a013325722e9321213add507f66729464e110b92ea14ac2a1b",
       "files": 89,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "docs": {
-      "fingerprint": "12ecbf7b6e2da0eee77bf0348e4d836b665437ea3171a21aa69a48090bde9430",
-      "files": 22,
+      "fingerprint": "a12871c03166b81bfafbaf58a949bd4bfa5fd1400441e9a4f6f9f323e7e84496",
+      "files": 23,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "lib": {
-      "fingerprint": "1ab06ed8c11c9af9d3838fc025a83be616fb86bf75d897beec70e25c9da0dbe8",
+      "fingerprint": "d6f14c7da6106ff9d0442e656c56f13fb43f317d4528863e90ae1ac0f8da5c40",
       "files": 13,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "root": {
-      "fingerprint": "376cfb3bd1ce3f01c2e22492c70fd1656812c7753ceba1f56ffebc681265c07e",
+      "fingerprint": "32c5789b5b2ebabae2bcc63ca46c2757a7a4b19f2c91b617106eb3209c31b9fc",
       "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -68,7 +68,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "terraform": {
-      "fingerprint": "5918250cb224c5236c4419183f0f683887ce6ddc57a7a9082feba1aa76c784b8",
+      "fingerprint": "fa6423eb2678afef9333ab0de9dc7ba8bab9e3470e3b94b726d7a05dc66c7c88",
       "files": 28,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
