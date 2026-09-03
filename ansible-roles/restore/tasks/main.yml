@@ -299,6 +299,7 @@
         # NOTE: Keep tmpfs mount intact. With state: absent on a mount point
         # Ansible would fail (EBUSY). Instead, clear contents with find -exec.
         - name: Clear all MODX cache (keep tmpfs mount intact)
+          become: true
           ansible.builtin.shell:
             cmd: find {{ web_root }}/core/cache -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
           changed_when: true

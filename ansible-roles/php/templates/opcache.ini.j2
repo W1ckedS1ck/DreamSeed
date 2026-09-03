@@ -1,10 +1,16 @@
 ; Managed by Ansible
+; validate_timestamps=0: PHP-FPM is restarted (systemd Restart=always + deploy
+; flush_handlers) after deploy, so the cache is always invalidated. With
+; timestamps=1, every request past revalidate_freq triggers a stat() per file
+; → contributes to the documented 3-min 503 storm when MODX "Clear Cache" runs
+; alongside concurrent FPM workers (see docs/private/site-hardening-roadmap.md).
+; To revalidate manually: `cachetool opcache:reset` or `systemctl restart php{{ php_version }}-fpm`.
 zend_extension=opcache
 opcache.enable=1
 opcache.enable_cli=0
 opcache.memory_consumption={{ opcache_memory_consumption | default(128) }}
 opcache.interned_strings_buffer={{ opcache_interned_strings_buffer | default(16) }}
-opcache.max_accelerated_files={{ opcache_max_accelerated_files | default(10000) }}
-opcache.revalidate_freq={{ opcache_revalidate_freq | default(60) }}
-opcache.validate_timestamps=1
+opcache.max_accelerated_files={{ opcache_max_accelerated_files | default(20000) }}
+opcache.revalidate_freq=0
+opcache.validate_timestamps=0
 opcache.save_comments=1

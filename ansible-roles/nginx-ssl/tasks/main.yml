@@ -6,6 +6,18 @@
     groups: ssl-cert
     append: true
 
+- name: Deploy Grafana htpasswd file (nginx basic auth in front of /grafana)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/nginx/.grafana_htpasswd
+    content: "{{ grafana_htpasswd_user }}:{{ grafana_htpasswd }}\n"
+    owner: root
+    group: www-data
+    mode: "0640"
+    # Only when the hash is provisioned. If GRAFANA_NGINX_HASH is empty the
+    # /grafana location falls through to Grafana's own login (no double gate).
+  when: grafana_htpasswd | default('') | length > 0
+
 - name: Deploy Nginx SSL vhost
   become: true
   ansible.builtin.template:

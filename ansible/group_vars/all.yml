@@ -59,7 +59,15 @@ fail2ban_ignoreip: ""
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented
 # expected version — Renovate PRs are the release radar, deploy log shows drift.
 grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.2.0', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+# Grafana admin password (used by /etc/grafana/grafana.env systemd EnvironmentFile)
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
+# Nginx-level auth in front of /grafana (defense-in-depth: gates the
+# reverse-proxy path before Grafana's own login form, blocks admin/admin
+# brute-force from the public internet). htpasswd is generated at deploy
+# time from a separate secret (GRAFANA_NGINX_PASS) so the Grafana password
+# is not the same as the one exposed to the public-facing basic auth.
+grafana_htpasswd_user: "{{ lookup('env', 'GRAFANA_NGINX_USER') | default('grafana', true) }}"
+grafana_htpasswd: "{{ lookup('env', 'GRAFANA_NGINX_HASH') | default('', true) }}"
 grafana_port: 3000
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.12.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
 monitoring_nginx_version: "{{ lookup('env', 'MONITORING_NGINX_VERSION') | default('1.5.3', true) }}" # renovate: depName=nginxinc/nginx-prometheus-exporter datasource=github-releases

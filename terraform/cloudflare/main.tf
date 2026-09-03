@@ -1,6 +1,13 @@
+# Resolve the registrable Cloudflare zone from any (sub)domain.
+# Examples:
+#   vitalikuts.online              -> vitalikuts.online   (apex, 2 labels)
+#   aws.vitalikuts.online          -> vitalikuts.online   (3 labels, drop first)
+#   ssh.aws.vitalikuts.online      -> vitalikuts.online   (4+ labels, drop first two)
+# Drop leading labels until exactly 2 remain (registrable zone = TLD + SLD).
 locals {
-  parts     = split(".", var.domain)
-  zone_name = length(local.parts) > 2 ? join(".", slice(local.parts, 1, length(local.parts))) : var.domain
+  parts      = split(".", var.domain)
+  zone_parts = length(local.parts) > 2 ? slice(local.parts, length(local.parts) - 2, length(local.parts)) : local.parts
+  zone_name  = join(".", local.zone_parts)
 }
 
 data "cloudflare_zone" "this" {
