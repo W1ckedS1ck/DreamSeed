@@ -91,3 +91,18 @@ repos:
         language: system
         files: ^terraform/.*\.tf$
         pass_filenames: false
+
+      - id: gen_codemap
+        name: Regenerate code map
+        entry: python3 docs/codemap/gen_codemap.py --check
+        language: system
+        files: |
+          (?x)^(
+            \.github/|
+            ansible/|
+            scripts/|
+            terraform/|
+            lib/|
+            docs/
+          )
+        pass_filenames: false
