@@ -58,7 +58,7 @@ fail2ban_ignoreip: ""
 
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented
 # expected version — Renovate PRs are the release radar, deploy log shows drift.
-grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.2.0', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.2.1', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 grafana_port: 3000
 monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default('1.12.1', true) }}" # renovate: depName=prometheus/node_exporter datasource=github-releases
@@ -70,7 +70,7 @@ monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | de
 monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.90.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
 # Pinned uv binary — install path: release .sha256 asset -> get_url checksum (same pattern as setup-gitleaks)
-uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.7', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
+uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.10', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
 # Bot venv: created by uv (system CPython 3.12 on 24.04, uv-managed on later releases)
 bot_python_version: "3.12"
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
