@@ -1,7 +1,7 @@
 {
-  "commit": "1fdcd18c5d9c6101bc9eac77bd454b94475b070b",
+  "commit": "f26610195fce6d461c2b6cb3853442f7e8c459fd",
   "working_tree_changed": true,
-  "generated_at": "2026-09-07T17:08:40Z",
+  "generated_at": "2026-09-07T17:51:02Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,7 +33,7 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "d3e66913258a165789594fb759f5f6333d6eb2ebd7e7657ce91f2b203b387229",
+      "fingerprint": "e37a47639a2dea9a38372f5cd3e50e6aa61bd62c98e7d22eca89809d873cdab3",
       "files": 24,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -43,7 +43,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "ansible-roles": {
-      "fingerprint": "0455e842f35f0fd5a7f7ae2305bbb06a68acc622088c50b9f0a62239a895e597",
+      "fingerprint": "c98275595eed50ff8c1eb2063d8527847ed48215ca5784dcb3be08f9c5f169dd",
       "files": 89,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -63,7 +63,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "scripts": {
-      "fingerprint": "846821698a42d9bbb582389e06a49f6536418bacf85378ff1029a88c9c2e6468",
+      "fingerprint": "c7b32139326e83f624e1e8c432861f536254b3ad8f696ebda38468f795a6fa12",
       "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },

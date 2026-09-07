@@ -175,7 +175,7 @@ runs:
   using: composite
   steps:
     - name: Mask secrets
-      uses: ./.github/actions/mask-secrets
+      uses: $/.github/actions/mask-secrets
       env:
         TG_TOKEN: ${{ inputs.tg_token }}
         DB_PASS: ${{ inputs.db_pass }}

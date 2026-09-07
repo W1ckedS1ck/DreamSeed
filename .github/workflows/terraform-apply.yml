@@ -46,7 +46,7 @@ jobs:
         run: echo "Terraform apply started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
+        uses: $/.github/actions/mask-secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           PROD_HETZ_HCLOUD_TOKEN: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
@@ -59,7 +59,7 @@ jobs:
             HCLOUD_TOKEN
             VITALI_SSH_PUBLIC_KEY
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
 
       - name: Record start time
         id: start

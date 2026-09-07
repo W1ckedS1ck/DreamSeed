@@ -67,11 +67,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
 
       - name: Setup Ansible
         if: inputs.action == 'deploy'
-        uses: ./.github/actions/setup-ansible
+        uses: $/.github/actions/setup-ansible
 
       - name: Prepare
         id: start
@@ -79,13 +79,13 @@ jobs:
           echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/setup-secrets
+      - uses: $/.github/actions/setup-secrets
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault-password: ${{ secrets.VAULT_PASSWORD }}
           rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
 
-      - uses: ./.github/actions/setup-env
+      - uses: $/.github/actions/setup-env
         with:
           tg_token: ${{ secrets.TG_TOKEN }}
           tg_chat_id: ${{ vars.TG_CHAT_ID }}
@@ -206,7 +206,7 @@ jobs:
 
       - name: Scrub secrets from deploy log
         if: always() && inputs.action == 'deploy' && failure()
-        uses: ./.github/actions/scrub-log
+        uses: $/.github/actions/scrub-log
         with:
           log-path: /tmp/deploy.log
           vault-password: ${{ secrets.VAULT_PASSWORD }}
@@ -320,7 +320,7 @@ jobs:
 
       - name: Capture site screenshot
         if: success() && inputs.action == 'deploy'
-        uses: ./.github/actions/capture-screenshot
+        uses: $/.github/actions/capture-screenshot
         with:
           url: "https://${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}/"
           output: /tmp/pages-screenshot/${{ inputs.environment }}.png
@@ -379,7 +379,7 @@ jobs:
 
       - name: Scrub secrets from destroy log
         if: always() && inputs.action == 'destroy' && failure()
-        uses: ./.github/actions/scrub-log
+        uses: $/.github/actions/scrub-log
         with:
           log-path: /tmp/deploy.log
           vault-password: ${{ secrets.VAULT_PASSWORD }}

@@ -40,7 +40,7 @@ jobs:
         run: echo "Workflow started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Mask secrets
-        uses: ./.github/actions/mask-secrets
+        uses: $/.github/actions/mask-secrets
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}
@@ -55,13 +55,13 @@ jobs:
             SSH_PRIVATE_KEY
             VAULT_PASSWORD
 
-      - uses: ./.github/actions/setup-terraform
+      - uses: $/.github/actions/setup-terraform
 
       - name: Record start time
         id: start
         run: echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/setup-secrets
+      - uses: $/.github/actions/setup-secrets
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault-password: ${{ secrets.VAULT_PASSWORD }}
