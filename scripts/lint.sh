@@ -117,8 +117,8 @@ run_actionlint() {
         return 0
     fi
 
-    # Ignore self-repository uses ($/...) — GitHub feature (2026-07), not yet
-    # supported by actionlint (rhysd/actionlint#711).
+    # $/... self-repository action refs (GitHub feature 2026-07) are not yet
+    # understood by actionlint (rhysd/actionlint#711) — ignore that false error.
     if actionlint -ignore 'specifying action "\$/.+" in invalid format because ref is missing'; then
         print_ok "No issues"
         ci_annotation "actionlint" "pass"

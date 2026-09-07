@@ -186,14 +186,12 @@
   delay: 5
   changed_when: false
 
-- name: Verify Grafana admin password (login probe)
+- name: Verify Grafana admin password (basic auth probe)
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ grafana_port }}/api/login"
-    method: POST
-    body:
-      user: admin
-      password: "{{ grafana_admin_password }}"
-    body_format: form-urlencoded
+    url: "http://127.0.0.1:{{ grafana_port }}/api/user"
+    url_username: admin
+    url_password: "{{ grafana_admin_password }}"
+    force_basic_auth: true
     status_code: [200, 401]
   register: grafana_login_check
   changed_when: false

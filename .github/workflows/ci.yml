@@ -261,6 +261,23 @@ jobs:
           NPM_CONFIG_LOGLEVEL: error
         run: npx --yes --package renovate@44 -- renovate-config-validator
 
+  env-contract:
+    name: .env Parser Contract
+    # The same secrets flow through three independent parsers
+    # (lib/env.sh | scripts/common_functions.sh | scripts/env_loader.py).
+    # 9 fixtures in tests/env/ assert identical output. Always run on PRs that
+    # touch any of the four paths; run on every push to catch silent drift.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: 🚀 Start
+        run: echo "env-contract started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Run parser contract check
+        run: bash scripts/check_env_contract.sh
+
   deploy-check:
     name: Deploy Check
     runs-on: ubuntu-latest

@@ -20,9 +20,14 @@ pm.max_spare_servers = {{ pm_max_spare }}
 pm.max_requests = 500
 
 ; Session storage via Redis
+; gc_maxlifetime=86400 (24h) matches the MODX system_settings write in
+; backup/tasks/main.yml (session_gc_maxlifetime). PHP-FPM wins for FPM-driven
+; sessions when session_handler_class is empty (see backup role enforcement);
+; keeping both in sync avoids a misleading "this setting is configured" that
+; is silently overridden.
 php_value[session.save_handler] = redis
 php_value[session.save_path] = "tcp://127.0.0.1:6379{% if redis_password | length > 0 %}?auth={{ redis_password }}{% endif %}"
-php_value[session.gc_maxlifetime] = 604800
+php_value[session.gc_maxlifetime] = 86400
 php_value[session.gc_probability] = 0
 php_value[session.gc_divisor] = 1000
 php_admin_value[catch_workers_output] = yes

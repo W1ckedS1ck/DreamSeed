@@ -104,21 +104,29 @@
           set -o pipefail
           _archive="/home/ubuntu/backups/.restore_cache/{{ restore_latest_project.stdout | trim }}"
           _web="{{ web_root }}"
+          _bak="${_web}.bak.$$"
           tar -tzf "$_archive" > /dev/null 2>&1 || { echo "Corrupt archive: $_archive"; exit 1; }
+          # Unmount the MODX cache tmpfs BEFORE moving web_root away. Otherwise
+          # the mount follows the dir into _bak and rm -rf cannot remove the
+          # mountpoint (leaves an orphaned tmpfs + leftover dir).
           mountpoint -q "$_web/core/cache" && umount "$_web/core/cache" || true
-          mv "$_web" "${_web}.bak.$$" 2>/dev/null || true
+          mv "$_web" "$_bak" 2>/dev/null || true
           mkdir -p "$_web"
           if ! tar -xzf "$_archive" -C "$(dirname "$_web")"; then
-            mv "${_web}.bak.$$"/* "$_web" 2>/dev/null || true
-            rm -rf "${_web}.bak.$$" 2>/dev/null || true
+            mv "$_bak"/* "$_web" 2>/dev/null || true
+            rm -rf "$_bak" 2>/dev/null || true
             exit 1
           fi
+          # Remount the cache tmpfs. mount -a reads the fstab entry; fall back
+          # to an explicit mount if it didn't take (e.g. raced with PHP role).
           mount -a 2>&1 || true
-          # tmpfs for MODX cache should be back after mount -a. A regular dir
-          # still works, so this is a WARNING (visible in the task log), not a
-          # failure — but never swallow it with /dev/null.
+          mountpoint -q "$_web/core/cache" || mount "$_web/core/cache" 2>/dev/null || true
+          # A regular dir still works, so this is a WARNING, not a failure.
           mountpoint -q "$_web/core/cache" || echo "WARNING: tmpfs not mounted at $_web/core/cache (check fstab)" >&2
-          rm -rf "${_web}.bak.$$" 2>/dev/null || true
+          # Drop the old site. Unmount any cache tmpfs that slipped into _bak
+          # first, so rm -rf can actually remove the mountpoint.
+          mountpoint -q "$_bak/core/cache" && umount "$_bak/core/cache" || true
+          rm -rf "$_bak" 2>/dev/null || true
           chown -R www-data:www-data "$_web"
         executable: /bin/bash
       changed_when: true
@@ -299,6 +307,7 @@
         # NOTE: Keep tmpfs mount intact. With state: absent on a mount point
         # Ansible would fail (EBUSY). Instead, clear contents with find -exec.
         - name: Clear all MODX cache (keep tmpfs mount intact)
+          become: true
           ansible.builtin.shell:
             cmd: find {{ web_root }}/core/cache -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
           changed_when: true

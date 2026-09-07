@@ -134,13 +134,12 @@
   ],
   "packageRules": [
     {
-      "description": "Hard-lock PHP to 8.3 (MODX 2.x incompatible above). More match fields than the 'Dev & monitoring tools' group so it always wins; allowedVersions caps even if enabled flips.",
+      "description": "Hard-lock PHP to 8.3 (MODX 2.x incompatible above). allowedVersions caps any update that would otherwise fire from the endoflife-date custom manager.",
       "matchFileNames": ["ansible/group_vars/all.yml"],
       "matchDatasources": ["endoflife-date"],
       "matchPackageNames": ["php"],
       "matchManagers": ["custom.regex"],
-      "allowedVersions": "<8.4",
-      "enabled": false
+      "allowedVersions": "<8.4"
     },
     {
       "description": "Grafana version is documented only (install uses apt-latest) — keep PR as release radar, no automerge",

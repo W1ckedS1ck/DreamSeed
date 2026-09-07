@@ -16,6 +16,11 @@ concurrency:
   group: grafana-cloud-${{ inputs.workspace }}
   cancel-in-progress: false
 
+# Default-deny: GITHUB_TOKEN starts with repo-write; this workflow only reads
+# the repo and writes through the Grafana Cloud provider via TF_API_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   plan-and-apply:
     name: Grafana Cloud — ${{ inputs.workspace == 'prod' && '🔴 PRODUCTION' || '🟢 DEV' }}

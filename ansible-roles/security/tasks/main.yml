@@ -207,13 +207,7 @@
     state: directory
     mode: "0755"
 
-- name: Check if MODX permissions already secured
-  become: true
-  ansible.builtin.stat:
-    path: /etc/dreamseed/.modx_secured
-  register: modx_secured_marker
-
-- name: Lock core/ to root:www-data (one-time recursive)
+- name: Lock core/ to root:www-data (recursive, re-applied every deploy)
   become: true
   ansible.builtin.file:
     path: "{{ web_root }}/core"
@@ -221,7 +215,7 @@
     group: www-data
     mode: "u=rwX,g=rwX,o="
     recurse: true
-  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
+  when: modx_config_file.stat.exists
 
 - name: Ensure cache/logs stay writable by www-data
   become: true
@@ -235,14 +229,6 @@
     - "{{ web_root }}/core/cache"
     - "{{ web_root }}/core/logs"
   when: modx_config_file.stat.exists
-
-- name: Create MODX secured marker
-  become: true
-  ansible.builtin.file:
-    path: /etc/dreamseed/.modx_secured
-    state: touch
-    mode: "0644"
-  when: modx_config_file.stat.exists and not modx_secured_marker.stat.exists
 
 # --- Unattended Upgrades ---
 # Package installed in packages_common (playbook-01)
@@ -278,9 +264,28 @@
     groups: www-data
     append: true
 
-- name: Set setgid so new files inherit www-data group
+# Site is owned www-data:www-data but carries modes from the backup archive
+# (0644/0755), so the www-data group — and thus the ubuntu dev — has no write
+# bit. Run after restore (playbook-04 > playbook-03) to re-grant group write
+# every deploy: files -> g+w, dirs -> g+w + setgid so new files inherit www-data.
+- name: Grant www-data group write access across site tree (files + setgid dirs)
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      _web="{{ web_root }}"
+      [ -d "$_web" ] || exit 0
+      chmod -R g+w "$_web"
+      find "$_web" -type d -exec chmod g+s {} +
+  changed_when: false
+
+# The recursive g+w above also re-enables group write on the DB config.
+# Re-secure it: root-owned, group may read but not write.
+- name: Re-secure MODX config after recursive chmod
   become: true
   ansible.builtin.file:
-    path: "{{ web_root }}"
-    state: directory
-    mode: g+s
+    path: "{{ web_root }}/core/config/config.inc.php"
+    owner: root
+    group: www-data
+    mode: "0640"
+  when: modx_config_file.stat.exists

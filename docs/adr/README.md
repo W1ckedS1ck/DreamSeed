@@ -11,5 +11,6 @@ Short, immutable records of significant infrastructure decisions. Each ADR captu
 | [005](ADR-005-cloudflare-only-ingress.md) | Cloudflare-only ingress to origins | Accepted |
 | [006](ADR-006-weekly-dr-rehearsal.md) | Weekly automated DR rehearsal | Accepted |
 | [007](ADR-007-secrets-architecture.md) | Secrets architecture | Accepted |
+| [008](ADR-008-prod-migration-aws-to-hetzner.md) | Production migration from AWS to Hetzner Cloud (2026-08-21) | Accepted |
 
 New ADRs get the next sequential number and never overwrite existing ones; superseded decisions are marked as such, not deleted.
