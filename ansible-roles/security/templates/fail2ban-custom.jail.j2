@@ -33,7 +33,10 @@ logpath  = /var/log/nginx/{{ domain }}-ssl-access.log
 logpath  = /var/log/apache2/{{ domain }}-ssl-access.log
 {% endif %}
 ignoreip = 127.0.0.1/8 ::1{{ (" " ~ fail2ban_ignoreip) if (fail2ban_ignoreip | default('', true)) | length > 0 else '' }}
-maxretry = 150
+# Volumetric cap on POSTs to /connectors/index.php. 150 was below real admin
+# AJAX burst levels (a legit developer tripped it) — 1000 keeps the cap while
+# never banning a working admin. Per-account brute-force is MODX's native lockout.
+maxretry = 1000
 findtime = 600
 bantime  = 3600
 
