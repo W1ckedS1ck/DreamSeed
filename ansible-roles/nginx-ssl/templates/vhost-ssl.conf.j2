@@ -64,7 +64,7 @@ server {
     }
 
     location ^~ /manager {
-        limit_req zone=modx_admin burst=30 nodelay;
+        limit_req zone=modx_admin burst=200 nodelay;
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
         add_header X-Content-Type-Options "nosniff" always;
