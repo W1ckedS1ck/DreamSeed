@@ -1,7 +1,7 @@
 {
-  "commit": "d1c1adbfa14799c776dc81cb7f98d45d2fc018e6",
+  "commit": "1fdcd18c5d9c6101bc9eac77bd454b94475b070b",
   "working_tree_changed": true,
-  "generated_at": "2026-09-06T12:47:19Z",
+  "generated_at": "2026-09-07T17:08:40Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,7 +33,7 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "972841dc0a2ff2dce1fae39802d9c2c8756d2aa1fd5c77f831a05c8f947e2993",
+      "fingerprint": "d3e66913258a165789594fb759f5f6333d6eb2ebd7e7657ce91f2b203b387229",
       "files": 24,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -43,7 +43,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "ansible-roles": {
-      "fingerprint": "e0ec18fcc3e175a013325722e9321213add507f66729464e110b92ea14ac2a1b",
+      "fingerprint": "0455e842f35f0fd5a7f7ae2305bbb06a68acc622088c50b9f0a62239a895e597",
       "files": 89,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -68,7 +68,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "terraform": {
-      "fingerprint": "fa6423eb2678afef9333ab0de9dc7ba8bab9e3470e3b94b726d7a05dc66c7c88",
+      "fingerprint": "92cf3d8b617b0d8c28748011ff5602a2069ba71f8a36bef0dc7222cf1be75a13",
       "files": 28,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },

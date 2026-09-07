@@ -83,11 +83,11 @@ resource "cloudflare_ruleset" "rate_limit" {
     ratelimit = {
       characteristics     = ["cf.colo.id", "ip.src"]
       period              = 10
-      requests_per_period = 20
+      requests_per_period = 200
       mitigation_timeout  = 10
     }
     expression  = "(starts_with(http.request.uri.path, \"/manager/\"))"
-    description = "Rate limit /manager/ — 20 req/10s, block 10s (Free plan minimum; primary defense is fail2ban modx-admin jail: 150 failures/10min → 1h ban)"
+    description = "Rate limit /manager/ — 200 req/10s, block 10s (defense-in-depth; primary defense is fail2ban modx-admin jail: 150 failures/10min → 1h ban)"
     enabled     = true
   }]
 
