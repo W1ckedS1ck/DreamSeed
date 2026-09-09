@@ -312,11 +312,11 @@ jobs:
       - name: Add code map to Pages artifact
         if: success() && inputs.action == 'deploy'
         run: |
-          if [ -f docs/codemap/codemap.html ]; then
-            mkdir -p /tmp/pages-screenshot
-            cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
-            cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
-          fi
+          # Map outputs are not committed — regenerate from this checkout.
+          python3 docs/codemap/gen_codemap.py
+          mkdir -p /tmp/pages-screenshot
+          cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
+          cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
 
       - name: Capture site screenshot
         if: success() && inputs.action == 'deploy'

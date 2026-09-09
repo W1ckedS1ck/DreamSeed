@@ -1,6 +1,6 @@
 # Architecture
 
-> Interactive map of this codebase: [w1ckeds1ck.github.io/DreamSeed](https://w1ckeds1ck.github.io/DreamSeed/) (`docs/codemap/codemap.html` in the repo). This page is the static prose version; the map is the machine-generated visual layer (nodes, weighted edges, flows). Regenerate it with the codemap generator, never hand-edit the outputs.
+> Interactive map of this codebase: [w1ckeds1ck.github.io/DreamSeed](https://w1ckeds1ck.github.io/DreamSeed/) — regenerated in CI from every push to `main`. This page is the static prose version; the map is the machine-generated visual layer (nodes, weighted edges, flows). Regenerate it with the codemap generator, never hand-edit the outputs.
 >
 > Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 
@@ -322,4 +322,4 @@ Push / manual      Docs                  Pages site (code map) + wiki sync
 
 The canonical directory tree lives in the [repository README](https://github.com/W1ckedS1ck/DreamSeed#-project-layout) — kept in sync with the code rather than duplicated here.
 
-For a machine-verified, clickable version of the same structure (modules, edges, flows), use the [interactive code map](https://w1ckeds1ck.github.io/DreamSeed/) or browse `docs/codemap/codemap.html` in the repo.
+For a machine-verified, clickable version of the same structure (modules, edges, flows), use the [interactive code map](https://w1ckeds1ck.github.io/DreamSeed/) — CI rebuilds it from every push to `main`.
