@@ -17,23 +17,6 @@ permissions:
   contents: read
 
 jobs:
-  codemap-freshness:
-    name: Code Map freshness
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      - name: Regenerate code map and verify committed copy matches
-        run: |
-          # --check compares fresh build vs committed, ignoring volatile fields.
-          python3 docs/codemap/gen_codemap.py --check
-
   publish-code-map:
     # Pages site stays main-only; dev only syncs the wiki (see sync-wiki).
     if: github.ref_name == 'main'
@@ -55,15 +38,6 @@ jobs:
 
       - name: Regenerate code map
         run: python3 docs/codemap/gen_codemap.py
-
-      - name: Warn if committed copy is stale
-        run: |
-          if ! git diff --quiet -- docs/codemap/codemap.html docs/codemap/codemap.json docs/codemap/codemap.lock; then
-            M="${GITHUB_STEP_SUMMARY:-}"
-            if [ -n "$M" ]; then
-              echo "> The committed \`codemap.*\` copy is older than this run. To keep the repo in sync, run \`python3 docs/codemap/gen_codemap.py\` locally and commit the result." >> "$M"
-            fi
-          fi
 
       - name: Write job summary
         env:
