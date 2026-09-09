@@ -102,6 +102,26 @@
     },
     {
       "customType": "regex",
+      "description": "Track zizmor version pinned for uvx in lint.sh",
+      "managerFilePatterns": [
+        "/^scripts/lint\\.sh$/"
+      ],
+      "matchStrings": ["ZIZMOR_VERSION=\"(?<currentValue>[\\w.\\-]+)\""],
+      "depNameTemplate": "zizmor",
+      "datasourceTemplate": "pypi"
+    },
+    {
+      "customType": "regex",
+      "description": "Track yamllint version pinned for uvx in lint.sh",
+      "managerFilePatterns": [
+        "/^scripts/lint\\.sh$/"
+      ],
+      "matchStrings": ["YAMLLINT_VERSION=\"(?<currentValue>[\\w.\\-]+)\""],
+      "depNameTemplate": "yamllint",
+      "datasourceTemplate": "pypi"
+    },
+    {
+      "customType": "regex",
       "description": "Track pre-commit hooks",
       "managerFilePatterns": [
         "/^\\.pre-commit-config\\.yaml$/"

@@ -21,6 +21,10 @@ CI_MODE=false
     NC=''
 }
 
+# Pinned — Renovate tracks these via renovate.json regex managers.
+ZIZMOR_VERSION="1.30.1"
+YAMLLINT_VERSION="1.38.0"
+
 TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
     "ruff:ruff:pip install ruff"
@@ -137,7 +141,7 @@ run_zizmor() {
         return 0
     fi
 
-    if uvx zizmor --min-confidence medium .; then
+    if uvx "zizmor==${ZIZMOR_VERSION}" --min-confidence medium .; then
         print_ok "No medium+ confidence issues"
         ci_annotation "zizmor" "pass"
     else
@@ -155,7 +159,7 @@ run_yamllint() {
         return 0
     fi
 
-    if uvx yamllint --strict .; then
+    if uvx "yamllint==${YAMLLINT_VERSION}" --strict .; then
         print_ok "No issues"
         ci_annotation "yamllint" "pass"
     else
