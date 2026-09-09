@@ -1,7 +1,7 @@
 {
-  "commit": "f26610195fce6d461c2b6cb3853442f7e8c459fd",
+  "commit": "e65ffce74119e74b437d02345c1e69fb47f04786",
   "working_tree_changed": true,
-  "generated_at": "2026-09-07T17:51:02Z",
+  "generated_at": "2026-09-09T05:35:49Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -33,7 +33,7 @@
   "fingerprint_algorithm": "sha256 over sorted 'relpath<TAB>git-blob-sha' lines of tracked files per module",
   "modules": {
     ".github": {
-      "fingerprint": "e37a47639a2dea9a38372f5cd3e50e6aa61bd62c98e7d22eca89809d873cdab3",
+      "fingerprint": "1d742ce3e3c118d7a9534a4db81c04229c06bfcdfb12724e1d6f2bce4550d382",
       "files": 24,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -53,7 +53,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "lib": {
-      "fingerprint": "d6f14c7da6106ff9d0442e656c56f13fb43f317d4528863e90ae1ac0f8da5c40",
+      "fingerprint": "4a676c52d8e37b48124cb914de3d604d0f47ac12f77efd3b90a5b2c15ccc5632",
       "files": 13,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -63,7 +63,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "scripts": {
-      "fingerprint": "c7b32139326e83f624e1e8c432861f536254b3ad8f696ebda38468f795a6fa12",
+      "fingerprint": "3161ff07db779230fa80c3b5bda5ccfd65ff82f151b1dd5db9ff5ea70026c735",
       "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -73,8 +73,8 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "tests": {
-      "fingerprint": "6802f86752a6de76aebc6f3b9f11f1999ced1b820a2762b3517c5513291d3a45",
-      "files": 9,
+      "fingerprint": "1f8010d11d5bdece4de50dba325be16ed6c7dcf9a8d134733acb59e29fd19286",
+      "files": 10,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     }
   }

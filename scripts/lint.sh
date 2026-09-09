@@ -81,7 +81,7 @@ run_shellcheck() {
         find . -name "*.sh" -not -path "./.git/*" -not -path "./secrets/*" -print0
     )
 
-    if shellcheck --severity=error "${sh_files[@]}"; then
+    if shellcheck --severity=warning "${sh_files[@]}"; then
         print_ok "No errors"
         ci_annotation "ShellCheck" "pass"
     else

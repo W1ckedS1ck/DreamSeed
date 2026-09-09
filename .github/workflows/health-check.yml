@@ -246,10 +246,10 @@ jobs:
             MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${APT_RC})${N}Remaining: ${AFTER}${TG_REBOOT}"
           elif [ "$UPDATE_OUTCOME" != "success" ]; then
             MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ update step aborted (${UPDATE_OUTCOME})${TG_REBOOT}"
-          elif [ "$U" = "0" ] && [ "$AFTER" = "0" ]; then
+          elif [ "$UPDATED" = "0" ] && [ "$AFTER" = "0" ]; then
             MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
           else
-            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${U} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
+            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${UPDATED} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
           fi
 
           bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true

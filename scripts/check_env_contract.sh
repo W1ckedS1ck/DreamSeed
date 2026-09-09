@@ -37,6 +37,9 @@ preset_vars() { # deterministic env for expansion fixtures
     if [[ "$PRESET" == "cycle" ]]; then
         export EC_CYCLE_A='$EC_CYCLE_A'
     fi
+    if [[ "$PRESET" == "inject_indirect" ]]; then
+        export EC_INJECT_SRC='$(echo pwned)'
+    fi
 }
 
 run_one() { # parser lib|server|py fixture keys -> dump on stdout, rc = parser rc
@@ -139,6 +142,7 @@ check_fixture "blocked.env" "PATH EC_SURVIVOR" div_lib_fail
 check_fixture "malformed.env" "EC_SURVIVOR2" div_lib_fail
 check_fixture "env_key.env" "ENV EC_SURVIVOR3" div_lib_fail
 check_fixture "inject.env" "EC_BAD" all_fail
+check_fixture "inject_indirect.env" "EC_BAD" all_fail inject_indirect
 check_fixture "unterminated.env" "EC_OPEN" all_fail
 check_fixture "cycle.env" "EC_CYCLE_A" all_fail cycle
 

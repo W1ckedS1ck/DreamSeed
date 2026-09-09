@@ -14,6 +14,7 @@ source "$SCRIPT_DIR/scripts/common_functions.sh"
 
 # secrets/.env is ansible-vault encrypted — decrypt to a temp file first.
 _LIST_TMPFILES=()
+# shellcheck disable=SC2154 # _f is assigned by the for-loop inside this same trap string
 trap 'for _f in "${_LIST_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
 ENV_PLAIN=$(mktemp)
 chmod 600 "$ENV_PLAIN"

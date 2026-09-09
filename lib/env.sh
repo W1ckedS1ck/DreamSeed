@@ -119,6 +119,11 @@ _env_export() {
                 return 1
             }
         done
+        # Re-check post-expansion, mirroring common_functions.sh/env_loader.py
+        if [[ "$val" == *'$('* || "$val" == *'`'* ]]; then
+            echo "Error: command substitution detected in $f:$n (key '$key', after expansion)" >&2
+            return 1
+        fi
     fi
     export "$key=$val"
 }

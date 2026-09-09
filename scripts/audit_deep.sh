@@ -735,7 +735,8 @@ _expected_services=(
 )
 # telegram-bot is prod-only (long-polling singleton, one getUpdates poller per
 # token) — only required to be running on prod; never expected on a dev host.
-if [[ "${ENV:-}" == "prod" ]]; then
+# ENV matches both "prod" and "prod-hetz" — parity with the check at line 668.
+if [[ "${ENV:-}" == prod* ]]; then
     _expected_services+=(telegram-bot)
 fi
 _all_active=0
