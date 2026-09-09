@@ -277,6 +277,7 @@
       [ -d "$_web" ] || exit 0
       chmod -R g+w "$_web"
       find "$_web" -type d -exec chmod g+s {} +
+    executable: /bin/bash
   changed_when: false
 
 # The recursive g+w above also re-enables group write on the DB config.
