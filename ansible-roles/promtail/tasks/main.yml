@@ -2,10 +2,11 @@
 # Grafana apt repo (GPG key + deb822_repository) is provisioned once in the
 # packages_common role (playbook-01). Here we only install + configure.
 
-- name: Install Promtail
+# state: latest — Unattended-Upgrade would never upgrade a 'present' install (distro-security only)
+- name: Install Promtail (upgrade to latest from apt repo) # noqa: package-latest
   ansible.builtin.apt:
     name: promtail
-    state: present
+    state: latest
     update_cache: true
     cache_valid_time: 0
   become: true
