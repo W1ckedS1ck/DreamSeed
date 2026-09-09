@@ -165,6 +165,26 @@ jobs:
             echo "reboot=no" >> "$GITHUB_OUTPUT"
           fi
 
+          # Kernel drift is informational only: with Canonical Livepatch enabled
+          # the kernel hook deliberately suppresses /var/run/reboot-required for
+          # linux-* packages, so the marker above can stay empty for months.
+          # Comparing the running kernel against the newest installed one makes
+          # pending reboots visible in the report without triggering alerts.
+          echo "=== Kernel drift (informational) ==="
+          KERNEL_RUNNING=$($SSH "uname -r" 2>/dev/null || true)
+          KERNEL_LATEST=$($SSH "ls /boot/vmlinuz-* 2>/dev/null | sed 's/.*vmlinuz-//' | sort -V | tail -1" 2>/dev/null || true)
+          if [ -n "$KERNEL_RUNNING" ] && [ -n "$KERNEL_LATEST" ] && [ "$KERNEL_RUNNING" != "$KERNEL_LATEST" ]; then
+            echo "Kernel drift: running ${KERNEL_RUNNING}, installed ${KERNEL_LATEST}"
+            {
+              echo "kernel_drift=yes"
+              echo "kernel_running=$KERNEL_RUNNING"
+              echo "kernel_latest=$KERNEL_LATEST"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "Kernel up to date: ${KERNEL_RUNNING:-unknown}"
+            echo "kernel_drift=no" >> "$GITHUB_OUTPUT"
+          fi
+
           echo "=== Services check ==="
           for svc in nginx apache2 php8.3-fpm mariadb victoria-metrics grafana-server fail2ban telegram-bot; do
             if $SSH "systemctl is-active $svc" 2>/dev/null | grep -q active; then
@@ -229,6 +249,9 @@ jobs:
           REBOOT: ${{ steps.update.outputs.reboot }}
           APT_RC: ${{ steps.update.outputs.apt_rc }}
           UPDATE_OUTCOME: ${{ steps.update.outcome }}
+          KERNEL_DRIFT: ${{ steps.update.outputs.kernel_drift }}
+          KERNEL_RUNNING: ${{ steps.update.outputs.kernel_running }}
+          KERNEL_LATEST: ${{ steps.update.outputs.kernel_latest }}
         run: |
           STATUS="$UPDATE_STATUS"
           ELAPSED=$(( $(date +%s) - "$START_EPOCH" ))
@@ -239,17 +262,22 @@ jobs:
           else
             TG_REBOOT=""
           fi
+          if [ "$KERNEL_DRIFT" = "yes" ]; then
+            TG_KERNEL="${N}ℹ️ Kernel: running ${KERNEL_RUNNING}, installed ${KERNEL_LATEST}"
+          else
+            TG_KERNEL=""
+          fi
 
           if [ "$STATUS" = "unreachable" ]; then
             MSG="❌ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}SSH unreachable"
           elif [ "$STATUS" = "apt-failed" ]; then
-            MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${APT_RC})${N}Remaining: ${AFTER}${TG_REBOOT}"
+            MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ apt upgrade failed (exit ${APT_RC})${N}Remaining: ${AFTER}${TG_KERNEL}${TG_REBOOT}"
           elif [ "$UPDATE_OUTCOME" != "success" ]; then
-            MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ update step aborted (${UPDATE_OUTCOME})${TG_REBOOT}"
+            MSG="❌ *Server Update FAILED* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M')${N}🖥 ${DOMAIN}${N}⚠️ update step aborted (${UPDATE_OUTCOME})${TG_KERNEL}${TG_REBOOT}"
           elif [ "$UPDATED" = "0" ] && [ "$AFTER" = "0" ]; then
-            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_REBOOT}"
+            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}Updated: 0${N}All packages up to date${TG_KERNEL}${TG_REBOOT}"
           else
-            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${UPDATED} packages${N}Remaining: ${AFTER}${TG_REBOOT}"
+            MSG="✅ *Server Update* — ${TARGET}${N}📅 $(date '+%Y-%m-%d %H:%M') ⏱ ${ELAPSED}s${N}🖥 ${DOMAIN}${N}${N}Updated: ${UPDATED} packages${N}Remaining: ${AFTER}${TG_KERNEL}${TG_REBOOT}"
           fi
 
           bash "$GITHUB_WORKSPACE/scripts/send_tg.sh" "$MSG" Markdown || true
@@ -267,6 +295,9 @@ jobs:
           START_EPOCH: ${{ steps.start.outputs.start_epoch }}
           UPDATED: ${{ steps.update.outputs.updated }}
           REBOOT: ${{ steps.update.outputs.reboot }}
+          KERNEL_DRIFT: ${{ steps.update.outputs.kernel_drift }}
+          KERNEL_RUNNING: ${{ steps.update.outputs.kernel_running }}
+          KERNEL_LATEST: ${{ steps.update.outputs.kernel_latest }}
           SHA: ${{ github.sha }}
           SERVER_URL: ${{ github.server_url }}
           REPO: ${{ github.repository }}
@@ -289,6 +320,7 @@ jobs:
             echo "| **Security** | ${SECURITY:-?} |"
             echo "| **Remaining** | ${AFTER:-?} |"
             echo "| **Reboot** | ${REBOOT} |"
+            echo "| **Kernel** | running ${KERNEL_RUNNING:-?}, latest installed ${KERNEL_LATEST:-?} (drift: ${KERNEL_DRIFT:-?}) |"
             echo "| **Commit** | ${SHA} |"
             echo "| **Run** | [link](${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}) |"
             echo ""
