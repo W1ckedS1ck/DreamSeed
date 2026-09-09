@@ -54,7 +54,6 @@ print_fail() {
     FAILED=true
 }
 print_skip() { echo -e "    ${YELLOW}⊘${NC} $1"; }
-print_error() { $CI_MODE && echo "::error::$1" || echo -e "  ${RED}✗${NC} $1"; }
 
 tool_available() {
     command -v "$1" &>/dev/null

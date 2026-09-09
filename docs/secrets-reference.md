@@ -152,7 +152,4 @@ The `gdrive-crypt` remote wraps the base `gdrive:` remote with rclone crypt (AES
 
 | Secret | Notes |
 |--------|-------|
-| `INFRACOST_API_KEY` | Infracost API key, not referenced in any workflow |
-| `TESTHETZ_HCLOUD_TOKEN` | Hetzner Cloud token for non-existent `test-bench.yml` |
-| `TESTHETZ_SSH_KEY` | SSH key for non-existent `test-bench.yml` |
 | `DEV_AWS_SSH_PUBLIC_KEY` | Not referenced in any workflow (AWS dev uses `VITALI_SSH_PUBLIC_KEY`) |
