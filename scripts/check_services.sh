@@ -306,7 +306,7 @@ if systemctl is-active vmagent &>/dev/null; then
     _blocks=$(echo "$_raw" | awk '/^vmagent_remotewrite_blocks_sent_total/ {sum+=$2} END {print sum+0}')
     _errors=$(echo "$_raw" | awk '/^vmagent_remotewrite_errors_total/ {sum+=$2} END {print sum+0}')
 
-    _errfile="/var/tmp/.vmagent_errors_last"
+    _errfile="$SCRIPT_DIR/.vmagent_errors_last"
     # Baseline for the errors delta. Robust to: file lost (first run / tmp cleaner)
     # -> no delta; unreadable file -> no set -e abort; vmagent counter reset
     # (errors < prev) -> no delta.
@@ -318,7 +318,7 @@ if systemctl is-active vmagent &>/dev/null; then
     else
         _new=$((_errors - _prev))
     fi
-    echo "$_errors" >"$_errfile" 2>/dev/null || true
+    { printf '%s\n' "$_errors" >"$_errfile"; } 2>/dev/null || true
 
     if [[ "$_blocks" -gt 0 && "$_new" -eq 0 ]]; then
         export_metric 'vmagent_remote_write_ok 1'
