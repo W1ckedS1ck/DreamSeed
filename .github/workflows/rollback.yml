@@ -9,7 +9,7 @@ on:
         type: choice
         options: [prod, dev-aws, dev-hetz, prod-hetz]
       confirm:
-        description: 'Prod confirmation — type "rollback prod"'
+        description: 'Prod confirmation — type "rollback <environment>" (e.g. "rollback prod-hetz")'
         required: false
         type: string
 
@@ -100,12 +100,13 @@ jobs:
         if: inputs.environment == 'prod' || inputs.environment == 'prod-hetz'
         env:
           CONFIRM: ${{ inputs.confirm }}
+          TARGET_ENV: ${{ inputs.environment }}
         run: |
-          if [[ "$CONFIRM" != "rollback prod" ]]; then
-            echo "::error::To rollback prod you must set confirm = 'rollback prod'"
+          if [[ "$CONFIRM" != "rollback $TARGET_ENV" ]]; then
+            echo "::error::To rollback $TARGET_ENV you must set confirm = 'rollback $TARGET_ENV'"
             exit 1
           fi
-          echo "Prod rollback confirmed"
+          echo "Prod rollback confirmed ($TARGET_ENV)"
 
       - name: Restore latest backup
         id: restore

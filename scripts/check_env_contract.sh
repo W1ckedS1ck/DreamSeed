@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# Cross-parser .env contract check (zero deps: bash + python3).
-#
-# The same secrets flow through three independent parsers:
-#   lib/env.sh (deploy controller) | scripts/common_functions.sh load_env
-#   (server scripts) | scripts/env_loader.py (telegram bot)
-# Run this BEFORE editing any of them — it asserts identical output for the
-# shared contract fixtures and freezes the documented divergences (blocked
-# vars / malformed lines / ENV: lib/env.sh fails loudly, server side skips).
+# Asserts lib/env.sh, common_functions.sh load_env, and env_loader.py parse .env fixtures
+# identically. Run BEFORE editing any of the three.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,6 +30,9 @@ preset_vars() { # deterministic env for expansion fixtures
     export HOME="$HOME_STUB"
     if [[ "$PRESET" == "cycle" ]]; then
         export EC_CYCLE_A='$EC_CYCLE_A'
+    fi
+    if [[ "$PRESET" == "inject_indirect" ]]; then
+        export EC_INJECT_SRC='$(echo pwned)'
     fi
 }
 
@@ -139,6 +136,7 @@ check_fixture "blocked.env" "PATH EC_SURVIVOR" div_lib_fail
 check_fixture "malformed.env" "EC_SURVIVOR2" div_lib_fail
 check_fixture "env_key.env" "ENV EC_SURVIVOR3" div_lib_fail
 check_fixture "inject.env" "EC_BAD" all_fail
+check_fixture "inject_indirect.env" "EC_BAD" all_fail inject_indirect
 check_fixture "unterminated.env" "EC_OPEN" all_fail
 check_fixture "cycle.env" "EC_CYCLE_A" all_fail cycle
 

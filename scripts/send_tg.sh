@@ -1,13 +1,6 @@
 #!/bin/bash
-# Send a Telegram message. Thin CLI wrapper around common_functions.sh's
-# send_tg() — that function is the single source of truth for the actual
-# HTTP call, shared with scripts that source common_functions.sh directly.
-#
-# Reads TG_TOKEN / TG_CHAT_ID / TG_THREAD_ID from the environment.
-# Usage: send_tg.sh "message text" [parse_mode]   (parse_mode default: HTML)
-#
-# The bot token stays out of argv (ps aux) — curl reads the URL from a
-# 0600 temp config file instead of a command-line argument.
+# CLI wrapper around common_functions.sh's send_tg(). Usage: send_tg.sh "text" [parse_mode]
+# Token stays out of argv (ps aux) — curl reads it from a 0600 temp config file.
 
 set -euo pipefail
 

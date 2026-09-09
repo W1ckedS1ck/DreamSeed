@@ -136,11 +136,11 @@ terraform_destroy() {
     if [[ -n "$ssl_backup_ip" ]]; then
         local ssl_dest="$SCRIPT_DIR/secrets/ssl/letsencrypt"
         mkdir -p "$ssl_dest"
+        # Backup renewal/ too — the SSL role uses renewal/{domain}.conf to
+        # decide whether certbot should re-issue. Without it, a restored dev
+        # box re-issues a cert on every redeploy and burns LE rate limits.
         ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
             -i "$SSH_KEY" "ubuntu@$ssl_backup_ip" \
-            # Backup renewal/ too — the SSL role uses renewal/{domain}.conf to
-            # decide whether certbot should re-issue. Without it, a restored dev
-            # box re-issues a cert on every redeploy and burns LE rate limits.
             "sudo tar -czh -C /etc/letsencrypt live/ renewal/ 2>/dev/null" >"$ssl_dest/certs.tar.gz" 2>/dev/null || true
         if tar -tzf "$ssl_dest/certs.tar.gz" 2>/dev/null | grep -q 'fullchain.pem'; then
             tar -xzf "$ssl_dest/certs.tar.gz" -C "$ssl_dest/" 2>/dev/null || true

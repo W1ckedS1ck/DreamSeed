@@ -396,6 +396,24 @@ jobs:
           set -e
           ls -la /tmp/restore-logs/server/
 
+      - name: Scrub secrets from deploy log
+        if: always()
+        uses: $/.github/actions/scrub-log
+        with:
+          log-path: /tmp/deploy.log
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
+      - name: Scrub secrets from destroy log
+        if: always()
+        uses: $/.github/actions/scrub-log
+        with:
+          log-path: /tmp/destroy.log
+          vault-password: ${{ secrets.VAULT_PASSWORD }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          rclone-conf-base64: ${{ secrets.RCLONE_CONF_BASE64 }}
+
       - name: Upload test logs (deploy/destroy/server)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

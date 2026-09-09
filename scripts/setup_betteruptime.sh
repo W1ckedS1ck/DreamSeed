@@ -19,6 +19,7 @@ chmod 600 "$ENV_PLAIN"
 # Track every temp file (incl. write_key_to_env's $tmpfile.new) so none
 # survives a failed run (M10). rm -f is safe for already-deleted entries.
 _SETUP_TMPFILES=("$ENV_PLAIN")
+# shellcheck disable=SC2154 # _f is assigned by the for-loop inside this same trap string
 trap 'for _f in "${_SETUP_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
 
 VAULT_PW_FILE="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
@@ -56,7 +57,9 @@ get_existing_webhooks() {
 
 heartbeat_exists() {
     local name="$1"
+    # shellcheck disable=SC2178 # false positive: confused by python "data" below
     local data="$2"
+    # shellcheck disable=SC2128 # same false positive
     echo "$data" | python3 -c "
 import sys, json
 target = sys.argv[1]
@@ -179,7 +182,9 @@ existing_mon=$(curl -s -X GET "$API/monitors" --config <(bu_auth) || echo '{"dat
 
 monitor_exists() {
     local url="$1"
+    # shellcheck disable=SC2178 # false positive: confused by python "data" below
     local data="$2"
+    # shellcheck disable=SC2128 # same false positive
     echo "$data" | python3 -c "
 import sys, json
 target = sys.argv[1]
