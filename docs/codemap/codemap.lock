@@ -1,7 +1,7 @@
 {
-  "commit": "5216407aa369e2b0db7cd837ca6d449e18f4d53f",
+  "commit": "3765246009cc89c4afdc10c49d56c3f4b053ddca",
   "working_tree_changed": true,
-  "generated_at": "2026-09-09T06:30:33Z",
+  "generated_at": "2026-09-09T06:58:04Z",
   "scanned_scope": [
     ".github",
     "ansible",
@@ -38,7 +38,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "ansible": {
-      "fingerprint": "9bd808566c3e3aa2628288dda157d2b17435ee758b24f615de9c258afd9afcf6",
+      "fingerprint": "e6ffbf1833534e42a75909a0ec98a6f4c0ce0aa30353ffa7bc9b6791c11f9e94",
       "files": 14,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
@@ -58,7 +58,7 @@
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },
     "root": {
-      "fingerprint": "8c428150df7fc0e233e042b64439fcf06e7299f6e54879b40c52abb97c80feff",
+      "fingerprint": "f603c1327cab42916033a7f646fc8d20245f1930849a1d7846d305a4d15a6ed4",
       "files": 16,
       "algorithm": "sha256(sorted 'relpath\\tblobsha' excluding generated docs/codemap/*)"
     },

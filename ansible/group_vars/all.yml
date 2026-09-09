@@ -73,12 +73,12 @@ monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default(
 monitoring_nginx_version: "{{ lookup('env', 'MONITORING_NGINX_VERSION') | default('1.5.3', true) }}" # renovate: depName=nginxinc/nginx-prometheus-exporter datasource=github-releases
 monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | default('1.1.1', true) }}" # renovate: depName=Lusitaniae/apache_exporter datasource=github-releases
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.20.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
-monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.150.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.150.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.90.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
+monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.151.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.151.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.91.1', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
 # Pinned uv binary — install path: release .sha256 asset -> get_url checksum (same pattern as setup-gitleaks)
-uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.10', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
+uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.11', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
 # Bot venv: created by uv (system CPython 3.12 on 24.04, uv-managed on later releases)
 bot_python_version: "3.12"
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
