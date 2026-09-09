@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# Cross-parser .env contract check (zero deps: bash + python3).
-#
-# The same secrets flow through three independent parsers:
-#   lib/env.sh (deploy controller) | scripts/common_functions.sh load_env
-#   (server scripts) | scripts/env_loader.py (telegram bot)
-# Run this BEFORE editing any of them — it asserts identical output for the
-# shared contract fixtures and freezes the documented divergences (blocked
-# vars / malformed lines / ENV: lib/env.sh fails loudly, server side skips).
+# Asserts lib/env.sh, common_functions.sh load_env, and env_loader.py parse .env fixtures
+# identically. Run BEFORE editing any of the three.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

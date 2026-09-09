@@ -1,6 +1,4 @@
-# Cloudflare edge ranges — web traffic MUST only come from CF (origin hidden
-# behind proxy). SSH (22) stays open to the world for Ansible. Fetched live from
-# cloudflare.com at plan time, so the firewall always tracks current ranges.
+# Fetched live at plan time — HTTP/HTTPS restricted to current CF edge ranges (origin hidden behind proxy); SSH stays open for Ansible.
 data "http" "cf_ips_v4" {
   url = "https://www.cloudflare.com/ips-v4"
 
