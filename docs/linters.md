@@ -5,7 +5,7 @@
 There are 2 layers of linting:
 
 - **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
-- **CI on GitHub**: `ci.yml` (11 jobs, 8 required for merge)
+- **CI on GitHub**: `ci.yml` (12 jobs, 8 required for merge)
 
 ---
 

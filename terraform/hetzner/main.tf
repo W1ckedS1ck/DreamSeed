@@ -3,10 +3,24 @@
 # cloudflare.com at plan time, so the firewall always tracks current ranges.
 data "http" "cf_ips_v4" {
   url = "https://www.cloudflare.com/ips-v4"
+
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200 && length(trimspace(self.response_body)) > 0
+      error_message = "Cloudflare ips-v4 fetch failed or returned an empty body — refusing to apply a firewall with an empty/garbage allowlist."
+    }
+  }
 }
 
 data "http" "cf_ips_v6" {
   url = "https://www.cloudflare.com/ips-v6"
+
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200 && length(trimspace(self.response_body)) > 0
+      error_message = "Cloudflare ips-v6 fetch failed or returned an empty body — refusing to apply a firewall with an empty/garbage allowlist."
+    }
+  }
 }
 
 locals {

@@ -102,16 +102,6 @@
     },
     {
       "customType": "regex",
-      "description": "Track yamllint version in CI",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/"
-      ],
-      "matchStrings": ["pip install yamllint==(?<currentValue>[\\w.\\-]+)"],
-      "depNameTemplate": "yamllint",
-      "datasourceTemplate": "pypi"
-    },
-    {
-      "customType": "regex",
       "description": "Track pre-commit hooks",
       "managerFilePatterns": [
         "/^\\.pre-commit-config\\.yaml$/"
