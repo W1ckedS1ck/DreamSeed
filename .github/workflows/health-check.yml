@@ -165,11 +165,8 @@ jobs:
             echo "reboot=no" >> "$GITHUB_OUTPUT"
           fi
 
-          # Kernel drift is informational only: with Canonical Livepatch enabled
-          # the kernel hook deliberately suppresses /var/run/reboot-required for
-          # linux-* packages, so the marker above can stay empty for months.
-          # Comparing the running kernel against the newest installed one makes
-          # pending reboots visible in the report without triggering alerts.
+          # Livepatch suppresses the kernel reboot marker for linux-* packages,
+          # so compare running kernel vs newest installed — informational only.
           echo "=== Kernel drift (informational) ==="
           KERNEL_RUNNING=$($SSH "uname -r" 2>/dev/null || true)
           KERNEL_LATEST=$($SSH "ls /boot/vmlinuz-* 2>/dev/null | sed 's/.*vmlinuz-//' | sort -V | tail -1" 2>/dev/null || true)
