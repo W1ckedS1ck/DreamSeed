@@ -309,7 +309,8 @@ if systemctl is-active vmagent &>/dev/null; then
     _errfile="$SCRIPT_DIR/.vmagent_errors_last"
     # Baseline for the errors delta. Robust to: file lost (first run / tmp cleaner)
     # -> no delta; unreadable file -> no set -e abort; vmagent counter reset
-    # (errors < prev) -> no delta.
+    # (errors < prev) -> no delta. A root run hands the file back to the script
+    # dir's owner so later non-root runs can still update it.
     _had_file=false
     [[ -r "$_errfile" ]] && _had_file=true
     _prev=$(cat "$_errfile" 2>/dev/null || echo 0)
@@ -318,7 +319,7 @@ if systemctl is-active vmagent &>/dev/null; then
     else
         _new=$((_errors - _prev))
     fi
-    { printf '%s\n' "$_errors" >"$_errfile"; } 2>/dev/null || true
+    { printf '%s\n' "$_errors" >"$_errfile" && [[ "$(id -u)" -eq 0 ]] && chown "$(stat -c '%U:%G' "$SCRIPT_DIR")" "$_errfile"; } 2>/dev/null || true
 
     if [[ "$_blocks" -gt 0 && "$_new" -eq 0 ]]; then
         export_metric 'vmagent_remote_write_ok 1'
