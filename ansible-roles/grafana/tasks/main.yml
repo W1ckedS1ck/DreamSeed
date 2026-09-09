@@ -2,10 +2,11 @@
 # Grafana apt repo provisioned in packages_common (playbook-01).
 # apt.grafana.com lags GitHub releases by ~2 weeks, so a GitHub-pinned install
 # target would be stale most of the time — install apt-latest, log drift below.
-- name: Install Grafana (latest from apt repo)
+# state: latest — Unattended-Upgrade would never upgrade a 'present' install (distro-security only)
+- name: Install Grafana (upgrade to latest from apt repo) # noqa: package-latest
   ansible.builtin.apt:
     name: grafana
-    state: present
+    state: latest
     update_cache: true
     cache_valid_time: 0
   become: true

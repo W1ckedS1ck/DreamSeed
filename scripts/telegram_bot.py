@@ -42,7 +42,18 @@ class _TokenMask(logging.Filter):
         return True
 
 
-logging.getLogger().addFilter(_TokenMask())
+def _install_token_mask() -> None:
+    # Attach the redaction filter to every root HANDLER, not to the root
+    # logger. Logger-level filters only see records logged through that exact
+    # logger; records from child loggers (httpx, httpcore, PTB) bypass them
+    # and reach the root handlers directly — where a handler-level filter
+    # still applies.
+    mask = _TokenMask()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(mask)
+
+
+_install_token_mask()
 
 BACKUP_DIR = os.environ.get("BACKUP_DIR", "/home/ubuntu/backups")
 RCLONE_REMOTE = os.environ.get("RCLONE_REMOTE", "gdrive-crypt")

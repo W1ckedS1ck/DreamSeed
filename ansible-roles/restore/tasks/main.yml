@@ -200,6 +200,19 @@
   ansible.builtin.set_fact:
     restore_db_needs_restore: "{{ (restore_db_tables.stdout | default('0') | int) < 3 }}"
 
+# A half-imported DB (>3 tables, no config) looks "restored" to the table-count
+# gate below. If a previous run died mid-import, the in-progress marker stays
+# on disk and forces a full re-import instead of a silent skip.
+- name: Check for unfinished DB import marker (previous run failed mid-import)
+  ansible.builtin.stat:
+    path: /home/ubuntu/backups/.restore_cache/.db_import_in_progress
+  register: restore_db_import_marker
+
+- name: Force DB re-import (unfinished import marker found)
+  ansible.builtin.set_fact:
+    restore_db_needs_restore: true
+  when: restore_db_import_marker.stat.exists
+
 # Same as project restore: dev pulls prod backups by design (see group_vars/all.yml).
 
 - name: Restore database from Google Drive
@@ -239,6 +252,15 @@
       changed_when: false
       when: restore_latest_db.stdout | trim != ""
 
+    # Cleared only after the table-count verify below passes. If the import
+    # dies mid-stream (disk full, timeout), the marker survives and forces a
+    # re-import on the next run instead of the "Skip DB restore" path.
+    - name: Mark DB import as in progress
+      ansible.builtin.file:
+        path: /home/ubuntu/backups/.restore_cache/.db_import_in_progress
+        state: touch
+        mode: "0600"
+
     - name: Restore database
       ansible.builtin.shell:
         cmd: |
@@ -250,7 +272,7 @@
       failed_when: restore_db_result.rc != 0
       when: restore_latest_db.stdout | trim != ""
 
-    - name: Verify database restore (expect 50+ tables)
+    - name: Verify database restore (minimum table count = {{ db_min_tables }})
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
@@ -259,6 +281,12 @@
       register: restore_db_table_count
       changed_when: false
       failed_when: (restore_db_table_count.stdout | int) < db_min_tables
+      when: restore_latest_db.stdout | trim != ""
+
+    - name: Clear DB import in-progress marker (restore verified)
+      ansible.builtin.file:
+        path: /home/ubuntu/backups/.restore_cache/.db_import_in_progress
+        state: absent
       when: restore_latest_db.stdout | trim != ""
 
     - name: Cleanup DB archive
