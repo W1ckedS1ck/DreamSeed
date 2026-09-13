@@ -23,7 +23,7 @@ db_min_tables: 100
 # ==== PHP ====
 # HARD LOCK: MODX 2.x is incompatible with PHP > 8.3. Never bump (renovate rule + deploy/lint guards enforce).
 
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}" # renovate: depName=php
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3.33', true) }}" # renovate: depName=php
 
 # ==== Redis ====
 
@@ -78,7 +78,7 @@ monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | de
 monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.91.1', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
 # Pinned uv binary — install path: release .sha256 asset -> get_url checksum (same pattern as setup-gitleaks)
-uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.11', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
+uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.13', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
 # Bot venv: created by uv (system CPython 3.12 on 24.04, uv-managed on later releases)
 bot_python_version: "3.12"
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
