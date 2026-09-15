@@ -1526,18 +1526,23 @@ ssh prod "cat /home/ubuntu/backups/logs/verify_$(date +%Y-%m-%d).log 2>/dev/null
 
 ### B10. 🔴 BetterStack Alert — check-services heartbeat missed
 
-**What triggered:** `check_services.sh` did not ping within 5min + 60s grace
+**What triggered:** `check_services.sh` did not ping within 5min + 5m grace
 **Severity:** Warning — the health-check watchdog may be down
 **Causes:**
 
 1. `check-services.timer`/service stopped
-2. Server overloaded or deployed (marker suppresses checks during deploy)
-3. `BETTERUPTIME_CHECK_SERVICES_KEY` missing from server `.env`
+2. Server overloaded or deployed (marker suppresses checks during deploy — the
+   heartbeat is still pinged, so this alone should not alert)
+3. Planned reboot / kernel update — expected: the timer waits `OnBootSec=2min`
+   after boot, so the heartbeat pauses briefly. A longer silence means the timer
+   did not resume and is a real failure.
+4. `BETTERUPTIME_CHECK_SERVICES_KEY` missing from server `.env`
 
 **Diagnose:**
 
 ```bash
 ssh prod "sudo systemctl status check-services.timer"
+ssh prod "systemctl list-timers check-services.timer --no-pager"
 ssh prod "bash /home/ubuntu/Scripts/check_services.sh"
 ```
 

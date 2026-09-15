@@ -55,7 +55,9 @@ get_existing_webhooks() {
     curl -s -X GET "$API/outgoing-webhooks" --config <(bu_auth) || echo '{"data":[]}'
 }
 
-heartbeat_exists() {
+# Print "id\turl\tperiod\tgrace" for the heartbeat matching $name, or nothing.
+# Used both to detect existing heartbeats and to reconcile drift in period/grace.
+heartbeat_lookup() {
     local name="$1"
     # shellcheck disable=SC2178 # false positive: confused by python "data" below
     local data="$2"
@@ -67,7 +69,7 @@ data = json.load(sys.stdin)
 for item in data.get('data', []):
     a = item['attributes']
     if a['name'] == target:
-        print(a['url'])
+        print('%s\t%s\t%s\t%s' % (item['id'], a['url'], a.get('period', ''), a.get('grace', '')))
         break
 " "$name" 2>/dev/null
 }
@@ -138,15 +140,32 @@ for spec in \
     "report-daily|BETTERUPTIME_REPORT_DAILY_KEY|86400|1800" \
     "report-weekly|BETTERUPTIME_REPORT_WEEKLY_KEY|604800|3600" \
     "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600" \
-    "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|60"; do
+    "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|300"; do
 
     IFS='|' read -r name var_name period grace <<<"$spec"
 
-    url=$(heartbeat_exists "$name" "$existing_hb")
+    hb_id="" hb_url="" hb_period="" hb_grace=""
+    hb_line=$(heartbeat_lookup "$name" "$existing_hb" || true)
+    if [[ -n "$hb_line" ]]; then
+        IFS=$'\t' read -r hb_id hb_url hb_period hb_grace <<<"$hb_line" || true
+    fi
 
-    if [[ -n "$url" ]]; then
-        key=$(echo "$url" | awk -F/ '{print $NF}')
-        echo -e "  ${GREEN}✓${NC} $name (already exists)"
+    if [[ -n "$hb_id" ]]; then
+        key=$(echo "$hb_url" | awk -F/ '{print $NF}')
+        if [[ "$hb_period" == "$period" && "$hb_grace" == "$grace" ]]; then
+            echo -e "  ${GREEN}✓${NC} $name (already exists)"
+        else
+            # Reconcile drift so IaC spec changes actually reach Better Stack
+            # (heartbeats used to be create-only, leaving live config stale).
+            json=$(printf '{"period":%s,"grace":%s}' "$period" "$grace")
+            resp=$(curl -s -X PATCH "$API/heartbeats/$hb_id" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
+            if echo "$resp" | grep -q '"id"'; then
+                echo -e "  ${GREEN}✓${NC} $name (updated: period ${hb_period}s→${period}s, grace ${hb_grace}s→${grace}s)"
+            else
+                err=$(echo "$resp" | grep -o '"error": "[^"]*"' | head -1)
+                echo -e "  ${RED}✗${NC} $name — update failed ${err:-}" >&2
+            fi
+        fi
     else
         json=$(printf '{"name":"%s","period":%s,"grace":%s,"email":true,"push":true}' "$name" "$period" "$grace")
         resp=$(curl -s -X POST "$API/heartbeats" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
