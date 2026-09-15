@@ -67,11 +67,8 @@ preflight_checks() {
         export CLOUDFLARE_ZONE_ID
     fi
 
-    # Better Stack heartbeats (prod only):
-    #  - no keys yet (fresh stand) → full setup + write keys to secrets/.env
-    #  - keys present → reconcile period/grace on every deploy, so manual drift
-    #    (e.g. a weakened period silently disabling the dead-man switch) is
-    #    corrected without waiting for a fresh setup.
+    # Prod: full setup only when keys are missing; otherwise reconcile heartbeat
+    # period/grace every deploy so drift can't silently weaken the dead-man switch.
     if [[ "$TARGET" =~ ^prod && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
         if [[ -z "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
             if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then

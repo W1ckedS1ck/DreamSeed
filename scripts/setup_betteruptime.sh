@@ -1,8 +1,7 @@
 #!/bin/bash
 # Better Stack setup — heartbeats + Telegram webhooks. Idempotent.
 #   --write-env        Write new keys to secrets/.env automatically
-#   --heartbeats-only  Reconcile only heartbeats (period/grace drift), skip
-#                      monitors/webhooks and never touch secrets/.env
+#   --heartbeats-only  Reconcile heartbeat period/grace only; skip .env writes
 # Requires BETTERUPTIME_API_TOKEN in secrets/.env; TG_TOKEN/TG_CHAT_ID optional.
 
 set -euo pipefail
@@ -67,8 +66,7 @@ get_existing_webhooks() {
     curl -s -X GET "$API/outgoing-webhooks" --config <(bu_auth) || echo '{"data":[]}'
 }
 
-# Print "id\turl\tperiod\tgrace" for the heartbeat matching $name, or nothing.
-# Used both to detect existing heartbeats and to reconcile drift in period/grace.
+# Print "id\turl\tperiod\tgrace" for the named heartbeat (detect + reconcile drift).
 heartbeat_lookup() {
     local name="$1"
     # shellcheck disable=SC2178 # false positive: confused by python "data" below
@@ -167,8 +165,7 @@ for spec in \
         if [[ "$hb_period" == "$period" && "$hb_grace" == "$grace" ]]; then
             echo -e "  ${GREEN}✓${NC} $name (already exists)"
         else
-            # Reconcile drift so IaC spec changes actually reach Better Stack
-            # (heartbeats used to be create-only, leaving live config stale).
+            # Reconcile drift so spec changes reach Better Stack (was create-only).
             json=$(printf '{"period":%s,"grace":%s}' "$period" "$grace")
             resp=$(curl -s -X PATCH "$API/heartbeats/$hb_id" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
             if echo "$resp" | grep -q '"id"'; then
@@ -202,8 +199,7 @@ for spec in \
     fi
 done
 
-# Reconcile-only mode stops here (used by deploy preflight on every prod deploy)
-# so heartbeat drift gets corrected without touching monitors/webhooks/.env.
+# Reconcile-only mode stops before monitors/webhooks/.env.
 if $HEARTBEATS_ONLY; then
     echo -e "\n${GREEN}All done (heartbeats only)${NC}"
     exit 0

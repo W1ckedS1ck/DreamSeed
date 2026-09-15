@@ -2,12 +2,7 @@
 Description=DreamSeed services health check timer (every 5 minutes)
 
 [Timer]
-# Short boot delay only — long enough for base services after a plain reboot,
-# not for a deploy. A running deploy is suppressed by the /tmp/.dreamseed_deploying
-# marker (written by playbook-01, cleared by deploy.sh), and check_services.sh
-# still pings the heartbeat while skipping, so a fresh deploy never goes silent.
-# A long OnBootSec (was 15min) false-fired the Better Stack dead-man switch on
-# every planned reboot/kernel update — the heartbeat was silent >5min+grace.
+# Short delay is enough — deploys are covered by the /tmp/.dreamseed_deploying marker.
 OnBootSec=2min
 OnUnitActiveSec=5min
 AccuracySec=5s
