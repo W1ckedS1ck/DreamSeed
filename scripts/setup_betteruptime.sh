@@ -1,6 +1,8 @@
 #!/bin/bash
 # Better Stack setup — heartbeats + Telegram webhooks. Idempotent.
-#   --write-env  Write new keys to secrets/.env automatically
+#   --write-env        Write new keys to secrets/.env automatically
+#   --heartbeats-only  Reconcile only heartbeats (period/grace drift), skip
+#                      monitors/webhooks and never touch secrets/.env
 # Requires BETTERUPTIME_API_TOKEN in secrets/.env; TG_TOKEN/TG_CHAT_ID optional.
 
 set -euo pipefail
@@ -36,7 +38,17 @@ load_env "$ENV_PLAIN"
 }
 
 WRITE_ENV=false
-[[ "${1:-}" == "--write-env" ]] && WRITE_ENV=true
+HEARTBEATS_ONLY=false
+for arg in "$@"; do
+    case "$arg" in
+    --write-env) WRITE_ENV=true ;;
+    --heartbeats-only) HEARTBEATS_ONLY=true ;;
+    *)
+        echo "Unknown option: $arg" >&2
+        exit 2
+        ;;
+    esac
+done
 
 API="https://uptime.betterstack.com/api/v2"
 # Auth header via process substitution (not argv) — token stays out of ps aux.
@@ -189,6 +201,13 @@ for spec in \
         fi
     fi
 done
+
+# Reconcile-only mode stops here (used by deploy preflight on every prod deploy)
+# so heartbeat drift gets corrected without touching monitors/webhooks/.env.
+if $HEARTBEATS_ONLY; then
+    echo -e "\n${GREEN}All done (heartbeats only)${NC}"
+    exit 0
+fi
 
 # ==== HTTP monitors ====
 

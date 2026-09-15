@@ -67,15 +67,24 @@ preflight_checks() {
         export CLOUDFLARE_ZONE_ID
     fi
 
-    # Auto-setup Better Stack heartbeats for prod if needed
-    if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
-        if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
-            resolve_env_file "$ENV_FILE"
-            env_src="$ENV_SRC"
-            parse_env_file "$env_src" || exit 1
+    # Better Stack heartbeats (prod only):
+    #  - no keys yet (fresh stand) → full setup + write keys to secrets/.env
+    #  - keys present → reconcile period/grace on every deploy, so manual drift
+    #    (e.g. a weakened period silently disabling the dead-man switch) is
+    #    corrected without waiting for a fresh setup.
+    if [[ "$TARGET" =~ ^prod && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
+        if [[ -z "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
+            if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
+                resolve_env_file "$ENV_FILE"
+                env_src="$ENV_SRC"
+                parse_env_file "$env_src" || exit 1
+            else
+                echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."
+                echo "  To set up manually later, run: bash scripts/setup_betteruptime.sh --write-env"
+            fi
         else
-            echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."
-            echo "  To set up manually later, run: bash scripts/setup_betteruptime.sh --write-env"
+            bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --heartbeats-only ||
+                echo "⚠ Warning: Better Stack heartbeat reconcile failed. Continuing."
         fi
     fi
 
