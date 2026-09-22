@@ -111,8 +111,11 @@ secrets/.env (ansible-vault AES256 encrypted, gitignored)
 ```
 smart_backup.sh (hourly via cron)
    │
-   ├─ Project: find -newer marker → skip if unchanged
+   ├─ Project: find -newer marker → skip if unchanged (tiles/ excluded)
    │            tar.gz → rotate keep 5
+   │
+   ├─ Map tiles: separate content-addressed archive (name = tree hash) →
+   │            only re-tarred when the tiles tree changed → rotate keep 3
    │
    ├─ Database: mysqldump via ~/.my.cnf → gzip → rotate keep 15
    │
@@ -126,7 +129,9 @@ upload_backups_to_gdrive.sh (every hour at :05)
    │
    ├─ rclone copy latest project + db → gdrive-crypt:DreamSeed/backups/{project,db}${ENV}/ (ignore-existing)
    │
-   ├─ Prune cloud: 10 project + 100 db → cleanup trash
+   ├─ rclone copy map tiles (prod only, content-addressed → skipped if unchanged)
+   │
+   ├─ Prune cloud: 10 project + 100 db + 3 tiles → cleanup trash
    │
    └─ Ping Better Stack heartbeat
 
@@ -137,6 +142,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
    │
    ├─ Stop web + PHP-FPM
    ├─ Restore project (tar -xzf)
+   ├─ Restore map tiles (separate archive, extracted into the project)
    ├─ Restore DB (gunzip | mysql) + TRUNCATE modx_session
    ├─ Detect rollback via modx_site_content.editedon
    └─ Restart services → health check → Telegram summary

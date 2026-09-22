@@ -277,9 +277,11 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
   ```bash
   ls /home/ubuntu/backups/project/ | wc -l
   ls /home/ubuntu/backups/db/ | wc -l
+  ls /home/ubuntu/backups/tiles/ | wc -l
   # Manual cleanup if rotation hasn't kicked in
   rm -f $(ls -t /home/ubuntu/backups/project/*.tar.gz | tail -n +6)
   rm -f $(ls -t /home/ubuntu/backups/db/*.sql.gz | tail -n +16)
+  rm -f $(ls -t /home/ubuntu/backups/tiles/*.tar.gz | tail -n +4)
   ```
 
 - **Clean VictoriaMetrics data (if old):**
@@ -302,7 +304,7 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
   sudo systemctl restart mariadb
   ```
 
-**Prevention:** The server rotates backups to max 5 project + 15 DB. Check that `rotate_files` in `smart_backup.sh` is working.
+**Prevention:** The server rotates backups to max 5 project + 15 DB + 3 tiles. Check that `rotate_files` in `smart_backup.sh` is working.
 
 ---
 

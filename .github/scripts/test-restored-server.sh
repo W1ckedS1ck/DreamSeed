@@ -120,6 +120,20 @@ done
 GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | grep . || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
 [ "$GDRIVE" != "NO_BACKUPS" ] && pass "GDrive backups: $(echo "$GDRIVE" | tr -d '\n')" || fail "GDrive backups: not found"
 
+# --- Map tiles (separate backup artifact, excluded from the project archive) ---
+if ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/tiles"; then
+    TILES_BACKUP=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/tiles/DreamSeed_tiles_*.tar.gz 2>/dev/null | head -1 || echo ''")
+    if [ -n "$TILES_BACKUP" ]; then
+        pass "Tiles backup exists: $(basename "$TILES_BACKUP")"
+    else
+        warn "Tiles dir present but no local tiles backup"
+    fi
+    TILES_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/tiles/ --max-depth 1 2>/dev/null | wc -l" || echo 0)
+    echo "cloud_tiles=${TILES_CLOUD:-0}"
+else
+    echo "cloud_tiles=no_local_tiles_dir"
+fi
+
 ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" && pass "Telegram bot running" || warn "Telegram bot not running"
 
 ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban modx-admin jail" || warn "fail2ban modx-admin: disabled (behind CF)"

@@ -150,6 +150,85 @@
         state: absent
       when: restore_latest_project.stdout | trim != ""
 
+# Map tiles are excluded from the project archive (they are large and rarely
+# change — see smart_backup.sh) and restored from their own cloud artifact.
+# Optional: sites without a tiles tree simply have no tiles backup.
+- name: Restore map tiles from Google Drive
+  when:
+    - not restore_site_exists.stat.exists
+    - rclone_config_remote.stat.exists
+  block:
+    - name: Find latest tiles backup (content-addressed names — rank by mtime)
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          rclone lsf gdrive-crypt:DreamSeed/backups/tiles/ --files-only --format tp | sort | tail -1 | cut -d';' -f2
+        executable: /bin/bash
+      register: restore_latest_tiles
+      changed_when: false
+      failed_when: false
+
+    - name: Skip tiles restore when no tiles backup exists
+      ansible.builtin.debug:
+        msg: "⊘ No map tiles backup on Google Drive — skipping tiles restore"
+      when: restore_latest_tiles.stdout | trim == ""
+
+    - name: Validate tiles backup filename
+      ansible.builtin.fail:
+        msg: "Unsafe tiles backup filename from rclone: '{{ restore_latest_tiles.stdout | trim }}'"
+      when:
+        - restore_latest_tiles.stdout | trim != ""
+        - not (restore_latest_tiles.stdout | trim | regex_search('^[A-Za-z0-9._-]+$'))
+
+    - name: Download tiles backup to EBS cache
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          rclone --config /home/ubuntu/.config/rclone/rclone.conf copy "gdrive-crypt:DreamSeed/backups/tiles/{{ restore_latest_tiles.stdout | trim }}" /home/ubuntu/backups/.restore_cache/
+        executable: /bin/bash
+      changed_when: false
+      when: restore_latest_tiles.stdout | trim != ""
+
+    - name: Verify tiles archive integrity and top-level dir
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          _a="/home/ubuntu/backups/.restore_cache/{{ restore_latest_tiles.stdout | trim }}"
+          tar -tzf "$_a" > /dev/null 2>&1
+          _top=$(tar -tzf "$_a" | head -1 | cut -d/ -f1)
+          [ "$_top" = "tiles" ] || { echo "unexpected top-level: $_top"; exit 1; }
+        executable: /bin/bash
+      register: restore_tiles_check
+      changed_when: false
+      failed_when: restore_tiles_check.rc != 0
+      when: restore_latest_tiles.stdout | trim != ""
+
+    - name: Extract map tiles
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          _a="/home/ubuntu/backups/.restore_cache/{{ restore_latest_tiles.stdout | trim }}"
+          mkdir -p "{{ web_root }}"
+          tar -xzf "$_a" -C "{{ web_root }}"
+          chown -R www-data:www-data "{{ web_root }}/tiles"
+        executable: /bin/bash
+      changed_when: true
+      when: restore_latest_tiles.stdout | trim != ""
+
+    - name: Cleanup tiles archive
+      ansible.builtin.file:
+        path: "/home/ubuntu/backups/.restore_cache/{{ restore_latest_tiles.stdout | trim }}"
+        state: absent
+      when: restore_latest_tiles.stdout | trim != ""
+
+    - name: Show restored tiles
+      ansible.builtin.debug:
+        msg: "✓ Restored map tiles: {{ restore_latest_tiles.stdout | trim }}"
+      when: restore_latest_tiles.stdout | trim != ""
+
 - name: Skip restore (already exists)
   ansible.builtin.debug:
     msg: "⊘ Site already exists at {{ web_root }}, skipping restore"

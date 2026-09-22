@@ -9,6 +9,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
+# ==== Lock against parallel runs ====
+# A changed map-tiles archive is large; its upload can outlast the hourly cron,
+# so guard against overlapping runs (same flock pattern as smart_backup.sh).
+LOCK_DIR="${HOME:-/tmp}/.locks"
+mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
+LOCK_FILE="$LOCK_DIR/upload_gdrive.lock"
+exec 8>"$LOCK_FILE"
+if ! flock -n 8; then
+    echo "Upload already running (lock: $LOCK_FILE)" >&2
+    exit 0
+fi
+
 # ==== Logging ====
 LOG_DIR="${BACKUP_DIR:-/home/ubuntu/backups}/logs"
 mkdir -p "$LOG_DIR"
@@ -30,6 +42,7 @@ LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 PROJECT_DIR="$LOCAL_BACKUP_DIR/project"
 DB_DIR="$LOCAL_BACKUP_DIR/db"
 REDIS_DIR="$LOCAL_BACKUP_DIR/redis"
+TILES_DIR="$LOCAL_BACKUP_DIR/tiles"
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive-crypt}"
 
@@ -53,6 +66,7 @@ REMOTE_BASE="DreamSeed/backups"
 MAX_PROJECT_BACKUPS="${CLOUD_PROJECT_KEEP:-10}"
 MAX_DB_BACKUPS="${CLOUD_DB_KEEP:-100}"
 MAX_REDIS_BACKUPS="${CLOUD_REDIS_KEEP:-10}"
+MAX_TILES_BACKUPS="${CLOUD_TILES_KEEP:-3}"
 
 HAS_ERROR=0
 UPLOAD_MSG=""
@@ -101,12 +115,24 @@ if [[ -d "$REDIS_DIR" ]]; then
     upload_new_files "$REDIS_DIR" "redis_dump_*.rdb" "$REMOTE_BASE/redis${ENV_SUFFIX}/" 600 "Redis"
 fi
 
-# ==== 4. Clean old backups in cloud ====
+# ==== 4. Upload map tiles ====
+# Prod-only: tiles are the source of truth on prod, and dev/test always restore
+# PROD paths (their own uploads are never consumed — see detect_env()/RESTORE_ALL).
+# Skipping the (hundreds-of-MB) tiles upload on non-prod keeps ephemeral test
+# drills from re-uploading it every run for no benefit. Names are
+# content-addressed, so even on prod an unchanged tiles tree is skipped.
+if [[ -d "$TILES_DIR" && -z "$ENV_SUFFIX" ]]; then
+    upload_new_files "$TILES_DIR" "DreamSeed_tiles_*.tar.gz" "$REMOTE_BASE/tiles${ENV_SUFFIX}/" 1800 "Tiles"
+fi
+
+# ==== 5. Clean old backups in cloud ====
 prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
 "
 prune_cloud_backups "db" "$MAX_DB_BACKUPS" || UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
 "
 prune_cloud_backups "redis" "$MAX_REDIS_BACKUPS" || UPLOAD_MSG+="⚠️ Redis listing failed, cleanup skipped
+"
+prune_cloud_backups "tiles" "$MAX_TILES_BACKUPS" || UPLOAD_MSG+="⚠️ Tiles listing failed, cleanup skipped
 "
 
 if timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null; then
@@ -115,7 +141,7 @@ else
     echo "  Cleanup: ⚠️ skipped (timeout or error)"
 fi
 
-# ==== 5. Rotate old logs (keep 30 days) ====
+# ==== 6. Rotate old logs (keep 30 days) ====
 find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
 
 if [[ "$HAS_ERROR" -eq 0 ]]; then

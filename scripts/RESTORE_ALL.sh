@@ -284,6 +284,7 @@ if [ "$MODE" != "--auto-latest" ]; then
     SELECTED_PROJECT=""
     SELECTED_DB=""
     SELECTED_REDIS=""
+    SELECTED_TILES=""
 
     case "$MENU_CHOICE" in
         1)
@@ -336,6 +337,16 @@ if [ "$MODE" != "--auto-latest" ]; then
         fi
     fi
 
+    # Map tiles are a separate artifact restored alongside the project (optional
+    # — absent when the tiles tree never changed / has no backup yet).
+    if [ "$RESTORE_PROJECT" -eq 1 ]; then
+        if [ "$SOURCE" = "cloud" ]; then
+            SELECTED_TILES=$(select_backup_cloud "tiles${ENV_SUFFIX}" "DreamSeed_tiles_" 2>/dev/null) || SELECTED_TILES=""
+        else
+            SELECTED_TILES=$(select_backup "$BACKUP_DIR/tiles" "DreamSeed_tiles_*.tar.gz" 2>/dev/null) || SELECTED_TILES=""
+        fi
+    fi
+
     echo ""
 
     # Nothing to restore
@@ -352,6 +363,7 @@ if [ "$MODE" != "--auto-latest" ]; then
     [ -n "$SELECTED_PROJECT" ] && echo -e "  - Replace project files: ${CYAN}$(basename "$SELECTED_PROJECT")${NC}"
     [ -n "$SELECTED_DB" ] && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
     [ -n "$SELECTED_REDIS" ] && echo -e "  - Restore Redis sessions: ${CYAN}$(basename "$SELECTED_REDIS")${NC}"
+    [ -n "$SELECTED_TILES" ] && echo -e "  - Restore map tiles: ${CYAN}$(basename "$SELECTED_TILES")${NC}"
     echo -e "  - Stop $WEB_SERVICE and PHP-FPM"
     echo -e "  - Clear MODX cache"
     echo ""
@@ -377,6 +389,7 @@ else
     SELECTED_PROJECT=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -1) || true
     SELECTED_DB=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -1) || true
     SELECTED_REDIS=$(list_backups "$BACKUP_DIR/redis" 'redis_dump_*.rdb' | head -1) || true
+    SELECTED_TILES=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1) || true
 
     _db_age=0
     [ -n "$SELECTED_DB" ] && _db_age=$(($(date +%s) - $(stat -c %Y "$SELECTED_DB")))
@@ -417,6 +430,22 @@ else
     SELECTED_PROJECT=$(_fetch "$BACKUP_DIR/project" "project" "$SELECTED_PROJECT")
     SELECTED_DB=$(_fetch "$BACKUP_DIR/db" "db" "$SELECTED_DB")
     SELECTED_REDIS=$(_fetch "$BACKUP_DIR/redis" "redis" "$SELECTED_REDIS")
+
+    # Tiles are content-addressed (name = content hash), so the generic
+    # name-sorted _fetch can't rank them. Prefer the local archive; otherwise
+    # download the newest cloud one by mtime.
+    if [ -z "$SELECTED_TILES" ]; then
+        _ctiles=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/tiles/" --files-only --format tp 2>/dev/null | sort | tail -1 | cut -d';' -f2 || true)
+        if [ -n "$_ctiles" ]; then
+            echo "  tiles: downloading newest cloud backup $_ctiles" >&2
+            mkdir -p "$BACKUP_DIR/tiles"
+            if rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/tiles/$_ctiles" "$BACKUP_DIR/tiles/" >/dev/null 2>&1; then
+                SELECTED_TILES="$BACKUP_DIR/tiles/$_ctiles"
+            else
+                echo -e "${YELLOW}  ⚠ tiles: cloud download failed${NC}" >&2
+            fi
+        fi
+    fi
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
         echo "ERROR: Latest backups not found (local or GDrive)"
@@ -614,6 +643,42 @@ else
 fi
 echo ""
 
+# ==== STEP 6.5: Restore map tiles ====
+# Tiles are a separate artifact (large, rarely changing) excluded from the
+# project archive; restore them on top of the just-extracted project.
+
+TILES_STATUS="⏭️ Skipped"
+
+if [ -n "$SELECTED_TILES" ]; then
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[2.5] Restoring map tiles...${NC}"
+    else
+        echo "Restoring map tiles..."
+    fi
+
+    _tiles_ok=0
+    if timeout 300 sudo tar -tzf "$SELECTED_TILES" >/dev/null 2>&1; then
+        _tiles_top=$(timeout 300 sudo tar -tzf "$SELECTED_TILES" 2>/dev/null | head -1 | cut -d/ -f1 || true)
+        if [ "$_tiles_top" = "tiles" ] &&
+            ! timeout 300 sudo tar -tzf "$SELECTED_TILES" 2>/dev/null | grep -qE '^/|(^|/)\.\.(/|$)'; then
+            if timeout 1800 gunzip -c "$SELECTED_TILES" | sudo tar --no-same-owner --no-same-permissions -xf - -C "$PROJECT_DIR" 2>/dev/null; then
+                sudo chown -R www-data:www-data "$PROJECT_DIR/tiles"
+                _tiles_ok=1
+            fi
+        fi
+    fi
+
+    if [ "$_tiles_ok" -eq 1 ]; then
+        TILES_STATUS="✅ $(basename "$SELECTED_TILES")"
+        echo -e "${GREEN}✓ Map tiles restored${NC}"
+    else
+        TILES_STATUS="❌ $(basename "$SELECTED_TILES")"
+        RESTORE_RESULT=1
+        echo -e "${RED}✗ Map tiles restore failed!${NC}"
+    fi
+fi
+echo ""
+
 # ==== STEP 7: Restore database ====
 
 DB_STATUS="⏭️ Skipped"
@@ -799,6 +864,7 @@ echo ""
 echo "Project: $PROJECT_STATUS"
 echo "DB: $DB_STATUS"
 echo "Redis: $REDIS_STATUS"
+echo "Tiles: $TILES_STATUS"
 echo "Site: $SITE_STATUS"
 echo "$ELAPSED_DISPLAY"
 
@@ -816,6 +882,7 @@ MSG="$MSG
 
 📝 <b>Project:</b> $PROJECT_STATUS
 🗄️ <b>DB:</b> $DB_STATUS
+🗺️ <b>Tiles:</b> $TILES_STATUS
 🌐 <b>Site:</b> $SITE_STATUS
 ⏱️ <b>Time:</b> <code>${ELAPSED}</code>s"
 

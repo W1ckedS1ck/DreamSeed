@@ -125,12 +125,14 @@ jobs:
           PROJECT=$(echo "$OUTPUT" | grep "^Project:" | tail -1 | sed 's/.*: //')
           DB=$(echo "$OUTPUT" | grep "^DB:" | tail -1 | sed 's/.*: //')
           REDIS=$(echo "$OUTPUT" | grep "^Redis:" | tail -1 | sed 's/.*: //')
+          TILES=$(echo "$OUTPUT" | grep "^Tiles:" | tail -1 | sed 's/.*: //')
           SITE=$(echo "$OUTPUT" | grep "^Site:" | tail -1 | sed 's/.*: //')
           TIME=$(echo "$OUTPUT" | grep "^Time:" | tail -1 | sed 's/.*: //')
           {
             echo "project=$PROJECT"
             echo "db=$DB"
             echo "redis=$REDIS"
+            echo "tiles=$TILES"
             echo "site=$SITE"
             echo "time=$TIME"
           } >> "$GITHUB_OUTPUT"
@@ -187,6 +189,7 @@ jobs:
           RESTORE_PROJECT: ${{ steps.restore.outputs.project }}
           RESTORE_DB: ${{ steps.restore.outputs.db }}
           RESTORE_REDIS: ${{ steps.restore.outputs.redis }}
+          RESTORE_TILES: ${{ steps.restore.outputs.tiles }}
           RESTORE_SITE: ${{ steps.restore.outputs.site }}
           RESTORE_TIME: ${{ steps.restore.outputs.time }}
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
@@ -201,12 +204,13 @@ jobs:
           else
             STATUS="⚠️  SITE UNHEALTHY"
           fi
-          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\n📝 Project: %s\n🗄️ DB: %s\n♻️ Redis: %s\n🌐 Site: %s\n⏱️ Time: %s\n🖥 %s %s' \
+          MSG=$(printf '%s — Rollback Deploy\n📅 %s\n\n📝 Project: %s\n🗄️ DB: %s\n♻️ Redis: %s\n🗺️ Tiles: %s\n🌐 Site: %s\n⏱️ Time: %s\n🖥 %s %s' \
             "$STATUS" \
             "$(date '+%Y-%m-%d %H:%M')" \
             "$RESTORE_PROJECT" \
             "$RESTORE_DB" \
             "$RESTORE_REDIS" \
+            "$RESTORE_TILES" \
             "$RESTORE_SITE" \
             "$RESTORE_TIME" \
             "$SERVER_IP" \
@@ -221,6 +225,7 @@ jobs:
           RESTORE_PROJECT: ${{ steps.restore.outputs.project }}
           RESTORE_DB: ${{ steps.restore.outputs.db }}
           RESTORE_REDIS: ${{ steps.restore.outputs.redis }}
+          RESTORE_TILES: ${{ steps.restore.outputs.tiles }}
           RESTORE_SITE: ${{ steps.restore.outputs.site }}
           RESTORE_TIME: ${{ steps.restore.outputs.time }}
           SUMMARY_ENV: ${{ inputs.environment }}
@@ -256,6 +261,7 @@ jobs:
             echo "| Project | $RESTORE_PROJECT |"
             echo "| DB | $RESTORE_DB |"
             echo "| Redis | $RESTORE_REDIS |"
+            echo "| Tiles | $RESTORE_TILES |"
             echo "| Site | $RESTORE_SITE |"
             echo "| Duration | $RESTORE_TIME |"
           } >> "$M"

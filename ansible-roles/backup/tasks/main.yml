@@ -16,6 +16,7 @@
     - "{{ scripts_dir_remote }}"
     - "{{ backup_dir }}/project"
     - "{{ backup_dir }}/db"
+    - "{{ backup_dir }}/tiles"
 
 - name: Upload backup scripts
   ansible.builtin.copy:

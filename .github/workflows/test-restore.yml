@@ -286,7 +286,7 @@ jobs:
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
-          ssh ubuntu@"$SERVER_IP" "rm -rf /home/ubuntu/backups/project /home/ubuntu/backups/db /home/ubuntu/backups/redis" 2>&1
+          ssh ubuntu@"$SERVER_IP" "rm -rf /home/ubuntu/backups/project /home/ubuntu/backups/db /home/ubuntu/backups/redis /home/ubuntu/backups/tiles" 2>&1
           echo "Local backups removed — RESTORE_ALL will fall through to GDrive"
 
       - name: Restore (CLOUD) via RESTORE_ALL.sh

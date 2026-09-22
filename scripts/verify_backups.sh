@@ -7,6 +7,7 @@ load_env "$SCRIPT_DIR/.env"
 
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 DB_NAME="${DB_NAME:-modx_db}"
+PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 DOMAIN="${DOMAIN:-unknown}"
 
 LOG_FILE="$BACKUP_DIR/logs/verify_$(date +%Y-%m-%d).log"
@@ -38,6 +39,26 @@ else
     # against DB freshness below (a fresh DB dump proves the pipeline runs).
     PROJ_MISSING=1
     log_ts "⚠ No project backup found (expected when site files unchanged)"
+fi
+
+# ==== Verify local map tiles backup (separate artifact) ====
+# Only meaningful when the site actually has a tiles tree; the archive itself is
+# created only when tiles change, so absence with no tiles dir is expected.
+if [[ -d "$PROJECT_DIR/tiles" ]]; then
+    TILES_BACKUP=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1)
+    if [[ -n "$TILES_BACKUP" && -f "$TILES_BACKUP" ]]; then
+        if timeout 300 tar -tzf "$TILES_BACKUP" >/dev/null 2>&1; then
+            log_ts "✓ Tiles backup OK: $(basename "$TILES_BACKUP")"
+        else
+            log_ts "✗ Tiles backup CORRUPTED: $(basename "$TILES_BACKUP")"
+            ALERTS+="❌ Tiles backup corrupted: $(basename "$TILES_BACKUP")
+"
+        fi
+    else
+        log_ts "✗ Tiles dir present but no tiles backup found"
+        ALERTS+="❌ Tiles dir present but no tiles backup found in $BACKUP_DIR/tiles
+"
+    fi
 fi
 
 # ==== Verify local DB backup ====
