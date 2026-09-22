@@ -29,7 +29,7 @@
   become: true
   ansible.builtin.shell:
     cmd: |
-      pro attach --attach-config /root/.pro-attach.yaml
+      timeout --kill-after=10 180 pro attach --attach-config /root/.pro-attach.yaml
       rc=$?
       rm -f /root/.pro-attach.yaml
       exit $rc
