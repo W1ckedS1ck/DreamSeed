@@ -573,6 +573,7 @@ jobs:
       - name: Merge site from the other publisher
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           OTHER_WORKFLOW: deploy.yml
         run: |
           set -euo pipefail
