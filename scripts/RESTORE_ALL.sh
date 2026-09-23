@@ -596,6 +596,8 @@ PROJECT_STATUS="⏭️ Skipped"
 umount_cache_tmpfs() { mountpoint -q "$1/core/cache" 2>/dev/null && sudo umount "$1/core/cache" 2>/dev/null || true; }
 mount_cache_tmpfs() {
     mountpoint -q "$PROJECT_DIR/core/cache" 2>/dev/null && return 0
+    # The project archive excludes core/cache entirely, so the dir must exist first.
+    sudo mkdir -p "$PROJECT_DIR/core/cache" 2>/dev/null || true
     sudo mount "$PROJECT_DIR/core/cache" 2>/dev/null || sudo mount -a 2>/dev/null || true
     mountpoint -q "$PROJECT_DIR/core/cache" 2>/dev/null || echo "WARNING: tmpfs not mounted at $PROJECT_DIR/core/cache (check fstab)" >&2
 }
