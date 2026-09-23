@@ -24,10 +24,7 @@ _SETUP_TMPFILES=("$ENV_PLAIN")
 trap 'for _f in "${_SETUP_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
 
 VAULT_PW_FILE="${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}"
-ansible-vault view "$SCRIPT_DIR/secrets/.env" --vault-password-file "$VAULT_PW_FILE" >"$ENV_PLAIN" 2>/dev/null || {
-    echo "Error: cannot decrypt secrets/.env" >&2
-    exit 1
-}
+resolve_env_plain "$SCRIPT_DIR/secrets/.env" "$VAULT_PW_FILE" >"$ENV_PLAIN" || exit 1
 
 load_env "$ENV_PLAIN"
 
@@ -100,7 +97,7 @@ write_key_to_env() {
     chmod 600 "$tmpfile"
     _SETUP_TMPFILES+=("$tmpfile")
 
-    ansible-vault view "$ENV_FILE" --vault-password-file "$VAULT_PW_FILE" >"$tmpfile" 2>/dev/null || {
+    resolve_env_plain "$ENV_FILE" "$VAULT_PW_FILE" >"$tmpfile" || {
         rm -f "$tmpfile"
         return 1
     }

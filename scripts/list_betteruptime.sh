@@ -12,17 +12,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common_functions.sh
 source "$SCRIPT_DIR/scripts/common_functions.sh"
 
-# secrets/.env is ansible-vault encrypted — decrypt to a temp file first.
+# secrets/.env may be ansible-vault encrypted (local) or plaintext (CI).
 _LIST_TMPFILES=()
 # shellcheck disable=SC2154 # _f is assigned by the for-loop inside this same trap string
 trap 'for _f in "${_LIST_TMPFILES[@]:-}"; do rm -f "$_f"; done' EXIT
 ENV_PLAIN=$(mktemp)
 chmod 600 "$ENV_PLAIN"
 _LIST_TMPFILES+=("$ENV_PLAIN")
-ansible-vault view "$SCRIPT_DIR/secrets/.env" --vault-password-file "${HOME}/.vault_pass_dreamseed" >"$ENV_PLAIN" 2>/dev/null || {
-    echo "Error: cannot decrypt secrets/.env" >&2
-    exit 1
-}
+resolve_env_plain "$SCRIPT_DIR/secrets/.env" "${HOME}/.vault_pass_dreamseed" >"$ENV_PLAIN" || exit 1
 load_env "$ENV_PLAIN"
 
 [[ -z "${BETTERUPTIME_API_TOKEN:-}" ]] && {
