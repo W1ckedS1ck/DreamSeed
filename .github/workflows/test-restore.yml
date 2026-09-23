@@ -567,25 +567,32 @@ jobs:
       pages: write
       id-token: write
     steps:
-      # Pages artifacts replace the whole site: merge this run's content with
-      # the other publisher's last site under the shared pages-site lock, so
-      # neither workflow erases the other's files/history.
-      - name: Merge site from the other publisher
+      # Pages artifacts replace the whole site: absorb the newest live-site
+      # artifacts (union of what is/recently was published by both workflows),
+      # then add this run's files — publishing can only ever grow the site.
+      - name: Merge with the currently live site
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          OTHER_WORKFLOW: deploy.yml
         run: |
           set -euo pipefail
           mkdir -p /tmp/pages-site
           gh run download "$GITHUB_RUN_ID" -n pages-own -D /tmp/pages-site
-          OTHER_RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$OTHER_WORKFLOW/runs?status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
-          if [ -n "$OTHER_RUN" ]; then
-            if gh run download "$OTHER_RUN" -n github-pages -D /tmp/pages-site-other; then
-              cp -rn /tmp/pages-site-other/. /tmp/pages-site/
-            else
-              echo "::warning::could not download $OTHER_WORKFLOW site artifact (expired?) — its files will be replaced by this publish"
+          IDS=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=github-pages&per_page=10" --jq '([.artifacts[] | select(.expired == false) | .workflow_run.id] | unique | .[0:3] | .[])')
+          merged=0
+          for id in $IDS; do
+            if [ "$id" = "$GITHUB_RUN_ID" ]; then
+              continue
             fi
+            if gh run download "$id" -n github-pages -D "/tmp/pages-site-live-$id"; then
+              cp -rn "/tmp/pages-site-live-$id/." /tmp/pages-site/
+              merged=$((merged + 1))
+            else
+              echo "::warning::could not download live site artifact from run $id"
+            fi
+          done
+          if [ "$merged" -eq 0 ]; then
+            echo "::warning::no previous site artifact merged — this publish may replace existing files"
           fi
 
       - name: Upload merged site for Pages
