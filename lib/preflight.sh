@@ -87,6 +87,15 @@ preflight_checks() {
 
     apply_target_vars
 
+    # DNS token is mandatory for a real deploy — update_cloudflare_dns would
+    # otherwise skip silently and report success with a stale record.
+    if [[ "$DESTROY_MODE" == "false" && "$CHECK_MODE" == "false" &&
+        "$DRY_RUN" == "false" && "${SKIP_DNS:-false}" == "false" &&
+        -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+        echo "Error: CLOUDFLARE_API_TOKEN not set — DNS would not update (use --no-dns to skip intentionally)"
+        exit 1
+    fi
+
     # Load Grafana Cloud credentials (PROD_ for prod, DEV_ for all dev)
     local gc_pfx="DEV"
     [[ "$TARGET" =~ ^prod ]] && gc_pfx="PROD"

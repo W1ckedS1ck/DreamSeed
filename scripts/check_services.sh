@@ -43,6 +43,15 @@ DOMAIN="${DOMAIN:-}"
 
 DB_NAME="${DB_NAME:-modx_db}"
 
+fail=0
+# Init ALL tier flags here, before ANY check can write them. They used to be
+# reset in the TIER section below — silently wiping the telegram-bot Tier-1
+# verdict set earlier in the script (dead prod bot then never blocked deploys).
+# Tier model: _local_fail = blocks the deploy (exit 1); fail = warn-only;
+# _external_warn = cloud-side issues (never block).
+_local_fail=0
+_external_warn=0
+
 # Auto-detect web server
 if systemctl is-active nginx &>/dev/null; then
     WEB_SVC="nginx"
@@ -51,6 +60,7 @@ elif systemctl is-active apache2 &>/dev/null; then
 else
     echo "  ✗ No web server running"
     WEB_SVC=""
+    _local_fail=1
 fi
 
 # Auto-detect PHP version
@@ -60,17 +70,26 @@ for v in /etc/php/*/fpm/pool.d/www.conf; do
 done
 [[ -z "$PHP_VER" ]] && PHP_VER="8.3"
 
-fail=0
-# Init BOTH tier flags here, before ANY check can write them. They used to be
-# reset in the TIER section below — silently wiping the telegram-bot Tier-1
-# verdict set earlier in the script (dead prod bot then never blocked deploys).
-_local_fail=0
-_external_warn=0
-
-# --- Services ---
-# grafana-server is intentionally ABSENT from this loop: it installs LAST as a
-# fallback (see check #2) and must never gate the deploy or the heartbeat.
-for s in "${WEB_SVC}" "php${PHP_VER}-fpm" "mariadb" "redis-server" "node_exporter" "mysqld_exporter" "nginx_exporter" "redis_exporter" "victoria-metrics"; do
+# --- Services (tier split) ---
+# grafana-server is intentionally ABSENT from these loops: it installs LAST as
+# a fallback (see check #2) and must never gate the deploy or the heartbeat.
+_local_svcs=("php${PHP_VER}-fpm" "mariadb" "redis-server")
+if [[ -n "$WEB_SVC" ]]; then
+    _local_svcs=("$WEB_SVC" "${_local_svcs[@]}")
+fi
+_mon_svcs=("node_exporter" "mysqld_exporter" "nginx_exporter" "redis_exporter" "victoria-metrics")
+for s in "${_local_svcs[@]}"; do
+    st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
+    if [[ "$st" == "active" ]]; then
+        echo "  ✓ $s"
+        export_metric "service_status{service=\"$s\"} 1"
+    else
+        echo "  ✗ $s — $st"
+        export_metric "service_status{service=\"$s\"} 0"
+        _local_fail=1
+    fi
+done
+for s in "${_mon_svcs[@]}"; do
     st=$(systemctl is-active "$s" 2>/dev/null || echo "inactive")
     if [[ "$st" == "active" ]]; then
         echo "  ✓ $s"
@@ -130,7 +149,7 @@ if [[ "$http" == "200" || "$http" == "301" ]]; then
         # 200 but not an HTML page (empty body, error string, maintenance stub)
         echo "  ✗ HTTP $http ${DOMAIN:-localhost} — 200 but not HTML (${#body} bytes)"
         export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 0"
-        fail=1
+        _local_fail=1
     else
         echo "  ✓ HTTP $http ${DOMAIN:-localhost}"
         export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 1"
@@ -141,7 +160,7 @@ elif [[ "$http" == "520" ]]; then
 else
     echo "  ✗ HTTP $http ${DOMAIN:-localhost} — site not serving"
     export_metric "site_http_status{domain=\"${DOMAIN:-localhost}\",code=\"$http\"} 0"
-    fail=1
+    _local_fail=1
 fi
 
 # --- SSL ---
@@ -157,7 +176,7 @@ elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; t
 else
     echo "  ✗ SSL: no certificate"
     export_metric "ssl_certificate_valid{provider=\"none\"} 0"
-    fail=1
+    _local_fail=1
 fi
 
 # --- MODX ---
@@ -165,14 +184,14 @@ if [[ -f /var/www/html/index.php ]]; then
     echo "  ✓ MODX: index.php"
 else
     echo "  ✗ MODX: index.php missing"
-    fail=1
+    _local_fail=1
 fi
 
 # --- Database ---
 if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
     echo "  ✗ DB: invalid name format"
     export_metric "database_tables{database=\"$DB_NAME\"} 0"
-    fail=1
+    _local_fail=1
     tables=0
 else
     tables=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME//\'/''}';" 2>/dev/null || echo "0")
@@ -184,7 +203,7 @@ elif [[ "$tables" -ge 1 ]]; then
     echo "  ⚠ DB: only $tables tables"
 else
     echo "  ✗ DB: no tables"
-    fail=1
+    _local_fail=1
 fi
 
 # --- VictoriaMetrics (retry 10 times × 2s — may still be starting) ---
@@ -240,13 +259,13 @@ if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
     # NOT pushed — cron-backup alert must track smart_backup.sh runs, not this.
 else
     echo "  ✗ cron: backup not set"
-    fail=1
+    _local_fail=1
 fi
 if crontab -u ubuntu -l 2>/dev/null | grep -q upload_backups_to_gdrive; then
     echo "  ✓ cron: upload"
 else
     echo "  ✗ cron: upload not set"
-    fail=1
+    _local_fail=1
 fi
 
 # --- fail2ban ---
@@ -293,7 +312,7 @@ for _t in check-site.timer check-services.timer; do
         echo "  ✓ $_t"
     else
         echo "  ✗ $_t (inactive)"
-        fail=1
+        _local_fail=1
     fi
 done
 
@@ -339,10 +358,15 @@ else
 fi
 
 # --- TIER 1 CRITICAL CHECKS ---
-# LOCAL services (FAIL deploy if broken)
-# EXTERNAL services (WARN if broken — cloud issues shouldn't block deploy)
-# NOTE: _local_fail/_external_warn are initialized at the top of the script,
-# next to $fail — do NOT re-init them here (would wipe the telegram-bot verdict).
+# Tier model (flags initialized at the top, next to $fail):
+#   _local_fail    — deploy-blocking (exit 1): no web server, php-fpm/mariadb/
+#                    redis-server down, site not serving HTML, DB without
+#                    tables, missing index.php/SSL/backup-crons/timers, dead
+#                    telegram-bot on prod, no Redis ping.
+#   fail           — warn-only monitoring: exporters, VictoriaMetrics,
+#                    promtail, vmagent, fail2ban (log-only edge state, etc).
+#   _external_warn — cloud-side issues (Loki/Telegram) — never block.
+# NOTE: do NOT re-init these flags here (would wipe earlier verdicts).
 
 # 1. Redis connectivity (LOCAL — CRITICAL for sessions)
 if redis-cli ping >/dev/null 2>&1; then

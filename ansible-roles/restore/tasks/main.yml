@@ -289,6 +289,13 @@
   changed_when: false
   failed_when: false
 
+- name: Fail if DB table-count check errored (never treat as empty DB)
+  ansible.builtin.fail:
+    msg: >-
+      mysql table-count check failed (rc={{ restore_db_tables.rc }}) —
+      refusing to decide restore; fix DB access first.
+  when: restore_db_tables.rc != 0
+
 - name: Set db_needs_restore fact
   ansible.builtin.set_fact:
     restore_db_needs_restore: "{{ (restore_db_tables.stdout | default('0') | int) < 3 }}"

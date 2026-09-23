@@ -150,9 +150,16 @@ jobs:
           FIELDS+=("--field" "mode=${MODE:-parallel}")
           [[ -n "$IP" ]] && FIELDS+=("--field" "server_ip=$IP")
 
+          # guard_source_ref blocks dev targets deployed from main (refusal
+          # protects dev from prod code) — dispatch dev targets from dev.
+          REF=main
+          if [[ "$TARGET" =~ ^dev- ]]; then
+            REF=dev
+          fi
+
           gh workflow run deploy.yml \
             --repo "$REPO" \
-            --ref main \
+            --ref "$REF" \
             "${FIELDS[@]}"
 
           gh issue comment "$ISSUE" \
@@ -170,9 +177,14 @@ jobs:
         run: |
           CONFIRM="destroy $TARGET"
 
+          REF=main
+          if [[ "$TARGET" =~ ^dev- ]]; then
+            REF=dev
+          fi
+
           gh workflow run deploy.yml \
             --repo "$REPO" \
-            --ref main \
+            --ref "$REF" \
             --field "environment=$TARGET" \
             --field "action=destroy" \
             --field "confirm=$CONFIRM"

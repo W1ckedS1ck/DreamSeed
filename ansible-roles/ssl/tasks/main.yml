@@ -128,6 +128,17 @@
   ansible.builtin.set_fact:
     ssl_has_cert: "{{ ssl_cert_file_after_restore.stat.exists }}"
 
+- name: Fail on prod when no certificate (Cloudflare strict would 526)
+  ansible.builtin.fail:
+    msg: >-
+      No TLS certificate for {{ domain }} on prod (deploy_env={{ deploy_env }}).
+      certbot failed and no local backup exists — self-signed would break
+      Cloudflare Full(strict). Fix DNS-01 credentials or restore the cert backup.
+  when:
+    - deploy_env is match('^prod')
+    - not ssl_has_cert
+    - ssl_cf_dns_enabled | default(true) | bool
+
 - name: SSL status
   ansible.builtin.debug:
     msg: |
