@@ -372,6 +372,8 @@ jobs:
       - name: Copy code map into Pages content
         if: steps.shot_check.outputs.exists == 'yes'
         run: |
+          # Map outputs are not committed — regenerate from this checkout.
+          python3 docs/codemap/gen_codemap.py
           cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
           cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
 
