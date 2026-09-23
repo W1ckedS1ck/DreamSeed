@@ -17,6 +17,7 @@ log_ts "⏱ Backup verification started"
 
 LOCAL_PROJ_OK=0
 LOCAL_DB_OK=0
+TILES_MISSING=0
 CLOUD_OK=0
 ALERTS=""
 
@@ -54,9 +55,11 @@ if [[ -d "$PROJECT_DIR/tiles" ]]; then
 "
         fi
     else
-        log_ts "✗ Tiles dir present but no tiles backup found"
-        ALERTS+="❌ Tiles dir present but no tiles backup found in $BACKUP_DIR/tiles
-"
+        # The archive appears at the first smart_backup run after deploy, so
+        # absence right after a deploy must not alert — resolve like the project
+        # backup: a fresh DB dump proves the pipeline runs (see below).
+        TILES_MISSING=1
+        log_ts "⚠ No tiles backup yet (expected until the next smart_backup run)"
     fi
 fi
 
@@ -108,6 +111,11 @@ if [[ "$PROJ_MISSING" -eq 1 ]]; then
         ALERTS+="❌ No project backup found in $BACKUP_DIR/project
 "
     fi
+fi
+
+if [[ "$TILES_MISSING" -eq 1 && "$LOCAL_DB_OK" -eq 0 ]]; then
+    ALERTS+="❌ Tiles dir present but no tiles backup (and DB backup not fresh — pipeline down)
+"
 fi
 
 export_metric "backup_verification_ok{type=\"local\",instance=\"$DOMAIN\"} $((LOCAL_PROJ_OK && LOCAL_DB_OK))"

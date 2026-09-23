@@ -18,6 +18,8 @@ if ! flock -n 8; then
     echo "Upload already running (lock: $LOCK_FILE)" >&2
     exit 0
 fi
+# The shared cloud-listing temp file must not outlive a failed run (set -e exit).
+trap 'rm -f "${CLOUD_LISTING_FILE:-}" 2>/dev/null || true' EXIT
 
 # ==== Logging ====
 LOG_DIR="${BACKUP_DIR:-/home/ubuntu/backups}/logs"

@@ -681,9 +681,32 @@ if [ -n "$SELECTED_TILES" ]; then
 
     _tiles_ok=0
     if timeout 300 sudo tar -tzf "$SELECTED_TILES" >/dev/null 2>&1; then
-        _tiles_top=$(timeout 300 sudo tar -tzf "$SELECTED_TILES" 2>/dev/null | head -1 | cut -d/ -f1 || true)
-        if [ "$_tiles_top" = "tiles" ] &&
-            ! timeout 300 sudo tar -tzf "$SELECTED_TILES" 2>/dev/null | grep -qE '^/|(^|/)\.\.(/|$)'; then
+        _tiles_listing=$(timeout 300 sudo tar -tzf "$SELECTED_TILES" 2>/dev/null || true)
+        _tiles_top=$(printf '%s\n' "$_tiles_listing" | head -1 | cut -d/ -f1 || true)
+        _tiles_safe=0
+        if [ "$_tiles_top" = "tiles" ] && ! printf '%s\n' "$_tiles_listing" | grep -qE '^/|(^|/)\.\.(/|$)'; then
+            # Same tar-slip guard as the project archive above: reject symlinks
+            # whose target escapes the archive root (extracted as root).
+            if timeout 300 sudo python3 - "$SELECTED_TILES" <<'PYEOF' 2>/dev/null
+import tarfile, sys, posixpath
+
+archive, top = sys.argv[1], "tiles"
+with tarfile.open(archive, "r:gz") as tf:
+    for m in tf.getmembers():
+        if not m.issym():
+            continue
+        t = m.linkname
+        if t.startswith("/"):
+            print(f"unsafe: {m.name} -> {t} (absolute)"); sys.exit(1)
+        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(m.name), t))
+        if resolved != top and not resolved.startswith(top + "/"):
+            print(f"unsafe: {m.name} -> {t} (escapes to {resolved})"); sys.exit(1)
+PYEOF
+            then
+                _tiles_safe=1
+            fi
+        fi
+        if [ "$_tiles_safe" -eq 1 ]; then
             if timeout 1800 gunzip -c "$SELECTED_TILES" | sudo tar --no-same-owner --no-same-permissions -xf - -C "$PROJECT_DIR" 2>/dev/null; then
                 sudo chown -R www-data:www-data "$PROJECT_DIR/tiles"
                 _tiles_ok=1
