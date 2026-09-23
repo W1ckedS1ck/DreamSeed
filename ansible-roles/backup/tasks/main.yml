@@ -131,6 +131,7 @@
     group: ubuntu
     mode: "0600"
   no_log: true
+  notify: Reload systemd and restart bot
 
 # NOTE: exactly ONE telegram-bot singleton task may exist. A second variant
 # comparing `deploy_env == 'prod'` used to sit below and stop+disable the bot

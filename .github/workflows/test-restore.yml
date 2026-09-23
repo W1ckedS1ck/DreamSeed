@@ -7,8 +7,8 @@ name: "[B] Restore Test"
 #   1. local restore (backups present on the server)
 #   2. cloud restore (local backups removed -> RESTORE_ALL pulls from GDrive,
 #      the same path [M] Rollback uses)
-# A green run destroys the ephemeral server; a FAILED run keeps it alive for
-# debugging (finish the task in place — no reprovision). keep_server=true forces keep.
+# The ephemeral server is destroyed after every run (failed ones included — an
+# unattended scheduled failure must not leak a server); keep_server=true forces keep.
 
 on:
   schedule:
@@ -446,9 +446,10 @@ jobs:
           retention-days: 7
 
       # --- Phase 4: teardown ---
-      # Destroy only on a green drill; a failed run keeps the server for debugging.
+      # Always tear down unless keep_server=true: logs are already collected
+      # above, and an unattended scheduled failure must not leak a server.
       - name: Destroy test server
-        if: ${{ inputs.keep_server == false && steps.deploy.outcome == 'success' && steps.verify_local.outcome == 'success' && steps.verify_cloud.outcome == 'success' && steps.service_tests.outcome == 'success' }}
+        if: ${{ always() && inputs.keep_server == false && steps.server-ip.outputs.ip != '' }}
         id: destroy
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
@@ -522,21 +523,29 @@ jobs:
             echo "| Failures | $TEST_FAILS |"
             echo ""
             echo "### Evidence"
-            echo "📸 Screenshot preview published inline in the **Publish screenshot preview** job below — refresh in ~1 min"
-            if [[ -n "$SERVER_IP" && "$DESTROY_OUTCOME" != "success" ]]; then
+            if [ "${{ steps.shot_check.outputs.exists }}" = "yes" ]; then
+              echo "📸 Screenshot preview published inline in the **Publish screenshot preview** job below — refresh in ~1 min"
+            else
+              echo "📸 Screenshot: not captured in this run — no preview published"
+            fi
+            if [[ "$DESTROY_OUTCOME" != "success" ]]; then
               echo ""
-              echo "### ⚠️ Server kept alive (not destroyed)"
+              echo "### ⚠️ Server may still exist (destroy did not complete)"
               if [[ "$KEEP_SERVER" == "true" ]]; then
-                echo "Requested via \`keep_server=true\`."
+                echo "Requested via \`keep_server=true\` — intentionally kept."
+              elif [[ -z "$SERVER_IP" ]]; then
+                echo "No server IP recorded (deploy failed early) — destroy was skipped. Verify the \`test\` Terraform workspace is empty."
               else
-                echo "The run did not succeed, so the server was kept for debugging."
+                echo "The destroy step did not complete — check its log; the \`test\` workspace may still hold \`$SERVER_IP\`."
+              fi
+              if [[ -n "$SERVER_IP" ]]; then
+                echo ""
+                echo "SSH: \`ssh -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP\`"
               fi
               echo ""
-              echo "SSH: \`ssh -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP\`"
+              echo "To tear it down: re-run this workflow with **keep_server = false** (any run that records a server IP destroys it)."
               echo ""
-              echo "To tear it down: re-run this workflow with **keep_server = false** once fixed (a green run destroys it), or destroy the \`test\` Terraform workspace."
-              echo ""
-              echo "Note: the next run reuses the existing \`test\` server instead of recreating it."
+              echo "Note: the next run reuses an existing \`test\` server instead of recreating it."
             fi
           } >> "$M"
 

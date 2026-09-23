@@ -121,15 +121,19 @@ GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/proj
 [ "$GDRIVE" != "NO_BACKUPS" ] && pass "GDrive backups: $(echo "$GDRIVE" | tr -d '\n')" || fail "GDrive backups: not found"
 
 # --- Map tiles (separate backup artifact, excluded from the project archive) ---
+# Accept local OR cloud: right after the cloud path is exercised the local copy
+# may be gone and the hourly cron may not have re-created it yet.
 if ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/tiles"; then
     TILES_BACKUP=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/tiles/DreamSeed_tiles_*.tar.gz 2>/dev/null | head -1 || echo ''")
-    if [ -n "$TILES_BACKUP" ]; then
-        pass "Tiles backup exists: $(basename "$TILES_BACKUP")"
-    else
-        warn "Tiles dir present but no local tiles backup"
-    fi
     TILES_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/tiles/ --max-depth 1 2>/dev/null | wc -l" || echo 0)
     echo "cloud_tiles=${TILES_CLOUD:-0}"
+    if [ -n "$TILES_BACKUP" ]; then
+        pass "Tiles backup exists: $(basename "$TILES_BACKUP")"
+    elif [ "${TILES_CLOUD:-0}" -gt 0 ]; then
+        pass "Tiles backup: in cloud (${TILES_CLOUD} file(s))"
+    else
+        warn "Tiles dir present but no local or cloud tiles backup"
+    fi
 else
     echo "cloud_tiles=no_local_tiles_dir"
 fi
@@ -222,7 +226,8 @@ MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.
 echo "modx_manager_code=$MANAGER_CODE"
 
 RESP_TIME=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{time_total}' 'https://$DOMAIN/' 2>/dev/null || echo '0'" | tr ',' '.')
-RESP_MS=$(printf "%.0f" "$RESP_TIME" 2>/dev/null || echo "0")
+# time_total is seconds — report real ms (%.0f on seconds always showed 0ms and never tripped the 2s warn)
+RESP_MS=$(awk -v t="$RESP_TIME" 'BEGIN { printf "%d", t * 1000 }' 2>/dev/null || echo 0)
 echo "response_time_ms=$RESP_MS"
 [ "${RESP_MS:-999}" -lt 2000 ] && pass "Response time: ${RESP_MS}ms" || warn "Response time: ${RESP_MS}ms (slow)"
 

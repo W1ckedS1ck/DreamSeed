@@ -5,7 +5,7 @@
 There are 2 layers of linting:
 
 - **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
-- **CI on GitHub**: `ci.yml` (12 jobs, 8 required for merge)
+- **CI on GitHub**: `ci.yml` (12 jobs on push — 11 on PRs, Deploy Check is push-only; 8 required for merge)
 
 ---
 
@@ -28,9 +28,9 @@ There are 2 layers of linting:
 | 13 | **zizmor** | CI | GitHub Actions security (workflow attacks, secrets) | GitHub Actions |
 | 14 | **Renovate Config Validator** | local + CI | `renovate.json` schema + custom manager patterns (runs in `--fast` and in the pre-commit CI job) | JSON/RegEx |
 | 15 | **Cloudflare IP ranges** | local | vendored `cloudflare-realip.conf` vs live `cloudflare.com/ips` (runs in `--fast`) | Data |
-| 16 | **Secrets audit** | local (full) | `.gitignore` excludes (`secrets/`, `.env`, `*.service`), `secrets/` not tracked in git, required env vars present | Secrets |
+| 16 | **Secrets audit** | local + CI | `.gitignore` excludes (`secrets/`, `.env`, `*.service`), `secrets/` not tracked in git, no hardcoded-secret patterns in tracked files | Secrets |
 | 17 | **Deploy Check** | CI | real `deploy.sh -c` smoke test (env parse, vault, playbook syntax) | orchestration |
-| 18 | **Env parser contract** | local (manual) | `scripts/check_env_contract.sh` — all 3 .env parsers produce identical output on contract fixtures (`tests/env/`); run before editing `lib/env.sh`, `scripts/common_functions.sh` or `scripts/env_loader.py` | bash+python |
+| 18 | **Env parser contract** | local + CI | `scripts/check_env_contract.sh` — all 3 .env parsers produce identical output on contract fixtures (`tests/env/`); run before editing `lib/env.sh`, `scripts/common_functions.sh` or `scripts/env_loader.py` | bash+python |
 | 19 | **terraform-docs** | local (pre-commit) | regenerates per-root `terraform/<root>/README.md` from module docs; one hook per root (aws/hetzner/grafana/cloudflare), graceful skip when binary is absent | HCL → Markdown |
 
 ---
@@ -107,7 +107,7 @@ There are 2 layers of linting:
 
 **Type:** cross-parser behavioral check (not a linter — no static analysis).
 **Purpose:** the same `secrets/.env` flows through three independent parsers (`lib/env.sh` on the deploy controller, `common_functions.sh load_env` in server scripts, `env_loader.py` in the telegram bot). This script runs all three against the fixtures in `tests/env/` and asserts identical `KEY=VALUE` output, plus freezes the documented divergences (blocked vars / malformed lines / `ENV=`: lib/env.sh fails loudly, server side skips silently).
-**Run:** `./scripts/check_env_contract.sh` — **before editing any of the three parsers**. Zero dependencies (bash + python3), not wired into CI by design.
+**Run:** `./scripts/check_env_contract.sh` — **before editing any of the three parsers**. Zero dependencies (bash + python3); also runs in CI as the `env-contract` job on every PR and push (`ci.yml`).
 
 ---
 

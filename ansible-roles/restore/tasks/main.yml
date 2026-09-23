@@ -268,10 +268,13 @@
   become: true
   ansible.builtin.command: mount {{ web_root }}/core/cache
   when: restore_cache_mounted.rc != 0
-  failed_when: false # preserve original tolerance — verify task below reports state
-  changed_when: true
+  register: restore_cache_mount
+  # fstab entry may be missing while playbook-02 still runs (parallel mode) —
+  # tolerate, warn below; php role owns creating the entry.
+  failed_when: false
+  changed_when: restore_cache_mount.rc == 0
 
-- name: Verify tmpfs mount for MODX cache
+- name: Check if MODX cache tmpfs is mounted
   become: true
   ansible.builtin.shell:
     cmd: awk '$2 == path {print $1, $2, $3}' path="{{ web_root }}/core/cache" /proc/mounts
@@ -279,6 +282,11 @@
   register: restore_tmpfs_check
   changed_when: false
   failed_when: false
+
+- name: Warn if MODX cache tmpfs not mounted (perf only — disk cache still works)
+  ansible.builtin.debug:
+    msg: "⚠ MODX cache tmpfs not mounted — cache will use disk until the php role mounts it"
+  when: restore_tmpfs_check.stdout | trim | length == 0
 
 # ==== Restore Database ====
 

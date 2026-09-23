@@ -136,6 +136,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
+          # guard_source_ref blocks dev targets deployed from main — dev-* dispatches from dev
+          REF: ${{ startsWith(steps.parse.outputs.target, 'dev-') && 'dev' || 'main' }}
           WEB_SERVER: ${{ steps.parse.outputs.web_server }}
           MODE: ${{ steps.parse.outputs.mode }}
           IP: ${{ steps.parse.outputs.ip }}
@@ -149,13 +151,6 @@ jobs:
           FIELDS+=("--field" "web_server=$WEB_SERVER")
           FIELDS+=("--field" "mode=${MODE:-parallel}")
           [[ -n "$IP" ]] && FIELDS+=("--field" "server_ip=$IP")
-
-          # guard_source_ref blocks dev targets deployed from main (refusal
-          # protects dev from prod code) — dispatch dev targets from dev.
-          REF=main
-          if [[ "$TARGET" =~ ^dev- ]]; then
-            REF=dev
-          fi
 
           gh workflow run deploy.yml \
             --repo "$REPO" \
@@ -171,16 +166,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
+          REF: ${{ startsWith(steps.parse.outputs.target, 'dev-') && 'dev' || 'main' }}
           ISSUE: ${{ github.event.issue.number }}
           USER: ${{ github.event.comment.user.login }}
           REPO: ${{ github.repository }}
         run: |
           CONFIRM="destroy $TARGET"
-
-          REF=main
-          if [[ "$TARGET" =~ ^dev- ]]; then
-            REF=dev
-          fi
 
           gh workflow run deploy.yml \
             --repo "$REPO" \

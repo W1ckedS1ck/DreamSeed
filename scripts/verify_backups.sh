@@ -125,6 +125,7 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
     ENV=$(detect_env)
     PROJ_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/project${ENV}"
     DB_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/db${ENV}"
+    TILES_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/tiles${ENV}"
 
     # rclone exit code is captured so a failed listing is reported as an
     # error, not silently mistaken for "genuinely zero cloud backups"
@@ -168,6 +169,30 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
         ALERTS+="❌ Cloud backups missing or empty
 "
         CLOUD_OK=0
+    fi
+
+    # Cloud tiles (prod-only upload): missing in cloud + mature local archive =
+    # broken upload. The 2h guard skips the first-deploy window.
+    if [[ -z "$ENV" && -d "$PROJECT_DIR/tiles" ]]; then
+        _ltiles=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1)
+        _tc_err=0
+        TILES_CLOUD_COUNT=$(rclone lsf "$TILES_CLOUD_PATH" --files-only 2>/dev/null | wc -l) || _tc_err=1
+        if [[ "$_tc_err" -eq 1 ]]; then
+            log_ts "✗ Cloud tiles listing failed (rclone error)"
+            ALERTS+="❌ Cloud tiles listing failed (rclone error)
+"
+            CLOUD_OK=0
+        elif [[ -n "$_ltiles" && "${TILES_CLOUD_COUNT:-0}" -eq 0 ]]; then
+            _lage=$((($(date +%s) - $(stat -c %Y "$_ltiles")) / 3600))
+            if [[ "$_lage" -ge 2 ]]; then
+                log_ts "✗ Cloud tiles missing while local archive is ${_lage}h old"
+                ALERTS+="❌ Cloud tiles backup missing in the cloud (local archive ${_lage}h old)
+"
+                CLOUD_OK=0
+            else
+                log_ts "⚠ Cloud tiles not uploaded yet (local archive ${_lage}h old)"
+            fi
+        fi
     fi
 
     export_metric "backup_verification_ok{type=\"cloud\",instance=\"$DOMAIN\"} $CLOUD_OK"

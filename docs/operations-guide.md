@@ -25,7 +25,7 @@ Common causes:
 - **AWS:** Security group not attached, wrong VPC, EBS volume stuck
 - **Hetzner:** Firewall blocking your IP, image not found
 
-Fix: destroy the broken box (`gh workflow run deploy.yml --ref dev -f environment=<target> -f action=destroy -f confirm="destroy <target>"` or `./deploy.sh <target> -x` locally) → fix the issue → repeat deploy.
+Fix: destroy the broken box — `gh workflow run deploy.yml --ref main -f environment=<target> -f action=destroy -f confirm="destroy <target>"` for prod targets (`--ref dev` for dev targets) → fix the issue → repeat deploy.
 
 ### cloud-init hang (step waits 5+ min)
 
@@ -39,7 +39,7 @@ If Hetzner `user_data` script failed (e.g., `apt update` timeout):
 
 - The cloud-init script is in `terraform/hetzner/cloud-init.tftpl` (template rendered by Terraform `templatefile()`, see `main.tf`)
 - Common: apt repo timeout, `ADDITIONAL_SSH_KEYS` contains invalid key
-- Fix: fix the issue, then `./deploy.sh <target> -n -i <ip> --no-dns` (re-run Ansible only)
+- Fix: fix the issue, then re-run the Deploy workflow with `server_ip=<ip>` (skips Terraform; workflow re-runs Ansible only)
 
 ### certbot SSL failure
 
@@ -306,7 +306,7 @@ ssh-keygen -t ed25519 -f ~/.ssh/new_deploy_key -C "github-actions@dreamseed"
 #    GitHub → Settings → Secrets → Actions → SSH_PRIVATE_KEY
 
 # 3. Redeploy to push new key to all servers
-./deploy.sh prod -n -i <ip>
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx -f server_ip=<ip>
 
 # 4. Remove old key from:
 #    - ~/.ssh/authorized_keys on all servers
@@ -322,7 +322,8 @@ ssh-keygen -t ed25519 -f ~/.ssh/new_deploy_key -C "github-actions@dreamseed"
 # 3. Update:
 #    - secrets/.env (TG_TOKEN)
 #    - GitHub Secret (TG_TOKEN)
-# 4. Redeploy: ./deploy.sh prod -n -i <ip>
+# 4. Redeploy (restarts the bot with the new token)
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx -f server_ip=<ip>
 # 5. Notify the team (old token can no longer send messages)
 ```
 
@@ -340,7 +341,7 @@ ssh-keygen -t ed25519 -f ~/.ssh/new_deploy_key -C "github-actions@dreamseed"
 #    - GitHub Secret (CLOUDFLARE_API_TOKEN)
 
 # 4. Redeploy to renew any certs that used the old token
-./deploy.sh prod -n -i <ip>
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx -f server_ip=<ip>
 ```
 
 ### Scenario D: MariaDB credentials leaked
@@ -352,15 +353,15 @@ DB root authenticates via `auth_socket` (no password, local root only). The app 
 ansible-vault edit secrets/.env   # change DB_PASS
 
 # 2. Redeploy to push the new password to the server + update /home/ubuntu/.my.cnf
-./deploy.sh prod -n -i <ip>
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx -f server_ip=<ip>
 ```
 
 If the server itself is compromised (attacker has root → can read `/home/ubuntu/.my.cnf` and everything else):
 
 ```bash
 # 1. Rebuild the server (root access == game over, don't patch)
-./deploy.sh prod -x   # destroy
-./deploy.sh prod -n   # rebuild
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=destroy -f confirm="destroy prod-hetz"
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx
 
 # 2. All data is restored from backup during deploy
 # 3. Rotate ALL secrets (DB_PASS, GRAFANA_PASS, TG_TOKEN, CLOUDFLARE_API_TOKEN, ...)
@@ -389,8 +390,8 @@ If an attacker gains root access to the server:
 #    Hetzner: console → server → snapshots → create snapshot
 
 # 3. REBUILD from scratch:
-./deploy.sh prod -x   # destroy
-./deploy.sh prod -n   # fresh deploy + restore from backup
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=destroy -f confirm="destroy prod-hetz"
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx
 
 # 4. After rebuild:
 #    - Rotate ALL secrets (TG_TOKEN, DB_PASS, GRAFANA_PASS, CLOUDFLARE_API_TOKEN)

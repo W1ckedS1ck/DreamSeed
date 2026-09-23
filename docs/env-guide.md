@@ -273,6 +273,14 @@ datasource settings of each stack.
 
 ---
 
+## Hetzner Cloud
+
+| Variable | Notes |
+|----------|-------|
+| `HCLOUD_TOKEN` | Hetzner Cloud API token — primary name for `dev-hetz`. On `prod-hetz` the prefixed `PROD_HETZ_HCLOUD_TOKEN` wins, with unprefixed `HCLOUD_TOKEN` as backward-compat fallback (`apply_target_vars` / `lib/env.sh`). |
+
+---
+
 ## Legacy
 
 The following variables are no longer used but kept for reference:
@@ -284,4 +292,3 @@ The following variables are no longer used but kept for reference:
 | `HEALTHCHECK_GDRIVE_UUID` | Migrated |
 | `HEALTHCHECK_REPORT_DAILY_UUID` | Migrated |
 | `HEALTHCHECK_REPORT_WEEKLY_UUID` | Migrated |
-| `HCLOUD_TOKEN` / `HETZNER_*` (unprefixed) | Fallback if `DEV_HETZ_*` / `PROD_HETZ_*` are empty |

@@ -28,5 +28,13 @@ INVEOF
         for v in "${!BETTERUPTIME_@}"; do unset "$v"; done
     fi
 
-    mkdir -p ~/.ansible/facts_cache
+    # Per-target fact cache: every inventory uses the same hostname
+    # ("dreamseed"), so a shared jsonfile cache would bleed facts between
+    # environments for up to fact_caching_timeout (30 min) — e.g. RAM-derived
+    # FPM/innodb sizes or a cached php_version from the other machine.
+    export ANSIBLE_CACHE_PLUGIN_CONNECTION="${HOME}/.ansible/facts_cache/${TF_WORKSPACE}"
+    mkdir -p "$ANSIBLE_CACHE_PLUGIN_CONNECTION"
+    # Old flat layout left hostname-named JSON at the cache root (the cross-env
+    # bleed source) — remove now that caches live in per-workspace subdirs.
+    find "${HOME}/.ansible/facts_cache" -maxdepth 1 -type f -name '*.json' -delete 2>/dev/null || true
 }

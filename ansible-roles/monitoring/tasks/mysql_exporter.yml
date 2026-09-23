@@ -30,6 +30,7 @@
   become: true
   when: db_pass | default('') | length > 0
   no_log: true
+  notify: Restart MySQL Exporter
 
 - name: Deploy MySQL Exporter service
   ansible.builtin.copy:

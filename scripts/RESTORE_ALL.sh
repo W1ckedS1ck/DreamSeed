@@ -19,6 +19,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
+# Cloud archives (project ~470MB, tiles ~380MB) can exceed the 600s
+# rclone_retry cap on a slow Drive day — the timeout would kill a healthy
+# copy mid-flight. Match the upload script's 1800s.
+export RCLONE_CMD_TIMEOUT="${RCLONE_CMD_TIMEOUT:-1800}"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX,,}"
 
@@ -180,7 +184,7 @@ select_backup_cloud() {
     local pattern="$2"
 
     local files=()
-    while IFS= read -r f; do files+=("$f"); done < <(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/" --files-only --format tps 2>/dev/null | grep "$pattern" | sort -t';' -k1 -r || true)
+    while IFS= read -r f; do files+=("$f"); done < <(rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/" --files-only --format tps 2>/dev/null | grep "$pattern" | sort -t';' -k1 -r || true)
 
     if [ ${#files[@]} -eq 0 ]; then
         echo -e "${RED}No backups found on GDrive ($remote_path)${NC}" >&2
@@ -331,18 +335,18 @@ if [ "$MODE" != "--auto-latest" ]; then
     # Try to select Redis backup if "all" was chosen (optional — doesn't fail if not found)
     if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]]; then
         if [ "$SOURCE" = "cloud" ]; then
-            SELECTED_REDIS=$(select_backup_cloud "redis${ENV_SUFFIX}" "redis_dump_" 2>/dev/null) || SELECTED_REDIS=""
+            SELECTED_REDIS=$(select_backup_cloud "redis${ENV_SUFFIX}" "redis_dump_") || SELECTED_REDIS=""
         else
-            SELECTED_REDIS=$(select_backup "$BACKUP_DIR/redis" "*.rdb" 2>/dev/null) || SELECTED_REDIS=""
+            SELECTED_REDIS=$(select_backup "$BACKUP_DIR/redis" "*.rdb") || SELECTED_REDIS=""
         fi
     fi
 
     # Tiles restore alongside the project (optional).
     if [ "$RESTORE_PROJECT" -eq 1 ]; then
         if [ "$SOURCE" = "cloud" ]; then
-            SELECTED_TILES=$(select_backup_cloud "tiles${ENV_SUFFIX}" "DreamSeed_tiles_" 2>/dev/null) || SELECTED_TILES=""
+            SELECTED_TILES=$(select_backup_cloud "tiles${ENV_SUFFIX}" "DreamSeed_tiles_") || SELECTED_TILES=""
         else
-            SELECTED_TILES=$(select_backup "$BACKUP_DIR/tiles" "DreamSeed_tiles_*.tar.gz" 2>/dev/null) || SELECTED_TILES=""
+            SELECTED_TILES=$(select_backup "$BACKUP_DIR/tiles" "DreamSeed_tiles_*.tar.gz") || SELECTED_TILES=""
         fi
     fi
 
@@ -396,7 +400,7 @@ else
     _cloud_listing=""
     if [ -z "$SELECTED_DB" ] || [ "$_db_age" -ge 21600 ] || [ -z "$SELECTED_PROJECT" ]; then
         echo "Local backups missing or DB $((_db_age / 3600))h old — checking cloud..."
-        _cloud_listing=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive --fast-list 2>/dev/null) || {
+        _cloud_listing=$(rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive --fast-list 2>/dev/null) || {
             echo -e "${YELLOW}  ⚠ Cloud listing failed — using local backups only${NC}" >&2
             _cloud_listing=""
         }
@@ -416,7 +420,7 @@ else
             if [ -n "$cloud_new" ] && { [ -z "$cur" ] || [ "$cloud_new" \> "$(basename "$cur")" ]; }; then
                 echo "  ${subdir}: downloading newest cloud backup ${cloud_new}" >&2
                 mkdir -p "$dir"
-                if rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}/${cloud_new}" "$dir/" >/dev/null 2>&1; then
+                if rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}/${cloud_new}" "$dir/" >/dev/null 2>&1; then
                     echo "$dir/$cloud_new"
                     return 0
                 fi
@@ -432,11 +436,11 @@ else
 
     # Tiles are content-addressed — _fetch's name sort can't rank them; use mtime.
     if [ -z "$SELECTED_TILES" ]; then
-        _ctiles=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/tiles/" --files-only --format tp 2>/dev/null | sort | tail -1 | cut -d';' -f2 || true)
+        _ctiles=$(rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/tiles/" --files-only --format tp 2>/dev/null | sort | tail -1 | cut -d';' -f2 || true)
         if [ -n "$_ctiles" ]; then
             echo "  tiles: downloading newest cloud backup $_ctiles" >&2
             mkdir -p "$BACKUP_DIR/tiles"
-            if rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/tiles/$_ctiles" "$BACKUP_DIR/tiles/" >/dev/null 2>&1; then
+            if rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/tiles/$_ctiles" "$BACKUP_DIR/tiles/" >/dev/null 2>&1; then
                 SELECTED_TILES="$BACKUP_DIR/tiles/$_ctiles"
             else
                 echo -e "${YELLOW}  ⚠ tiles: cloud download failed${NC}" >&2

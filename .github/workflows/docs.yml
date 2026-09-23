@@ -121,8 +121,12 @@ jobs:
           echo "count=$(git status --porcelain | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
           git add -A
           git commit -m "Sync docs/ from ${GITHUB_REF_NAME} (${GITHUB_SHA})"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
-          git push
+          # Token-free remote URL: GH_TOKEN is expanded only inside the
+          # credential helper (from env), never appearing in git's argv or in
+          # .git/config the way an https://x-access-token@ URL would.
+          git remote set-url origin "https://github.com/${{ github.repository }}.wiki.git"
+          # shellcheck disable=SC2016 # ${GH_TOKEN} must expand inside the helper, not here
+          git -c credential.helper='!f() { echo "username=x-access-token"; echo "password=${GH_TOKEN}"; }; f' push
 
       - name: Write job summary
         run: |

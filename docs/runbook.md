@@ -1157,7 +1157,7 @@ sudo fail2ban-client status
 #### Unbanning a blocked developer (false positive)
 
 The `modx-admin` jail counts `POST /connectors/index.php` as brute-force
-attempts, with a high `maxretry` (150/10min) so normal manager AJAX traffic
+attempts, with a high `maxretry` (1000/10min) so normal manager AJAX traffic
 doesn't trip it. There is no `ignoreregex` exemption anymore — an earlier
 Referer/UA-based exemption was removed because it was spoofable (any client
 could send `/manager/` Referer + a browser UA to bypass the jail). A false
@@ -1775,11 +1775,11 @@ It will:
 
 Pre-restore snapshots (`~/.tmp_pre_restore_*`) are preserved for manual recovery. Each run cleans up only **its own** directory and only on success — snapshots from failed runs accumulate until deleted manually.
 
-### B) Server is dead — rebuild from scratch via CLI
+### B) Server is dead — rebuild from scratch via gh CLI
 
 ```bash
-# Local machine
-./deploy.sh prod-hetz -n -i <NEW_IP>
+# Deploy a fresh server (production environment approval required)
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx -f mode=parallel
 
 # After deploy completes, SSH in and restore data from cloud:
 ssh dream "bash /home/ubuntu/Scripts/RESTORE_ALL.sh"

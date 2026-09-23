@@ -8,6 +8,7 @@
 
 - name: Deploy Grafana htpasswd file (nginx basic auth in front of /grafana)
   become: true
+  no_log: true
   ansible.builtin.copy:
     dest: /etc/nginx/.grafana_htpasswd
     content: "{{ grafana_htpasswd_user }}:{{ grafana_htpasswd }}\n"
