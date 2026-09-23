@@ -23,7 +23,7 @@ db_min_tables: 100
 # ==== PHP ====
 # HARD LOCK: MODX 2.x is incompatible with PHP > 8.3. Never bump (renovate rule + deploy/lint guards enforce).
 
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3', true) }}" # renovate: depName=php
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3.33', true) }}" # renovate: depName=php
 
 # ==== Redis ====
 
@@ -60,7 +60,7 @@ fail2ban_ignoreip: ""
 
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented
 # expected version — Renovate PRs are the release radar, deploy log shows drift.
-grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.2.1', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.2.2', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
 # Grafana admin password (used by /etc/grafana/grafana.env systemd EnvironmentFile)
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 # Nginx-level auth in front of /grafana (defense-in-depth: gates the
@@ -75,12 +75,12 @@ monitoring_node_version: "{{ lookup('env', 'MONITORING_NODE_VERSION') | default(
 monitoring_nginx_version: "{{ lookup('env', 'MONITORING_NGINX_VERSION') | default('1.5.3', true) }}" # renovate: depName=nginxinc/nginx-prometheus-exporter datasource=github-releases
 monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | default('1.1.1', true) }}" # renovate: depName=Lusitaniae/apache_exporter datasource=github-releases
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.20.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
-monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.151.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.151.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.91.1', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
+monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.152.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.152.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
+monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.92.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
 # Pinned uv binary — install path: release .sha256 asset -> get_url checksum (same pattern as setup-gitleaks)
-uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.11', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
+uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.18', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
 # Bot venv: created by uv (system CPython 3.12 on 24.04, uv-managed on later releases)
 bot_python_version: "3.12"
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"
@@ -130,7 +130,7 @@ additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per lin
 faro_enabled: true
 faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
 faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
-faro_sdk_version: "2.11.0"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
+faro_sdk_version: "2.12.1"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
 
 # ==== SSL ====
 
