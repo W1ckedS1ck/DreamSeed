@@ -23,9 +23,7 @@ PROJECT_KEEP="${BACKUP_PROJECT_KEEP:-${PROJECT_KEEP:-5}}"
 DB_KEEP="${BACKUP_DB_KEEP:-${DB_KEEP:-15}}"
 TILES_KEEP="${BACKUP_TILES_KEEP:-${TILES_KEEP:-3}}"
 
-# Map tiles live under the project dir but are backed up SEPARATELY: they are
-# large (hundreds of MB) and almost never change, so folding them into the
-# project archive would re-upload the whole thing on every project tweak.
+# Tiles are large and rarely change — keep them out of the project archive.
 TILES_DIR="${PROJECT_DIR}/tiles"
 
 DOMAIN="${DOMAIN:-unknown}"
@@ -126,12 +124,8 @@ fi
 
 log_ts "Project: $PROJECT_STATUS"
 
-# ==== Map tiles backup (separate artifact, only when content changes) ====
-# The archive name embeds a metadata hash (path/size/mtime) of the tiles tree,
-# so an unchanged tree maps to the same filename and is neither re-tarred here
-# nor re-uploaded (the uploader skips names already present in the cloud). This
-# also dedupes across ephemeral servers (fresh test boxes restore the same
-# tiles -> same name -> no re-upload).
+# ==== Map tiles backup (separate artifact, only when changed) ====
+# Name embeds a tree hash → unchanged tiles are neither re-tarred nor re-uploaded.
 TILES_STATUS=""
 if [[ -d "$TILES_DIR" ]]; then
     TILES_HASH=$({ sudo find "$TILES_DIR" -type f -printf '%P\t%s\t%T@\n' 2>/dev/null || true; } | LC_ALL=C sort | sha256sum | cut -c1-16)

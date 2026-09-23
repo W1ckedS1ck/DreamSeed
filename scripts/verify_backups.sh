@@ -42,8 +42,7 @@ else
 fi
 
 # ==== Verify local map tiles backup (separate artifact) ====
-# Only meaningful when the site actually has a tiles tree; the archive itself is
-# created only when tiles change, so absence with no tiles dir is expected.
+# Only when the site has tiles; absence with no tiles dir is expected.
 if [[ -d "$PROJECT_DIR/tiles" ]]; then
     TILES_BACKUP=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1)
     if [[ -n "$TILES_BACKUP" && -f "$TILES_BACKUP" ]]; then

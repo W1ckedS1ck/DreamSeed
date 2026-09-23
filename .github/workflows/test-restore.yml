@@ -230,9 +230,7 @@ jobs:
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
           echo "=== Destroying data to simulate disaster ==="
-          # Unmount the MODX cache tmpfs first: rm -rf cannot remove a busy
-          # mountpoint (harmless but noisy), and the mount would otherwise ride
-          # along into RESTORE_ALL's .bak dir.
+          # Unmount the MODX cache tmpfs first (rm can't remove a busy mountpoint).
           ssh ubuntu@"$SERVER_IP" "mountpoint -q /var/www/html/core/cache && sudo umount /var/www/html/core/cache 2>/dev/null; sudo rm -rf /var/www/html/* /var/www/html/.[!.]* 2>/dev/null; sudo rm -rf /var/www/html" || true
           ssh ubuntu@"$SERVER_IP" "sudo mysql -e 'DROP DATABASE modx_db; CREATE DATABASE modx_db;'" || true
           # FLUSHALL/FLUSHDB are renamed off (redis.conf hardening), so clear via scan+del
@@ -431,9 +429,7 @@ jobs:
           retention-days: 7
 
       # --- Phase 4: teardown ---
-      # Destroy only on a fully green run (or when the server was never created).
-      # A FAILED run keeps the server alive so the failure can be debugged / the
-      # task finished in place — no reprovision needed. keep_server=true always keeps it.
+      # Destroy only on a green drill; a failed run keeps the server for debugging.
       - name: Destroy test server
         if: ${{ inputs.keep_server == false && steps.deploy.outcome == 'success' && steps.verify_local.outcome == 'success' && steps.verify_cloud.outcome == 'success' && steps.service_tests.outcome == 'success' }}
         id: destroy

@@ -150,9 +150,7 @@
         state: absent
       when: restore_latest_project.stdout | trim != ""
 
-# Map tiles are excluded from the project archive (they are large and rarely
-# change — see smart_backup.sh) and restored from their own cloud artifact.
-# Optional: sites without a tiles tree simply have no tiles backup.
+# Tiles are excluded from the project archive; restore from their own artifact.
 - name: Restore map tiles from Google Drive
   when:
     - not restore_site_exists.stat.exists

@@ -337,8 +337,7 @@ if [ "$MODE" != "--auto-latest" ]; then
         fi
     fi
 
-    # Map tiles are a separate artifact restored alongside the project (optional
-    # — absent when the tiles tree never changed / has no backup yet).
+    # Tiles restore alongside the project (optional).
     if [ "$RESTORE_PROJECT" -eq 1 ]; then
         if [ "$SOURCE" = "cloud" ]; then
             SELECTED_TILES=$(select_backup_cloud "tiles${ENV_SUFFIX}" "DreamSeed_tiles_" 2>/dev/null) || SELECTED_TILES=""
@@ -431,9 +430,7 @@ else
     SELECTED_DB=$(_fetch "$BACKUP_DIR/db" "db" "$SELECTED_DB")
     SELECTED_REDIS=$(_fetch "$BACKUP_DIR/redis" "redis" "$SELECTED_REDIS")
 
-    # Tiles are content-addressed (name = content hash), so the generic
-    # name-sorted _fetch can't rank them. Prefer the local archive; otherwise
-    # download the newest cloud one by mtime.
+    # Tiles are content-addressed — _fetch's name sort can't rank them; use mtime.
     if [ -z "$SELECTED_TILES" ]; then
         _ctiles=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/tiles/" --files-only --format tp 2>/dev/null | sort | tail -1 | cut -d';' -f2 || true)
         if [ -n "$_ctiles" ]; then
@@ -585,11 +582,8 @@ echo ""
 
 PROJECT_STATUS="⏭️ Skipped"
 
-# MODX cache lives on a tmpfs mount (fstab) at $PROJECT_DIR/core/cache. Renaming
-# the project dir drags the mount along (mounts follow the dentry), so rm -rf
-# then fails on the busy mountpoint, the tmpfs is orphaned inside .bak, and the
-# restored project is left without its RAM cache. Unmount before moving/removing
-# the tree and remount after. Mirrors ansible-roles/restore/tasks/main.yml.
+# MODX cache is a tmpfs mount; unmount before mv/rm, remount after (else the
+# mount rides into .bak and rm -rf fails on the busy mountpoint).
 umount_cache_tmpfs() { mountpoint -q "$1/core/cache" 2>/dev/null && sudo umount "$1/core/cache" 2>/dev/null || true; }
 mount_cache_tmpfs() {
     mountpoint -q "$PROJECT_DIR/core/cache" 2>/dev/null && return 0
@@ -663,8 +657,7 @@ fi
 echo ""
 
 # ==== STEP 6.5: Restore map tiles ====
-# Tiles are a separate artifact (large, rarely changing) excluded from the
-# project archive; restore them on top of the just-extracted project.
+# Tiles are excluded from the project archive — restore separately.
 
 TILES_STATUS="⏭️ Skipped"
 

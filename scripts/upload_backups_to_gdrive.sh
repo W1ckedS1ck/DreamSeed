@@ -9,9 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
-# ==== Lock against parallel runs ====
-# A changed map-tiles archive is large; its upload can outlast the hourly cron,
-# so guard against overlapping runs (same flock pattern as smart_backup.sh).
+# ==== Lock against parallel runs (slow tile uploads can outlast the cron) ====
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
 LOCK_FILE="$LOCK_DIR/upload_gdrive.lock"
@@ -115,12 +113,7 @@ if [[ -d "$REDIS_DIR" ]]; then
     upload_new_files "$REDIS_DIR" "redis_dump_*.rdb" "$REMOTE_BASE/redis${ENV_SUFFIX}/" 600 "Redis"
 fi
 
-# ==== 4. Upload map tiles ====
-# Prod-only: tiles are the source of truth on prod, and dev/test always restore
-# PROD paths (their own uploads are never consumed — see detect_env()/RESTORE_ALL).
-# Skipping the (hundreds-of-MB) tiles upload on non-prod keeps ephemeral test
-# drills from re-uploading it every run for no benefit. Names are
-# content-addressed, so even on prod an unchanged tiles tree is skipped.
+# ==== 4. Upload map tiles (prod-only; content-addressed names) ====
 if [[ -d "$TILES_DIR" && -z "$ENV_SUFFIX" ]]; then
     upload_new_files "$TILES_DIR" "DreamSeed_tiles_*.tar.gz" "$REMOTE_BASE/tiles${ENV_SUFFIX}/" 1800 "Tiles"
 fi
