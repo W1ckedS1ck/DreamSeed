@@ -37,7 +37,8 @@ jobs:
   restore-test:
     name: Restore test (Hetzner)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 60 min was cut short on a Google-throttled day (cloud restore 81s → 688s).
+    timeout-minutes: 90
     outputs:
       server_ip: ${{ steps.server-ip.outputs.ip }}
       screenshot: ${{ steps.shot_check.outputs.exists }}
