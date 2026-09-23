@@ -7,7 +7,8 @@ name: "[B] Restore Test"
 #   1. local restore (backups present on the server)
 #   2. cloud restore (local backups removed -> RESTORE_ALL pulls from GDrive,
 #      the same path [M] Rollback uses)
-# Server is destroyed afterwards regardless of outcome.
+# A green run destroys the ephemeral server; a FAILED run keeps it alive for
+# debugging (finish the task in place — no reprovision). keep_server=true forces keep.
 
 on:
   schedule:
@@ -427,8 +428,11 @@ jobs:
           retention-days: 7
 
       # --- Phase 4: teardown ---
+      # Destroy only on a fully green run (or when the server was never created).
+      # A FAILED run keeps the server alive so the failure can be debugged / the
+      # task finished in place — no reprovision needed. keep_server=true always keeps it.
       - name: Destroy test server
-        if: always() && inputs.keep_server == false
+        if: ${{ inputs.keep_server == false && steps.deploy.outcome == 'success' && steps.verify_local.outcome == 'success' && steps.verify_cloud.outcome == 'success' && steps.service_tests.outcome == 'success' }}
         id: destroy
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
@@ -457,6 +461,8 @@ jobs:
           CLOUD_REDIS_SESSIONS: ${{ steps.verify_cloud.outputs.cloud_redis_sessions }}
           TEST_SUMMARY: ${{ steps.service_tests.outputs.test_summary }}
           TEST_FAILS: ${{ steps.service_tests.outputs.test_fails }}
+          DESTROY_OUTCOME: ${{ steps.destroy.outcome }}
+          KEEP_SERVER: ${{ inputs.keep_server }}
         run: |
           RESTORE_LOCAL="${{ steps.restore_local.outcome }}"
           RESTORE_CLOUD="${{ steps.restore_cloud.outcome }}"
@@ -501,6 +507,21 @@ jobs:
             echo ""
             echo "### Evidence"
             echo "📸 Screenshot preview published inline in the **Publish screenshot preview** job below — refresh in ~1 min"
+            if [[ -n "$SERVER_IP" && "$DESTROY_OUTCOME" != "success" ]]; then
+              echo ""
+              echo "### ⚠️ Server kept alive (not destroyed)"
+              if [[ "$KEEP_SERVER" == "true" ]]; then
+                echo "Requested via \`keep_server=true\`."
+              else
+                echo "The run did not succeed, so the server was kept for debugging."
+              fi
+              echo ""
+              echo "SSH: \`ssh -i ~/.ssh/Vitali.pem ubuntu@$SERVER_IP\`"
+              echo ""
+              echo "To tear it down: re-run this workflow with **keep_server = false** once fixed (a green run destroys it), or destroy the \`test\` Terraform workspace."
+              echo ""
+              echo "Note: the next run reuses the existing \`test\` server instead of recreating it."
+            fi
           } >> "$M"
 
       - name: Cleanup secrets
