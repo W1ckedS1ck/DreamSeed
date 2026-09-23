@@ -227,6 +227,22 @@
         msg: "✓ Restored map tiles: {{ restore_latest_tiles.stdout | trim }}"
       when: restore_latest_tiles.stdout | trim != ""
 
+# Fail-closed: a new-format project (empty tiles/ marker) without its tiles
+# artifact must not provision a map-less server silently.
+- name: Fail when project expects tiles but none were restored
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      if [ -d "{{ web_root }}/tiles" ] && [ -z "$(ls -A "{{ web_root }}/tiles")" ]; then
+        echo "project archive carries an empty tiles/ marker but no tiles backup was restored — restore would lose the map" >&2
+        exit 1
+      fi
+      exit 0
+  changed_when: false
+  when:
+    - not restore_site_exists.stat.exists
+    - restore_latest_tiles is not defined or restore_latest_tiles.stdout | default('') | trim == ""
+
 - name: Skip restore (already exists)
   ansible.builtin.debug:
     msg: "⊘ Site already exists at {{ web_root }}, skipping restore"

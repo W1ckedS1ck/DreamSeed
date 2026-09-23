@@ -505,9 +505,18 @@ PYEOF
     # Pre-extraction layout check: the archive's top-level dir must match the
     # project dir name (smart_backup archives as "-C dirname basename"). Catches
     # a wrong/renamed archive BEFORE extraction, not via post-hoc rollback.
-    _topdir=$(timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | head -1 | cut -d/ -f1 || true)
+    _proj_listing=$(timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null || true)
+    _topdir=$(printf '%s\n' "$_proj_listing" | head -1 | cut -d/ -f1 || true)
     if [[ -z "$_topdir" || "$_topdir" != "$(basename "$PROJECT_DIR")" ]]; then
         echo -e "${RED}✗ Project archive top-level '${_topdir:-<empty>}' != expected '$(basename "$PROJECT_DIR")': $(basename "$SELECTED_PROJECT")${NC}"
+        exit 1
+    fi
+    # New-format archives keep an empty tiles/ marker (contents live in the tiles
+    # artifact) — without that artifact the restore would silently lose the map.
+    if printf '%s\n' "$_proj_listing" | grep -qE '^[^/]+/tiles/$' \
+        && ! printf '%s\n' "$_proj_listing" | grep -qE '^[^/]+/tiles/.' \
+        && [ -z "$SELECTED_TILES" ]; then
+        echo -e "${RED}✗ Project archive expects tiles (empty tiles/ marker) but no tiles backup — restore would lose the map${NC}"
         exit 1
     fi
     echo -e "${GREEN}✓ Project archive: OK${NC}"

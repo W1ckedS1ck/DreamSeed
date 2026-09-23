@@ -102,20 +102,29 @@ upload_new_files() {
     done <<<"$files"
 }
 
-# ==== 1. Upload project ====
-upload_new_files "$PROJECT_DIR" "DreamSeed_*.tar.gz" "$REMOTE_BASE/project${ENV_SUFFIX}/" 1800 "Project"
-
-# ==== 2. Upload database ====
-upload_new_files "$DB_DIR" "db_*.sql.gz" "$REMOTE_BASE/db${ENV_SUFFIX}/" 1800 "DB"
-
-# ==== 3. Upload Redis ====
-if [[ -d "$REDIS_DIR" ]]; then
-    upload_new_files "$REDIS_DIR" "redis_dump_*.rdb" "$REMOTE_BASE/redis${ENV_SUFFIX}/" 600 "Redis"
+# ==== 1. Upload map tiles FIRST (prod-only) ====
+# Invariant: a cloud project archive without tiles must never appear before its
+# tiles artifact — otherwise a restore in that window silently loses the map.
+TILES_PENDING=0
+if [[ -d "$TILES_DIR" && -z "$ENV_SUFFIX" ]]; then
+    _err_before=$HAS_ERROR
+    upload_new_files "$TILES_DIR" "DreamSeed_tiles_*.tar.gz" "$REMOTE_BASE/tiles${ENV_SUFFIX}/" 1800 "Tiles"
+    [[ "$HAS_ERROR" -ne "$_err_before" ]] && TILES_PENDING=1
 fi
 
-# ==== 4. Upload map tiles (prod-only; content-addressed names) ====
-if [[ -d "$TILES_DIR" && -z "$ENV_SUFFIX" ]]; then
-    upload_new_files "$TILES_DIR" "DreamSeed_tiles_*.tar.gz" "$REMOTE_BASE/tiles${ENV_SUFFIX}/" 1800 "Tiles"
+# ==== 2. Upload project ====
+if [[ "$TILES_PENDING" -eq 1 ]]; then
+    echo "  Project: ⏭ skipped this run — tiles upload failed, keeping the old cloud archive"
+else
+    upload_new_files "$PROJECT_DIR" "DreamSeed_*.tar.gz" "$REMOTE_BASE/project${ENV_SUFFIX}/" 1800 "Project"
+fi
+
+# ==== 3. Upload database ====
+upload_new_files "$DB_DIR" "db_*.sql.gz" "$REMOTE_BASE/db${ENV_SUFFIX}/" 1800 "DB"
+
+# ==== 4. Upload Redis ====
+if [[ -d "$REDIS_DIR" ]]; then
+    upload_new_files "$REDIS_DIR" "redis_dump_*.rdb" "$REMOTE_BASE/redis${ENV_SUFFIX}/" 600 "Redis"
 fi
 
 # ==== 5. Clean old backups in cloud ====

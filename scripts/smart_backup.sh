@@ -107,7 +107,7 @@ else
     if timeout 1800 sudo tar -czf "$PROJECT_TMP" \
         --exclude="$(basename "$PROJECT_DIR")/core/cache" \
         --exclude="$(basename "$PROJECT_DIR")/core/backup" \
-        --exclude="$(basename "$PROJECT_DIR")/tiles" \
+        --exclude="$(basename "$PROJECT_DIR")/tiles/*" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null &&
         timeout 300 sudo tar -tzf "$PROJECT_TMP" >/dev/null 2>&1; then
         sudo mv "$PROJECT_TMP" "$PROJECT_BACKUP"
