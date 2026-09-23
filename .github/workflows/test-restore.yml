@@ -40,6 +40,7 @@ jobs:
     timeout-minutes: 60
     outputs:
       server_ip: ${{ steps.server-ip.outputs.ip }}
+      screenshot: ${{ steps.shot_check.outputs.exists }}
 
     steps:
       # Silence the "hint: Using 'master' as the initial branch" noise emitted by
@@ -373,11 +374,16 @@ jobs:
           cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
           cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
 
-      - name: Upload screenshot to Pages
+      # Upload as a plain artifact; the publish job merges it with the other
+      # publisher's site and uploads the combined github-pages artifact
+      # (upload-pages-artifact is fixed to that name, so it must run only once).
+      - name: Stage site content for Pages
         if: steps.shot_check.outputs.exists == 'yes'
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
+          name: pages-own
           path: /tmp/pages-screenshot
+          if-no-files-found: error
 
       - name: Upload screenshots
         if: steps.shot_check.outputs.exists == 'yes'
@@ -546,17 +552,43 @@ jobs:
     # Publish whenever a server actually existed (screenshot captured before
     # teardown) — even when the restore test failed, so the evidence is visible
     # under the spoiler instead of a dead "Download screenshot" link.
-    if: needs.restore-test.outputs.server_ip != ''
+    if: needs.restore-test.outputs.server_ip != '' && needs.restore-test.outputs.screenshot == 'yes'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: pages
+      group: pages-site
       cancel-in-progress: false
     permissions:
       contents: read
+      actions: read
       pages: write
       id-token: write
     steps:
+      # Pages artifacts replace the whole site: merge this run's content with
+      # the other publisher's last site under the shared pages-site lock, so
+      # neither workflow erases the other's files/history.
+      - name: Merge site from the other publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OTHER_WORKFLOW: deploy.yml
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pages-site
+          gh run download "$GITHUB_RUN_ID" -n pages-own -D /tmp/pages-site
+          OTHER_RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$OTHER_WORKFLOW/runs?status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+          if [ -n "$OTHER_RUN" ]; then
+            if gh run download "$OTHER_RUN" -n github-pages -D /tmp/pages-site-other; then
+              cp -rn /tmp/pages-site-other/. /tmp/pages-site/
+            else
+              echo "::warning::could not download $OTHER_WORKFLOW site artifact (expired?) — its files will be replaced by this publish"
+            fi
+          fi
+
+      - name: Upload merged site for Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: /tmp/pages-site
+
       - name: Deploy screenshot preview
         id: pages
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

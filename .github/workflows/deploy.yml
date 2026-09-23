@@ -325,11 +325,15 @@ jobs:
           url: "https://${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}/"
           output: /tmp/pages-screenshot/${{ inputs.environment }}-${{ github.run_id }}.png
 
-      - name: Upload screenshot to Pages
+      # Plain artifact — the publish job merges it with the other publisher's
+      # site before uploading github-pages (that name allows one upload/run).
+      - name: Stage site content for Pages
         if: success() && inputs.action == 'deploy'
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
+          name: pages-own
           path: /tmp/pages-screenshot
+          if-no-files-found: error
 
       - name: Destroy
         if: inputs.action == 'destroy'
@@ -515,12 +519,38 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: pages
+      group: pages-site
       cancel-in-progress: false
     permissions:
+      actions: read
       pages: write
       id-token: write
     steps:
+      # Pages artifacts replace the whole site: merge this run's content with
+      # the other publisher's last site under the shared pages-site lock, so
+      # neither workflow erases the other's files/history.
+      - name: Merge site from the other publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OTHER_WORKFLOW: test-restore.yml
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pages-site
+          gh run download "$GITHUB_RUN_ID" -n pages-own -D /tmp/pages-site
+          OTHER_RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$OTHER_WORKFLOW/runs?status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+          if [ -n "$OTHER_RUN" ]; then
+            if gh run download "$OTHER_RUN" -n github-pages -D /tmp/pages-site-other; then
+              cp -rn /tmp/pages-site-other/. /tmp/pages-site/
+            else
+              echo "::warning::could not download $OTHER_WORKFLOW site artifact (expired?) — its files will be replaced by this publish"
+            fi
+          fi
+
+      - name: Upload merged site for Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: /tmp/pages-site
+
       - name: Deploy screenshot preview
         id: pages
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
