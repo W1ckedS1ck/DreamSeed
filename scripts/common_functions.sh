@@ -18,6 +18,26 @@ fi
 
 # Backup rotation defaults (overridable via server .env: PROJECT_KEEP / DB_KEEP)
 
+# Print an env file's plaintext to stdout, tolerating both storage forms:
+#   - ansible-vault encrypted (local: secrets/.env is committed encrypted)
+#   - plaintext (CI: setup-env writes secrets/.env in the clear from GH Secrets)
+# Same header sniff as lib/env.sh so the deploy runner and server scripts agree.
+resolve_env_plain() {
+    local f="$1" pw="${2:-${VAULT_PASSWORD_FILE:-$HOME/.vault_pass_dreamseed}}"
+    [[ -f "$f" ]] || {
+        echo "Error: file $f not found!" >&2
+        return 1
+    }
+    if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
+        ansible-vault view "$f" --vault-password-file "$pw" 2>/dev/null || {
+            echo "Error: cannot decrypt $f" >&2
+            return 1
+        }
+    else
+        cat "$f"
+    fi
+}
+
 load_env() {
     local env_file="$1"
     [[ ! -f "$env_file" ]] && {
