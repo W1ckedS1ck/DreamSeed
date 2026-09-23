@@ -585,6 +585,18 @@ echo ""
 
 PROJECT_STATUS="⏭️ Skipped"
 
+# MODX cache lives on a tmpfs mount (fstab) at $PROJECT_DIR/core/cache. Renaming
+# the project dir drags the mount along (mounts follow the dentry), so rm -rf
+# then fails on the busy mountpoint, the tmpfs is orphaned inside .bak, and the
+# restored project is left without its RAM cache. Unmount before moving/removing
+# the tree and remount after. Mirrors ansible-roles/restore/tasks/main.yml.
+umount_cache_tmpfs() { mountpoint -q "$1/core/cache" 2>/dev/null && sudo umount "$1/core/cache" 2>/dev/null || true; }
+mount_cache_tmpfs() {
+    mountpoint -q "$PROJECT_DIR/core/cache" 2>/dev/null && return 0
+    sudo mount "$PROJECT_DIR/core/cache" 2>/dev/null || sudo mount -a 2>/dev/null || true
+    mountpoint -q "$PROJECT_DIR/core/cache" 2>/dev/null || echo "WARNING: tmpfs not mounted at $PROJECT_DIR/core/cache (check fstab)" >&2
+}
+
 if [ -n "$SELECTED_PROJECT" ]; then
     if [ "$MODE" = "interactive" ]; then
         echo -e "${YELLOW}[2] Restoring project...${NC}"
@@ -601,8 +613,9 @@ if [ -n "$SELECTED_PROJECT" ]; then
         exit 1
     }
 
-    # Backup current project
+    # Backup current project (unmount cache tmpfs first — see helper above)
     if [ -d "$PROJECT_DIR" ]; then
+        umount_cache_tmpfs "$PROJECT_DIR"
         sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$"
     fi
     sudo mkdir -p "$PROJECT_DIR"
@@ -615,23 +628,29 @@ if [ -n "$SELECTED_PROJECT" ]; then
         # Verify structure
         if [ ! -f "$PROJECT_DIR/index.php" ]; then
             echo -e "${RED}✗ Restored project missing index.php — archive may be invalid${NC}"
+            umount_cache_tmpfs "$PROJECT_DIR"
             sudo rm -rf "$PROJECT_DIR"
             [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
+            mount_cache_tmpfs
             PROJECT_STATUS="❌ Archive structure error"
             RESTORE_RESULT=1
             echo -e "${RED}✗ Project restore failed!${NC}"
         else
+            umount_cache_tmpfs "${PROJECT_DIR}.bak.$$"
             sudo rm -rf "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
             sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
             sudo chown -R www-data:www-data "$PROJECT_DIR"
             sudo chmod g+s "$PROJECT_DIR"
+            mount_cache_tmpfs
             PROJECT_STATUS="✅ $(basename "$SELECTED_PROJECT")"
             echo -e "${GREEN}✓ Project restored${NC}"
         fi
     else
         # Rollback on failure
+        umount_cache_tmpfs "$PROJECT_DIR"
         sudo rm -rf "$PROJECT_DIR"
         [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
+        mount_cache_tmpfs
         PROJECT_STATUS="❌ Error"
         RESTORE_RESULT=1
         echo -e "${RED}✗ Project restore failed!${NC}"
