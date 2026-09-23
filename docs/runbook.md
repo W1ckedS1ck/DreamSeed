@@ -1137,7 +1137,7 @@ curl -s "http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp"
 
 **Metric:** `fail2ban_up` = 0 (pushed by `check_services.sh` every 5 min)
 **Severity:** Warning — brute-force protection may be degraded
-**Possible causes:** fail2ban service crashed, required jails missing (sshd, modx-admin, dreamseed-botsearch, dreamseed-bad-request, recidive)
+**Possible causes:** fail2ban service crashed, required jails missing (sshd, modx-admin, dreamseed-botsearch, dreamseed-bad-request, grafana, recidive)
 
 **Diagnose:**
 
@@ -1175,7 +1175,7 @@ sudo fail2ban-client set modx-admin unbanip 203.0.113.10
 Permanent whitelist for known developer/AI-agent IPs: set
 `FAIL2BAN_IGNOREIP_<TARGET>` (e.g. `FAIL2BAN_IGNOREIP_DEV_AWS`, space-separated
 IPs/CIDRs) in `secrets/.env`. It lands in the web jails' `ignoreip` (modx-admin,
-botsearch, bad-request) on next deploy; sshd is never whitelisted.
+botsearch, bad-request, grafana) on next deploy; sshd is never whitelisted.
 
 ---
 

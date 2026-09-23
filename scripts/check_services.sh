@@ -258,7 +258,7 @@ if [[ "$_f2b_active" != "active" ]]; then
 else
     _f2b_jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
     _f2b_missing=0
-    for _j in sshd modx-admin dreamseed-botsearch dreamseed-bad-request recidive; do
+    for _j in sshd modx-admin dreamseed-botsearch dreamseed-bad-request grafana recidive; do
         if ! echo "$_f2b_jails" | grep -q "$_j"; then
             _f2b_missing=1
         fi

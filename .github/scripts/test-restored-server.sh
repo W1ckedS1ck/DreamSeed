@@ -134,10 +134,25 @@ else
     echo "cloud_tiles=no_local_tiles_dir"
 fi
 
-ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot" && pass "Telegram bot running" || warn "Telegram bot not running"
+# Dev = Prod: the bot must be ACTIVE on prod and INACTIVE elsewhere (a second
+# getUpdates poller would Conflict-kill prod's) — invert the expectation per env.
+TG_STATE=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active telegram-bot 2>/dev/null" || echo inactive)
+if [ "$TG_STATE" = "active" ]; then
+    if [[ "${DOMAIN:-}" == *vitalikuts* ]]; then
+        fail "Telegram bot ACTIVE on non-prod (would Conflict-kill prod poller)"
+    else
+        pass "Telegram bot running"
+    fi
+else
+    if [[ "${DOMAIN:-}" == *vitalikuts* ]]; then
+        pass "Telegram bot inactive (non-prod by design)"
+    else
+        warn "Telegram bot not running"
+    fi
+fi
 
 ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban modx-admin jail" || warn "fail2ban modx-admin: disabled (behind CF)"
-ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban grafana jail" || warn "fail2ban grafana: disabled (not deployed)"
+ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban grafana jail" || fail "fail2ban grafana jail missing"
 
 # --- Redis ---
 ssh ubuntu@"$SERVER_IP" "systemctl is-active redis-server" && pass "Redis server running" || fail "Redis server"
