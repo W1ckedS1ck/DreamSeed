@@ -15,7 +15,6 @@
       # Suggests of fail2ban — without an explicit install jails ERROR at start.
       - python3-pyinotify
       - jq
-      - rclone
       - ssl-cert
       - unzip
       - bind9-dnsutils
@@ -33,6 +32,68 @@
   until: _apt_result is success
   environment:
     DEBIAN_FRONTEND: noninteractive
+
+# rclone: install the pinned OFFICIAL binary instead of the Ubuntu package
+# (24.04 ships 1.60.1, years behind — measurably slower GDrive restores).
+# Version is Renovate-tracked in group_vars/all.yml; the .deb SHA256 is verified
+# against the upstream SHA256SUMS before install. Idempotent: skipped when the
+# wanted version already runs.
+- name: Check installed rclone version
+  ansible.builtin.command: rclone version
+  register: _rclone_version_cmd
+  changed_when: false
+  failed_when: false
+
+- name: Install/upgrade rclone (official .deb, SHA256-verified)
+  when: >
+    _rclone_version_cmd.rc != 0 or
+    rclone_version not in (_rclone_version_cmd.stdout | default(''))
+  block:
+    - name: Download rclone .deb
+      ansible.builtin.get_url:
+        url: "https://downloads.rclone.org/v{{ rclone_version }}/rclone-v{{ rclone_version }}-linux-amd64.deb"
+        dest: "/tmp/rclone-v{{ rclone_version }}-linux-amd64.deb"
+        mode: "0644"
+        timeout: 120
+
+    - name: Download rclone SHA256SUMS
+      ansible.builtin.get_url:
+        url: "https://downloads.rclone.org/v{{ rclone_version }}/SHA256SUMS"
+        dest: "/tmp/rclone-SHA256SUMS"
+        mode: "0644"
+        timeout: 60
+
+    - name: Verify rclone .deb SHA256
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          asset="rclone-v{{ rclone_version }}-linux-amd64.deb"
+          expected=$(awk -v f="$asset" '$2 == f {print $1}' /tmp/rclone-SHA256SUMS)
+          if [ -z "$expected" ]; then
+            echo "ERROR: no SHA256 entry for $asset in SHA256SUMS" >&2
+            exit 1
+          fi
+          printf '%s  %s\n' "$expected" "/tmp/$asset" | sha256sum -c - >/dev/null
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Install rclone .deb
+      become: true
+      ansible.builtin.apt:
+        deb: "/tmp/rclone-v{{ rclone_version }}-linux-amd64.deb"
+        state: present
+
+    - name: Verify rclone runs
+      ansible.builtin.command: rclone version
+      changed_when: false
+
+    - name: Cleanup rclone installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/rclone-v{{ rclone_version }}-linux-amd64.deb"
+        - "/tmp/rclone-SHA256SUMS"
 
 - name: Enable unattended-upgrades (security-only auto updates)
   become: true
