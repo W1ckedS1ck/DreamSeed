@@ -401,11 +401,11 @@ EDGES = [
     # --- CI -> infra modules ---
     {"from_id": "github-ci", "to": "terraform-aws", "type": "calls",
          "evidence": [{"path": ".github/workflows/drift-detection.yml", "symbol": "tf_dir: terraform/aws"},
-                   {"path": ".github/workflows/terraform-apply.yml", "symbol": "terraform apply -input=false tf.plan"}],
+                   {"path": ".github/workflows/terraform-apply.yml", "symbol": "terraform apply -auto-approve"}],
          "note": "drift-detection and terraform-apply run terraform in terraform/aws."},
     {"from_id": "github-ci", "to": "terraform-hetzner", "type": "calls",
          "evidence": [{"path": ".github/workflows/drift-detection.yml", "symbol": "tf_dir: terraform/hetzner"},
-                   {"path": ".github/workflows/terraform-apply.yml", "symbol": "terraform apply -input=false tf.plan"}],
+                   {"path": ".github/workflows/terraform-apply.yml", "symbol": "terraform apply -auto-approve"}],
          "note": "drift-detection and terraform-apply run terraform in terraform/hetzner."},
     {"from_id": "github-ci", "to": "terraform-saas", "type": "calls",
          "evidence": [{"path": ".github/workflows/drift-detection.yml", "symbol": "tf_dir: terraform/cloudflare"},

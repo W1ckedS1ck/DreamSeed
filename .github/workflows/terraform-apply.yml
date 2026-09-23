@@ -154,8 +154,11 @@ jobs:
           elif [ "$PROV" = "hetzner" ]; then
             EXTRA_VARS+=(-var="environment=$WS")
           fi
+          # All backends are remote (Terraform Cloud) — it does not support
+          # saving a plan locally, so plan without -out. The apply job below
+          # re-plans and applies (the environment approval gate is the review).
           terraform plan -input=false -detailed-exitcode $MODE_FLAG \
-            -out=tf.plan "${EXTRA_VARS[@]}" | tee /tmp/plan.txt
+            "${EXTRA_VARS[@]}" | tee /tmp/plan.txt
           rc=${PIPESTATUS[0]}
           case "$rc" in
             0) echo "Plan: no changes" ;;
@@ -182,13 +185,6 @@ jobs:
               echo "_Plan failed — no diff available._"
             fi
           } >> "$M"
-
-      - name: Upload plan artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: tfplan-${{ inputs.workspace }}
-          path: ${{ env.TF_DIR }}/tf.plan
-          retention-days: 1
 
   apply:
     name: TF ${{ inputs.mode }} ${{ inputs.workspace }} (${{ inputs.provider }})
@@ -291,20 +287,32 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: terraform init -input=false
 
-      - name: Download plan artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: tfplan-${{ inputs.workspace }}
-          path: ${{ env.TF_DIR }}
-
-      - name: Terraform apply planned changes
+      - name: Terraform ${{ inputs.mode }}
         working-directory: ${{ env.TF_DIR }}
         env:
+          SSH_KEY_SECRET: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
           TF_MODE: ${{ inputs.mode }}
+          PROV: ${{ inputs.provider }}
+          WS: ${{ inputs.workspace }}
         run: |
-          # Applies exactly the reviewed planfile — variable values are baked
-          # in at plan time; no drift can sneak in between plan and apply.
-          terraform apply -input=false tf.plan
+          # Remote backend cannot apply a saved local plan, so apply re-plans
+          # and auto-approves. The environment approval gate (and the plan job
+          # above) provide the human review before this runs.
+          MODE_FLAG=""
+          [ "$TF_MODE" = "refresh-only" ] && MODE_FLAG="-refresh-only"
+          EXTRA_VARS=()
+          if [ "$PROV" = "aws" ]; then
+            case "$WS" in
+              prod)    : ;;
+              dev-aws) : ;;
+              *)       echo "::error::Unknown workspace $WS for AWS provider"; exit 1 ;;
+            esac
+            echo "$SSH_KEY_SECRET" > /tmp/key.pub
+            EXTRA_VARS+=(-var="ssh_public_key_path=/tmp/key.pub" -var="environment=$WS")
+          elif [ "$PROV" = "hetzner" ]; then
+            EXTRA_VARS+=(-var="environment=$WS")
+          fi
+          terraform apply -auto-approve -input=false $MODE_FLAG "${EXTRA_VARS[@]}"
 
       - name: Write job summary
         if: always()
