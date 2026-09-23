@@ -81,6 +81,9 @@ monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | defaul
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
 # Pinned uv binary — install path: release .sha256 asset -> get_url checksum (same pattern as setup-gitleaks)
 uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.12.18', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
+# rclone: the Ubuntu package lags badly (1.60.1 on 24.04) and measurably slows
+# GDrive restores. Pin the official release; SHA256 verified from upstream SHA256SUMS.
+rclone_version: "{{ lookup('env', 'RCLONE_VERSION') | default('1.75.1', true) }}" # renovate: depName=rclone/rclone datasource=github-releases
 # Bot venv: created by uv (system CPython 3.12 on 24.04, uv-managed on later releases)
 bot_python_version: "3.12"
 loki_url: "{{ lookup('env', 'LOKI_URL') | default('', true) }}"

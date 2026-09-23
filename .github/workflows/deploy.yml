@@ -544,7 +544,8 @@ jobs:
               continue
             fi
             if gh run download "$id" -n github-pages -D "/tmp/pages-site-live-$id"; then
-              cp -rn "/tmp/pages-site-live-$id/." /tmp/pages-site/
+              # --update=none (not -n, deprecated/non-portable): never clobber this run's files
+              cp -r --update=none "/tmp/pages-site-live-$id/." /tmp/pages-site/
               merged=$((merged + 1))
             else
               echo "::warning::could not download live site artifact from run $id"

@@ -5,6 +5,16 @@
   gather_facts: true
 
   pre_tasks:
+    # Pre-create the configured remote_tmp (see ansible.cfg) so module_utils
+    # never auto-creates it 0700 and emits the "may cause issues when running
+    # as another user" warning. `file` needs no remote_tmp itself (pipelining).
+    - name: Ensure Ansible remote_tmp exists (silence 0700 auto-create warning)
+      ansible.builtin.file:
+        path: /var/tmp/ansible-root
+        state: directory
+        mode: "0700"
+      changed_when: false
+
     - name: Wait for SSH
       ansible.builtin.wait_for_connection:
         timeout: 120

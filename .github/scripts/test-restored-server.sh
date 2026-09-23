@@ -132,7 +132,10 @@ if ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/tiles"; then
     elif [ "${TILES_CLOUD:-0}" -gt 0 ]; then
         pass "Tiles backup: in cloud (${TILES_CLOUD} file(s))"
     else
-        warn "Tiles dir present but no local or cloud tiles backup"
+        # Hard failure: the site ships map tiles but neither the local nor the
+        # prod cloud tiles artifact exists. A real rollback from GDrive would
+        # silently lose the map, so this must not pass as a mere warning.
+        fail "Tiles dir present but no local/cloud tiles backup — GDrive rollback would lose the map"
     fi
 else
     echo "cloud_tiles=no_local_tiles_dir"

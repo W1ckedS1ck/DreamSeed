@@ -113,8 +113,15 @@ jobs:
         run: |
           cat >> secrets/.env << 'EOF'
           DEV_HETZ_SSH_KEY_NAME=Vitali.pub
-          DEV_HETZ_PRIMARY_IP_NAME=primary_ip-1
           DEV_HETZ_SERVER_TYPE=cx23
+          # Ephemeral test server: create a dedicated Primary IP
+          # (dreamseed-main-test) instead of attaching dev-hetz's shared
+          # primary_ip-1 — a Primary IP can only be bound to one server, so
+          # test and dev-hetz must not share it. Override the vault's
+          # prefixed+unprefixed values (last-wins parser).
+          DEV_HETZ_PRIMARY_IP_NAME=
+          HETZNER_PRIMARY_IP_NAME=
+          HETZNER_ENABLE_PRIMARY_IP=true
           EOF
 
       # --- Phase 1: full deploy through the real deploy.sh (target "test") ---
@@ -141,9 +148,32 @@ jobs:
           IP=$(TF_TOKEN_app_terraform_io="$TF_API_TOKEN" TF_WORKSPACE=test \
             terraform -chdir=terraform/hetzner output -raw server_ipv4 2>/dev/null || echo "")
           echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "ts_deploy=$(date +%s)" >> "$GITHUB_OUTPUT"
           echo "Server IP: ${IP:-unknown}"
 
       # --- Phase 2: create a backup, simulate disaster, restore ---
+      # Deterministic Redis check: seed a sentinel session BEFORE smart_backup so
+      # it lands in the local RDB. The LOCAL restore must bring it back verbatim.
+      # The CLOUD path restores PROD's RDB (no sentinel by design), so there we
+      # only assert Redis is non-empty. Counts alone prove nothing (TTL decay +
+      # prod data on the cloud path).
+      - name: Seed Redis sentinel session
+        id: sentinel
+        if: steps.deploy.outcome == 'success'
+        env:
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+        run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
+          KEY="PHPREDIS_SESSION:restoretest-${{ github.run_id }}"
+          VAL="sentinel-${{ github.run_id }}"
+          # Inline the literals (GitHub-expanded) so nothing expands client-side
+          # inside the remote command (shellcheck SC2029).
+          GOT=$(ssh ubuntu@"$SERVER_IP" "redis-cli set 'PHPREDIS_SESSION:restoretest-${{ github.run_id }}' 'sentinel-${{ github.run_id }}' EX 86400 >/dev/null && redis-cli get 'PHPREDIS_SESSION:restoretest-${{ github.run_id }}'" || echo "")
+          echo "sentinel_key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "sentinel_val=$VAL" >> "$GITHUB_OUTPUT"
+          echo "Sentinel seeded: $KEY = $GOT"
+
       - name: Create backup via smart_backup.sh
         if: steps.deploy.outcome == 'success'
         env:
@@ -248,8 +278,8 @@ jobs:
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           set +e
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i "$SSH_KEY" \
-            ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
-          RC=$?
+            ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1 | tee /tmp/restore_local.out
+          RC=${PIPESTATUS[0]}
           set -e
           echo "restore_local_exit=$RC" >> "$GITHUB_OUTPUT"
           [ "$RC" -eq 0 ] || exit "$RC"
@@ -273,11 +303,15 @@ jobs:
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           echo "local_redis_sessions=$REDIS_AFTER (before destroy: $REDIS_SESSIONS_BEFORE)"
           echo "local_redis_sessions=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
-          if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ]; then
+          SENTINEL=$(ssh ubuntu@"$SERVER_IP" "redis-cli get '${{ steps.sentinel.outputs.sentinel_key }}'" 2>/dev/null || echo "")
+          echo "local_sentinel=$SENTINEL (want ${{ steps.sentinel.outputs.sentinel_val }})"
+          echo "local_sentinel=$SENTINEL" >> "$GITHUB_OUTPUT"
+          echo "ts_local=$(date +%s)" >> "$GITHUB_OUTPUT"
+          if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ] && [ "$SENTINEL" = "${{ steps.sentinel.outputs.sentinel_val }}" ]; then
             echo "local_restore=pass"
             echo "local_restore=pass" >> "$GITHUB_OUTPUT"
           else
-            echo "local_restore=fail"
+            echo "local_restore=fail (http=$HTTP_CODE hash=$NEW_HASH sentinel='$SENTINEL')"
             echo "local_restore=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -302,8 +336,8 @@ jobs:
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           set +e
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i "$SSH_KEY" \
-            ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1
-          RC=$?
+            ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1 | tee /tmp/restore_cloud.out
+          RC=${PIPESTATUS[0]}
           set -e
           echo "restore_cloud_exit=$RC" >> "$GITHUB_OUTPUT"
           [ "$RC" -eq 0 ] || exit "$RC"
@@ -327,11 +361,16 @@ jobs:
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           echo "cloud_redis_sessions=$REDIS_AFTER (before destroy: $REDIS_SESSIONS_BEFORE)"
           echo "cloud_redis_sessions=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
-          if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ]; then
+          # Cloud path restores PROD's RDB, so no sentinel — assert Redis actually
+          # came back non-empty instead of trusting a count.
+          REDIS_DBSIZE=$(ssh ubuntu@"$SERVER_IP" "redis-cli dbsize" 2>/dev/null || echo "0")
+          echo "cloud_redis_dbsize=$REDIS_DBSIZE" >> "$GITHUB_OUTPUT"
+          echo "ts_cloud=$(date +%s)" >> "$GITHUB_OUTPUT"
+          if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ] && [ "${REDIS_DBSIZE:-0}" -gt 0 ]; then
             echo "cloud_restore=pass"
             echo "cloud_restore=pass" >> "$GITHUB_OUTPUT"
           else
-            echo "cloud_restore=fail"
+            echo "cloud_restore=fail (http=$HTTP_CODE hash=$NEW_HASH redis_dbsize=$REDIS_DBSIZE)"
             echo "cloud_restore=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -344,7 +383,8 @@ jobs:
         shell: bash
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          DB_NAME=modx_db .github/scripts/test-restored-server.sh "$SERVER_IP" 2>&1 | tee /dev/stderr | grep -E '^(test_summary|test_fails)=' >> "$GITHUB_OUTPUT"
+          DB_NAME=modx_db .github/scripts/test-restored-server.sh "$SERVER_IP" 2>&1 | tee /dev/stderr | grep -E '^(test_summary|test_fails|cloud_tiles)=' >> "$GITHUB_OUTPUT"
+          echo "ts_tests=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       # --- Phase 3: screenshot (taken right before teardown; shown inline in the
       #     publish-preview job below, like deploy.yml — no download link) ---
@@ -476,20 +516,63 @@ jobs:
           REDIS_SESSIONS_BEFORE: ${{ steps.artifact_hash.outputs.redis_sessions_before }}
           LOCAL_REDIS_SESSIONS: ${{ steps.verify_local.outputs.local_redis_sessions }}
           CLOUD_REDIS_SESSIONS: ${{ steps.verify_cloud.outputs.cloud_redis_sessions }}
+          LOCAL_SENTINEL: ${{ steps.verify_local.outputs.local_sentinel }}
+          SENTINEL_VAL: ${{ steps.sentinel.outputs.sentinel_val }}
+          CLOUD_REDIS_DBSIZE: ${{ steps.verify_cloud.outputs.cloud_redis_dbsize }}
+          CLOUD_TILES: ${{ steps.service_tests.outputs.cloud_tiles }}
           TEST_SUMMARY: ${{ steps.service_tests.outputs.test_summary }}
           TEST_FAILS: ${{ steps.service_tests.outputs.test_fails }}
+          TS_DEPLOY: ${{ steps.server-ip.outputs.ts_deploy }}
+          TS_LOCAL: ${{ steps.verify_local.outputs.ts_local }}
+          TS_CLOUD: ${{ steps.verify_cloud.outputs.ts_cloud }}
+          TS_TESTS: ${{ steps.service_tests.outputs.ts_tests }}
           DESTROY_OUTCOME: ${{ steps.destroy.outcome }}
           KEEP_SERVER: ${{ inputs.keep_server }}
         run: |
+          set +e
           RESTORE_LOCAL="${{ steps.restore_local.outcome }}"
           RESTORE_CLOUD="${{ steps.restore_cloud.outcome }}"
           DEPLOY="${{ steps.deploy.outcome }}"
-          ELAPSED=$(( $(date +%s) - ${{ steps.start_time.outputs.start_epoch }} ))
-          if [[ "$DEPLOY" == "success" && "$RESTORE_LOCAL" == "success" && "$RESTORE_CLOUD" == "success" ]]; then
+          START_EPOCH=${{ steps.start_time.outputs.start_epoch }}
+          ELAPSED=$(( $(date +%s) - START_EPOCH ))
+          if [[ "$DEPLOY" == "success" && "$RESTORE_LOCAL" == "success" && "$RESTORE_CLOUD" == "success" && "$TEST_SUMMARY" == *"F:0"* ]]; then
             STATUS="✅ RESTORE TEST OK"
           else
-            STATUS="❌ FAILED (deploy=$DEPLOY local=$RESTORE_LOCAL cloud=$RESTORE_CLOUD)"
+            STATUS="❌ FAILED (deploy=$DEPLOY local=$RESTORE_LOCAL cloud=$RESTORE_CLOUD tests='$TEST_SUMMARY')"
           fi
+
+          # Which archive each path actually restored (from RESTORE_ALL output).
+          prov_line() {
+            P=""; D=""; R=""
+            [ -f "$1" ] || return 0
+            P=$(grep -m1 '^Project: ' "$1" | sed 's/^Project: //')
+            D=$(grep -m1 '^DB: ' "$1" | sed 's/^DB: //')
+            R=$(grep -m1 '^Redis: ' "$1" | sed 's/^Redis: //')
+          }
+          prov_line /tmp/restore_local.out; LP="$P"; LD="$D"; LR="$R"
+          prov_line /tmp/restore_cloud.out; CP="$P"; CD="$D"; CR="$R"
+          PROJ_DATE=$(printf '%s' "$LP" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+          DB_DATE=$(printf '%s' "$LD" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+          SKEW=""
+          if [ -n "$PROJ_DATE" ] && [ -n "$DB_DATE" ] && [ "$PROJ_DATE" != "$DB_DATE" ]; then
+            SKEW=" — ⚠️ project($PROJ_DATE) ≠ DB($DB_DATE)"
+          fi
+
+          case "${CLOUD_TILES:-}" in
+            no_local_tiles_dir) TILES_ROW="no tiles dir on server" ;;
+            ''|0)               TILES_ROW="❌ not in cloud" ;;
+            *)                  TILES_ROW="✅ cloud ($CLOUD_TILES)" ;;
+          esac
+
+          if [ -n "$SENTINEL_VAL" ] && [ "$LOCAL_SENTINEL" = "$SENTINEL_VAL" ]; then
+            SENTINEL_ROW="✅ restored verbatim"
+          else
+            SENTINEL_ROW="❌ '${LOCAL_SENTINEL:-missing}'"
+          fi
+
+          dur() { if [ "${1:-0}" -gt 0 ] && [ "${2:-0}" -gt 0 ]; then echo "$(( ($2 - $1) / 60 ))m $(( ($2 - $1) % 60 ))s"; else echo "n/a"; fi; }
+          ART="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
           M="$GITHUB_STEP_SUMMARY"
           {
             echo "## Restore Test — ${STATUS}"
@@ -500,14 +583,28 @@ jobs:
             echo "| **Domain** | ${{ env.DOMAIN }} |"
             echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
             echo "| **Commit** | ${{ github.sha }} |"
-            echo "| **Run** | [link](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo "| **Run** | [link]($ART) |"
             echo ""
             echo "### Restore paths"
-            echo "| Path | Status | HTTP | Hash match | Redis sessions |"
+            echo "| Path | Status | HTTP | Hash match | Redis sessions | Redis proof |"
+            echo "|---|---|---|---|---|---|"
+            echo "| **Local** | ${{ steps.restore_local.outcome }} | ${{ steps.verify_local.outputs.local_http }} | ${{ steps.verify_local.outputs.local_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $LOCAL_REDIS_SESSIONS | $SENTINEL_ROW |"
+            echo "| **Cloud (GDrive, rollback path)** | ${{ steps.restore_cloud.outcome }} | ${{ steps.verify_cloud.outputs.cloud_http }} | ${{ steps.verify_cloud.outputs.cloud_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $CLOUD_REDIS_SESSIONS | dbsize=$CLOUD_REDIS_DBSIZE |"
+            echo "| **Cloud upload (fresh)** | ${{ steps.verify_upload.outputs.cloud_upload }} | n/a | n/a | n/a | n/a |"
+            echo ""
+            echo "### Backup provenance${SKEW}"
+            echo "| Path | Project | DB | Redis | Tiles |"
             echo "|---|---|---|---|---|"
-            echo "| **Local** | ${{ steps.restore_local.outcome }} | ${{ steps.verify_local.outputs.local_http }} | ${{ steps.verify_local.outputs.local_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $LOCAL_REDIS_SESSIONS |"
-            echo "| **Cloud (GDrive, rollback path)** | ${{ steps.restore_cloud.outcome }} | ${{ steps.verify_cloud.outputs.cloud_http }} | ${{ steps.verify_cloud.outputs.cloud_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $CLOUD_REDIS_SESSIONS |"
-            echo "| **Cloud upload (fresh)** | ${{ steps.verify_upload.outputs.cloud_upload }} | n/a | n/a | n/a |"
+            echo "| **Local** | ${LP:-—} | ${LD:-—} | ${LR:-—} | — |"
+            echo "| **Cloud (prod paths)** | ${CP:-—} | ${CD:-—} | ${CR:-—} | $TILES_ROW |"
+            echo ""
+            echo "### Timings"
+            echo "| Phase | Duration |"
+            echo "|---|---|"
+            echo "| Deploy | $(dur "$START_EPOCH" "$TS_DEPLOY") |"
+            echo "| Local restore | $(dur "$TS_DEPLOY" "$TS_LOCAL") |"
+            echo "| Cloud restore | $(dur "$TS_LOCAL" "$TS_CLOUD") |"
+            echo "| Service tests | $(dur "$TS_CLOUD" "$TS_TESTS") |"
             echo ""
             echo "### Artifacts (pre-disaster)"
             echo "| | |"
@@ -521,6 +618,7 @@ jobs:
             echo "|---|---|"
             echo "| Summary | $TEST_SUMMARY |"
             echo "| Failures | $TEST_FAILS |"
+            echo "| Tiles in cloud | $TILES_ROW |"
             echo ""
             echo "### Evidence"
             if [ "${{ steps.shot_check.outputs.exists }}" = "yes" ]; then
@@ -528,6 +626,9 @@ jobs:
             else
               echo "📸 Screenshot: not captured in this run — no preview published"
             fi
+            echo "📎 Artifacts (logs, screenshots): [run artifacts]($ART#artifacts)"
+            echo ""
+            echo "<sub>Runner note: \`ubuntu-latest\` migrates to Ubuntu 26 from 2026-10-19 — pin the label if a break appears.</sub>"
             if [[ "$DESTROY_OUTCOME" != "success" ]]; then
               echo ""
               echo "### ⚠️ Server may still exist (destroy did not complete)"
@@ -587,14 +688,16 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/pages-site
           gh run download "$GITHUB_RUN_ID" -n pages-own -D /tmp/pages-site
-          IDS=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=github-pages&per_page=10" --jq '([.artifacts[] | select(.expired == false) | .workflow_run.id] | unique | .[0:3] | .[])')
+          IDS=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=github-pages&per_page=20" --jq '([.artifacts[] | select(.expired == false) | .workflow_run.id] | unique | .[0:9] | .[])')
           merged=0
           for id in $IDS; do
             if [ "$id" = "$GITHUB_RUN_ID" ]; then
               continue
             fi
             if gh run download "$id" -n github-pages -D "/tmp/pages-site-live-$id"; then
-              cp -rn "/tmp/pages-site-live-$id/." /tmp/pages-site/
+              # --update=none (not -n, non-portable): never clobber this run's
+              # files, but keep every older run's screenshots/code map.
+              cp -r --update=none "/tmp/pages-site-live-$id/." /tmp/pages-site/
               merged=$((merged + 1))
             else
               echo "::warning::could not download live site artifact from run $id"

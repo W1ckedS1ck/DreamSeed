@@ -17,7 +17,7 @@ load_env "$SCRIPT_DIR/.env"
 # ==== Settings ====
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
-MARKER_FILE="$BACKUP_DIR/.project_marker"
+PROJECT_FP_FILE="$BACKUP_DIR/.project_fingerprint"
 
 PROJECT_KEEP="${BACKUP_PROJECT_KEEP:-${PROJECT_KEEP:-5}}"
 DB_KEEP="${BACKUP_DB_KEEP:-${DB_KEEP:-15}}"
@@ -86,23 +86,24 @@ Cleanup old backups or expand disk."
 fi
 
 # ==== Project backup (only if changed) ====
+# Change detection = metadata fingerprint (path+size+mtime, sha256), the same
+# mechanism tiles use. Unlike the old `-newer marker` check this also catches
+# deletions, renames and restores that preserve old mtimes. The fingerprint is
+# written only after a successful backup, so a failed run is retried next time.
 PROJECT_STATUS=""
 
-if [[ -f "$MARKER_FILE" ]]; then
-    CHANGED=$(sudo find "$PROJECT_DIR" -type f \
-        ! -path "*/core/cache/*" \
-        ! -path "*/core/backup/*" \
-        ! -path "*/tiles/*" \
-        -newer "$MARKER_FILE" -print -quit 2>/dev/null)
-    log_ts "Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')"
-else
-    CHANGED="initial"
-    log_ts "Change check: first run"
-fi
+PROJECT_FP_NOW=$({ sudo find "$PROJECT_DIR" -type f \
+    ! -path "*/core/cache/*" \
+    ! -path "*/core/backup/*" \
+    ! -path "*/tiles/*" \
+    -printf '%P\t%s\t%T@\n' 2>/dev/null || true; } | LC_ALL=C sort | sha256sum | cut -c1-16)
+PROJECT_FP_OLD=$(cat "$PROJECT_FP_FILE" 2>/dev/null || echo "")
 
-if [[ -z "$CHANGED" ]]; then
+if [[ -n "$PROJECT_FP_OLD" && "$PROJECT_FP_NOW" == "$PROJECT_FP_OLD" ]]; then
+    log_ts "Change check: unchanged (fp $PROJECT_FP_NOW)"
     PROJECT_STATUS="ℹ️ Project unchanged, backup skipped"
 else
+    log_ts "Change check: modified (fp ${PROJECT_FP_OLD:-none} -> $PROJECT_FP_NOW)"
     PROJECT_TMP="$(mktemp "$BACKUP_DIR/project/.tmp_project_XXXXXX.tar.gz")"
     if timeout 1800 sudo tar -czf "$PROJECT_TMP" \
         --exclude="$(basename "$PROJECT_DIR")/core/cache" \
@@ -115,7 +116,7 @@ else
         log_ts "Project backup OK: $PROJECT_BACKUP"
         PROJECT_STATUS="✅ Project backed up"
         rotate_files "$BACKUP_DIR/project/DreamSeed_*.tar.gz" "$PROJECT_KEEP"
-        touch "$MARKER_FILE"
+        printf '%s\n' "$PROJECT_FP_NOW" > "$PROJECT_FP_FILE"
     else
         rm -f "$PROJECT_TMP"
         PROJECT_STATUS="❌ Project backup failed"
