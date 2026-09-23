@@ -277,9 +277,11 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
   ```bash
   ls /home/ubuntu/backups/project/ | wc -l
   ls /home/ubuntu/backups/db/ | wc -l
+  ls /home/ubuntu/backups/tiles/ | wc -l
   # Manual cleanup if rotation hasn't kicked in
   rm -f $(ls -t /home/ubuntu/backups/project/*.tar.gz | tail -n +6)
   rm -f $(ls -t /home/ubuntu/backups/db/*.sql.gz | tail -n +16)
+  rm -f $(ls -t /home/ubuntu/backups/tiles/*.tar.gz | tail -n +4)
   ```
 
 - **Clean VictoriaMetrics data (if old):**
@@ -302,7 +304,7 @@ ls -lh /var/log/nginx/*.log /var/log/mysql/*.log 2>/dev/null
   sudo systemctl restart mariadb
   ```
 
-**Prevention:** The server rotates backups to max 5 project + 15 DB. Check that `rotate_files` in `smart_backup.sh` is working.
+**Prevention:** The server rotates backups to max 5 project + 15 DB + 3 tiles. Check that `rotate_files` in `smart_backup.sh` is working.
 
 ---
 
@@ -1135,7 +1137,7 @@ curl -s "http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp"
 
 **Metric:** `fail2ban_up` = 0 (pushed by `check_services.sh` every 5 min)
 **Severity:** Warning — brute-force protection may be degraded
-**Possible causes:** fail2ban service crashed, required jails missing (sshd, modx-admin, dreamseed-botsearch, dreamseed-bad-request, recidive)
+**Possible causes:** fail2ban service crashed, required jails missing (sshd, modx-admin, dreamseed-botsearch, dreamseed-bad-request, grafana, recidive)
 
 **Diagnose:**
 
@@ -1155,7 +1157,7 @@ sudo fail2ban-client status
 #### Unbanning a blocked developer (false positive)
 
 The `modx-admin` jail counts `POST /connectors/index.php` as brute-force
-attempts, with a high `maxretry` (150/10min) so normal manager AJAX traffic
+attempts, with a high `maxretry` (1000/10min) so normal manager AJAX traffic
 doesn't trip it. There is no `ignoreregex` exemption anymore — an earlier
 Referer/UA-based exemption was removed because it was spoofable (any client
 could send `/manager/` Referer + a browser UA to bypass the jail). A false
@@ -1173,7 +1175,7 @@ sudo fail2ban-client set modx-admin unbanip 203.0.113.10
 Permanent whitelist for known developer/AI-agent IPs: set
 `FAIL2BAN_IGNOREIP_<TARGET>` (e.g. `FAIL2BAN_IGNOREIP_DEV_AWS`, space-separated
 IPs/CIDRs) in `secrets/.env`. It lands in the web jails' `ignoreip` (modx-admin,
-botsearch, bad-request) on next deploy; sshd is never whitelisted.
+botsearch, bad-request, grafana) on next deploy; sshd is never whitelisted.
 
 ---
 
@@ -1526,18 +1528,23 @@ ssh prod "cat /home/ubuntu/backups/logs/verify_$(date +%Y-%m-%d).log 2>/dev/null
 
 ### B10. 🔴 BetterStack Alert — check-services heartbeat missed
 
-**What triggered:** `check_services.sh` did not ping within 5min + 60s grace
+**What triggered:** `check_services.sh` did not ping within 5min + 5m grace
 **Severity:** Warning — the health-check watchdog may be down
 **Causes:**
 
 1. `check-services.timer`/service stopped
-2. Server overloaded or deployed (marker suppresses checks during deploy)
-3. `BETTERUPTIME_CHECK_SERVICES_KEY` missing from server `.env`
+2. Server overloaded or deployed (marker suppresses checks during deploy — the
+   heartbeat is still pinged, so this alone should not alert)
+3. Planned reboot / kernel update — expected: the timer waits `OnBootSec=2min`
+   after boot, so the heartbeat pauses briefly. A longer silence means the timer
+   did not resume and is a real failure.
+4. `BETTERUPTIME_CHECK_SERVICES_KEY` missing from server `.env`
 
 **Diagnose:**
 
 ```bash
 ssh prod "sudo systemctl status check-services.timer"
+ssh prod "systemctl list-timers check-services.timer --no-pager"
 ssh prod "bash /home/ubuntu/Scripts/check_services.sh"
 ```
 
@@ -1768,11 +1775,11 @@ It will:
 
 Pre-restore snapshots (`~/.tmp_pre_restore_*`) are preserved for manual recovery. Each run cleans up only **its own** directory and only on success — snapshots from failed runs accumulate until deleted manually.
 
-### B) Server is dead — rebuild from scratch via CLI
+### B) Server is dead — rebuild from scratch via gh CLI
 
 ```bash
-# Local machine
-./deploy.sh prod-hetz -n -i <NEW_IP>
+# Deploy a fresh server (production environment approval required)
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx -f mode=parallel
 
 # After deploy completes, SSH in and restore data from cloud:
 ssh dream "bash /home/ubuntu/Scripts/RESTORE_ALL.sh"

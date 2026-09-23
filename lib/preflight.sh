@@ -53,7 +53,7 @@ preflight_checks() {
     export SSH_PUBLIC_KEY_PATH ADDITIONAL_SSH_KEYS
     export BETTERUPTIME_API_TOKEN BETTERUPTIME_BACKUP_KEY BETTERUPTIME_GDRIVE_KEY BETTERUPTIME_REPORT_DAILY_KEY BETTERUPTIME_REPORT_WEEKLY_KEY BETTERUPTIME_VERIFY_KEY BETTERUPTIME_CHECK_SERVICES_KEY
     export TG_TOKEN TG_CHAT_ID TG_THREAD_ID
-    export EMAIL_USER EMAIL_PASS SMTP_SERVER SMTP_PORT OWNER LOKI_URL LOKI_USERNAME FARO_COLLECTOR_URL FARO_APP_NAME
+    export OWNER LOKI_URL LOKI_USERNAME FARO_COLLECTOR_URL FARO_APP_NAME
     export RCLONE_CRYPT_PASSWORD
     export UBUNTU_PRO_TOKEN
 
@@ -67,19 +67,34 @@ preflight_checks() {
         export CLOUDFLARE_ZONE_ID
     fi
 
-    # Auto-setup Better Stack heartbeats for prod if needed
-    if [[ "$TARGET" =~ ^prod && -z "${BETTERUPTIME_BACKUP_KEY:-}" && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
-        if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
-            resolve_env_file "$ENV_FILE"
-            env_src="$ENV_SRC"
-            parse_env_file "$env_src" || exit 1
+    # Prod: full setup only when keys are missing; otherwise reconcile heartbeat
+    # period/grace every deploy so drift can't silently weaken the dead-man switch.
+    if [[ "$TARGET" =~ ^prod && -n "${BETTERUPTIME_API_TOKEN:-}" ]]; then
+        if [[ -z "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
+            if bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --write-env; then
+                resolve_env_file "$ENV_FILE"
+                env_src="$ENV_SRC"
+                parse_env_file "$env_src" || exit 1
+            else
+                echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."
+                echo "  To set up manually later, run: bash scripts/setup_betteruptime.sh --write-env"
+            fi
         else
-            echo "⚠ Warning: Better Stack heartbeat setup failed. Continuing without heartbeats."
-            echo "  To set up manually later, run: bash scripts/setup_betteruptime.sh --write-env"
+            bash "$SCRIPT_DIR/scripts/setup_betteruptime.sh" --heartbeats-only ||
+                echo "⚠ Warning: Better Stack heartbeat reconcile failed. Continuing."
         fi
     fi
 
     apply_target_vars
+
+    # DNS token is mandatory for a real deploy — update_cloudflare_dns would
+    # otherwise skip silently and report success with a stale record.
+    if [[ "$DESTROY_MODE" == "false" && "$CHECK_MODE" == "false" &&
+        "$DRY_RUN" == "false" && "${SKIP_DNS:-false}" == "false" &&
+        -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+        echo "Error: CLOUDFLARE_API_TOKEN not set — DNS would not update (use --no-dns to skip intentionally)"
+        exit 1
+    fi
 
     # Load Grafana Cloud credentials (PROD_ for prod, DEV_ for all dev)
     local gc_pfx="DEV"

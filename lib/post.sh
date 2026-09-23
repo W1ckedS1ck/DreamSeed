@@ -5,6 +5,9 @@
 update_dns() {
     if [[ "$SKIP_DNS" == "false" ]]; then
         step_start "Cloudflare DNS update"
+        if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            step_fail "CLOUDFLARE_API_TOKEN not set — refusing to skip DNS silently (use --no-dns to skip intentionally)"
+        fi
         update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP" || step_fail "Cloudflare DNS update failed"
         # Grey-cloud (no proxy) — for direct SSH without Cloudflare (dev only)
         if [[ ! "$TARGET" =~ ^prod ]]; then

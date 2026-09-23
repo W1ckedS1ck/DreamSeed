@@ -132,11 +132,13 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     env = get_env()
     proj_files = _local_backups("project", "DreamSeed_")
     db_files = _local_backups("db", "db_")
+    tiles_files = _local_backups("tiles", "DreamSeed_tiles_")
 
     env_suffix = "" if env == "prod" else f"-{env}"
-    cloud_proj, cloud_db = await asyncio.gather(
+    cloud_proj, cloud_db, cloud_tiles = await asyncio.gather(
         _rclone_lsf(f"{RCLONE_REMOTE}:{REMOTE_BASE}/project{env_suffix}/"),
         _rclone_lsf(f"{RCLONE_REMOTE}:{REMOTE_BASE}/db{env_suffix}/"),
+        _rclone_lsf(f"{RCLONE_REMOTE}:{REMOTE_BASE}/tiles{env_suffix}/"),
     )
 
     msg = f"📊 <b>Backup Status</b> — {env}\n\n📁 Local:\n"
@@ -144,11 +146,15 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         msg += f"  🖥 {format_backup_name(f)} ({get_size(os.path.join(BACKUP_DIR, 'project', f))})\n"
     for f in db_files[:2]:
         msg += f"  🗄 {format_backup_name(f, DB_PREFIX)} ({get_size(os.path.join(BACKUP_DIR, 'db', f))})\n"
+    for f in tiles_files[:1]:
+        msg += f"  🗺 {f} ({get_size(os.path.join(BACKUP_DIR, 'tiles', f))})\n"
     msg += "\n☁️ GDrive:\n"
     for line in cloud_proj[:2]:
         msg += f"  🖥 {format_backup_name(line[1])} ({get_size(line[2])})\n"
     for line in cloud_db[:2]:
         msg += f"  🗄 {format_backup_name(line[1], DB_PREFIX)} ({get_size(line[2])})\n"
+    for line in cloud_tiles[:1]:
+        msg += f"  🗺 {line[1]} ({get_size(line[2])})\n"
     msg += f"\n⏰ Last check: {datetime.now(timezone.utc).strftime('%d.%m %H:%M')}"
 
     await update.message.reply_text(msg, parse_mode="HTML")

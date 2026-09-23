@@ -1,0 +1,7 @@
+# Grafana login failures (combined access log, real IP via CF realip): 401 on
+# the /grafana entry (nginx basic-auth gate) or /grafana/api/login (Grafana's own
+# form). ignoreregex drops session-expiry 401s on other /grafana/api/* calls.
+
+[Definition]
+failregex = ^<HOST> - \S+ \[.*\] "(?:GET|POST|HEAD) \/grafana[^"]*" (?:401)
+ignoreregex = \/grafana\/api\/(?!login)

@@ -40,6 +40,28 @@ maxretry = 1000
 findtime = 600
 bantime  = 3600
 
+# ==== Grafana login brute-force (nginx basic-auth gate + Grafana form) ====
+
+[grafana]
+enabled     = true
+port        = http,https
+{% if cloudflare_firewall_token | default('', true) | length > 0 %}
+action      = cloudflare-token[cfzone="{{ cloudflare_zone_id | default('') }}", cftoken="{{ cloudflare_firewall_token }}", notes="DreamSeed-grafana"]
+{% else %}
+banaction   = none
+{% endif %}
+filter      = grafana
+backend     = pyinotify
+{% if web_server == "nginx" %}
+logpath  = /var/log/nginx/{{ domain }}-ssl-access.log
+{% else %}
+logpath  = /var/log/apache2/{{ domain }}-ssl-access.log
+{% endif %}
+ignoreip = 127.0.0.1/8 ::1{{ (" " ~ fail2ban_ignoreip) if (fail2ban_ignoreip | default('', true)) | length > 0 else '' }}
+maxretry    = 5
+findtime    = 600
+bantime     = 1h
+
 {% if web_server == "nginx" %}
 # ==== Vulnerability scanner detection (nginx access log format) ====
 

@@ -78,7 +78,7 @@ The config is automatically created in CI from two GitHub Secrets:
 Locally, you can run:
 
 ```bash
-bash scripts/lint.sh --secrets  # check if all secrets are present
+bash scripts/lint.sh --secrets  # secrets hygiene audit (gitignore, tracked files, hardcoded patterns)
 ```
 
 Without the rclone config, the deploy will finish (all services configured) but **the site will not be restored**.

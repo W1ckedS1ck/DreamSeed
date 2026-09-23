@@ -7,6 +7,7 @@ load_env "$SCRIPT_DIR/.env"
 
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 DB_NAME="${DB_NAME:-modx_db}"
+PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 DOMAIN="${DOMAIN:-unknown}"
 
 LOG_FILE="$BACKUP_DIR/logs/verify_$(date +%Y-%m-%d).log"
@@ -16,6 +17,7 @@ log_ts "⏱ Backup verification started"
 
 LOCAL_PROJ_OK=0
 LOCAL_DB_OK=0
+TILES_MISSING=0
 CLOUD_OK=0
 ALERTS=""
 
@@ -38,6 +40,27 @@ else
     # against DB freshness below (a fresh DB dump proves the pipeline runs).
     PROJ_MISSING=1
     log_ts "⚠ No project backup found (expected when site files unchanged)"
+fi
+
+# ==== Verify local map tiles backup (separate artifact) ====
+# Only when the site has tiles; absence with no tiles dir is expected.
+if [[ -d "$PROJECT_DIR/tiles" ]]; then
+    TILES_BACKUP=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1)
+    if [[ -n "$TILES_BACKUP" && -f "$TILES_BACKUP" ]]; then
+        if timeout 300 tar -tzf "$TILES_BACKUP" >/dev/null 2>&1; then
+            log_ts "✓ Tiles backup OK: $(basename "$TILES_BACKUP")"
+        else
+            log_ts "✗ Tiles backup CORRUPTED: $(basename "$TILES_BACKUP")"
+            ALERTS+="❌ Tiles backup corrupted: $(basename "$TILES_BACKUP")
+"
+        fi
+    else
+        # The archive appears at the first smart_backup run after deploy, so
+        # absence right after a deploy must not alert — resolve like the project
+        # backup: a fresh DB dump proves the pipeline runs (see below).
+        TILES_MISSING=1
+        log_ts "⚠ No tiles backup yet (expected until the next smart_backup run)"
+    fi
 fi
 
 # ==== Verify local DB backup ====
@@ -90,6 +113,11 @@ if [[ "$PROJ_MISSING" -eq 1 ]]; then
     fi
 fi
 
+if [[ "$TILES_MISSING" -eq 1 && "$LOCAL_DB_OK" -eq 0 ]]; then
+    ALERTS+="❌ Tiles dir present but no tiles backup (and DB backup not fresh — pipeline down)
+"
+fi
+
 export_metric "backup_verification_ok{type=\"local\",instance=\"$DOMAIN\"} $((LOCAL_PROJ_OK && LOCAL_DB_OK))"
 
 # ==== Verify cloud backups (if rclone configured) ====
@@ -97,6 +125,7 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
     ENV=$(detect_env)
     PROJ_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/project${ENV}"
     DB_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/db${ENV}"
+    TILES_CLOUD_PATH="${RCLONE_REMOTE:-gdrive-crypt}:DreamSeed/backups/tiles${ENV}"
 
     # rclone exit code is captured so a failed listing is reported as an
     # error, not silently mistaken for "genuinely zero cloud backups"
@@ -140,6 +169,30 @@ if [[ -f ~/.config/rclone/rclone.conf ]]; then
         ALERTS+="❌ Cloud backups missing or empty
 "
         CLOUD_OK=0
+    fi
+
+    # Cloud tiles (prod-only upload): missing in cloud + mature local archive =
+    # broken upload. The 2h guard skips the first-deploy window.
+    if [[ -z "$ENV" && -d "$PROJECT_DIR/tiles" ]]; then
+        _ltiles=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1)
+        _tc_err=0
+        TILES_CLOUD_COUNT=$(rclone lsf "$TILES_CLOUD_PATH" --files-only 2>/dev/null | wc -l) || _tc_err=1
+        if [[ "$_tc_err" -eq 1 ]]; then
+            log_ts "✗ Cloud tiles listing failed (rclone error)"
+            ALERTS+="❌ Cloud tiles listing failed (rclone error)
+"
+            CLOUD_OK=0
+        elif [[ -n "$_ltiles" && "${TILES_CLOUD_COUNT:-0}" -eq 0 ]]; then
+            _lage=$((($(date +%s) - $(stat -c %Y "$_ltiles")) / 3600))
+            if [[ "$_lage" -ge 2 ]]; then
+                log_ts "✗ Cloud tiles missing while local archive is ${_lage}h old"
+                ALERTS+="❌ Cloud tiles backup missing in the cloud (local archive ${_lage}h old)
+"
+                CLOUD_OK=0
+            else
+                log_ts "⚠ Cloud tiles not uploaded yet (local archive ${_lage}h old)"
+            fi
+        fi
     fi
 
     export_metric "backup_verification_ok{type=\"cloud\",instance=\"$DOMAIN\"} $CLOUD_OK"

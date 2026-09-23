@@ -26,6 +26,7 @@ BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive-crypt}"
 LOCAL_PROJ_KEEP="${BACKUP_PROJECT_KEEP:-${PROJECT_KEEP:-5}}"
 LOCAL_DB_KEEP="${BACKUP_DB_KEEP:-${DB_KEEP:-15}}"
+LOCAL_TILES_KEEP="${BACKUP_TILES_KEEP:-${TILES_KEEP:-3}}"
 
 ENV=$(detect_env)
 ENV_DISPLAY=$(format_env_display "$ENV")
@@ -37,22 +38,28 @@ DB_FILES=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -24)
 
 PROJ_COUNT=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | wc -l)
 DB_COUNT=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | wc -l)
+TILES_COUNT=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | wc -l)
 
 # rclone exit code is captured so a failed listing is reported as "?" rather
 # than silently looking identical to "genuinely zero cloud backups" (M9).
 _rclone_err=0
 _proj_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/project${ENV}/" --files-only 2>/dev/null | sort) || _rclone_err=1
 _db_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/db${ENV}/" --files-only 2>/dev/null | sort) || _rclone_err=1
+_tiles_list=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/tiles${ENV}/" --files-only 2>/dev/null | sort) || _rclone_err=1
 if [ "$_rclone_err" -eq 1 ]; then
     CLOUD_PROJ="?"
     CLOUD_DB="?"
+    CLOUD_TILES="?"
     LAST_GDRIVE_PROJ=""
     LAST_GDRIVE_DB=""
+    LAST_GDRIVE_TILES=""
 else
     CLOUD_PROJ=$(printf '%s' "$_proj_list" | grep -c '.' || true)
     CLOUD_DB=$(printf '%s' "$_db_list" | grep -c '.' || true)
+    CLOUD_TILES=$(printf '%s' "$_tiles_list" | grep -c '.' || true)
     LAST_GDRIVE_PROJ=$(format_name "$(printf '%s' "$_proj_list" | tail -1)")
     LAST_GDRIVE_DB=$(format_name "$(printf '%s' "$_db_list" | tail -1)")
+    LAST_GDRIVE_TILES=$(printf '%s' "$_tiles_list" | tail -1)
 fi
 
 # ==== DAILY REPORT ====
@@ -104,6 +111,12 @@ $(date +%d.%m) - $ENV_DISPLAY"
 
     MSG+="
 
+🗺️ Tiles: $TILES_COUNT / $LOCAL_TILES_KEEP local, $CLOUD_TILES cloud"
+    [ -n "$LAST_GDRIVE_TILES" ] && MSG+="
+- Last tiles: $LAST_GDRIVE_TILES"
+
+    MSG+="
+
 $(date '+%d.%m.%Y %H:%M')"
 
     send_tg "$MSG" || true
@@ -130,6 +143,12 @@ $(date -d '-7 days' +%d.%m)-$(date +%d.%m) - $ENV_DISPLAY"
 - Last project: $LAST_GDRIVE_PROJ"
     [ -n "$LAST_GDRIVE_DB" ] && MSG+="
 - Last db: $LAST_GDRIVE_DB"
+
+    MSG+="
+
+🗺️ Tiles: $TILES_COUNT local, $CLOUD_TILES cloud"
+    [ -n "$LAST_GDRIVE_TILES" ] && MSG+="
+- Last tiles: $LAST_GDRIVE_TILES"
 
     MSG+="
 

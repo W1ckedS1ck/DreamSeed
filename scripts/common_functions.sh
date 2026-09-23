@@ -216,7 +216,9 @@ ping_heartbeat() {
 
 rclone_retry() {
     local max_attempts="${RCLONE_RETRIES:-5}"
-    local attempt=1 rc timeout_secs="${RCLONE_CMD_TIMEOUT:-600}"
+    # rc=1 default: with RCLONE_RETRIES=0 the loop never runs — return a real
+    # failure code instead of an unbound variable under the caller's set -u.
+    local attempt=1 rc=1 timeout_secs="${RCLONE_CMD_TIMEOUT:-600}"
     while [ "$attempt" -le "$max_attempts" ]; do
         if [ "$attempt" -gt 1 ]; then
             local delay=$(((attempt - 1) * 5))
@@ -230,15 +232,38 @@ rclone_retry() {
     return "$rc"
 }
 
+# One recursive listing shared by every prune/skip check. rclone --fast-list
+# batches Drive list calls (docs: up to 20x faster) — drops the hourly cost from
+# ~9 lsf calls to one. Staleness is safe here: a missing fresh file only means
+# under-prune / one redundant re-upload, never a wrong delete.
+CLOUD_LISTING_FILE=""
+CLOUD_LISTING_FAILED=0
+cloud_listing() {
+    [ "${CLOUD_LISTING_FAILED:-0}" -eq 1 ] && return 1
+    [ -n "$CLOUD_LISTING_FILE" ] && [ -f "$CLOUD_LISTING_FILE" ] && return 0
+    local f
+    f=$(mktemp) || return 1
+    if rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only -R --fast-list >"$f"; then
+        CLOUD_LISTING_FILE="$f"
+        return 0
+    fi
+    rm -f "$f"
+    # Memoize the failure too — don't spend 5 retries per section when Drive is down.
+    CLOUD_LISTING_FAILED=1
+    return 1
+}
+
 prune_cloud_backups() {
     local subdir="$1" max="$2"
+    local prefix="${subdir}${ENV_SUFFIX}/"
     local all
-    all=$(rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/" --files-only 2>/dev/null | sort -r) || return 1
+    cloud_listing || return 1
+    all=$(awk -v p="$prefix" 'index($0,p)==1{print substr($0,length(p)+1)}' "$CLOUD_LISTING_FILE" | sort -r)
     local count
     count=$(printf '%s\n' "$all" | grep -c '[^[:space:]]' || true)
     if [ "$count" -gt "$max" ]; then
         printf '%s\n' "$all" | tail -n +$((max + 1)) | while read -r file; do
-            [ -n "$file" ] && rclone_retry delete "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}${ENV_SUFFIX}/$file" || true
+            [ -n "$file" ] && rclone_retry delete "$RCLONE_REMOTE:$REMOTE_BASE/$prefix$file" || true
         done
     fi
 }

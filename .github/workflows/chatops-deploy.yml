@@ -136,6 +136,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
+          # guard_source_ref blocks dev targets deployed from main — dev-* dispatches from dev
+          REF: ${{ startsWith(steps.parse.outputs.target, 'dev-') && 'dev' || 'main' }}
           WEB_SERVER: ${{ steps.parse.outputs.web_server }}
           MODE: ${{ steps.parse.outputs.mode }}
           IP: ${{ steps.parse.outputs.ip }}
@@ -152,7 +154,7 @@ jobs:
 
           gh workflow run deploy.yml \
             --repo "$REPO" \
-            --ref main \
+            --ref "$REF" \
             "${FIELDS[@]}"
 
           gh issue comment "$ISSUE" \
@@ -164,6 +166,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.parse.outputs.target }}
+          REF: ${{ startsWith(steps.parse.outputs.target, 'dev-') && 'dev' || 'main' }}
           ISSUE: ${{ github.event.issue.number }}
           USER: ${{ github.event.comment.user.login }}
           REPO: ${{ github.repository }}
@@ -172,7 +175,7 @@ jobs:
 
           gh workflow run deploy.yml \
             --repo "$REPO" \
-            --ref main \
+            --ref "$REF" \
             --field "environment=$TARGET" \
             --field "action=destroy" \
             --field "confirm=$CONFIRM"

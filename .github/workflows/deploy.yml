@@ -323,13 +323,17 @@ jobs:
         uses: $/.github/actions/capture-screenshot
         with:
           url: "https://${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}/"
-          output: /tmp/pages-screenshot/${{ inputs.environment }}.png
+          output: /tmp/pages-screenshot/${{ inputs.environment }}-${{ github.run_id }}.png
 
-      - name: Upload screenshot to Pages
+      # Plain artifact — the publish job merges it with the other publisher's
+      # site before uploading github-pages (that name allows one upload/run).
+      - name: Stage site content for Pages
         if: success() && inputs.action == 'deploy'
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
+          name: pages-own
           path: /tmp/pages-screenshot
+          if-no-files-found: error
 
       - name: Destroy
         if: inputs.action == 'destroy'
@@ -515,12 +519,46 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: pages
+      group: pages-site
       cancel-in-progress: false
     permissions:
+      actions: read
       pages: write
       id-token: write
     steps:
+      # Pages artifacts replace the whole site: absorb the newest live-site
+      # artifacts (union of what is/recently was published by both workflows),
+      # then add this run's files — publishing can only ever grow the site.
+      - name: Merge with the currently live site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pages-site
+          gh run download "$GITHUB_RUN_ID" -n pages-own -D /tmp/pages-site
+          IDS=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=github-pages&per_page=10" --jq '([.artifacts[] | select(.expired == false) | .workflow_run.id] | unique | .[0:3] | .[])')
+          merged=0
+          for id in $IDS; do
+            if [ "$id" = "$GITHUB_RUN_ID" ]; then
+              continue
+            fi
+            if gh run download "$id" -n github-pages -D "/tmp/pages-site-live-$id"; then
+              cp -rn "/tmp/pages-site-live-$id/." /tmp/pages-site/
+              merged=$((merged + 1))
+            else
+              echo "::warning::could not download live site artifact from run $id"
+            fi
+          done
+          if [ "$merged" -eq 0 ]; then
+            echo "::warning::no previous site artifact merged — this publish may replace existing files"
+          fi
+
+      - name: Upload merged site for Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: /tmp/pages-site
+
       - name: Deploy screenshot preview
         id: pages
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
@@ -534,7 +572,7 @@ jobs:
           {
             echo "<details><summary>📸 Screenshot — $PREVIEW_ENV</summary>"
             echo ""
-            echo "![$PREVIEW_ENV](${{ steps.pages.outputs.page_url }}$PREVIEW_ENV.png?t=${{ github.run_id }})"
+            echo "![$PREVIEW_ENV](${{ steps.pages.outputs.page_url }}$PREVIEW_ENV-${{ github.run_id }}.png)"
             echo ""
             echo "</details>"
             echo ""

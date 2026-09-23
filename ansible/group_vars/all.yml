@@ -38,8 +38,10 @@ redis_password: "{{ lookup('env', 'REDIS_PASSWORD') | default('', true) }}"
 backup_cron_enabled: true
 backup_project_keep: 5
 backup_db_keep: 15
+backup_tiles_keep: 3
 cloud_project_keep: 10
 cloud_db_keep: 100
+cloud_tiles_keep: 3
 
 # ==== Cloudflare ====
 

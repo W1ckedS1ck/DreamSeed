@@ -24,7 +24,7 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml`, `test-restore.yml` → `rclone_config.yml` |
 | `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml`, `test-restore.yml` |
 | `UBUNTU_PRO_TOKEN` | Ubuntu Pro subscription token | `deploy.yml`, `test-restore.yml`, `setup-env` → Ansible (playbook-01/09) — not in Terraform/cloud-init |
-| `EMAIL_USER` / `EMAIL_PASS` / `SMTP_SERVER` / `SMTP_PORT` | Legacy SMTP credentials — **reserved, not consumed anywhere** (present in `.env.example` and exported by preflight, but no workflow or role reads them) | — |
+| `EMAIL_USER` / `EMAIL_PASS` / `SMTP_SERVER` / `SMTP_PORT` | Legacy SMTP credentials — **reserved, not consumed anywhere** (present in `.env.example` only — not exported by preflight, no workflow or role reads them) | — |
 
 ---
 
@@ -152,7 +152,4 @@ The `gdrive-crypt` remote wraps the base `gdrive:` remote with rclone crypt (AES
 
 | Secret | Notes |
 |--------|-------|
-| `INFRACOST_API_KEY` | Infracost API key, not referenced in any workflow |
-| `TESTHETZ_HCLOUD_TOKEN` | Hetzner Cloud token for non-existent `test-bench.yml` |
-| `TESTHETZ_SSH_KEY` | SSH key for non-existent `test-bench.yml` |
 | `DEV_AWS_SSH_PUBLIC_KEY` | Not referenced in any workflow (AWS dev uses `VITALI_SSH_PUBLIC_KEY`) |

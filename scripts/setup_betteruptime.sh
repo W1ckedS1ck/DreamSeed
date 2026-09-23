@@ -1,6 +1,7 @@
 #!/bin/bash
 # Better Stack setup — heartbeats + Telegram webhooks. Idempotent.
-#   --write-env  Write new keys to secrets/.env automatically
+#   --write-env        Write new keys to secrets/.env automatically
+#   --heartbeats-only  Reconcile heartbeat period/grace only; skip .env writes
 # Requires BETTERUPTIME_API_TOKEN in secrets/.env; TG_TOKEN/TG_CHAT_ID optional.
 
 set -euo pipefail
@@ -36,7 +37,17 @@ load_env "$ENV_PLAIN"
 }
 
 WRITE_ENV=false
-[[ "${1:-}" == "--write-env" ]] && WRITE_ENV=true
+HEARTBEATS_ONLY=false
+for arg in "$@"; do
+    case "$arg" in
+    --write-env) WRITE_ENV=true ;;
+    --heartbeats-only) HEARTBEATS_ONLY=true ;;
+    *)
+        echo "Unknown option: $arg" >&2
+        exit 2
+        ;;
+    esac
+done
 
 API="https://uptime.betterstack.com/api/v2"
 # Auth header via process substitution (not argv) — token stays out of ps aux.
@@ -55,7 +66,8 @@ get_existing_webhooks() {
     curl -s -X GET "$API/outgoing-webhooks" --config <(bu_auth) || echo '{"data":[]}'
 }
 
-heartbeat_exists() {
+# Print "id\turl\tperiod\tgrace" for the named heartbeat (detect + reconcile drift).
+heartbeat_lookup() {
     local name="$1"
     # shellcheck disable=SC2178 # false positive: confused by python "data" below
     local data="$2"
@@ -67,7 +79,7 @@ data = json.load(sys.stdin)
 for item in data.get('data', []):
     a = item['attributes']
     if a['name'] == target:
-        print(a['url'])
+        print('%s\t%s\t%s\t%s' % (item['id'], a['url'], a.get('period', ''), a.get('grace', '')))
         break
 " "$name" 2>/dev/null
 }
@@ -138,15 +150,31 @@ for spec in \
     "report-daily|BETTERUPTIME_REPORT_DAILY_KEY|86400|1800" \
     "report-weekly|BETTERUPTIME_REPORT_WEEKLY_KEY|604800|3600" \
     "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600" \
-    "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|60"; do
+    "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|300"; do
 
     IFS='|' read -r name var_name period grace <<<"$spec"
 
-    url=$(heartbeat_exists "$name" "$existing_hb")
+    hb_id="" hb_url="" hb_period="" hb_grace=""
+    hb_line=$(heartbeat_lookup "$name" "$existing_hb" || true)
+    if [[ -n "$hb_line" ]]; then
+        IFS=$'\t' read -r hb_id hb_url hb_period hb_grace <<<"$hb_line" || true
+    fi
 
-    if [[ -n "$url" ]]; then
-        key=$(echo "$url" | awk -F/ '{print $NF}')
-        echo -e "  ${GREEN}✓${NC} $name (already exists)"
+    if [[ -n "$hb_id" ]]; then
+        key=$(echo "$hb_url" | awk -F/ '{print $NF}')
+        if [[ "$hb_period" == "$period" && "$hb_grace" == "$grace" ]]; then
+            echo -e "  ${GREEN}✓${NC} $name (already exists)"
+        else
+            # Reconcile drift so spec changes reach Better Stack (was create-only).
+            json=$(printf '{"period":%s,"grace":%s}' "$period" "$grace")
+            resp=$(curl -s -X PATCH "$API/heartbeats/$hb_id" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
+            if echo "$resp" | grep -q '"id"'; then
+                echo -e "  ${GREEN}✓${NC} $name (updated: period ${hb_period}s→${period}s, grace ${hb_grace}s→${grace}s)"
+            else
+                err=$(echo "$resp" | grep -o '"error": "[^"]*"' | head -1)
+                echo -e "  ${RED}✗${NC} $name — update failed ${err:-}" >&2
+            fi
+        fi
     else
         json=$(printf '{"name":"%s","period":%s,"grace":%s,"email":true,"push":true}' "$name" "$period" "$grace")
         resp=$(curl -s -X POST "$API/heartbeats" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
@@ -170,6 +198,12 @@ for spec in \
         fi
     fi
 done
+
+# Reconcile-only mode stops before monitors/webhooks/.env.
+if $HEARTBEATS_ONLY; then
+    echo -e "\n${GREEN}All done (heartbeats only)${NC}"
+    exit 0
+fi
 
 # ==== HTTP monitors ====
 

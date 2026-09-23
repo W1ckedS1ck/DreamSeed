@@ -76,10 +76,10 @@
 |--------|-------|
 | Deploy time | ~8-10 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
-| Backup frequency (RPO) | hourly local (5/15 versions) → hourly Google Drive (10/100) |
+| Backup frequency (RPO) | hourly local (5/15, map tiles 3) → hourly Google Drive (10/100, map tiles 3) |
 | Uptime coverage | 29 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
 | CI checks per push | 12 jobs, 8 required for merge (lint → security → validate) |
-| Security | Hardened Ubuntu 24.04 — SSH hardening, 5 fail2ban jails (edge bans via Cloudflare API), sysctl/PAM hardening |
+| Security | Hardened Ubuntu 24.04 — SSH hardening, 6 fail2ban jails (edge bans via Cloudflare API), sysctl/PAM hardening |
 
 ---
 
@@ -105,12 +105,12 @@ I own **everything below the application layer** — provisioning, configuration
 ### What I Built
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
-- **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 04-security → 05-monitor → 06-backup → 07-grafana → 08-promtail → 09-pro)
+- **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 09-pro → 04-security → 05-monitor → 06-backup → 08-promtail → 07-grafana)
 - **Observability** — VictoriaMetrics + Promtail + Grafana stack with 29 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
-- **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 12 GitHub Actions jobs (8 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy and docs workflows
+- **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 project/DB + 3 map-tiles version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
+- **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 8 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy and docs workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls
-- **Production safety** — 3-step destroy confirmation on prod (two prompts + typing `destroy prod`), rollback requires typing `rollback <environment>` confirmation, prod `terraform apply` / Grafana / deploy require environment approval
+- **Production safety** — GitHub `production` environment approval gate on prod deploy/destroy/rollback/terraform-apply; destroy requires typing `destroy <target>` as the workflow confirmation input
 
 ---
 
@@ -149,37 +149,33 @@ Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). 
 
 ## 🚀 Deploy Commands {#deploy-commands}
 
+**Deploys and destroys run only via GitHub Actions** — `deploy.sh` locally is for lint, dry-run, logs and single-playbook debug:
+
 ```bash
-# Production on AWS with Nginx (requires confirmation)
-./deploy.sh prod -n
+# Deploy — prod targets wait for the production environment approval
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=deploy -f web_server=nginx -f mode=parallel
 
-# Production on Hetzner with Nginx (requires confirmation)
-./deploy.sh prod-hetz -n
+# Destroy — typed confirmation + environment approval
+gh workflow run deploy.yml --ref main -f environment=prod-hetz -f action=destroy -f confirm="destroy prod-hetz"
 
-# Dev environment 1 (Nginx)
-./deploy.sh dev-hetz -n
+# Dev targets dispatch from the dev branch (guard_source_ref)
+gh workflow run deploy.yml --ref dev -f environment=dev-hetz -f action=deploy -f web_server=nginx
 
-# Dev environment 2 (Apache)
-./deploy.sh dev-aws -a
+# Or the web UI: Actions → Deploy → Run workflow
+```
 
-# Parallel mode (4-phase Ansible) — ~30% faster on sequential deploys
-./deploy.sh prod -n -p
+**Local — lint / dry-run / debug only:**
 
-# Reconfigure an existing server (skip provisioning)
-./deploy.sh prod -n -i 1.2.3.4
+```bash
+# Dry run (parses env, validates playbooks/terraform — no changes)
+./deploy.sh prod -n --dry-run
 
-# Tail the latest deploy log (or terraform log with --logs tf)
+# Lint everything · tail the latest deploy log (or terraform log with --logs tf)
+./deploy.sh --lint
 ./deploy.sh --logs
 ```
 
-### Destroy
-
-```bash
-./deploy.sh dev-hetz -x      # one confirmation
-./deploy.sh prod -x          # three-step confirmation (safety!)
-```
-
-Any `prod` command — deploy or destroy — requires manual confirmation. Production destroy additionally requires typing the literal phrase **`destroy prod`**.
+Any prod destroy requires typing the literal phrase **`destroy <target>`** as the workflow `confirm` input plus the manual environment approval.
 
 ---
 
@@ -192,8 +188,9 @@ DreamSeed/
 │   │                       # ansible, stages, provision, wait, inventory, playbooks,
 │   │                       # post, gen_vars.py
 ├── .github/
-│   ├── actions/            # 8 composite actions: setup-* (terraform/ansible/secrets/
-│   │   │                   # env/gitleaks), chatops, scrub-log, capture-screenshot
+│   ├── actions/            # 9 composite actions: setup-* (terraform/ansible/secrets/
+│   │   │                   # env/gitleaks), chatops, mask-secrets, scrub-log,
+│   │   │                   # capture-screenshot
 │   ├── scripts/            # test-restored-server.sh — post-restore verification suite
 │   └── workflows/          # 10 workflows (see CI/CD section)
 ├── terraform/
@@ -261,7 +258,7 @@ Grafana dashboards, datasources, **and 29 alert rules** deployed automatically �
 **External (Better Stack cloud-hosted):**
 
 - **3 HTTP monitors** — main site (HTTP 200 + keyword "The Dreamers"), admin panel (`/manager/`), Grafana (`/grafana`) — every monitor checked from **4 global regions** (EU, US, Asia, Australia) at 3min interval
-- **6 cron heartbeats** — backup (1h/5m), gdrive-upload (1h/5m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/60s)
+- **6 cron heartbeats** — backup (1h/5m), gdrive-upload (1h/5m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/5m)
 - **Public status page** — `status.dreamseed.online` with live uptime history
 - **Telegram alerts** via separate webhooks for incident start and resolve
 
@@ -277,7 +274,7 @@ Grafana dashboards, datasources, **and 29 alert rules** deployed automatically �
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 12 jobs, 8 required | Every PR + push to main/dev |
+| **CI** — 12 jobs (11 on PRs — Deploy Check is push-only), 8 required | Every PR + push to main/dev |
 | **Deploy** — single-click deploy | Manual dispatch (all targets, prod requires approval) |
 | **Restore Test** — full backup/restore drill | Weekly Monday 10:00 UTC + manual |
 | **Drift Detection** — terraform plan on 5 targets | Daily 07:05 UTC |
@@ -288,13 +285,13 @@ Grafana dashboards, datasources, **and 29 alert rules** deployed automatically �
 | **ChatOps Deploy** — `/deploy` `/destroy` via issue comments | Issue comment |
 | **Docs** — Pages site + wiki sync | Push to main + manual |
 
-CI (12 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** (tflint+validate+fmt) · **Checkov** · **Trivy** · **gitleaks** · **actionlint** · YAML lint · zizmor · pre-commit · Deploy Check. Dependencies: **Renovate** (auto-PRs).
+CI (12 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** (tflint+validate+fmt) · **Checkov** · **Trivy** · **gitleaks** · **actionlint** · YAML lint · zizmor · pre-commit · .env parser contract · Deploy Check (push-only). Dependencies: **Renovate** (auto-PRs).
 
 ### 🛑 Production Safeguards
 
 - **Branch protection (ruleset `Protect Main`)** — all changes land via PR: 8 CI checks required, **squash-only** merge, linear history, no direct push / force-push (even for the owner)
-- **Deploy:** manual `[y/N]` confirmation before touching production
-- **Destroy:** three-step — two `[y/N]` prompts + typing `destroy prod`
+- **Deploy:** GitHub `production` environment approval gate on every prod run (manual approve step)
+- **Destroy:** typed `destroy <target>` confirmation input + the same approval gate
 - **Rollback:** requires typing `rollback <environment>` (e.g. `rollback prod-hetz`) in the workflow input
 - **Prod infra mutations** (deploy / `terraform apply` / Grafana Cloud) require environment approval in GitHub Actions
 - **Terraform Cloud** isolates state files per environment

@@ -35,7 +35,6 @@ TOOLS=(
     "trivy:trivy:brew install trivy"
     "terraform:terraform:brew install terraform"
     "markdownlint-cli2:markdownlint-cli2:npm install -g markdownlint-cli2"
-    "uv:uv:curl -LsSf https://astral.sh/uv/install.sh | sh"
 )
 
 FAILED=false
@@ -54,7 +53,6 @@ print_fail() {
     FAILED=true
 }
 print_skip() { echo -e "    ${YELLOW}⊘${NC} $1"; }
-print_error() { $CI_MODE && echo "::error::$1" || echo -e "  ${RED}✗${NC} $1"; }
 
 tool_available() {
     command -v "$1" &>/dev/null
@@ -428,7 +426,9 @@ run_secrets_audit() {
     fi
 
     local tracked_env
-    tracked_env=$(git ls-files 2>/dev/null | grep "\.env$") || true
+    # Basename .env or .env.* (real secret files), excluding the empty-value
+    # .env.example template and tests/env/*.env contract fixtures (fake values).
+    tracked_env=$(git ls-files 2>/dev/null | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
     if [[ -n "$tracked_env" ]]; then
         print_fail ".env files are tracked in git"
         echo "$tracked_env"

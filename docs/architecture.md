@@ -111,12 +111,15 @@ secrets/.env (ansible-vault AES256 encrypted, gitignored)
 ```
 smart_backup.sh (hourly via cron)
    │
-   ├─ Project: find -newer marker → skip if unchanged
+   ├─ Project: find -newer marker → skip if unchanged (tiles/ excluded)
    │            tar.gz → rotate keep 5
+   │
+   ├─ Map tiles: separate content-addressed archive (name = tree hash) →
+   │            only re-tarred when the tiles tree changed → rotate keep 3
    │
    ├─ Database: mysqldump via ~/.my.cnf → gzip → rotate keep 15
    │
-   ├─ Redis: redis-cli --rdb dump → rotate keep 5
+   ├─ Redis: redis-cli SAVE → cp dump.rdb → rotate keep 5
    │
    ├─ Push cron_last_run_backup to VictoriaMetrics
    │
@@ -124,9 +127,11 @@ smart_backup.sh (hourly via cron)
 
 upload_backups_to_gdrive.sh (every hour at :05)
    │
-   ├─ rclone copy latest project + db → gdrive-crypt:DreamSeed/backups/{project,db}${ENV}/ (ignore-existing)
+   ├─ rclone copy every project + db + tiles file missing on cloud → gdrive-crypt:DreamSeed/backups/{project,db}${ENV}/ (existence via shared cloud listing)
    │
-   ├─ Prune cloud: 10 project + 100 db → cleanup trash
+   ├─ rclone copy map tiles (prod only, content-addressed → skipped if unchanged)
+   │
+   ├─ Prune cloud: 10 project + 100 db + 3 tiles → cleanup trash
    │
    └─ Ping Better Stack heartbeat
 
@@ -137,6 +142,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
    │
    ├─ Stop web + PHP-FPM
    ├─ Restore project (tar -xzf)
+   ├─ Restore map tiles (separate archive, extracted into the project)
    ├─ Restore DB (gunzip | mysql) + TRUNCATE modx_session
    ├─ Detect rollback via modx_site_content.editedon
    └─ Restart services → health check → Telegram summary
@@ -261,7 +267,7 @@ Layer 2 — SSH:
   Key-only auth: 00-hardening.conf.d prefix wins via sshd first-match
 
 Layer 3 — Application:
-  fail2ban: modx-admin (POST /connectors/ — 150 retries/10min, no exemption;
+  fail2ban: modx-admin (POST /connectors/ — 1000 retries/10min, no exemption;
             an earlier Referer/UA exemption was removed as spoofable) →
             bans at Cloudflare edge
   fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits) → edge ban 12h
@@ -287,11 +293,13 @@ Layer 5 — Secrets:
 ```
 Trigger            Workflow              Jobs
 ───────            ────────              ────
-Push / PR          CI                    11 jobs (8 required for merge):
+Push / PR          CI                    12 jobs — 11 on PRs (Deploy Check is
+                                           push-only), 8 required for merge:
                                            ShellCheck, ansible-lint, actionlint,
                                            Terraform checks (tflint+validate+fmt),
                                            Checkov, Trivy, gitleaks, yamllint,
-                                           zizmor, pre-commit, Deploy Check
+                                           zizmor, pre-commit, .env parser
+                                           contract, Deploy Check
                      ────────── 8 required ──────────
 
 Manual dispatch    Deploy                Setup → secrets → deploy.sh / destroy

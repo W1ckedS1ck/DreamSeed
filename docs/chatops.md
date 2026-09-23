@@ -24,8 +24,9 @@ issue comment ──▶ [chatops] Deploy workflow ──▶ parse.py ──▶ d
    - `deploy` / `destroy` / `help` / `status` — handled
 3. **Permission gate** — author must be `OWNER`/`MEMBER`/`COLLABORATOR` with `write` or `admin`;
    **prod targets require `admin`**.
-4. **Dispatch** — runs `deploy.yml` via `gh workflow run --ref main` (always from `main`, the
-   stable branch — never from the comment's branch).
+4. **Dispatch** — runs `deploy.yml` via `gh workflow run` from `main` for
+   prod/other targets, or from `dev` for `dev-*` targets (satisfies
+   `guard_source_ref`; never from the comment's branch).
 
 ## Commands
 
@@ -91,7 +92,7 @@ Only `/deploy` and `/destroy` prefixed comments are treated as commands.
 | `.github/actions/chatops/parse.py` | Command parsing (`none`/`invalid`/`deploy`/`destroy`/`help`/`status`) |
 | `.github/actions/chatops/post_help.py` | `/deploy help` reply |
 | `.github/actions/chatops/post_status.py` | `/deploy status` reply |
-| `.github/workflows/deploy.yml` | The actual deploy/destroy workflow (dispatched with `--ref main`) |
+| `.github/workflows/deploy.yml` | The actual deploy/destroy workflow (dispatched from `main`, or `dev` for `dev-*` targets) |
 
 ## Adding a target
 

@@ -19,6 +19,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common_functions.sh
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
+# Cloud archives (project ~470MB, tiles ~380MB) can exceed the 600s
+# rclone_retry cap on a slow Drive day — the timeout would kill a healthy
+# copy mid-flight. Match the upload script's 1800s.
+export RCLONE_CMD_TIMEOUT="${RCLONE_CMD_TIMEOUT:-1800}"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX:-modx_}"
 MODX_TABLE_PREFIX="${MODX_TABLE_PREFIX,,}"
 
@@ -180,7 +184,7 @@ select_backup_cloud() {
     local pattern="$2"
 
     local files=()
-    while IFS= read -r f; do files+=("$f"); done < <(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/" --files-only --format tps 2>/dev/null | grep "$pattern" | sort -t';' -k1 -r || true)
+    while IFS= read -r f; do files+=("$f"); done < <(rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/$remote_path/" --files-only --format tps 2>/dev/null | grep "$pattern" | sort -t';' -k1 -r || true)
 
     if [ ${#files[@]} -eq 0 ]; then
         echo -e "${RED}No backups found on GDrive ($remote_path)${NC}" >&2
@@ -284,6 +288,7 @@ if [ "$MODE" != "--auto-latest" ]; then
     SELECTED_PROJECT=""
     SELECTED_DB=""
     SELECTED_REDIS=""
+    SELECTED_TILES=""
 
     case "$MENU_CHOICE" in
         1)
@@ -330,9 +335,18 @@ if [ "$MODE" != "--auto-latest" ]; then
     # Try to select Redis backup if "all" was chosen (optional — doesn't fail if not found)
     if [[ "$RESTORE_PROJECT" -eq 1 && "$RESTORE_DB" -eq 1 ]]; then
         if [ "$SOURCE" = "cloud" ]; then
-            SELECTED_REDIS=$(select_backup_cloud "redis${ENV_SUFFIX}" "redis_dump_" 2>/dev/null) || SELECTED_REDIS=""
+            SELECTED_REDIS=$(select_backup_cloud "redis${ENV_SUFFIX}" "redis_dump_") || SELECTED_REDIS=""
         else
-            SELECTED_REDIS=$(select_backup "$BACKUP_DIR/redis" "*.rdb" 2>/dev/null) || SELECTED_REDIS=""
+            SELECTED_REDIS=$(select_backup "$BACKUP_DIR/redis" "*.rdb") || SELECTED_REDIS=""
+        fi
+    fi
+
+    # Tiles restore alongside the project (optional).
+    if [ "$RESTORE_PROJECT" -eq 1 ]; then
+        if [ "$SOURCE" = "cloud" ]; then
+            SELECTED_TILES=$(select_backup_cloud "tiles${ENV_SUFFIX}" "DreamSeed_tiles_") || SELECTED_TILES=""
+        else
+            SELECTED_TILES=$(select_backup "$BACKUP_DIR/tiles" "DreamSeed_tiles_*.tar.gz") || SELECTED_TILES=""
         fi
     fi
 
@@ -352,6 +366,7 @@ if [ "$MODE" != "--auto-latest" ]; then
     [ -n "$SELECTED_PROJECT" ] && echo -e "  - Replace project files: ${CYAN}$(basename "$SELECTED_PROJECT")${NC}"
     [ -n "$SELECTED_DB" ] && echo -e "  - Overwrite database: ${CYAN}$(basename "$SELECTED_DB")${NC}"
     [ -n "$SELECTED_REDIS" ] && echo -e "  - Restore Redis sessions: ${CYAN}$(basename "$SELECTED_REDIS")${NC}"
+    [ -n "$SELECTED_TILES" ] && echo -e "  - Restore map tiles: ${CYAN}$(basename "$SELECTED_TILES")${NC}"
     echo -e "  - Stop $WEB_SERVICE and PHP-FPM"
     echo -e "  - Clear MODX cache"
     echo ""
@@ -377,6 +392,7 @@ else
     SELECTED_PROJECT=$(list_backups "$BACKUP_DIR/project" 'DreamSeed_*.tar.gz' | head -1) || true
     SELECTED_DB=$(list_backups "$BACKUP_DIR/db" 'db_*.sql.gz' | head -1) || true
     SELECTED_REDIS=$(list_backups "$BACKUP_DIR/redis" 'redis_dump_*.rdb' | head -1) || true
+    SELECTED_TILES=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1) || true
 
     _db_age=0
     [ -n "$SELECTED_DB" ] && _db_age=$(($(date +%s) - $(stat -c %Y "$SELECTED_DB")))
@@ -384,7 +400,7 @@ else
     _cloud_listing=""
     if [ -z "$SELECTED_DB" ] || [ "$_db_age" -ge 21600 ] || [ -z "$SELECTED_PROJECT" ]; then
         echo "Local backups missing or DB $((_db_age / 3600))h old — checking cloud..."
-        _cloud_listing=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive 2>/dev/null) || {
+        _cloud_listing=$(rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive --fast-list 2>/dev/null) || {
             echo -e "${YELLOW}  ⚠ Cloud listing failed — using local backups only${NC}" >&2
             _cloud_listing=""
         }
@@ -404,7 +420,7 @@ else
             if [ -n "$cloud_new" ] && { [ -z "$cur" ] || [ "$cloud_new" \> "$(basename "$cur")" ]; }; then
                 echo "  ${subdir}: downloading newest cloud backup ${cloud_new}" >&2
                 mkdir -p "$dir"
-                if rclone copy "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}/${cloud_new}" "$dir/" >/dev/null 2>&1; then
+                if rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}/${cloud_new}" "$dir/" >/dev/null 2>&1; then
                     echo "$dir/$cloud_new"
                     return 0
                 fi
@@ -417,6 +433,20 @@ else
     SELECTED_PROJECT=$(_fetch "$BACKUP_DIR/project" "project" "$SELECTED_PROJECT")
     SELECTED_DB=$(_fetch "$BACKUP_DIR/db" "db" "$SELECTED_DB")
     SELECTED_REDIS=$(_fetch "$BACKUP_DIR/redis" "redis" "$SELECTED_REDIS")
+
+    # Tiles are content-addressed — _fetch's name sort can't rank them; use mtime.
+    if [ -z "$SELECTED_TILES" ]; then
+        _ctiles=$(rclone_retry lsf "$RCLONE_REMOTE:$REMOTE_BASE/tiles/" --files-only --format tp 2>/dev/null | sort | tail -1 | cut -d';' -f2 || true)
+        if [ -n "$_ctiles" ]; then
+            echo "  tiles: downloading newest cloud backup $_ctiles" >&2
+            mkdir -p "$BACKUP_DIR/tiles"
+            if rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/tiles/$_ctiles" "$BACKUP_DIR/tiles/" >/dev/null 2>&1; then
+                SELECTED_TILES="$BACKUP_DIR/tiles/$_ctiles"
+            else
+                echo -e "${YELLOW}  ⚠ tiles: cloud download failed${NC}" >&2
+            fi
+        fi
+    fi
 
     if [ -z "$SELECTED_PROJECT" ] || [ -z "$SELECTED_DB" ]; then
         echo "ERROR: Latest backups not found (local or GDrive)"
@@ -479,9 +509,18 @@ PYEOF
     # Pre-extraction layout check: the archive's top-level dir must match the
     # project dir name (smart_backup archives as "-C dirname basename"). Catches
     # a wrong/renamed archive BEFORE extraction, not via post-hoc rollback.
-    _topdir=$(timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | head -1 | cut -d/ -f1 || true)
+    _proj_listing=$(timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null || true)
+    _topdir=$(printf '%s\n' "$_proj_listing" | head -1 | cut -d/ -f1 || true)
     if [[ -z "$_topdir" || "$_topdir" != "$(basename "$PROJECT_DIR")" ]]; then
         echo -e "${RED}✗ Project archive top-level '${_topdir:-<empty>}' != expected '$(basename "$PROJECT_DIR")': $(basename "$SELECTED_PROJECT")${NC}"
+        exit 1
+    fi
+    # New-format archives keep an empty tiles/ marker (contents live in the tiles
+    # artifact) — without that artifact the restore would silently lose the map.
+    if printf '%s\n' "$_proj_listing" | grep -qE '^[^/]+/tiles/$' \
+        && ! printf '%s\n' "$_proj_listing" | grep -qE '^[^/]+/tiles/.' \
+        && [ -z "$SELECTED_TILES" ]; then
+        echo -e "${RED}✗ Project archive expects tiles (empty tiles/ marker) but no tiles backup — restore would lose the map${NC}"
         exit 1
     fi
     echo -e "${GREEN}✓ Project archive: OK${NC}"
@@ -556,6 +595,17 @@ echo ""
 
 PROJECT_STATUS="⏭️ Skipped"
 
+# MODX cache is a tmpfs mount; unmount before mv/rm, remount after (else the
+# mount rides into .bak and rm -rf fails on the busy mountpoint).
+umount_cache_tmpfs() { mountpoint -q "$1/core/cache" 2>/dev/null && sudo umount "$1/core/cache" 2>/dev/null || true; }
+mount_cache_tmpfs() {
+    mountpoint -q "$PROJECT_DIR/core/cache" 2>/dev/null && return 0
+    # The project archive excludes core/cache entirely, so the dir must exist first.
+    sudo mkdir -p "$PROJECT_DIR/core/cache" 2>/dev/null || true
+    sudo mount "$PROJECT_DIR/core/cache" 2>/dev/null || sudo mount -a 2>/dev/null || true
+    mountpoint -q "$PROJECT_DIR/core/cache" 2>/dev/null || echo "WARNING: tmpfs not mounted at $PROJECT_DIR/core/cache (check fstab)" >&2
+}
+
 if [ -n "$SELECTED_PROJECT" ]; then
     if [ "$MODE" = "interactive" ]; then
         echo -e "${YELLOW}[2] Restoring project...${NC}"
@@ -572,8 +622,9 @@ if [ -n "$SELECTED_PROJECT" ]; then
         exit 1
     }
 
-    # Backup current project
+    # Backup current project (unmount cache tmpfs first — see helper above)
     if [ -d "$PROJECT_DIR" ]; then
+        umount_cache_tmpfs "$PROJECT_DIR"
         sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.bak.$$"
     fi
     sudo mkdir -p "$PROJECT_DIR"
@@ -586,23 +637,29 @@ if [ -n "$SELECTED_PROJECT" ]; then
         # Verify structure
         if [ ! -f "$PROJECT_DIR/index.php" ]; then
             echo -e "${RED}✗ Restored project missing index.php — archive may be invalid${NC}"
+            umount_cache_tmpfs "$PROJECT_DIR"
             sudo rm -rf "$PROJECT_DIR"
             [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
+            mount_cache_tmpfs
             PROJECT_STATUS="❌ Archive structure error"
             RESTORE_RESULT=1
             echo -e "${RED}✗ Project restore failed!${NC}"
         else
+            umount_cache_tmpfs "${PROJECT_DIR}.bak.$$"
             sudo rm -rf "${PROJECT_DIR}.bak.$$" 2>/dev/null || true
             sudo mkdir -p "$PROJECT_DIR/core/xpdo/cache"
             sudo chown -R www-data:www-data "$PROJECT_DIR"
             sudo chmod g+s "$PROJECT_DIR"
+            mount_cache_tmpfs
             PROJECT_STATUS="✅ $(basename "$SELECTED_PROJECT")"
             echo -e "${GREEN}✓ Project restored${NC}"
         fi
     else
         # Rollback on failure
+        umount_cache_tmpfs "$PROJECT_DIR"
         sudo rm -rf "$PROJECT_DIR"
         [ -d "${PROJECT_DIR}.bak.$$" ] && sudo mv "${PROJECT_DIR}.bak.$$" "$PROJECT_DIR" || true
+        mount_cache_tmpfs
         PROJECT_STATUS="❌ Error"
         RESTORE_RESULT=1
         echo -e "${RED}✗ Project restore failed!${NC}"
@@ -610,6 +667,64 @@ if [ -n "$SELECTED_PROJECT" ]; then
 else
     if [ "$MODE" = "interactive" ]; then
         echo -e "${YELLOW}[2] Skipping project restore.${NC}"
+    fi
+fi
+echo ""
+
+# ==== STEP 6.5: Restore map tiles ====
+# Tiles are excluded from the project archive — restore separately.
+
+TILES_STATUS="⏭️ Skipped"
+
+if [ -n "$SELECTED_TILES" ]; then
+    if [ "$MODE" = "interactive" ]; then
+        echo -e "${YELLOW}[2.5] Restoring map tiles...${NC}"
+    else
+        echo "Restoring map tiles..."
+    fi
+
+    _tiles_ok=0
+    if timeout 300 sudo tar -tzf "$SELECTED_TILES" >/dev/null 2>&1; then
+        _tiles_listing=$(timeout 300 sudo tar -tzf "$SELECTED_TILES" 2>/dev/null || true)
+        _tiles_top=$(printf '%s\n' "$_tiles_listing" | head -1 | cut -d/ -f1 || true)
+        _tiles_safe=0
+        if [ "$_tiles_top" = "tiles" ] && ! printf '%s\n' "$_tiles_listing" | grep -qE '^/|(^|/)\.\.(/|$)'; then
+            # Same tar-slip guard as the project archive above: reject symlinks
+            # whose target escapes the archive root (extracted as root).
+            if timeout 300 sudo python3 - "$SELECTED_TILES" <<'PYEOF' 2>/dev/null
+import tarfile, sys, posixpath
+
+archive, top = sys.argv[1], "tiles"
+with tarfile.open(archive, "r:gz") as tf:
+    for m in tf.getmembers():
+        if not m.issym():
+            continue
+        t = m.linkname
+        if t.startswith("/"):
+            print(f"unsafe: {m.name} -> {t} (absolute)"); sys.exit(1)
+        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(m.name), t))
+        if resolved != top and not resolved.startswith(top + "/"):
+            print(f"unsafe: {m.name} -> {t} (escapes to {resolved})"); sys.exit(1)
+PYEOF
+            then
+                _tiles_safe=1
+            fi
+        fi
+        if [ "$_tiles_safe" -eq 1 ]; then
+            if timeout 1800 gunzip -c "$SELECTED_TILES" | sudo tar --no-same-owner --no-same-permissions -xf - -C "$PROJECT_DIR" 2>/dev/null; then
+                sudo chown -R www-data:www-data "$PROJECT_DIR/tiles"
+                _tiles_ok=1
+            fi
+        fi
+    fi
+
+    if [ "$_tiles_ok" -eq 1 ]; then
+        TILES_STATUS="✅ $(basename "$SELECTED_TILES")"
+        echo -e "${GREEN}✓ Map tiles restored${NC}"
+    else
+        TILES_STATUS="❌ $(basename "$SELECTED_TILES")"
+        RESTORE_RESULT=1
+        echo -e "${RED}✗ Map tiles restore failed!${NC}"
     fi
 fi
 echo ""
@@ -799,6 +914,7 @@ echo ""
 echo "Project: $PROJECT_STATUS"
 echo "DB: $DB_STATUS"
 echo "Redis: $REDIS_STATUS"
+echo "Tiles: $TILES_STATUS"
 echo "Site: $SITE_STATUS"
 echo "$ELAPSED_DISPLAY"
 
@@ -816,6 +932,7 @@ MSG="$MSG
 
 📝 <b>Project:</b> $PROJECT_STATUS
 🗄️ <b>DB:</b> $DB_STATUS
+🗺️ <b>Tiles:</b> $TILES_STATUS
 🌐 <b>Site:</b> $SITE_STATUS
 ⏱️ <b>Time:</b> <code>${ELAPSED}</code>s"
 

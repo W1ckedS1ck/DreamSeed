@@ -9,6 +9,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_functions.sh"
 load_env "$SCRIPT_DIR/.env"
 
+# ==== Lock against parallel runs (slow tile uploads can outlast the cron) ====
+LOCK_DIR="${HOME:-/tmp}/.locks"
+mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
+LOCK_FILE="$LOCK_DIR/upload_gdrive.lock"
+exec 8>"$LOCK_FILE"
+if ! flock -n 8; then
+    echo "Upload already running (lock: $LOCK_FILE)" >&2
+    exit 0
+fi
+# The shared cloud-listing temp file must not outlive a failed run (set -e exit).
+trap 'rm -f "${CLOUD_LISTING_FILE:-}" 2>/dev/null || true' EXIT
+
 # ==== Logging ====
 LOG_DIR="${BACKUP_DIR:-/home/ubuntu/backups}/logs"
 mkdir -p "$LOG_DIR"
@@ -30,6 +42,7 @@ LOCAL_BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 PROJECT_DIR="$LOCAL_BACKUP_DIR/project"
 DB_DIR="$LOCAL_BACKUP_DIR/db"
 REDIS_DIR="$LOCAL_BACKUP_DIR/redis"
+TILES_DIR="$LOCAL_BACKUP_DIR/tiles"
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive-crypt}"
 
@@ -53,6 +66,7 @@ REMOTE_BASE="DreamSeed/backups"
 MAX_PROJECT_BACKUPS="${CLOUD_PROJECT_KEEP:-10}"
 MAX_DB_BACKUPS="${CLOUD_DB_KEEP:-100}"
 MAX_REDIS_BACKUPS="${CLOUD_REDIS_KEEP:-10}"
+MAX_TILES_BACKUPS="${CLOUD_TILES_KEEP:-3}"
 
 HAS_ERROR=0
 UPLOAD_MSG=""
@@ -63,14 +77,18 @@ UPLOAD_MSG=""
 # cloud history (M16).
 upload_new_files() {
     local local_dir="$1" glob="$2" remote_dir="$3" timeout="$4" label="$5"
-    local files base existing_present
+    local files base existing_present _cloud_prefix
     files=$(find "$local_dir" -maxdepth 1 -type f -name "$glob" -printf '%f\n' 2>/dev/null | sort -r || true)
     [ -z "$files" ] && {
         echo "  $label: ⚠️ no backups found"
         return 0
     }
 
-    existing_present=$(rclone lsf "$RCLONE_REMOTE:$remote_dir/" --files-only 2>/dev/null | sort || true)
+    existing_present=""
+    if cloud_listing; then
+        _cloud_prefix="${remote_dir#"$REMOTE_BASE"/}"
+        existing_present=$(awk -v p="$_cloud_prefix" 'index($0,p)==1{print substr($0,length(p)+1)}' "$CLOUD_LISTING_FILE")
+    fi
     export RCLONE_CMD_TIMEOUT="$timeout"
 
     while IFS= read -r base; do
@@ -90,32 +108,54 @@ upload_new_files() {
     done <<<"$files"
 }
 
-# ==== 1. Upload project ====
-upload_new_files "$PROJECT_DIR" "DreamSeed_*.tar.gz" "$REMOTE_BASE/project${ENV_SUFFIX}/" 1800 "Project"
+# ==== 1. Upload map tiles FIRST (prod-only) ====
+# Invariant: a cloud project archive without tiles must never appear before its
+# tiles artifact — otherwise a restore in that window silently loses the map.
+TILES_PENDING=0
+if [[ -d "$TILES_DIR" && -z "$ENV_SUFFIX" ]]; then
+    _err_before=$HAS_ERROR
+    upload_new_files "$TILES_DIR" "DreamSeed_tiles_*.tar.gz" "$REMOTE_BASE/tiles${ENV_SUFFIX}/" 1800 "Tiles"
+    [[ "$HAS_ERROR" -ne "$_err_before" ]] && TILES_PENDING=1
+fi
 
-# ==== 2. Upload database ====
+# ==== 2. Upload project ====
+if [[ "$TILES_PENDING" -eq 1 ]]; then
+    echo "  Project: ⏭ skipped this run — tiles upload failed, keeping the old cloud archive"
+else
+    upload_new_files "$PROJECT_DIR" "DreamSeed_*.tar.gz" "$REMOTE_BASE/project${ENV_SUFFIX}/" 1800 "Project"
+fi
+
+# ==== 3. Upload database ====
 upload_new_files "$DB_DIR" "db_*.sql.gz" "$REMOTE_BASE/db${ENV_SUFFIX}/" 1800 "DB"
 
-# ==== 3. Upload Redis ====
+# ==== 4. Upload Redis ====
 if [[ -d "$REDIS_DIR" ]]; then
     upload_new_files "$REDIS_DIR" "redis_dump_*.rdb" "$REMOTE_BASE/redis${ENV_SUFFIX}/" 600 "Redis"
 fi
 
-# ==== 4. Clean old backups in cloud ====
+# ==== 5. Clean old backups in cloud ====
 prune_cloud_backups "project" "$MAX_PROJECT_BACKUPS" || UPLOAD_MSG+="⚠️ Project listing failed, cleanup skipped
 "
 prune_cloud_backups "db" "$MAX_DB_BACKUPS" || UPLOAD_MSG+="⚠️ DB listing failed, cleanup skipped
 "
 prune_cloud_backups "redis" "$MAX_REDIS_BACKUPS" || UPLOAD_MSG+="⚠️ Redis listing failed, cleanup skipped
 "
+prune_cloud_backups "tiles" "$MAX_TILES_BACKUPS" || UPLOAD_MSG+="⚠️ Tiles listing failed, cleanup skipped
+"
 
-if timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null; then
-    echo "  Cleanup: ✅ trash emptied"
-else
-    echo "  Cleanup: ⚠️ skipped (timeout or error)"
+# Trash cleanup once a day (cron runs hourly at :05) — each call is another
+# Drive round-trip on a listing-driven command.
+if [ "$(date +%H)" = "00" ]; then
+    if timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null; then
+        echo "  Cleanup: ✅ trash emptied"
+    else
+        echo "  Cleanup: ⚠️ skipped (timeout or error)"
+    fi
 fi
+rm -f "${CLOUD_LISTING_FILE:-}" 2>/dev/null || true
+CLOUD_LISTING_FILE=""
 
-# ==== 5. Rotate old logs (keep 30 days) ====
+# ==== 6. Rotate old logs (keep 30 days) ====
 find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
 
 if [[ "$HAS_ERROR" -eq 0 ]]; then

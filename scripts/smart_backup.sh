@@ -21,6 +21,10 @@ MARKER_FILE="$BACKUP_DIR/.project_marker"
 
 PROJECT_KEEP="${BACKUP_PROJECT_KEEP:-${PROJECT_KEEP:-5}}"
 DB_KEEP="${BACKUP_DB_KEEP:-${DB_KEEP:-15}}"
+TILES_KEEP="${BACKUP_TILES_KEEP:-${TILES_KEEP:-3}}"
+
+# Tiles are large and rarely change — keep them out of the project archive.
+TILES_DIR="${PROJECT_DIR}/tiles"
 
 DOMAIN="${DOMAIN:-unknown}"
 
@@ -28,7 +32,7 @@ DATE=$(date +%F_%H-%M)
 PROJECT_BACKUP="$BACKUP_DIR/project/DreamSeed_$DATE.tar.gz"
 DB_BACKUP="$BACKUP_DIR/db/db_${DB_NAME}_$DATE.sql.gz"
 
-mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db" "$BACKUP_DIR/logs"
+mkdir -p "$BACKUP_DIR/project" "$BACKUP_DIR/db" "$BACKUP_DIR/tiles" "$BACKUP_DIR/logs"
 # Local archives hold an UNENCRYPTED DB dump + site files; cloud copies are
 # rclone-crypt but local ones are not. Restrict to owner as a minimum bar.
 chmod 700 "$BACKUP_DIR"
@@ -41,9 +45,10 @@ log_ts "⏱ Backup started — $ENV"
 
 TMP_DB_BACKUP=""
 PROJECT_TMP=""
+TILES_TMP=""
 
 # ==== Lock against parallel runs ====
-trap 'rm -f "${PROJECT_TMP:-}" "${TMP_DB_BACKUP:-}" 2>/dev/null || true; exec 9>&-' EXIT
+trap 'rm -f "${PROJECT_TMP:-}" "${TMP_DB_BACKUP:-}" "${TILES_TMP:-}" 2>/dev/null || true; exec 9>&-' EXIT
 LOCK_DIR="${HOME:-/tmp}/.locks"
 mkdir -p "$LOCK_DIR" && chmod 700 "$LOCK_DIR"
 LOCK_FILE="$LOCK_DIR/smart_backup.lock"
@@ -87,6 +92,7 @@ if [[ -f "$MARKER_FILE" ]]; then
     CHANGED=$(sudo find "$PROJECT_DIR" -type f \
         ! -path "*/core/cache/*" \
         ! -path "*/core/backup/*" \
+        ! -path "*/tiles/*" \
         -newer "$MARKER_FILE" -print -quit 2>/dev/null)
     log_ts "Change check: $([ -z "$CHANGED" ] && echo 'unchanged' || echo 'modified')"
 else
@@ -101,6 +107,7 @@ else
     if timeout 1800 sudo tar -czf "$PROJECT_TMP" \
         --exclude="$(basename "$PROJECT_DIR")/core/cache" \
         --exclude="$(basename "$PROJECT_DIR")/core/backup" \
+        --exclude="$(basename "$PROJECT_DIR")/tiles/*" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null &&
         timeout 300 sudo tar -tzf "$PROJECT_TMP" >/dev/null 2>&1; then
         sudo mv "$PROJECT_TMP" "$PROJECT_BACKUP"
@@ -116,6 +123,34 @@ else
 fi
 
 log_ts "Project: $PROJECT_STATUS"
+
+# ==== Map tiles backup (separate artifact, only when changed) ====
+# Name embeds a tree hash → unchanged tiles are neither re-tarred nor re-uploaded.
+TILES_STATUS=""
+if [[ -d "$TILES_DIR" ]]; then
+    TILES_HASH=$({ sudo find "$TILES_DIR" -type f -printf '%P\t%s\t%T@\n' 2>/dev/null || true; } | LC_ALL=C sort | sha256sum | cut -c1-16)
+    TILES_BACKUP="$BACKUP_DIR/tiles/DreamSeed_tiles_${TILES_HASH}.tar.gz"
+    if [[ -f "$TILES_BACKUP" ]]; then
+        TILES_STATUS="ℹ️ Tiles unchanged ($(basename "$TILES_BACKUP"))"
+    else
+        TILES_TMP="$(mktemp "$BACKUP_DIR/tiles/.tmp_tiles_XXXXXX.tar.gz")"
+        if timeout 1800 sudo tar -czf "$TILES_TMP" -C "$PROJECT_DIR" tiles 2>/dev/null &&
+            timeout 300 sudo tar -tzf "$TILES_TMP" >/dev/null 2>&1; then
+            sudo mv "$TILES_TMP" "$TILES_BACKUP"
+            sudo chown ubuntu:ubuntu "$TILES_BACKUP" 2>/dev/null || true
+            TILES_TMP=""
+            TILES_STATUS="✅ Tiles backed up ($(basename "$TILES_BACKUP"))"
+            rotate_files "$BACKUP_DIR/tiles/DreamSeed_tiles_*.tar.gz" "$TILES_KEEP"
+        else
+            rm -f "$TILES_TMP"
+            TILES_TMP=""
+            TILES_STATUS="❌ Tiles backup failed"
+        fi
+    fi
+else
+    TILES_STATUS="ℹ️ Tiles dir not present"
+fi
+log_ts "Tiles: $TILES_STATUS"
 
 # ==== Database backup (always) ====
 # Using .my.cnf — credentials not passed as arguments
@@ -175,7 +210,7 @@ else
 fi
 
 # ==== Telegram notification only on failure ====
-if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
+if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* || "$TILES_STATUS" == "❌"* ]]; then
     MSG="====== ALERT ======
 🔴 <b>BACKUP FAILED</b> — $ENV_DISPLAY_ESCAPED
 "
@@ -185,13 +220,15 @@ if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" =
 $DB_STATUS"
     [[ "$REDIS_STATUS" == "❌"* ]] && MSG+="
 $REDIS_STATUS"
+    [[ "$TILES_STATUS" == "❌"* ]] && MSG+="
+$TILES_STATUS"
     MSG+="
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
     send_tg "$MSG" || true
 fi
 
-if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* && "$REDIS_STATUS" != "❌"* ]]; then
+if [[ "$PROJECT_STATUS" != "❌"* && "$DB_STATUS" != "❌"* && "$REDIS_STATUS" != "❌"* && "$TILES_STATUS" != "❌"* ]]; then
     export_metric "backup_last_success_timestamp{instance=\"$DOMAIN\"} $(date +%s)"
     # Ping external watchdog on success
     if [[ -n "${BETTERUPTIME_BACKUP_KEY:-}" ]]; then
@@ -211,7 +248,7 @@ rotate_files "$BACKUP_DIR/logs/backup_*.log" 30
 
 # Honest exit code: any failed piece must be visible to cron/systemd, not just
 # via TG/Better Stack. Alerting already happened above — this only fixes the code.
-if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* ]]; then
+if [[ "$PROJECT_STATUS" == "❌"* || "$DB_STATUS" == "❌"* || "$REDIS_STATUS" == "❌"* || "$TILES_STATUS" == "❌"* ]]; then
     exit 1
 fi
 exit 0
