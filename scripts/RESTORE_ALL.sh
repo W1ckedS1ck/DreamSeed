@@ -396,7 +396,7 @@ else
     _cloud_listing=""
     if [ -z "$SELECTED_DB" ] || [ "$_db_age" -ge 21600 ] || [ -z "$SELECTED_PROJECT" ]; then
         echo "Local backups missing or DB $((_db_age / 3600))h old — checking cloud..."
-        _cloud_listing=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive 2>/dev/null) || {
+        _cloud_listing=$(rclone lsf "$RCLONE_REMOTE:$REMOTE_BASE/" --files-only --recursive --fast-list 2>/dev/null) || {
             echo -e "${YELLOW}  ⚠ Cloud listing failed — using local backups only${NC}" >&2
             _cloud_listing=""
         }

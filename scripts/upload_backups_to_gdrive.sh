@@ -75,14 +75,18 @@ UPLOAD_MSG=""
 # cloud history (M16).
 upload_new_files() {
     local local_dir="$1" glob="$2" remote_dir="$3" timeout="$4" label="$5"
-    local files base existing_present
+    local files base existing_present _cloud_prefix
     files=$(find "$local_dir" -maxdepth 1 -type f -name "$glob" -printf '%f\n' 2>/dev/null | sort -r || true)
     [ -z "$files" ] && {
         echo "  $label: ⚠️ no backups found"
         return 0
     }
 
-    existing_present=$(rclone lsf "$RCLONE_REMOTE:$remote_dir/" --files-only 2>/dev/null | sort || true)
+    existing_present=""
+    if cloud_listing; then
+        _cloud_prefix="${remote_dir#"$REMOTE_BASE"/}"
+        existing_present=$(awk -v p="$_cloud_prefix" 'index($0,p)==1{print substr($0,length(p)+1)}' "$CLOUD_LISTING_FILE")
+    fi
     export RCLONE_CMD_TIMEOUT="$timeout"
 
     while IFS= read -r base; do
@@ -137,11 +141,17 @@ prune_cloud_backups "redis" "$MAX_REDIS_BACKUPS" || UPLOAD_MSG+="⚠️ Redis li
 prune_cloud_backups "tiles" "$MAX_TILES_BACKUPS" || UPLOAD_MSG+="⚠️ Tiles listing failed, cleanup skipped
 "
 
-if timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null; then
-    echo "  Cleanup: ✅ trash emptied"
-else
-    echo "  Cleanup: ⚠️ skipped (timeout or error)"
+# Trash cleanup once a day (cron runs hourly at :05) — each call is another
+# Drive round-trip on a listing-driven command.
+if [ "$(date +%H)" = "00" ]; then
+    if timeout 60 rclone cleanup "$RCLONE_REMOTE:$REMOTE_BASE" 2>/dev/null; then
+        echo "  Cleanup: ✅ trash emptied"
+    else
+        echo "  Cleanup: ⚠️ skipped (timeout or error)"
+    fi
 fi
+rm -f "${CLOUD_LISTING_FILE:-}" 2>/dev/null || true
+CLOUD_LISTING_FILE=""
 
 # ==== 6. Rotate old logs (keep 30 days) ====
 find "$LOG_DIR" -name 'upload_*.log' -mtime +30 -delete 2>/dev/null || true
