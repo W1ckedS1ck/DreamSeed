@@ -323,7 +323,7 @@ jobs:
         uses: $/.github/actions/capture-screenshot
         with:
           url: "https://${{ inputs.environment == 'prod' && 'dreamseed.online' || inputs.environment == 'prod-hetz' && 'dreamseed.online' || inputs.environment == 'dev-aws' && 'aws.vitalikuts.online' || inputs.environment == 'dev-hetz' && 'hetz.vitalikuts.online' || '' }}/"
-          output: /tmp/pages-screenshot/${{ inputs.environment }}.png
+          output: /tmp/pages-screenshot/${{ inputs.environment }}-${{ github.run_id }}.png
 
       - name: Upload screenshot to Pages
         if: success() && inputs.action == 'deploy'
@@ -534,7 +534,7 @@ jobs:
           {
             echo "<details><summary>📸 Screenshot — $PREVIEW_ENV</summary>"
             echo ""
-            echo "![$PREVIEW_ENV](${{ steps.pages.outputs.page_url }}$PREVIEW_ENV.png?t=${{ github.run_id }})"
+            echo "![$PREVIEW_ENV](${{ steps.pages.outputs.page_url }}$PREVIEW_ENV-${{ github.run_id }}.png)"
             echo ""
             echo "</details>"
             echo ""

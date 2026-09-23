@@ -351,7 +351,7 @@ jobs:
         uses: $/.github/actions/capture-screenshot
         with:
           url: "https://${{ env.DOMAIN }}/"
-          output: /tmp/pages-screenshot/test-restore.png
+          output: /tmp/pages-screenshot/test-restore-${{ github.run_id }}.png
 
       - name: Check screenshot exists
         id: shot_check
@@ -364,6 +364,14 @@ jobs:
             echo "exists=no"
             echo "exists=no" >> "$GITHUB_OUTPUT"
           fi
+
+      # Pages artifacts replace the whole site — ship the code map too, so the
+      # link in deploy summaries doesn't 404 after a restore drill publishes.
+      - name: Copy code map into Pages content
+        if: steps.shot_check.outputs.exists == 'yes'
+        run: |
+          cp docs/codemap/codemap.html /tmp/pages-screenshot/index.html
+          cp docs/codemap/codemap.html /tmp/pages-screenshot/codemap.html
 
       - name: Upload screenshot to Pages
         if: steps.shot_check.outputs.exists == 'yes'
@@ -560,7 +568,7 @@ jobs:
           {
             echo "<details><summary>📸 Restore Test screenshot</summary>"
             echo ""
-            echo "![restore-test](${{ steps.pages.outputs.page_url }}test-restore.png?t=${{ github.run_id }})"
+            echo "![restore-test](${{ steps.pages.outputs.page_url }}test-restore-${{ github.run_id }}.png)"
             echo ""
             echo "</details>"
           } >> "$M"
