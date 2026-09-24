@@ -249,6 +249,9 @@ jobs:
           if [ "$FAILED" -eq 0 ]; then
             echo "cloud_upload=pass"
             echo "cloud_upload=pass" >> "$GITHUB_OUTPUT"
+            # End of the pre-disaster phase (sentinel, hashes, backup, upload) —
+            # splits the summary timings into honest buckets.
+            echo "ts_backup=$(date +%s)" >> "$GITHUB_OUTPUT"
           else
             echo "cloud_upload=fail"
             echo "cloud_upload=fail" >> "$GITHUB_OUTPUT"
@@ -525,6 +528,7 @@ jobs:
           TEST_SUMMARY: ${{ steps.service_tests.outputs.test_summary }}
           TEST_FAILS: ${{ steps.service_tests.outputs.test_fails }}
           TS_DEPLOY: ${{ steps.server-ip.outputs.ts_deploy }}
+          TS_BACKUP: ${{ steps.verify_upload.outputs.ts_backup }}
           TS_LOCAL: ${{ steps.verify_local.outputs.ts_local }}
           TS_CLOUD: ${{ steps.verify_cloud.outputs.ts_cloud }}
           TS_TESTS: ${{ steps.service_tests.outputs.ts_tests }}
@@ -615,7 +619,8 @@ jobs:
             echo "| Phase | Duration |"
             echo "|---|---|"
             echo "| Deploy | $(dur "$START_EPOCH" "$TS_DEPLOY") |"
-            echo "| Local restore | $(dur "$TS_DEPLOY" "$TS_LOCAL") |"
+            echo "| Pre-disaster (hash + backup) | $(dur "$TS_DEPLOY" "$TS_BACKUP") |"
+            echo "| Disaster + local restore | $(dur "$TS_BACKUP" "$TS_LOCAL") |"
             echo "| Cloud restore | $(dur "$TS_LOCAL" "$TS_CLOUD") |"
             echo "| Service tests | $(dur "$TS_CLOUD" "$TS_TESTS") |"
             echo ""
