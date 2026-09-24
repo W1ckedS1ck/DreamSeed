@@ -75,6 +75,14 @@
             executable: /bin/bash
           changed_when: false
 
+    # unarchive requires dest to already exist; monitor_extract_dir may point
+    # at a fresh versioned dir (vmagent) that nobody created yet.
+    - name: "Ensure extract dir exists: {{ monitor_bin_name }}"
+      ansible.builtin.file:
+        path: "{{ monitor_extract_dir | default('/tmp/') }}"
+        state: directory
+        mode: "0755"
+
     - name: "Extract {{ monitor_bin_name }}"
       ansible.builtin.unarchive:
         src: "/tmp/{{ monitor_bin_name }}.tar.gz"
