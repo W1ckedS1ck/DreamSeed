@@ -174,9 +174,7 @@ jobs:
           echo "sentinel_val=$VAL" >> "$GITHUB_OUTPUT"
           echo "Sentinel seeded: $KEY = $GOT"
 
-      # Recorded BEFORE smart_backup: db_hash must be taken as close to the
-      # dump moment as this layout allows — putting it after the backup would
-      # insert the whole gdrive upload between the reference and the dump.
+      # Before smart_backup: keep db_hash close to the dump moment.
       - name: Record pre-restore hashes
         id: artifact_hash
         if: steps.deploy.outcome == 'success'
@@ -206,12 +204,7 @@ jobs:
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh" 2>&1
 
-      # The upload script tees ALL output to its own log on the server, so a
-      # silent failure here would go unnoticed (and uploads also mask errors on
-      # <1h-old boxes). Proves THIS run's upload pipeline landed fresh backups
-      # in the *-test/ paths. The cloud restore below deliberately consumes
-      # PROD paths instead — the real [M] Rollback path — never these fresh
-      # ones, so the two checks cover different failure modes.
+      # Proves THIS run's upload to *-test/; cloud restore below uses PROD paths.
       - name: Verify cloud upload (fresh backup present in *-test/ paths)
         id: verify_upload
         if: steps.deploy.outcome == 'success'
@@ -249,8 +242,7 @@ jobs:
           if [ "$FAILED" -eq 0 ]; then
             echo "cloud_upload=pass"
             echo "cloud_upload=pass" >> "$GITHUB_OUTPUT"
-            # End of the pre-disaster phase (sentinel, hashes, backup, upload) —
-            # splits the summary timings into honest buckets.
+            # End of the pre-disaster phase — splits summary timings.
             echo "ts_backup=$(date +%s)" >> "$GITHUB_OUTPUT"
           else
             echo "cloud_upload=fail"
@@ -547,9 +539,7 @@ jobs:
             STATUS="❌ FAILED (deploy=$DEPLOY local=$RESTORE_LOCAL cloud=$RESTORE_CLOUD tests='$TEST_SUMMARY')"
           fi
 
-          # Which archive each path actually restored (from RESTORE_ALL output).
-          # tail -1 = the final status line (✅/❌ + rollback warning), not the
-          # bare-filename selection echo printed at restore start.
+          # Which archive each path restored (RESTORE_ALL output, final status line).
           prov_line() {
             P=""; D=""; R=""; T=""
             [ -f "$1" ] || return 0
@@ -560,13 +550,11 @@ jobs:
           }
           prov_line /tmp/restore_local.out; LP="$P"; LD="$D"; LR="$R"; LT="$T"
           prov_line /tmp/restore_cloud.out; CP="$P"; CD="$D"; CR="$R"; CT="$T"
-          # A cloud rollback against a >6h-old dump means the backup pipeline
-          # stalled (same 6h threshold RESTORE_ALL warns on).
+          # >6h-old cloud dump = stalled backup pipeline (RESTORE_ALL threshold).
           AGE_NOTE=""
           CD_TS=$(printf '%s' "$CD" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}' | head -1)
           if [ -n "$CD_TS" ]; then
-            # "2026-09-24_10-00" -> date "2026-09-24 10:00" (GNU date won't
-            # parse a hyphen as the time separator).
+            # "YYYY-MM-DD_HH-MM" -> "YYYY-MM-DD HH:MM" for GNU date.
             CD_TIME=${CD_TS##*_}
             CD_EPOCH=$(date -d "${CD_TS%%_*} ${CD_TIME/-/:}" +%s 2>/dev/null || echo 0)
             CD_AGE_H=$(( ($(date +%s) - CD_EPOCH) / 3600 ))

@@ -1,11 +1,5 @@
 #!/bin/bash
-# Content hash of the local modx_db: table names + exact row counts, in
-# table_name order. [B] Restore Test records it as the pre-disaster reference
-# and recomputes it after a local restore — a schema-only comparison (table
-# list) would pass a stale dump with identical structure, which is exactly the
-# wrong-bucket restore a DR drill must catch.
-# modx_session is excluded (skipped by smart_backup.sh, truncated by
-# RESTORE_ALL.sh after import).
+# md5 of modx_db table names + row counts (modx_session excluded).
 # Usage: db_content_hash.sh <server_ip>
 set -euo pipefail
 

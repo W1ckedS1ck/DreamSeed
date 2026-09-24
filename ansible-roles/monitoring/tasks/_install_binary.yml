@@ -75,9 +75,7 @@
             executable: /bin/bash
           changed_when: false
 
-    # unarchive requires dest to already exist; monitor_extract_dir may point
-    # at a fresh versioned dir (vmagent) that nobody created yet. Only when it
-    # is explicitly set — chmod'ing the default /tmp/ without become = EPERM.
+    # unarchive requires dest to exist (e.g. vmagent's versioned dir).
     - name: "Ensure extract dir exists: {{ monitor_bin_name }}"
       ansible.builtin.file:
         path: "{{ monitor_extract_dir }}"
