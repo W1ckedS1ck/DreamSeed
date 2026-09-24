@@ -78,7 +78,7 @@
     - name: "Extract {{ monitor_bin_name }}"
       ansible.builtin.unarchive:
         src: "/tmp/{{ monitor_bin_name }}.tar.gz"
-        dest: /tmp/
+        dest: "{{ monitor_extract_dir | default('/tmp/') }}"
         remote_src: true
 
     - name: "Install binary: {{ monitor_bin_name }}"

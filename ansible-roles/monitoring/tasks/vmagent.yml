@@ -10,8 +10,9 @@
     monitor_bin_path: /usr/local/bin/vmagent
     monitor_version: "{{ monitoring_vmagent_version }}"
     monitor_download_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}.tar.gz"
-    monitor_extracted_binary: /tmp/vmagent-prod
-    monitor_extracted_dir: /tmp/vmagent-prod
+    # vmutils is a flat multi-tool bundle — extract to a dir the cleanup removes whole.
+    monitor_extract_dir: "/tmp/vmutils-v{{ monitoring_vmagent_version }}/"
+    monitor_extracted_binary: "/tmp/vmutils-v{{ monitoring_vmagent_version }}/vmagent-prod"
     monitor_checksum_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ monitoring_vmagent_version }}/vmutils-linux-amd64-v{{ monitoring_vmagent_version }}_checksums.txt"
   when: _vmagent_enabled
 
