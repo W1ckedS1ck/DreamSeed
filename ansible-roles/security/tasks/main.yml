@@ -235,6 +235,10 @@
     group: www-data
     mode: "u=rwX,g=rwX,o="
     state: directory
+    # recurse: the Lock task above just chowned ALL of core/ (incl. the
+    # cache tmpfs) to root:www-data — without this, www-data keeps writing
+    # only via group and every xPDO writeTree chmod fails with EPERM.
+    recurse: true
   loop:
     - "{{ web_root }}/core/cache"
     - "{{ web_root }}/core/logs"
