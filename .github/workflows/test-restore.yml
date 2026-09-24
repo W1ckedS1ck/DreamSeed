@@ -174,6 +174,28 @@ jobs:
           echo "sentinel_val=$VAL" >> "$GITHUB_OUTPUT"
           echo "Sentinel seeded: $KEY = $GOT"
 
+      # Recorded BEFORE smart_backup: db_hash must be taken as close to the
+      # dump moment as this layout allows — putting it after the backup would
+      # insert the whole gdrive upload between the reference and the dump.
+      - name: Record pre-restore hashes
+        id: artifact_hash
+        if: steps.deploy.outcome == 'success'
+        env:
+          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
+        run: |
+          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
+          PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
+            "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
+          echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
+          echo "Project hash: $PROJ_HASH"
+          DB_HASH=$(.github/scripts/db_content_hash.sh "$SERVER_IP" || echo "FAILED")
+          echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
+          echo "DB hash: $DB_HASH"
+          REDIS_SESSIONS=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
+          echo "redis_sessions_before=$REDIS_SESSIONS" >> "$GITHUB_OUTPUT"
+          echo "Redis sessions before destroy: $REDIS_SESSIONS"
+
       - name: Create backup via smart_backup.sh
         if: steps.deploy.outcome == 'success'
         env:
@@ -183,13 +205,13 @@ jobs:
           ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/smart_backup.sh" 2>&1
           ssh ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh" 2>&1
-          echo "backup_files=$(ssh ubuntu@"$SERVER_IP" 'ls /home/ubuntu/backups/project/ | wc -l')" >> "$GITHUB_OUTPUT"
 
       # The upload script tees ALL output to its own log on the server, so a
       # silent failure here would go unnoticed (and uploads also mask errors on
-      # <1h-old boxes). Verify the freshly-created backups actually landed in
-      # the *-test/ cloud paths — otherwise the "cloud restore" phase below is
-      # really just restoring PROD snapshots and proves nothing about this run.
+      # <1h-old boxes). Proves THIS run's upload pipeline landed fresh backups
+      # in the *-test/ paths. The cloud restore below deliberately consumes
+      # PROD paths instead — the real [M] Rollback path — never these fresh
+      # ones, so the two checks cover different failure modes.
       - name: Verify cloud upload (fresh backup present in *-test/ paths)
         id: verify_upload
         if: steps.deploy.outcome == 'success'
@@ -233,26 +255,6 @@ jobs:
             echo "::error::Fresh backup not found in cloud *-test/ paths"
             exit 1
           fi
-
-      - name: Record pre-restore hashes
-        id: artifact_hash
-        if: steps.deploy.outcome == 'success'
-        env:
-          SERVER_IP: ${{ steps.server-ip.outputs.ip }}
-        run: |
-          SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
-          ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
-          PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
-          echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
-          echo "Project hash: $PROJ_HASH"
-          DB_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "mysql modx_db -N -e 'SELECT CONCAT(table_name,\":\",COUNT(*)) FROM information_schema.tables WHERE table_schema=\"modx_db\" AND table_name != \"modx_session\" GROUP BY table_name ORDER BY table_name' 2>/dev/null | md5sum | cut -d' ' -f1" || echo "FAILED")
-          echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
-          echo "DB hash: $DB_HASH"
-          REDIS_SESSIONS=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
-          echo "redis_sessions_before=$REDIS_SESSIONS" >> "$GITHUB_OUTPUT"
-          echo "Redis sessions before destroy: $REDIS_SESSIONS"
 
       - name: Destroy data — simulate disaster
         if: steps.deploy.outcome == 'success'
@@ -300,6 +302,9 @@ jobs:
             "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
           echo "local_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }})"
           echo "local_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
+          NEW_DB_HASH=$(.github/scripts/db_content_hash.sh "$SERVER_IP" || echo "FAILED")
+          echo "local_db_hash=$NEW_DB_HASH (want ${{ steps.artifact_hash.outputs.db_hash }})"
+          echo "local_db_hash=$NEW_DB_HASH" >> "$GITHUB_OUTPUT"
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           echo "local_redis_sessions=$REDIS_AFTER (before destroy: $REDIS_SESSIONS_BEFORE)"
           echo "local_redis_sessions=$REDIS_AFTER" >> "$GITHUB_OUTPUT"
@@ -307,11 +312,11 @@ jobs:
           echo "local_sentinel=$SENTINEL (want ${{ steps.sentinel.outputs.sentinel_val }})"
           echo "local_sentinel=$SENTINEL" >> "$GITHUB_OUTPUT"
           echo "ts_local=$(date +%s)" >> "$GITHUB_OUTPUT"
-          if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ] && [ "$SENTINEL" = "${{ steps.sentinel.outputs.sentinel_val }}" ]; then
+          if [ "$HTTP_CODE" = "200" ] && [ "$NEW_HASH" = "${{ steps.artifact_hash.outputs.project_hash }}" ] && [ "$SENTINEL" = "${{ steps.sentinel.outputs.sentinel_val }}" ] && [ "$NEW_DB_HASH" = "${{ steps.artifact_hash.outputs.db_hash }}" ]; then
             echo "local_restore=pass"
             echo "local_restore=pass" >> "$GITHUB_OUTPUT"
           else
-            echo "local_restore=fail (http=$HTTP_CODE hash=$NEW_HASH sentinel='$SENTINEL')"
+            echo "local_restore=fail (http=$HTTP_CODE hash=$NEW_HASH sentinel='$SENTINEL' db='$NEW_DB_HASH')"
             echo "local_restore=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -513,9 +518,6 @@ jobs:
         if: always()
         env:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
-          REDIS_SESSIONS_BEFORE: ${{ steps.artifact_hash.outputs.redis_sessions_before }}
-          LOCAL_REDIS_SESSIONS: ${{ steps.verify_local.outputs.local_redis_sessions }}
-          CLOUD_REDIS_SESSIONS: ${{ steps.verify_cloud.outputs.cloud_redis_sessions }}
           LOCAL_SENTINEL: ${{ steps.verify_local.outputs.local_sentinel }}
           SENTINEL_VAL: ${{ steps.sentinel.outputs.sentinel_val }}
           CLOUD_REDIS_DBSIZE: ${{ steps.verify_cloud.outputs.cloud_redis_dbsize }}
@@ -542,20 +544,31 @@ jobs:
           fi
 
           # Which archive each path actually restored (from RESTORE_ALL output).
+          # tail -1 = the final status line (✅/❌ + rollback warning), not the
+          # bare-filename selection echo printed at restore start.
           prov_line() {
-            P=""; D=""; R=""
+            P=""; D=""; R=""; T=""
             [ -f "$1" ] || return 0
-            P=$(grep -m1 '^Project: ' "$1" | sed 's/^Project: //')
-            D=$(grep -m1 '^DB: ' "$1" | sed 's/^DB: //')
-            R=$(grep -m1 '^Redis: ' "$1" | sed 's/^Redis: //')
+            P=$(grep '^Project: ' "$1" | tail -1 | sed 's/^Project: //')
+            D=$(grep '^DB: ' "$1" | tail -1 | sed 's/^DB: //')
+            R=$(grep '^Redis: ' "$1" | tail -1 | sed 's/^Redis: //')
+            T=$(grep '^Tiles: ' "$1" | tail -1 | sed 's/^Tiles: //')
           }
-          prov_line /tmp/restore_local.out; LP="$P"; LD="$D"; LR="$R"
-          prov_line /tmp/restore_cloud.out; CP="$P"; CD="$D"; CR="$R"
-          PROJ_DATE=$(printf '%s' "$LP" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
-          DB_DATE=$(printf '%s' "$LD" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
-          SKEW=""
-          if [ -n "$PROJ_DATE" ] && [ -n "$DB_DATE" ] && [ "$PROJ_DATE" != "$DB_DATE" ]; then
-            SKEW=" — ⚠️ project($PROJ_DATE) ≠ DB($DB_DATE)"
+          prov_line /tmp/restore_local.out; LP="$P"; LD="$D"; LR="$R"; LT="$T"
+          prov_line /tmp/restore_cloud.out; CP="$P"; CD="$D"; CR="$R"; CT="$T"
+          # A cloud rollback against a >6h-old dump means the backup pipeline
+          # stalled (same 6h threshold RESTORE_ALL warns on).
+          AGE_NOTE=""
+          CD_TS=$(printf '%s' "$CD" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}' | head -1)
+          if [ -n "$CD_TS" ]; then
+            # "2026-09-24_10-00" -> date "2026-09-24 10:00" (GNU date won't
+            # parse a hyphen as the time separator).
+            CD_TIME=${CD_TS##*_}
+            CD_EPOCH=$(date -d "${CD_TS%%_*} ${CD_TIME/-/:}" +%s 2>/dev/null || echo 0)
+            CD_AGE_H=$(( ($(date +%s) - CD_EPOCH) / 3600 ))
+            if [ "$CD_EPOCH" -gt 0 ] && [ "$CD_AGE_H" -ge 6 ]; then
+              AGE_NOTE=" — ⚠️ cloud DB dump is ${CD_AGE_H}h old"
+            fi
           fi
 
           case "${CLOUD_TILES:-}" in
@@ -581,22 +594,22 @@ jobs:
             echo "|---|---|"
             echo "| **Server** | $SERVER_IP |"
             echo "| **Domain** | ${{ env.DOMAIN }} |"
-            echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s |"
+            echo "| **Duration** | $(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s (to summary) |"
             echo "| **Commit** | ${{ github.sha }} |"
             echo "| **Run** | [link]($ART) |"
             echo ""
             echo "### Restore paths"
-            echo "| Path | Status | HTTP | Hash match | Redis sessions | Redis proof |"
+            echo "| Path | Status | HTTP | Project hash | DB match | Redis proof |"
             echo "|---|---|---|---|---|---|"
-            echo "| **Local** | ${{ steps.restore_local.outcome }} | ${{ steps.verify_local.outputs.local_http }} | ${{ steps.verify_local.outputs.local_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $LOCAL_REDIS_SESSIONS | $SENTINEL_ROW |"
-            echo "| **Cloud (GDrive, rollback path)** | ${{ steps.restore_cloud.outcome }} | ${{ steps.verify_cloud.outputs.cloud_http }} | ${{ steps.verify_cloud.outputs.cloud_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | $CLOUD_REDIS_SESSIONS | dbsize=$CLOUD_REDIS_DBSIZE |"
+            echo "| **Local** | ${{ steps.restore_local.outcome }} | ${{ steps.verify_local.outputs.local_http }} | ${{ steps.verify_local.outputs.local_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | ${{ steps.verify_local.outputs.local_db_hash == steps.artifact_hash.outputs.db_hash && '✅' || '❌' }} | $SENTINEL_ROW |"
+            echo "| **Cloud (GDrive, rollback path)** | ${{ steps.restore_cloud.outcome }} | ${{ steps.verify_cloud.outputs.cloud_http }} | ${{ steps.verify_cloud.outputs.cloud_project_hash == steps.artifact_hash.outputs.project_hash && '✅' || '❌' }} | n/a (prod dump) | dbsize=$CLOUD_REDIS_DBSIZE |"
             echo "| **Cloud upload (fresh)** | ${{ steps.verify_upload.outputs.cloud_upload }} | n/a | n/a | n/a | n/a |"
             echo ""
-            echo "### Backup provenance${SKEW}"
+            echo "### Backup provenance${AGE_NOTE}"
             echo "| Path | Project | DB | Redis | Tiles |"
             echo "|---|---|---|---|---|"
-            echo "| **Local** | ${LP:-—} | ${LD:-—} | ${LR:-—} | — |"
-            echo "| **Cloud (prod paths)** | ${CP:-—} | ${CD:-—} | ${CR:-—} | $TILES_ROW |"
+            echo "| **Local** | ${LP:-—} | ${LD:-—} | ${LR:-—} | ${LT:-—} |"
+            echo "| **Cloud (prod paths)** | ${CP:-—} | ${CD:-—} | ${CR:-—} | ${CT:-—} |"
             echo ""
             echo "### Timings"
             echo "| Phase | Duration |"
@@ -611,7 +624,6 @@ jobs:
             echo "|---|---|"
             echo "| **Project hash** | \`${{ steps.artifact_hash.outputs.project_hash }}\` |"
             echo "| **DB hash** | \`${{ steps.artifact_hash.outputs.db_hash }}\` |"
-            echo "| **Redis sessions before** | $REDIS_SESSIONS_BEFORE |"
             echo ""
             echo "### Service tests (after cloud restore)"
             echo "| Metric | Value |"
