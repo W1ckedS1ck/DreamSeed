@@ -543,13 +543,23 @@ jobs:
             if [ "$id" = "$GITHUB_RUN_ID" ]; then
               continue
             fi
-            if gh run download "$id" -n github-pages -D "/tmp/pages-site-live-$id"; then
-              # --update=none (not -n, deprecated/non-portable): never clobber this run's files
-              cp -r --update=none "/tmp/pages-site-live-$id/." /tmp/pages-site/
-              merged=$((merged + 1))
-            else
+            dl="/tmp/pages-site-live-$id"
+            if ! gh run download "$id" -n github-pages -D "$dl"; then
               echo "::warning::could not download live site artifact from run $id"
+              continue
             fi
+            # upload-pages-artifact ships one tarball, not loose files — unpack
+            # it, or the union would copy artifact.tar instead of the site.
+            mkdir -p "$dl/site"
+            if ! tar -xf "$dl/artifact.tar" -C "$dl/site"; then
+              echo "::warning::could not unpack live site artifact from run $id"
+              continue
+            fi
+            # older publishes leaked artifact.tar into the site — never re-add it
+            find "$dl/site" -name artifact.tar -delete
+            # --update=none (not -n, deprecated/non-portable): never clobber this run's files
+            cp -r --update=none "$dl/site/." /tmp/pages-site/
+            merged=$((merged + 1))
           done
           if [ "$merged" -eq 0 ]; then
             echo "::warning::no previous site artifact merged — this publish may replace existing files"
