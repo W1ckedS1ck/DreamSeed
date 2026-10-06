@@ -14,7 +14,7 @@ permissions:
 env:
   TFLINT_VERSION: "v0.64.0"
   GITLEAKS_VERSION: "8.30.1"
-  TERRAFORM_VERSION: "1.16.3"
+  TERRAFORM_VERSION: "1.16.5"
   UV_VERSION: "0.12.18"
 
 jobs:
@@ -60,7 +60,7 @@ jobs:
       - name: 🚀 Start
         run: echo "Terraform checks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - uses: $/.github/actions/setup-terraform
-      - uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
           cache: true
@@ -82,7 +82,7 @@ jobs:
       - name: 🚀 Start
         run: echo "Checkov started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - name: Run Checkov
-        uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e # v12.3125.0
+        uses: bridgecrewio/checkov-action@7b1bd992e2c40a3404e3511944aeb8d014703d9a # v12.3129.0
         with:
           directory: terraform
           framework: terraform
