@@ -6,7 +6,8 @@ name: "[B] Restore Test"
 # is exercised. The test then validates BOTH restore paths:
 #   1. local restore (backups present on the server)
 #   2. cloud restore (local backups removed -> RESTORE_ALL pulls from GDrive,
-#      the same path [M] Rollback uses)
+#      pinned to the very archive the deploy restored, so prod's hourly backups
+#      can't race the content-hash assert; same path [M] Rollback uses)
 # The ephemeral server is destroyed after every run (failed ones included — an
 # unattended scheduled failure must not leak a server); keep_server=true forces keep.
 
@@ -334,9 +335,23 @@ jobs:
           SERVER_IP: ${{ steps.server-ip.outputs.ip }}
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
+          # Pin the EXACT prod archive the deploy extracted (read it back from
+          # the deploy log). Prod runs a new project backup every hour, so
+          # "newest" 20 min later can be a different tree than the one the
+          # pre-restore hash was taken from — the content-hash assert below
+          # would then fail on a perfectly healthy restore.
+          PIN=""
+          if [ -f /tmp/deploy.log ]; then
+            PIN=$(grep -a -o -E 'Restored project: DreamSeed_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}\.tar\.gz' /tmp/deploy.log \
+              | head -1 | sed 's/^Restored project: //') || true
+          fi
+          if [ -z "$PIN" ]; then
+            echo "::warning::No 'Restored project:' line in the deploy log — cloud leg falls back to the newest archive"
+          fi
+          echo "Project archive pin: ${PIN:-<newest>}"
           set +e
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i "$SSH_KEY" \
-            ubuntu@"$SERVER_IP" "bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1 | tee /tmp/restore_cloud.out
+            ubuntu@"$SERVER_IP" "RESTORE_PROJECT_PIN='${PIN}' bash /home/ubuntu/Scripts/RESTORE_ALL.sh --auto-latest" 2>&1 | tee /tmp/restore_cloud.out
           RC=${PIPESTATUS[0]}
           set -e
           echo "restore_cloud_exit=$RC" >> "$GITHUB_OUTPUT"
