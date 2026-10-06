@@ -3,7 +3,7 @@
 
 | Name | Version |
 | ---- | ------- |
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5, < 2.0 |
 | <a name="requirement_hcloud"></a> [hcloud](#requirement\_hcloud) | ~> 1.66 |
 | <a name="requirement_http"></a> [http](#requirement\_http) | ~> 3.0 |
 
@@ -11,8 +11,8 @@
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_hcloud"></a> [hcloud](#provider\_hcloud) | 1.68.0 |
-| <a name="provider_http"></a> [http](#provider\_http) | 3.6.1 |
+| <a name="provider_hcloud"></a> [hcloud](#provider\_hcloud) | 1.69.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | 3.6.2 |
 
 ## Modules
 

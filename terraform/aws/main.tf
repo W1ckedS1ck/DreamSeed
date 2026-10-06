@@ -57,7 +57,7 @@ resource "aws_key_pair" "deploy" {
 }
 
 resource "aws_security_group" "web" {
-  # checkov:skip=CKV_AWS_24:SSH from anywhere required for Ansible provisioning; HTTP/HTTPS restricted to Cloudflare ranges
+  # checkov:skip=CKV_AWS_24:SSH from anywhere required for Ansible provisioning; HTTP/HTTPS restricted to Cloudflare ranges (review 2027-01)
   name        = "dreamseed-sg-${var.environment}"
   description = "Security group for DreamSeed web server (${var.environment})"
 
@@ -140,7 +140,7 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_instance" "web" {
-  # checkov:skip=CKV_AWS_126:Detailed monitoring costs extra — not needed for t3.small with VictoriaMetrics scraping from inside
+  # checkov:skip=CKV_AWS_126:Detailed monitoring costs extra — not needed for t3.small with VictoriaMetrics scraping from inside (review 2027-01)
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.deploy.key_name
