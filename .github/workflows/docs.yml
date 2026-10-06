@@ -23,11 +23,14 @@ jobs:
     name: Publish Code Map
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Same group as deploy.yml/test-restore.yml — all three replace the whole
+    # Pages site, so they must serialize instead of racing each other.
     concurrency:
-      group: pages
+      group: pages-site
       cancel-in-progress: false
     permissions:
       contents: read
+      actions: read
       pages: write
       id-token: write
 
@@ -70,9 +73,39 @@ jobs:
           cp docs/codemap/codemap.html _site/index.html
           cp docs/codemap/codemap.html _site/codemap.html
 
+      # Pages artifacts replace the whole site: absorb the newest live-site
+      # artifacts first, then keep this run's files — publishing can only ever
+      # grow the site (screenshots from deploy/restore runs must survive).
+      - name: Merge with the currently live site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          IDS=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=github-pages&per_page=20" --jq '([.artifacts[] | select(.expired == false) | .workflow_run.id] | unique | .[0:9] | .[])')
+          merged=0
+          for id in $IDS; do
+            if [ "$id" = "$GITHUB_RUN_ID" ]; then
+              continue
+            fi
+            if gh run download "$id" -n github-pages -D "/tmp/pages-site-live-$id"; then
+              # --update=none: never clobber the code map this run just built
+              cp -r --update=none "/tmp/pages-site-live-$id/." _site/
+              merged=$((merged + 1))
+            else
+              echo "::warning::could not download live site artifact from run $id"
+            fi
+          done
+          if [ "$merged" -eq 0 ]; then
+            echo "::warning::no previous site artifact merged — this publish may replace existing files"
+          fi
+
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: _site
+          # Default is 1 day: the merge chain above can only union artifacts that
+          # still exist, so a quiet >24h stretch would reset the site.
+          retention-days: 7
 
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
         id: deployment
