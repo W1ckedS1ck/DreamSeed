@@ -235,6 +235,8 @@
     group: www-data
     mode: "u=rwX,g=rwX,o="
     state: directory
+    # Undo the recursive Lock above: cache must stay www-data-owned.
+    recurse: true
   loop:
     - "{{ web_root }}/core/cache"
     - "{{ web_root }}/core/logs"

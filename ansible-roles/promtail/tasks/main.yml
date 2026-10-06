@@ -92,7 +92,8 @@
       ExecStart=/usr/bin/promtail -config.expand-env=true -config.file=/etc/promtail/promtail.yml
       EnvironmentFile=/etc/promtail/credentials.env
       StateDirectory=promtail
-    mode: "0600"
+    # No secrets here (secrets: credentials.env 0640) — systemd warns on 0600.
+    mode: "0644"
   become: true
   no_log: true
   notify:

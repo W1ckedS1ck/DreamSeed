@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from env_loader import load_env
 from telegram import Update
+from telegram.error import NetworkError
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 logging.basicConfig(
@@ -218,6 +219,16 @@ def start_health_server():
         log.warning("Health endpoint not started: %s", e)
 
 
+async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    err = context.error
+    # Transient upstream hiccups (e.g. Telegram 502 Bad Gateway on getUpdates)
+    # are auto-retried by the library; log one line instead of a full traceback.
+    if isinstance(err, NetworkError):
+        log.warning("Transient Telegram network error (auto-retried): %s", err)
+    else:
+        log.error("Unhandled exception in handler", exc_info=err)
+
+
 def main() -> None:
     if not TG_TOKEN:
         log.error("TG_TOKEN not set")
@@ -241,6 +252,7 @@ def main() -> None:
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("backups", cmd_backups))
     app.add_handler(CommandHandler("backup", cmd_backups))
+    app.add_error_handler(on_error)
 
     log.info("Bot started (asyncio + python-telegram-bot)")
     app.run_polling(allowed_updates=["message"])

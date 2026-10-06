@@ -394,6 +394,27 @@ else
     SELECTED_REDIS=$(list_backups "$BACKUP_DIR/redis" 'redis_dump_*.rdb' | head -1) || true
     SELECTED_TILES=$(list_backups "$BACKUP_DIR/tiles" 'DreamSeed_tiles_*.tar.gz' | head -1) || true
 
+    # RESTORE_PROJECT_PIN=<DreamSeed_YYYY-MM-DD_HH-MM.tar.gz> restores THAT cloud
+    # archive instead of the newest one. The weekly DR drill needs it: the deploy
+    # extracts prod's archive at T1, then the cloud leg runs ~20 min later at T2
+    # when prod's hourly backup may already hold a different tree — comparing the
+    # two would fail on a perfectly healthy restore. Also usable for a targeted
+    # rollback to a known point in time.
+    PROJECT_PIN="${RESTORE_PROJECT_PIN:-}"
+    if [ -n "$PROJECT_PIN" ]; then
+        case "$PROJECT_PIN" in
+            DreamSeed_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9].tar.gz) ;;
+            *)
+                echo "ERROR: RESTORE_PROJECT_PIN is not a project backup name: '$PROJECT_PIN'"
+                exit 1
+                ;;
+        esac
+        echo "Project archive pinned: $PROJECT_PIN"
+        # Local copies are ignored for the project — the pinned file must come
+        # from the cloud, otherwise this isn't the cloud restore path at all.
+        SELECTED_PROJECT=""
+    fi
+
     _db_age=0
     [ -n "$SELECTED_DB" ] && _db_age=$(($(date +%s) - $(stat -c %Y "$SELECTED_DB")))
 
@@ -413,24 +434,26 @@ else
     # changes (smart_backup.sh DATE), the newest cloud backup will silently be
     # wrong. Rewrite to mtime-based sorting when that happens.
     _fetch() {
-        local dir="$1" subdir="$2" cur="$3" cloud_new=""
-        if [ -n "$_cloud_listing" ]; then
+        local dir="$1" subdir="$2" cur="$3" pin="${4:-}" cloud_new=""
+        if [ -n "$pin" ]; then
+            cloud_new="$pin"
+        elif [ -n "$_cloud_listing" ]; then
             cloud_new=$(printf '%s\n' "$_cloud_listing" |
                 grep -E "^${subdir}/" | sed "s#^${subdir}/##" | sort -r | head -1) || true
-            if [ -n "$cloud_new" ] && { [ -z "$cur" ] || [ "$cloud_new" \> "$(basename "$cur")" ]; }; then
-                echo "  ${subdir}: downloading newest cloud backup ${cloud_new}" >&2
-                mkdir -p "$dir"
-                if rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}/${cloud_new}" "$dir/" >/dev/null 2>&1; then
-                    echo "$dir/$cloud_new"
-                    return 0
-                fi
-                echo -e "${YELLOW}  ⚠ ${subdir}: cloud download failed — keeping local${NC}" >&2
+        fi
+        if [ -n "$cloud_new" ] && { [ -z "$cur" ] || [ "$cloud_new" \> "$(basename "$cur")" ]; }; then
+            echo "  ${subdir}: downloading cloud backup ${cloud_new}${pin:+ (pinned)}" >&2
+            mkdir -p "$dir"
+            if rclone_retry copy "$RCLONE_REMOTE:$REMOTE_BASE/${subdir}/${cloud_new}" "$dir/" >/dev/null 2>&1; then
+                echo "$dir/$cloud_new"
+                return 0
             fi
+            echo -e "${YELLOW}  ⚠ ${subdir}: cloud download failed — keeping local${NC}" >&2
         fi
         printf '%s' "$cur"
     }
 
-    SELECTED_PROJECT=$(_fetch "$BACKUP_DIR/project" "project" "$SELECTED_PROJECT")
+    SELECTED_PROJECT=$(_fetch "$BACKUP_DIR/project" "project" "$SELECTED_PROJECT" "$PROJECT_PIN")
     SELECTED_DB=$(_fetch "$BACKUP_DIR/db" "db" "$SELECTED_DB")
     SELECTED_REDIS=$(_fetch "$BACKUP_DIR/redis" "redis" "$SELECTED_REDIS")
 

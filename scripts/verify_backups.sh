@@ -1,4 +1,6 @@
 #!/bin/bash
+# Usage: verify_backups.sh [--no-alert]   (or VERIFY_NO_ALERT=1)
+#   --no-alert  diagnostic run: suppress Telegram alert + heartbeat ping
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,6 +11,20 @@ BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 DB_NAME="${DB_NAME:-modx_db}"
 PROJECT_DIR="${PROJECT_DIR:-/var/www/html}"
 DOMAIN="${DOMAIN:-unknown}"
+
+# Diagnostic mode: --no-alert (or VERIFY_NO_ALERT=1) suppresses the Telegram
+# alert AND the Better Stack heartbeat ping, so manual/audit runs neither page
+# nor disturb the dead-man switch. The exit code still reflects the real result.
+NO_ALERT="${VERIFY_NO_ALERT:-false}"
+for arg in "$@"; do
+    case "$arg" in
+    --no-alert) NO_ALERT=true ;;
+    *)
+        echo "Unknown option: $arg" >&2
+        exit 2
+        ;;
+    esac
+done
 
 LOG_FILE="$BACKUP_DIR/logs/verify_$(date +%Y-%m-%d).log"
 mkdir -p "$BACKUP_DIR/logs"
@@ -208,11 +224,15 @@ if [[ -n "$ALERTS" ]]; then
 $ALERTS
 ⏰ $(date '+%d.%m.%Y %H:%M')
 =========================="
-    send_tg "$MSG" || true
-    log_ts "Alert sent to Telegram"
+    if [[ "$NO_ALERT" == "true" ]]; then
+        log_ts "⚠ Alerts suppressed (--no-alert) — not paging Telegram"
+    else
+        send_tg "$MSG" || true
+        log_ts "Alert sent to Telegram"
+    fi
 else
     log_ts "✅ All verifications passed"
-    if [[ -n "${BETTERUPTIME_VERIFY_KEY:-}" ]]; then
+    if [[ "$NO_ALERT" != "true" && -n "${BETTERUPTIME_VERIFY_KEY:-}" ]]; then
         if ping_heartbeat "$BETTERUPTIME_VERIFY_KEY"; then
             log_ts "Heartbeat: ✅ sent"
         fi

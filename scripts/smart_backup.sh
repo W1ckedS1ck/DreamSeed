@@ -109,6 +109,12 @@ else
         --exclude="$(basename "$PROJECT_DIR")/core/cache" \
         --exclude="$(basename "$PROJECT_DIR")/core/backup" \
         --exclude="$(basename "$PROJECT_DIR")/tiles/*" \
+        --exclude="$(basename "$PROJECT_DIR")/*.bak" \
+        --exclude="$(basename "$PROJECT_DIR")/*.bak.*" \
+        --exclude="$(basename "$PROJECT_DIR")/*~" \
+        --exclude="$(basename "$PROJECT_DIR")/*.swp" \
+        --exclude="$(basename "$PROJECT_DIR")/*.DS_Store" \
+        --exclude="$(basename "$PROJECT_DIR")/index.nginx-debian.html" \
         -C "$(dirname "$PROJECT_DIR")" "$(basename "$PROJECT_DIR")" 2>/dev/null &&
         timeout 300 sudo tar -tzf "$PROJECT_TMP" >/dev/null 2>&1; then
         sudo mv "$PROJECT_TMP" "$PROJECT_BACKUP"
