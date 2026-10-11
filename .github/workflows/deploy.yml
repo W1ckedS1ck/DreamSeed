@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload deploy log (debug)
         if: always() && inputs.action == 'deploy' && failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: deploy-log-${{ inputs.environment }}
           path: /tmp/deploy.log
@@ -329,7 +329,7 @@ jobs:
       # site before uploading github-pages (that name allows one upload/run).
       - name: Stage site content for Pages
         if: success() && inputs.action == 'deploy'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pages-own
           path: /tmp/pages-screenshot
@@ -392,7 +392,7 @@ jobs:
 
       - name: Upload deploy log (debug)
         if: always() && inputs.action == 'destroy' && failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: deploy-destroy-log-${{ inputs.environment }}
           path: /tmp/deploy.log
