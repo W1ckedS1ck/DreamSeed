@@ -294,13 +294,13 @@ Layer 5 — Secrets:
 Trigger            Workflow              Jobs
 ───────            ────────              ────
 Push / PR          CI                    12 jobs — 11 on PRs (Deploy Check is
-                                           push-only), 8 required for merge:
+                                           push-only), 11 required for merge:
                                            ShellCheck, ansible-lint, actionlint,
                                            Terraform checks (tflint+validate+fmt),
                                            Checkov, Trivy, gitleaks, yamllint,
                                            zizmor, pre-commit, .env parser
                                            contract, Deploy Check
-                     ────────── 8 required ──────────
+                     ────────── 11 required ──────────
 
 Manual dispatch    Deploy                Setup → secrets → deploy.sh / destroy
                    Rollback              Get IP → confirm → RESTORE_ALL.sh
@@ -321,6 +321,8 @@ Bot events         Renovate              Dependency updates (auto PRs)
 
 Issue comment      ChatOps Deploy        Deploy via chat command
 Push / manual      Docs                  Pages site (code map) + wiki sync
+Schedule Mon 05:37 OpenSSF Scorecard     Supply-chain score → SARIF + badge
+  + branch-rule change                    (also on push to main)
 
 ```
 

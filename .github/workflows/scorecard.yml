@@ -1,0 +1,46 @@
+name: "[B] OpenSSF Scorecard"
+
+# Automated twin of a manual supply-chain audit: flags unpinned deps, missing
+# required checks / branch protection, dangerous triggers, excessive token
+# permissions. Runs when protection rules change so the score reflects them.
+
+on:
+  # Re-score whenever a branch protection rule changes.
+  branch_protection_rule:
+  schedule:
+    # Weekly, Monday 05:37 UTC.
+    - cron: "37 5 * * 1"
+  push:
+    branches: ["main"]
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write # upload the SARIF result to code scanning
+      id-token: write # keyless attestation for the public results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Run analysis
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publish to the OpenSSF REST API so the README badge resolves.
+          publish_results: true
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          sarif_file: results.sarif
