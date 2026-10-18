@@ -288,8 +288,10 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "env-contract started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - name: Run parser contract check
-        run: bash scripts/check_env_contract.sh
+      - name: Run parser contract + differential fuzz
+        run: |
+          bash scripts/check_env_contract.sh
+          python3 tests/env/fuzz_env_parsers.py
 
   deploy-check:
     name: Deploy Check
