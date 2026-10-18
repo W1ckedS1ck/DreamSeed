@@ -153,6 +153,12 @@ jobs:
         run: pip install shellcheck-py
       - name: Run actionlint
         run: actionlint -shellcheck="$(command -v shellcheck)" -ignore 'specifying action "\$/.+" in invalid format because ref is missing'
+      - name: Verify required checks match ci.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pip install pyyaml
+          python3 scripts/check_required_checks.py
 
   yamllint:
     name: YAML Lint
