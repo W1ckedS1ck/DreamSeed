@@ -230,7 +230,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           BEFORE: ${{ github.event.before }}
         run: |
-          pip install pre-commit
+          pip install pre-commit shellcheck-py
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             REF="origin/$BASE_REF"
           elif [[ -n "$BEFORE" && "$BEFORE" != "0000000000000000000000000000000000000000" ]]; then
