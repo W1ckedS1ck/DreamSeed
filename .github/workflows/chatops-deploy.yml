@@ -1,15 +1,17 @@
 name: "[chatops] Deploy"
 
-on:
+# `issue_comment` is flagged by zizmor's dangerous-triggers audit (v1.31.0+): it
+# runs in the base-repo context with secrets + a write token, and any commenter
+# can trigger it. Required here for /deploy chatops. Safe by construction: the
+# workflow never checks out comment/PR code (actions/checkout takes the trusted
+# ref), the comment body is parsed as data by python, and every dispatch is
+# gated on the commenter being OWNER/MEMBER/COLLABORATOR with write|admin.
+on: # zizmor: ignore[dangerous-triggers] trusted-ref only, permission-gated dispatch, comment body parsed as data
   issue_comment:
     types: [created]
 
 permissions:
   contents: read
-  issues: write
-  # Required for `gh workflow run` (deploy/destroy dispatch). Gated below:
-  # prod targets additionally require admin collaborator permission.
-  actions: write
 
 concurrency:
   group: chatops
@@ -20,6 +22,12 @@ jobs:
     name: Parse & dispatch
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # issues: write → reactions + replies; actions: write → `gh workflow run`
+    # (deploy/destroy dispatch; prod targets additionally require admin below).
+    permissions:
+      contents: read
+      issues: write
+      actions: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

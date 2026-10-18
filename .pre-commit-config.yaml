@@ -13,16 +13,21 @@ repos:
         exclude_types: [jinja]
         exclude: ^scripts/common_functions\.sh$
 
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+  - repo: local
     hooks:
+      # System shellcheck: shellcheck-py ships no wheels for Python >=3.14 and
+      # builds from source (downloads the binary at build time), which hangs
+      # behind a slow/offline network. CI installs shellcheck-py; locally use
+      # the brew/dev package. The dedicated ShellCheck job is the real gate.
       - id: shellcheck
-        args: [--severity=error]
+        name: shellcheck
+        entry: shellcheck --severity=error
+        language: system
         types: [shell]
         exclude: \.tftpl$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.10
+    rev: v0.17.1
     hooks:
       - id: ruff
         types: [python]
