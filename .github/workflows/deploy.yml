@@ -46,7 +46,6 @@ concurrency:
 
 permissions:
   contents: read
-  deployments: write
 
 env:
   ACTIONS_RUNNER_DEBUG: false
