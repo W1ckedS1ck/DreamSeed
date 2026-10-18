@@ -22,7 +22,7 @@ CI_MODE=false
 }
 
 # Pinned — Renovate tracks these via renovate.json regex managers.
-ZIZMOR_VERSION="1.30.1"
+ZIZMOR_VERSION="1.31.1"
 YAMLLINT_VERSION="1.38.0"
 
 TOOLS=(
