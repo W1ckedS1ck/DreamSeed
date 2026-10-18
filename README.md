@@ -14,6 +14,7 @@
 ![Grafana](https://img.shields.io/badge/Grafana-13.x-F46800?logo=grafana)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/W1ckedS1ck/DreamSeed/badge)](https://scorecard.dev/viewer/?uri=github.com/W1ckedS1ck/DreamSeed)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~8–10 min.
@@ -78,7 +79,7 @@
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | hourly local (5/15, map tiles 3) → hourly Google Drive (10/100, map tiles 3) |
 | Uptime coverage | 29 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
-| CI checks per push | 12 jobs, 8 required for merge (lint → security → validate) |
+| CI checks per push | 12 jobs, 11 required for merge (lint → security → validate) |
 | Security | Hardened Ubuntu 24.04 — SSH hardening, 6 fail2ban jails (edge bans via Cloudflare API), sysctl/PAM hardening |
 
 ---
@@ -108,7 +109,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 09-pro → 04-security → 05-monitor → 06-backup → 08-promtail → 07-grafana)
 - **Observability** — VictoriaMetrics + Promtail + Grafana stack with 29 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 project/DB + 3 map-tiles version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 8 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy and docs workflows
+- **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 11 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy, docs and scorecard workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls
 - **Production safety** — GitHub `production` environment approval gate on prod deploy/destroy/rollback/terraform-apply; destroy requires typing `destroy <target>` as the workflow confirmation input
 
@@ -270,11 +271,11 @@ Grafana dashboards, datasources, **and 29 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 10 Workflows + Renovate
+### 🧪 CI/CD Pipeline — 11 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
-| **CI** — 12 jobs (11 on PRs — Deploy Check is push-only), 8 required | Every PR + push to main/dev |
+| **CI** — 12 jobs (11 on PRs — Deploy Check is push-only), 11 required | Every PR + push to main/dev |
 | **Deploy** — single-click deploy | Manual dispatch (all targets, prod requires approval) |
 | **Restore Test** — full backup/restore drill | Weekly Monday 10:00 UTC + manual |
 | **Drift Detection** — terraform plan on 5 targets | Daily 07:05 UTC |
@@ -284,12 +285,13 @@ Grafana dashboards, datasources, **and 29 alert rules** deployed automatically �
 | **TF: Infra + Cloudflare** — terraform apply (infra + WAF/cache rulesets) | Manual dispatch (prod requires approval) |
 | **ChatOps Deploy** — `/deploy` `/destroy` via issue comments | Issue comment |
 | **Docs** — Pages site + wiki sync | Push to main + manual |
+| **OpenSSF Scorecard** — supply-chain score → SARIF + badge | Weekly Monday 05:37 UTC, on branch-protection change, push to main |
 
-CI (12 jobs, 8 required for merge): ShellCheck · ansible-lint · **Terraform** (tflint+validate+fmt) · **Checkov** · **Trivy** · **gitleaks** · **actionlint** · YAML lint · zizmor · pre-commit · .env parser contract · Deploy Check (push-only). Dependencies: **Renovate** (auto-PRs).
+CI (12 jobs, 11 required for merge): ShellCheck · ansible-lint · **Terraform** (tflint+validate+fmt) · **Checkov** · **Trivy** · **gitleaks** · **actionlint** · YAML lint · zizmor · pre-commit · .env parser contract · Deploy Check (push-only). Dependencies: **Renovate** (auto-PRs).
 
 ### 🛑 Production Safeguards
 
-- **Branch protection (ruleset `Protect Main`)** — all changes land via PR: 8 CI checks required, **squash-only** merge, linear history, no direct push / force-push (even for the owner)
+- **Branch protection (ruleset `Protect Main`)** — all changes land via PR: 11 CI checks required, **squash-only** merge, linear history, no direct push / force-push (even for the owner)
 - **Deploy:** GitHub `production` environment approval gate on every prod run (manual approve step)
 - **Destroy:** typed `destroy <target>` confirmation input + the same approval gate
 - **Rollback:** requires typing `rollback <environment>` (e.g. `rollback prod-hetz`) in the workflow input
