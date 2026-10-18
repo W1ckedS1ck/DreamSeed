@@ -12,10 +12,6 @@ on: # zizmor: ignore[dangerous-triggers] trusted-ref only, permission-gated disp
 
 permissions:
   contents: read
-  issues: write
-  # Required for `gh workflow run` (deploy/destroy dispatch). Gated below:
-  # prod targets additionally require admin collaborator permission.
-  actions: write
 
 concurrency:
   group: chatops
@@ -26,6 +22,12 @@ jobs:
     name: Parse & dispatch
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # issues: write → reactions + replies; actions: write → `gh workflow run`
+    # (deploy/destroy dispatch; prod targets additionally require admin below).
+    permissions:
+      contents: read
+      issues: write
+      actions: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
