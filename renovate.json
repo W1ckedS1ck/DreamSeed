@@ -241,9 +241,9 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Automerge non-major GitHub Actions updates",
+      "description": "Automerge non-major GitHub Actions updates (incl. digest/SHA bumps of pinned actions)",
       "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash"
