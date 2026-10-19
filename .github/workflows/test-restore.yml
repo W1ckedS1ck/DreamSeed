@@ -184,8 +184,11 @@ jobs:
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
+          # Hash as root: secret files (e.g. www-data 600 tokens) are unreadable
+          # by the ssh user, so a non-root md5sum silently omits them and the
+          # two sides disagree for a reason unrelated to the restore.
           ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_before.txt || true
+            "sudo find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_before.txt || true
           PROJ_HASH=$(md5sum /tmp/project_manifest_before.txt | cut -d' ' -f1)
           echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
           echo "Project hash: $PROJ_HASH ($(wc -l < /tmp/project_manifest_before.txt) files)"
@@ -292,13 +295,11 @@ jobs:
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
-          echo "local_token_pre_http=$(ssh ubuntu@"$SERVER_IP" "sudo test -f /var/www/html/core/components/dreamseed/config/meta_capi_token.txt && echo present || echo absent" 2>/dev/null || echo err)"
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve ${{ env.DOMAIN }}:443:127.0.0.1 -o /dev/null -w '%{http_code}' --max-time 10 'https://${{ env.DOMAIN }}/'" 2>/dev/null || echo "000")
           echo "local_http=$HTTP_CODE"
           echo "local_http=$HTTP_CODE" >> "$GITHUB_OUTPUT"
-          echo "local_token_post_http=$(ssh ubuntu@"$SERVER_IP" "sudo test -f /var/www/html/core/components/dreamseed/config/meta_capi_token.txt && echo present || echo absent" 2>/dev/null || echo err)"
           ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_local.txt || true
+            "sudo find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_local.txt || true
           NEW_HASH=$(md5sum /tmp/project_manifest_local.txt | cut -d' ' -f1)
           echo "local_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }}, $(wc -l < /tmp/project_manifest_local.txt) files)"
           echo "local_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
@@ -372,14 +373,11 @@ jobs:
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
-          echo "cloud_token_pre_http=$(ssh ubuntu@"$SERVER_IP" "sudo test -f /var/www/html/core/components/dreamseed/config/meta_capi_token.txt && echo present || echo absent" 2>/dev/null || echo err)"
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve ${{ env.DOMAIN }}:443:127.0.0.1 -o /dev/null -w '%{http_code}' --max-time 10 'https://${{ env.DOMAIN }}/'" 2>/dev/null || echo "000")
           echo "cloud_http=$HTTP_CODE"
           echo "cloud_http=$HTTP_CODE" >> "$GITHUB_OUTPUT"
-          echo "cloud_token_post_http=$(ssh ubuntu@"$SERVER_IP" "sudo test -f /var/www/html/core/components/dreamseed/config/meta_capi_token.txt && echo present || echo absent" 2>/dev/null || echo err)"
-          echo "cloud_config_dir:"; ssh ubuntu@"$SERVER_IP" "sudo ls -la /var/www/html/core/components/dreamseed/config/ 2>&1" || true
           ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_cloud.txt || true
+            "sudo find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_cloud.txt || true
           NEW_HASH=$(md5sum /tmp/project_manifest_cloud.txt | cut -d' ' -f1)
           echo "cloud_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }}, $(wc -l < /tmp/project_manifest_cloud.txt) files)"
           echo "cloud_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
@@ -397,8 +395,6 @@ jobs:
           else
             echo "cloud_restore=fail (http=$HTTP_CODE hash=$NEW_HASH redis_dbsize=$REDIS_DBSIZE)"
             echo "cloud_restore=fail" >> "$GITHUB_OUTPUT"
-            echo "cloud_find_token=$(ssh ubuntu@"$SERVER_IP" "sudo find /var/www/html -name meta_capi_token.txt 2>/dev/null | tr '\n' ' '" || true)"
-            echo "cloud_backups=$(ssh ubuntu@"$SERVER_IP" "ls /home/ubuntu/backups/project/ 2>/dev/null | tail -2 | tr '\n' ' '" || true)"
             echo "--- manifest diff ('<' = missing after restore, '>' = extra) ---"
             { diff /tmp/project_manifest_before.txt /tmp/project_manifest_cloud.txt || true; } | head -80
             exit 1
