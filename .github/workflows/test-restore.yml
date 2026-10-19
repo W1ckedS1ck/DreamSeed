@@ -184,10 +184,14 @@ jobs:
         run: |
           SSH_KEY="${SSH_KEY:-${HOME}/.ssh/deploy_key}"
           ssh() { command ssh -q -o LogLevel=ERROR -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$SSH_KEY" "$@"; }
-          PROJ_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
+          # Hash as root: secret files (e.g. www-data 600 tokens) are unreadable
+          # by the ssh user, so a non-root md5sum silently omits them and the
+          # two sides disagree for a reason unrelated to the restore.
+          ssh ubuntu@"$SERVER_IP" \
+            "sudo find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_before.txt || true
+          PROJ_HASH=$(md5sum /tmp/project_manifest_before.txt | cut -d' ' -f1)
           echo "project_hash=$PROJ_HASH" >> "$GITHUB_OUTPUT"
-          echo "Project hash: $PROJ_HASH"
+          echo "Project hash: $PROJ_HASH ($(wc -l < /tmp/project_manifest_before.txt) files)"
           DB_HASH=$(.github/scripts/db_content_hash.sh "$SERVER_IP" || echo "FAILED")
           echo "db_hash=$DB_HASH" >> "$GITHUB_OUTPUT"
           echo "DB hash: $DB_HASH"
@@ -294,9 +298,10 @@ jobs:
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve ${{ env.DOMAIN }}:443:127.0.0.1 -o /dev/null -w '%{http_code}' --max-time 10 'https://${{ env.DOMAIN }}/'" 2>/dev/null || echo "000")
           echo "local_http=$HTTP_CODE"
           echo "local_http=$HTTP_CODE" >> "$GITHUB_OUTPUT"
-          NEW_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
-          echo "local_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }})"
+          ssh ubuntu@"$SERVER_IP" \
+            "sudo find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_local.txt || true
+          NEW_HASH=$(md5sum /tmp/project_manifest_local.txt | cut -d' ' -f1)
+          echo "local_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }}, $(wc -l < /tmp/project_manifest_local.txt) files)"
           echo "local_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
           NEW_DB_HASH=$(.github/scripts/db_content_hash.sh "$SERVER_IP" || echo "FAILED")
           echo "local_db_hash=$NEW_DB_HASH (want ${{ steps.artifact_hash.outputs.db_hash }})"
@@ -314,6 +319,8 @@ jobs:
           else
             echo "local_restore=fail (http=$HTTP_CODE hash=$NEW_HASH sentinel='$SENTINEL' db='$NEW_DB_HASH')"
             echo "local_restore=fail" >> "$GITHUB_OUTPUT"
+            echo "--- manifest diff ('<' = missing after restore, '>' = extra) ---"
+            { diff /tmp/project_manifest_before.txt /tmp/project_manifest_local.txt || true; } | head -80
             exit 1
           fi
 
@@ -369,9 +376,10 @@ jobs:
           HTTP_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve ${{ env.DOMAIN }}:443:127.0.0.1 -o /dev/null -w '%{http_code}' --max-time 10 'https://${{ env.DOMAIN }}/'" 2>/dev/null || echo "000")
           echo "cloud_http=$HTTP_CODE"
           echo "cloud_http=$HTTP_CODE" >> "$GITHUB_OUTPUT"
-          NEW_HASH=$(ssh ubuntu@"$SERVER_IP" \
-            "find /var/www/html -type f -not -path '*/core/cache/*' -exec md5sum {} \; 2>/dev/null | sort -k2 | md5sum | cut -d' ' -f1" || echo "FAILED")
-          echo "cloud_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }})"
+          ssh ubuntu@"$SERVER_IP" \
+            "sudo find /var/www/html -type f -not -path '*/core/cache/*' -not -path '*/core/backup/*' -not -path '*/tiles/*' -not -name '*.bak' -not -name '*.bak.*' -not -name '*~' -not -name '*.swp' -not -name '*.DS_Store' -not -name 'index.nginx-debian.html' -exec md5sum {} \; 2>/dev/null | sort -k2" > /tmp/project_manifest_cloud.txt || true
+          NEW_HASH=$(md5sum /tmp/project_manifest_cloud.txt | cut -d' ' -f1)
+          echo "cloud_project_hash=$NEW_HASH (want ${{ steps.artifact_hash.outputs.project_hash }}, $(wc -l < /tmp/project_manifest_cloud.txt) files)"
           echo "cloud_project_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
           REDIS_AFTER=$(ssh ubuntu@"$SERVER_IP" "redis-cli --scan --pattern 'PHPREDIS_SESSION:*' 2>/dev/null | wc -l" || echo "0")
           echo "cloud_redis_sessions=$REDIS_AFTER (before destroy: $REDIS_SESSIONS_BEFORE)"
@@ -387,6 +395,8 @@ jobs:
           else
             echo "cloud_restore=fail (http=$HTTP_CODE hash=$NEW_HASH redis_dbsize=$REDIS_DBSIZE)"
             echo "cloud_restore=fail" >> "$GITHUB_OUTPUT"
+            echo "--- manifest diff ('<' = missing after restore, '>' = extra) ---"
+            { diff /tmp/project_manifest_before.txt /tmp/project_manifest_cloud.txt || true; } | head -80
             exit 1
           fi
 
