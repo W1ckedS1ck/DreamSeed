@@ -119,31 +119,39 @@ check_fixture() {
     esac
 }
 
-[[ -d "$FIXTURES" ]] || {
-    echo "Fixtures directory not found: $FIXTURES" >&2
-    exit 2
+main() {
+    [[ -d "$FIXTURES" ]] || {
+        echo "Fixtures directory not found: $FIXTURES" >&2
+        exit 2
+    }
+
+    printf '%s\n' "  ▶ .env parser contract (lib/env.sh vs common_functions.sh vs env_loader.py)"
+
+    check_fixture "basic.env" \
+        "EC_PLAIN EC_QUOTED EC_SINGLE EC_EXPORTED EC_COMMENT EC_TRAIL EC_HASH EC_EMPTY" eq
+    check_fixture "expansion.env" \
+        "EC_HOME_REF EC_HOME_BRACED EC_FIRST EC_SECOND EC_THIRD EC_UNDEF_REF EC_LOWER_REF" eq
+    check_fixture "multiline.env" \
+        "EC_MULTI_D EC_MULTI_S EC_MULTI_C EC_AFTER" eq
+    check_fixture "blocked.env" "PATH EC_SURVIVOR" div_lib_fail
+    check_fixture "malformed.env" "EC_SURVIVOR2" div_lib_fail
+    check_fixture "env_key.env" "ENV EC_SURVIVOR3" div_lib_fail
+    check_fixture "inject.env" "EC_BAD" all_fail
+    check_fixture "inject_indirect.env" "EC_BAD" all_fail inject_indirect
+    check_fixture "unterminated.env" "EC_OPEN" all_fail
+    check_fixture "cycle.env" "EC_CYCLE_A" all_fail cycle
+
+    printf '\n'
+    if [[ $FAIL -eq 0 ]]; then
+        printf '  ✓ All %s contract checks passed\n' "$PASS"
+        exit 0
+    fi
+    printf '  ✗ %s of %s checks FAILED\n' "$FAIL" "$((PASS + FAIL))"
+    exit 1
 }
 
-printf '%s\n' "  ▶ .env parser contract (lib/env.sh vs common_functions.sh vs env_loader.py)"
-
-check_fixture "basic.env" \
-    "EC_PLAIN EC_QUOTED EC_SINGLE EC_EXPORTED EC_COMMENT EC_TRAIL EC_HASH EC_EMPTY" eq
-check_fixture "expansion.env" \
-    "EC_HOME_REF EC_HOME_BRACED EC_FIRST EC_SECOND EC_THIRD EC_UNDEF_REF EC_LOWER_REF" eq
-check_fixture "multiline.env" \
-    "EC_MULTI_D EC_MULTI_S EC_MULTI_C EC_AFTER" eq
-check_fixture "blocked.env" "PATH EC_SURVIVOR" div_lib_fail
-check_fixture "malformed.env" "EC_SURVIVOR2" div_lib_fail
-check_fixture "env_key.env" "ENV EC_SURVIVOR3" div_lib_fail
-check_fixture "inject.env" "EC_BAD" all_fail
-check_fixture "inject_indirect.env" "EC_BAD" all_fail inject_indirect
-check_fixture "unterminated.env" "EC_OPEN" all_fail
-check_fixture "cycle.env" "EC_CYCLE_A" all_fail cycle
-
-printf '\n'
-if [[ $FAIL -eq 0 ]]; then
-    printf '  ✓ All %s contract checks passed\n' "$PASS"
-    exit 0
+# Sourced by tests/env/fuzz_env_parsers.py to reuse run_one(); only run the
+# fixture suite when executed directly.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
 fi
-printf '  ✗ %s of %s checks FAILED\n' "$FAIL" "$((PASS + FAIL))"
-exit 1

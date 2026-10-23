@@ -6,6 +6,9 @@ There are 2 layers of linting:
 
 - **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
 - **CI on GitHub**: `ci.yml` (12 jobs on push — 11 on PRs, Deploy Check is push-only; 11 required for merge)
+- **Task runner**: `make help` lists shortcuts (`make lint`, `make lint-full`, `make test-env`, ...). Each delegates to the same scripts as CI — one source of truth.
+
+The `.env Parser Contract` job runs both the fixture contract (`scripts/check_env_contract.sh`) and a deterministic differential fuzzer (`tests/env/fuzz_env_parsers.py`) that asserts `lib/env.sh`, `common_functions.sh load_env` and `env_loader.py` agree on generated `.env` inputs.
 
 ---
 
