@@ -678,11 +678,14 @@ if systemctl is-active telegram-bot &>/dev/null; then
     else
         warn "Telegram bot: $_tg_conflict Conflict(s) - duplicate poller detected" "tg_bot_conflict"
     fi
-    _tg_errors=$(sudo journalctl -u telegram-bot --since "-7days" --no-pager 2>/dev/null | grep -ci 'error\|traceback\|exception' || true)
+    # Count error events, not log lines: one Python traceback spans many lines
+    # (stack frames may contain "error"/"exception"), which inflated the count.
+    _tg_errors=$(sudo journalctl -u telegram-bot --since "-7days" --no-pager 2>/dev/null \
+        | grep -cE '(^|[[:space:]])(ERROR|CRITICAL)([[:space:]]|:)|[A-Za-z_.]*(Error|Exception|TimedOut|Timeout): ' || true)
     if [[ "$_tg_errors" -eq 0 ]]; then
         ok "Telegram bot: 0 errors" "tg_bot_errors"
     else
-        warn "Telegram bot: $_tg_errors error(s)" "tg_bot_errors"
+        warn "Telegram bot: $_tg_errors error event(s)" "tg_bot_errors"
     fi
 else
     if [[ "$_tg_env_prod" -eq 1 ]]; then
