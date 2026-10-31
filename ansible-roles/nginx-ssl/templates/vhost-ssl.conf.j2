@@ -88,6 +88,11 @@ server {
         return 301 /garden-of-dreamers;
     }
 
+    # Duplicate cart URL: one canonical address for search engines
+    location = /cart/ {
+        return 301 /cart;
+    }
+
     location / {
         try_files $uri $uri/ @modx;
     }
