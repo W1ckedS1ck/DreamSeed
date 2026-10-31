@@ -45,3 +45,15 @@
   ansible.builtin.systemd:
     name: redis_exporter
     state: restarted
+
+- name: Restart journald
+  become: true
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted
+
+- name: Restart rsyslog
+  become: true
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted

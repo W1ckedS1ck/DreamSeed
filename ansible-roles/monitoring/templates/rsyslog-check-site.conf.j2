@@ -1,0 +1,3 @@
+# Managed by Ansible. check-site.timer runs every minute: systemd lifecycle lines
+# (Starting/Finished/Deactivated) are noise in syslog. The journal still keeps them.
+:msg, contains, "check-site.service" stop
