@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  TFLINT_VERSION: "v0.64.0"
+  TFLINT_VERSION: "v0.65.0"
   GITLEAKS_VERSION: "8.30.1"
   TERRAFORM_VERSION: "1.17.1"
   UV_VERSION: "0.12.18"
