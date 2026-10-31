@@ -58,6 +58,30 @@ inputs:
     description: Better Stack weekly report heartbeat key
     required: false
     default: ""
+  google_ads_client_id:
+    description: Google Ads OAuth client ID (read-only daily report)
+    required: false
+    default: ""
+  google_ads_client_secret:
+    description: Google Ads OAuth client secret
+    required: false
+    default: ""
+  google_ads_refresh_token:
+    description: Google Ads OAuth refresh token (scope adwords)
+    required: false
+    default: ""
+  google_ads_developer_token:
+    description: Google Ads developer token (API Center)
+    required: false
+    default: ""
+  google_ads_customer_id:
+    description: Google Ads customer ID (digits only)
+    required: false
+    default: ""
+  google_ads_login_customer_id:
+    description: Google Ads manager (MCC) ID, only if accessing via MCC
+    required: false
+    default: ""
   betteruptime_verify_key:
     description: Better Stack backup verify heartbeat key
     required: false
@@ -189,6 +213,12 @@ runs:
         BETTERUPTIME_GDRIVE_KEY: ${{ inputs.betteruptime_gdrive_key }}
         BETTERUPTIME_REPORT_DAILY_KEY: ${{ inputs.betteruptime_report_daily_key }}
         BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ inputs.betteruptime_report_weekly_key }}
+        GOOGLE_ADS_CLIENT_ID: ${{ inputs.google_ads_client_id }}
+        GOOGLE_ADS_CLIENT_SECRET: ${{ inputs.google_ads_client_secret }}
+        GOOGLE_ADS_REFRESH_TOKEN: ${{ inputs.google_ads_refresh_token }}
+        GOOGLE_ADS_DEVELOPER_TOKEN: ${{ inputs.google_ads_developer_token }}
+        GOOGLE_ADS_CUSTOMER_ID: ${{ inputs.google_ads_customer_id }}
+        GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ inputs.google_ads_login_customer_id }}
         BETTERUPTIME_VERIFY_KEY: ${{ inputs.betteruptime_verify_key }}
         BETTERUPTIME_CHECK_SERVICES_KEY: ${{ inputs.betteruptime_check_services_key }}
         DEV_GRAFANA_CLOUD_TOKEN: ${{ inputs.dev_grafana_cloud_token }}
@@ -216,6 +246,12 @@ runs:
           BETTERUPTIME_GDRIVE_KEY
           BETTERUPTIME_REPORT_DAILY_KEY
           BETTERUPTIME_REPORT_WEEKLY_KEY
+          GOOGLE_ADS_CLIENT_ID
+          GOOGLE_ADS_CLIENT_SECRET
+          GOOGLE_ADS_REFRESH_TOKEN
+          GOOGLE_ADS_DEVELOPER_TOKEN
+          GOOGLE_ADS_CUSTOMER_ID
+          GOOGLE_ADS_LOGIN_CUSTOMER_ID
           BETTERUPTIME_VERIFY_KEY
           BETTERUPTIME_CHECK_SERVICES_KEY
           DEV_GRAFANA_CLOUD_TOKEN
@@ -250,6 +286,12 @@ runs:
         BETTERUPTIME_GDRIVE_KEY: ${{ inputs.betteruptime_gdrive_key }}
         BETTERUPTIME_REPORT_DAILY_KEY: ${{ inputs.betteruptime_report_daily_key }}
         BETTERUPTIME_REPORT_WEEKLY_KEY: ${{ inputs.betteruptime_report_weekly_key }}
+        GOOGLE_ADS_CLIENT_ID: ${{ inputs.google_ads_client_id }}
+        GOOGLE_ADS_CLIENT_SECRET: ${{ inputs.google_ads_client_secret }}
+        GOOGLE_ADS_REFRESH_TOKEN: ${{ inputs.google_ads_refresh_token }}
+        GOOGLE_ADS_DEVELOPER_TOKEN: ${{ inputs.google_ads_developer_token }}
+        GOOGLE_ADS_CUSTOMER_ID: ${{ inputs.google_ads_customer_id }}
+        GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ inputs.google_ads_login_customer_id }}
         BETTERUPTIME_VERIFY_KEY: ${{ inputs.betteruptime_verify_key }}
         BETTERUPTIME_CHECK_SERVICES_KEY: ${{ inputs.betteruptime_check_services_key }}
         DEV_GRAFANA_CLOUD_URL: ${{ inputs.dev_grafana_cloud_url }}
@@ -308,6 +350,12 @@ runs:
           emit_env BETTERUPTIME_GDRIVE_KEY "$BETTERUPTIME_GDRIVE_KEY"
           emit_env BETTERUPTIME_REPORT_DAILY_KEY "$BETTERUPTIME_REPORT_DAILY_KEY"
           emit_env BETTERUPTIME_REPORT_WEEKLY_KEY "$BETTERUPTIME_REPORT_WEEKLY_KEY"
+          emit_env GOOGLE_ADS_CLIENT_ID "$GOOGLE_ADS_CLIENT_ID"
+          emit_env GOOGLE_ADS_CLIENT_SECRET "$GOOGLE_ADS_CLIENT_SECRET"
+          emit_env GOOGLE_ADS_REFRESH_TOKEN "$GOOGLE_ADS_REFRESH_TOKEN"
+          emit_env GOOGLE_ADS_DEVELOPER_TOKEN "$GOOGLE_ADS_DEVELOPER_TOKEN"
+          emit_env GOOGLE_ADS_CUSTOMER_ID "$GOOGLE_ADS_CUSTOMER_ID"
+          emit_env GOOGLE_ADS_LOGIN_CUSTOMER_ID "$GOOGLE_ADS_LOGIN_CUSTOMER_ID"
           emit_env BETTERUPTIME_VERIFY_KEY "$BETTERUPTIME_VERIFY_KEY"
           emit_env BETTERUPTIME_CHECK_SERVICES_KEY "$BETTERUPTIME_CHECK_SERVICES_KEY"
           echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"

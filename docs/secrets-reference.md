@@ -133,6 +133,12 @@ All set in `deploy.yml` and consumed by the respective server scripts.
 | `BETTERUPTIME_REPORT_WEEKLY_KEY` | `send_report.sh` (weekly) |
 | `BETTERUPTIME_VERIFY_KEY` | `verify_backups.sh` |
 | `BETTERUPTIME_CHECK_SERVICES_KEY` | `check_services.sh` |
+| `GOOGLE_ADS_CLIENT_ID` | `google_ads_report.sh` (OAuth client) |
+| `GOOGLE_ADS_CLIENT_SECRET` | `google_ads_report.sh` (OAuth client) |
+| `GOOGLE_ADS_REFRESH_TOKEN` | `google_ads_report.sh` (one-time consent) |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | `google_ads_report.sh` (API Center) |
+| `GOOGLE_ADS_CUSTOMER_ID` | `google_ads_report.sh` |
+| `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | `google_ads_report.sh` (MCC only) |
 
 ---
 

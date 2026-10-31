@@ -31,6 +31,7 @@
     - verify_backups.sh
     - RESTORE_ALL.sh
     - send_report.sh
+    - google_ads_report.sh
     - common_functions.sh
     - audit_deep.sh
     - env_loader.py

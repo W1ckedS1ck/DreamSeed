@@ -100,6 +100,12 @@ jobs:
           betteruptime_gdrive_key: ${{ secrets.BETTERUPTIME_GDRIVE_KEY }}
           betteruptime_report_daily_key: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
           betteruptime_report_weekly_key: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
+          google_ads_client_id: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          google_ads_client_secret: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          google_ads_refresh_token: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          google_ads_developer_token: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          google_ads_customer_id: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+          google_ads_login_customer_id: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
           betteruptime_verify_key: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
           betteruptime_check_services_key: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
           dev_grafana_cloud_url: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
