@@ -104,6 +104,7 @@ jobs:
           prod_region: ${{ secrets.PROD_REGION }}
           user_ssh_public_key: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           vitali_ssh_public_key: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
+          prod_host_ssh_public_key: ${{ secrets.PROD_HOST_SSH_PUBLIC_KEY }}
           rclone_crypt_password: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault_password: ${{ secrets.VAULT_PASSWORD }}

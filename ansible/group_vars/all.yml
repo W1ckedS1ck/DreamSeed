@@ -130,7 +130,9 @@ additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per lin
 
 # ==== Frontend Observability (Faro — RUM) ====
 
-faro_enabled: true
+# Disabled on prod 2026-10-25 (/faro-collect saturated mobile connection pools).
+# Faro block stays in vhost-ssl.conf.j2 for re-enable; set true to restore.
+faro_enabled: false
 faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
 faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
 faro_sdk_version: "2.12.1"  # renovate: depName=@grafana/faro-web-sdk datasource=npm

@@ -170,6 +170,10 @@ inputs:
     description: User SSH public key
     required: false
     default: ""
+  prod_host_ssh_public_key:
+    description: Public key of the prod-hetz host user (dev@dreamseed-prod-hetz)
+    required: false
+    default: ""
   vitali_ssh_public_key:
     description: Vitali SSH public key
     required: false
@@ -315,6 +319,7 @@ runs:
         PROD_REGION: ${{ inputs.prod_region }}
         USER_SSH_PUBLIC_KEY: ${{ inputs.user_ssh_public_key }}
         VITALI_SSH_PUBLIC_KEY: ${{ inputs.vitali_ssh_public_key }}
+        PROD_HOST_SSH_PUBLIC_KEY: ${{ inputs.prod_host_ssh_public_key }}
         RCLONE_CRYPT_PASSWORD: ${{ inputs.rclone_crypt_password }}
         UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
       run: |
@@ -360,8 +365,8 @@ runs:
           emit_env BETTERUPTIME_CHECK_SERVICES_KEY "$BETTERUPTIME_CHECK_SERVICES_KEY"
           echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
           echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
-          if [ -n "$USER_SSH_PUBLIC_KEY" ] || [ -n "$VITALI_SSH_PUBLIC_KEY" ]; then
-            printf 'ADDITIONAL_SSH_KEYS="%s\n%s"\n' "${USER_SSH_PUBLIC_KEY:-}" "${VITALI_SSH_PUBLIC_KEY:-}"
+          if [ -n "$USER_SSH_PUBLIC_KEY" ] || [ -n "$VITALI_SSH_PUBLIC_KEY" ] || [ -n "$PROD_HOST_SSH_PUBLIC_KEY" ]; then
+            printf 'ADDITIONAL_SSH_KEYS="%s\n%s\n%s"\n' "${USER_SSH_PUBLIC_KEY:-}" "${VITALI_SSH_PUBLIC_KEY:-}" "${PROD_HOST_SSH_PUBLIC_KEY:-}"
           fi
           emit_env DEV_GRAFANA_CLOUD_URL "$DEV_GRAFANA_CLOUD_URL"
           emit_env DEV_GRAFANA_CLOUD_USERNAME "$DEV_GRAFANA_CLOUD_USERNAME"
