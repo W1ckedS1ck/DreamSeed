@@ -202,6 +202,17 @@ Each backup/upload/report script pings a unique heartbeat URL on success:
 | `BETTERUPTIME_VERIFY_KEY` | `verify_backups.sh` |
 | `BETTERUPTIME_CHECK_SERVICES_KEY` | `check_services.sh` |
 
+### Google Ads (read-only, daily report)
+
+| Variable | Script |
+|----------|--------|
+| `GOOGLE_ADS_CLIENT_ID` / `GOOGLE_ADS_CLIENT_SECRET` | `google_ads_report.sh` (OAuth client, Desktop type) |
+| `GOOGLE_ADS_REFRESH_TOKEN` | `google_ads_report.sh` (one-time consent, scope `adwords`) |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | `google_ads_report.sh` (Google Ads → API Center) |
+| `GOOGLE_ADS_CUSTOMER_ID` / `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | `google_ads_report.sh` (digits only; MCC ID only when accessed via MCC) |
+
+The report block is skipped while these are empty. Developer token needs Basic access to be used on real accounts.
+
 Where to get: https://uptime.betterstack.com → Heartbeats → create → copy the UUID at the end of the URL.
 
 ---
