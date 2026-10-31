@@ -27,13 +27,13 @@ repos:
         exclude: \.tftpl$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.1
+    rev: v0.17.3
     hooks:
       - id: ruff
         types: [python]
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.23.3
+    rev: v0.24.0
     hooks:
       - id: markdownlint-cli2
         args: ["--config", "markdownlint-cli2.jsonc"]
