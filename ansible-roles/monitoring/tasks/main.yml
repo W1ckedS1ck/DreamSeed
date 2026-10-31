@@ -70,5 +70,8 @@
 - name: Check site
   ansible.builtin.include_tasks: check_site.yml
 
+- name: Log hygiene (journal cap, syslog noise filter)
+  ansible.builtin.include_tasks: log_hygiene.yml
+
 - name: Check services
   ansible.builtin.include_tasks: check_services.yml
