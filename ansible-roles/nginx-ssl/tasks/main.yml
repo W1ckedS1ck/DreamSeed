@@ -19,6 +19,16 @@
     # /grafana location falls through to Grafana's own login (no double gate).
   when: grafana_htpasswd | default('') | length > 0
 
+- name: Deploy Nginx cache-control map (HTML TTL per cookie and path)
+  become: true
+  ansible.builtin.copy:
+    src: dreamseed-cache-map.conf
+    dest: /etc/nginx/conf.d/dreamseed-cache-map.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Nginx
+
 - name: Deploy Nginx SSL vhost
   become: true
   ansible.builtin.template:

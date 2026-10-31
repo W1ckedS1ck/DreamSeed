@@ -7,6 +7,15 @@ server {
     sub_filter '</head>' '<script>(function(){var s=document.createElement("script");s.src="https://unpkg.com/@grafana/faro-web-sdk@{{ faro_sdk_version }}/dist/bundle/faro-web-sdk.iife.js";s.onload=function(){window.GrafanaFaroWebSdk.initializeFaro({url:"/faro-collect",app:{name:"{{ faro_app_name }}",version:"1.0.0",environment:"production"},sessionTracking:{samplingRate:1,persistent:true}});var t=document.createElement("script");t.src="https://unpkg.com/@grafana/faro-web-tracing@{{ faro_sdk_version }}/dist/bundle/faro-web-tracing.iife.js";t.onload=function(){window.GrafanaFaroWebSdk.faro.instrumentations.add(new window.GrafanaFaroWebTracing.TracingInstrumentation())};document.head.appendChild(t)};document.head.appendChild(s)})();</script></head>';
 {% endif %}
 
+    # DreamSeed: strip ?lang= to avoid CF hollow-language cache variants
+    # Cookie is set by DreamSeedLang / dreamseed-i18n.js; keep URL language-neutral.
+    if ($arg_lang != "") {
+        set $ds_lang_strip 1;
+    }
+    if ($ds_lang_strip = 1) {
+        return 302 $uri;
+    }
+
     # Block direct IP access (bypasses Cloudflare WAF)
     # localhost and IP loopbacks allowed for local monitoring and health checks
     if ($host !~* ^({{ domain }}|localhost|127\.0\.0\.1|\[?::1\]?)$) {
@@ -33,12 +42,17 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://connect.facebook.net https://www.facebook.com https://cloudflareinsights.com; frame-ancestors 'self';" always;
+    # CSP: site + Paddle/ProfitWell + GA4/gtag + Google Ads + Yandex.Metrika.
+    # GA diagnostics flagged missing analytics.google.com / ad.doubleclick.net — use Google wildcards.
+    # Paddle checkout embeds buy.paddle.com + Stripe (js.stripe.com / m.stripe.network).
+    # Missing Stripe frame-src can surface as Paddle overlay E-403 for card entry.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://*.googletagmanager.com https://*.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com https://cdn.paddle.com https://*.paddle.com https://buy.paddle.com https://public.profitwell.com https://*.profitwell.com https://js.stripe.com https://*.stripe.com https://www.googleadservices.com https://www.google.com https://www.google.ru https://*.g.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://yastatic.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.paddle.com https://buy.paddle.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com https://server.arcgisonline.com https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://*.profitwell.com https://*.stripe.com https://*.googletagmanager.com https://*.google-analytics.com https://*.g.doubleclick.net https://*.google.com https://www.google.ru https://www.googleadservices.com https://pagead2.googlesyndication.com https://ad.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://yastatic.net https://google.by https://*.google.by https://yandex.ru https://*.yandex.ru; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://*.clarity.ms https://connect.facebook.net https://www.facebook.com https://cloudflareinsights.com https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://checkout-service.paddle.com https://checkout-analytics.paddle.com https://*.profitwell.com https://*.stripe.com https://api.stripe.com https://*.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net https://*.google.com https://www.google.ru https://www.googleadservices.com https://pagead2.googlesyndication.com https://ad.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://*.mc.yandex.ru https://*.mc.yandex.com https://yastatic.net https://mpc-prod-27-s6uit34pua-uk.a.run.app https://mm-b87d1f4411634570a31077b00488b380.ecs.us-east-1.on.aws; frame-src https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://js.stripe.com https://*.stripe.com https://m.stripe.network https://*.googletagmanager.com https://td.doubleclick.net https://bid.g.doubleclick.net https://www.google.com https://www.google.ru https://mc.yandex.ru https://mc.yandex.com https://www.facebook.com https://*.facebook.com; frame-ancestors 'self';" always;
 
-    # Short browser cache for HTML; CF edge_ttl (override_origin) caches longer separately.
-    add_header Cache-Control "public, max-age=120" always;
+    # HTML cache: per-request TTL from dreamseed-cache-map.conf (logged-in and account/cart paths: no-store).
+    add_header Cache-Control $dreamseed_cache_control always;
+    add_header Cloudflare-CDN-Cache-Control $dreamseed_cf_cache_control always;
 
     client_max_body_size 64M;
 
@@ -55,12 +69,31 @@ server {
         access_log off;
     }
 
+    # Auth/account HTML is personalized (gift codes, KBZh unlock notice) — never edge-cache.
+    location ^~ /personal-account {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        add_header Cloudflare-CDN-Cache-Control "no-store" always;
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        try_files $uri $uri/ @modx;
+    }
+
+    # Old RU translit map URL → English slug
+    location = /karta-mechtatelej {
+        return 301 /garden-of-dreamers;
+    }
+    location = /karta-mechtatelej/ {
+        return 301 /garden-of-dreamers;
+    }
+
     location / {
         try_files $uri $uri/ @modx;
     }
 
     location @modx {
-        rewrite ^/(.*)$ /index.php?q=$1 last;
+        rewrite ^/(.*)$ /index.php?q=$1&$args last;
     }
 
     location ^~ /manager {
@@ -70,7 +103,7 @@ server {
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.gravatar.com; font-src 'self' data:; frame-ancestors 'self';" always;
         try_files $uri $uri/ @modx;
 
@@ -176,6 +209,13 @@ server {
         proxy_pass {{ faro_collector_url }};
         proxy_set_header Host {{ faro_collector_url | regex_replace('^https?://', '') | regex_replace('/.*$', '') }};
         proxy_ssl_server_name on;
+    }
+{% else %}
+    # Faro RUM disabled. Sink for clients still holding the old SDK — do not proxy upstream (avoids stalling tabs).
+    location /faro-collect {
+        default_type application/json;
+        add_header Cache-Control "no-store";
+        return 204;
     }
 {% endif %}
 }
