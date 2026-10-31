@@ -115,6 +115,12 @@ $(date +%d.%m) - $ENV_DISPLAY"
     [ -n "$LAST_GDRIVE_TILES" ] && MSG+="
 - Last tiles: $LAST_GDRIVE_TILES"
 
+    # Empty output = Google Ads not configured yet; failure = note it, keep the report
+    GADS_BLOCK=$("$SCRIPT_DIR/google_ads_report.sh") || GADS_BLOCK="⚠️ Google Ads: unavailable (see server log)"
+    [ -n "$GADS_BLOCK" ] && MSG+="
+
+📣 $GADS_BLOCK"
+
     MSG+="
 
 $(date '+%d.%m.%Y %H:%M')"
