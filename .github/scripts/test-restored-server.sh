@@ -1,6 +1,7 @@
 #!/bin/bash
 # Test restored server services. Run from CI workflow.
 # Usage: test-restored-server.sh <SERVER_IP>
+# shellcheck disable=SC2029  # values sent to the remote shell are validated (DB_NAME, DOMAIN) or constant (SCRIPTS_DIR, script list)
 set -euo pipefail
 
 SERVER_IP="${1:?Usage: $0 <SERVER_IP>}"
@@ -47,6 +48,11 @@ if [ "${ROWS:-0}" -gt 0 ]; then pass "Content rows: $ROWS"; else fail "No conten
 if ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx"; then pass "Nginx running"; else fail "Nginx"; fi
 if ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm"; then pass "PHP-FPM running"; else fail "PHP-FPM"; fi
 DOMAIN=$(ssh ubuntu@"$SERVER_IP" "grep -hs 'server_name' /etc/nginx/sites-available/*.conf 2>/dev/null | grep -v 'server_name _' | awk '{print \$2}' | tr -d ';' | head -1" 2>/dev/null || echo "localhost")
+# DOMAIN comes from the restored server's nginx config and is interpolated into remote commands below.
+if [[ -n "$DOMAIN" && ! "$DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    echo "ERROR: DOMAIN contains invalid characters (got: '$DOMAIN')" >&2
+    exit 1
+fi
 HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/'" 2>/dev/null || echo "000")
 if [ "$HTTPS_CODE" = "200" ]; then pass "HTTPS 200"; else fail "HTTPS $HTTPS_CODE"; fi
 
