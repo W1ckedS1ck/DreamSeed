@@ -24,6 +24,7 @@ CI_MODE=false
 # Pinned — Renovate tracks these via renovate.json regex managers.
 ZIZMOR_VERSION="1.31.1"
 YAMLLINT_VERSION="1.38.0"
+RENOVATE_VERSION="44.199.0"
 
 TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
@@ -178,7 +179,7 @@ run_renovate_validate() {
     # Pin renovate so validation is deterministic across machines/CI.
     # managerFilePatterns in renovate.json requires renovate >= 41 (see CLAUDE.md).
     # NPM_CONFIG_LOGLEVEL=error silences npm's engine/deprecation noise (we run on node >= renovate's engines).
-    if NPM_CONFIG_LOGLEVEL=error npx --yes --package renovate@44.198.3 -- renovate-config-validator 2>&1; then
+    if NPM_CONFIG_LOGLEVEL=error npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator 2>&1; then
         print_ok "renovate.json valid"
         ci_annotation "Renovate" "pass"
     else

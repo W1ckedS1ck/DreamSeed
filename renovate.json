@@ -103,6 +103,18 @@
     },
     {
       "customType": "regex",
+      "description": "Track the renovate version used to validate this config (lint.sh)",
+      "managerFilePatterns": [
+        "/^scripts/lint\\.sh$/"
+      ],
+      "matchStrings": [
+        "RENOVATE_VERSION=\"(?<currentValue>[\\w.\\-]+)\""
+      ],
+      "depNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
       "description": "Track zizmor version pinned for uvx in lint.sh",
       "managerFilePatterns": [
         "/^scripts/lint\\.sh$/"
