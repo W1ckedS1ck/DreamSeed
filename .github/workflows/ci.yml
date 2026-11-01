@@ -292,6 +292,10 @@ jobs:
         run: |
           bash scripts/check_env_contract.sh
           python3 tests/env/fuzz_env_parsers.py
+      - name: Install unit test dependencies
+        run: pip install -r ci/requirements.txt
+      - name: Run unit tests (templates, bot helpers, CI job names)
+        run: python3 -m pytest tests/unit -q
 
   deploy-check:
     name: Deploy Check
