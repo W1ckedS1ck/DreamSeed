@@ -34,91 +34,91 @@ warn() {
 
 # --- MODX cache state ---
 CACHE_STALE=$(ssh ubuntu@"$SERVER_IP" "find /var/www/html/core/cache/ -mmin -10 -type f 2>/dev/null | head -1 | wc -l" || echo 0)
-[ "$CACHE_STALE" -gt 0 ] && pass "MODX cache populated after restore" || warn "MODX cache empty or inaccessible"
+if [ "$CACHE_STALE" -gt 0 ]; then pass "MODX cache populated after restore"; else warn "MODX cache empty or inaccessible"; fi
 
 # --- Database ---
-ssh ubuntu@"$SERVER_IP" "systemctl is-active mariadb" && pass "MariaDB running" || fail "MariaDB"
-ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT 1'" && pass "DB connect" || fail "DB connect"
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active mariadb"; then pass "MariaDB running"; else fail "MariaDB"; fi
+if ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT 1'"; then pass "DB connect"; else fail "DB connect"; fi
 ROWS=$(ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT COUNT(*) FROM modx_site_content'" 2>/dev/null || echo 0)
 echo "content_rows=$ROWS"
-[ "${ROWS:-0}" -gt 0 ] && pass "Content rows: $ROWS" || fail "No content rows"
+if [ "${ROWS:-0}" -gt 0 ]; then pass "Content rows: $ROWS"; else fail "No content rows"; fi
 
 # --- Web server ---
-ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx" && pass "Nginx running" || fail "Nginx"
-ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm" && pass "PHP-FPM running" || fail "PHP-FPM"
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx"; then pass "Nginx running"; else fail "Nginx"; fi
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active php8.3-fpm"; then pass "PHP-FPM running"; else fail "PHP-FPM"; fi
 DOMAIN=$(ssh ubuntu@"$SERVER_IP" "grep -hs 'server_name' /etc/nginx/sites-available/*.conf 2>/dev/null | grep -v 'server_name _' | awk '{print \$2}' | tr -d ';' | head -1" 2>/dev/null || echo "localhost")
 HTTPS_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/'" 2>/dev/null || echo "000")
-[ "$HTTPS_CODE" = "200" ] && pass "HTTPS 200" || fail "HTTPS $HTTPS_CODE"
+if [ "$HTTPS_CODE" = "200" ]; then pass "HTTPS 200"; else fail "HTTPS $HTTPS_CODE"; fi
 
 # Nginx config syntax (needs sudo — ubuntu can't read Let's Encrypt keys,
 # plain `nginx -t` fails with [emerg] Permission denied even when nginx is
 # healthy and serving 200)
-ssh ubuntu@"$SERVER_IP" "sudo nginx -t 2>&1 | grep -q 'syntax is ok'" && pass "Nginx config syntax OK" || fail "Nginx config: syntax check failed"
+if ssh ubuntu@"$SERVER_IP" "sudo nginx -t 2>&1 | grep -q 'syntax is ok'"; then pass "Nginx config syntax OK"; else fail "Nginx config: syntax check failed"; fi
 
 # --- MODX core ---
-ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php" && pass "Config exists" || fail "Config missing"
+if ssh ubuntu@"$SERVER_IP" "test -f /var/www/html/core/config/config.inc.php"; then pass "Config exists"; else fail "Config missing"; fi
 # Permissions come from the backup archive (chown -R www-data on restore), not
 # from a template — so 640/660 are both valid. Real requirement: NOT
 # world-readable (last octal digit 0) so other OS users can't read DB creds.
 CONFIG_PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
 CONFIG_OWNER=$(ssh ubuntu@"$SERVER_IP" "stat -c '%U' /var/www/html/core/config/config.inc.php 2>/dev/null || echo ''")
 if [ -n "$CONFIG_PERMS" ] && [ "${CONFIG_PERMS: -1}" = "0" ]; then
-    [ "$CONFIG_OWNER" = "www-data" ] && pass "Config permissions: $CONFIG_PERMS ($CONFIG_OWNER)" || warn "Config owner: $CONFIG_OWNER (expected www-data)"
+    if [ "$CONFIG_OWNER" = "www-data" ]; then pass "Config permissions: $CONFIG_PERMS ($CONFIG_OWNER)"; else warn "Config owner: $CONFIG_OWNER (expected www-data)"; fi
 else
     warn "Config permissions: ${CONFIG_PERMS:-N/A} (expected 640/660, not world-readable)"
 fi
-ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets" && pass "Assets exists" || fail "Assets missing"
+if ssh ubuntu@"$SERVER_IP" "test -d /var/www/html/assets"; then pass "Assets exists"; else fail "Assets missing"; fi
 
 # --- PHP logs ---
 PHP_ERRORS=$(ssh ubuntu@"$SERVER_IP" "sudo cat /var/log/php*-fpm.log 2>/dev/null | grep -ci 'PHP Fatal error' || true")
-[ "${PHP_ERRORS:-0}" -eq 0 ] 2>/dev/null && pass "No PHP Fatal errors" || warn "PHP Fatal errors: $PHP_ERRORS"
+if [ "${PHP_ERRORS:-0}" -eq 0 ] 2>/dev/null; then pass "No PHP Fatal errors"; else warn "PHP Fatal errors: $PHP_ERRORS"; fi
 
 # --- Monitoring stack ---
-ssh ubuntu@"$SERVER_IP" "curl -sf -o /dev/null http://127.0.0.1:8428/health" && pass "VictoriaMetrics health" || warn "VM health: FAIL"
+if ssh ubuntu@"$SERVER_IP" "curl -sf -o /dev/null http://127.0.0.1:8428/health"; then pass "VictoriaMetrics health"; else warn "VM health: FAIL"; fi
 
-ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9100/metrics 2>/dev/null | grep -q 'node_cpu'" && pass "Node Exporter metrics" || warn "Node Exporter: FAIL"
+if ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9100/metrics 2>/dev/null | grep -q 'node_cpu'"; then pass "Node Exporter metrics"; else warn "Node Exporter: FAIL"; fi
 
 # --- Security ---
 F2B=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active fail2ban" 2>/dev/null || echo "inactive")
-[ "$F2B" = "active" ] && pass "fail2ban running" || warn "fail2ban: $F2B"
+if [ "$F2B" = "active" ]; then pass "fail2ban running"; else warn "fail2ban: $F2B"; fi
 
-ssh ubuntu@"$SERVER_IP" "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_config.d/00-hardening.conf 2>/dev/null" && pass "SSH hardening" || warn "SSH hardening: FAIL"
+if ssh ubuntu@"$SERVER_IP" "grep -q 'MaxAuthTries 3' /etc/ssh/sshd_config.d/00-hardening.conf 2>/dev/null"; then pass "SSH hardening"; else warn "SSH hardening: FAIL"; fi
 
 TBL=$(ssh ubuntu@"$SERVER_IP" "mysql \"$DB_NAME\" -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"$DB_NAME\"'" 2>/dev/null || echo 0)
-[ "${TBL:-0}" -ge 50 ] && pass "DB tables: $TBL" || warn "DB tables: ${TBL:-0} (expected 50+)"
+if [ "${TBL:-0}" -ge 50 ]; then pass "DB tables: $TBL"; else warn "DB tables: ${TBL:-0} (expected 50+)"; fi
 
-ssh ubuntu@"$SERVER_IP" "systemctl is-active check-site.timer" && pass "check_site.timer" || fail "check_site.timer"
-ssh ubuntu@"$SERVER_IP" "systemctl is-active check-services.timer" && pass "check-services.timer" || fail "check-services.timer"
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active check-site.timer"; then pass "check_site.timer"; else fail "check_site.timer"; fi
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active check-services.timer"; then pass "check-services.timer"; else fail "check-services.timer"; fi
 
-ssh ubuntu@"$SERVER_IP" "systemctl is-active grafana-server" && pass "Grafana running" || warn "Grafana not running"
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active grafana-server"; then pass "Grafana running"; else warn "Grafana not running"; fi
 
 VMAGENT=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active vmagent" 2>/dev/null || echo "inactive")
-[ "$VMAGENT" = "active" ] && pass "vmagent running" || warn "vmagent: $VMAGENT"
+if [ "$VMAGENT" = "active" ]; then pass "vmagent running"; else warn "vmagent: $VMAGENT"; fi
 
-ssh ubuntu@"$SERVER_IP" "systemctl is-active mysqld_exporter" && pass "MySQLd Exporter running" || warn "MySQLd Exporter not running"
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active mysqld_exporter"; then pass "MySQLd Exporter running"; else warn "MySQLd Exporter not running"; fi
 
 VMAE=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:8429/metrics 2>/dev/null | grep 'vmagent_remotewrite_errors_total' | grep -o '[0-9]*$'" 2>/dev/null || echo "NO_DATA")
-[ "$VMAE" = "0" ] && pass "vmagent remote write: 0 errors" || fail "vmagent remote write errors: $VMAE"
+if [ "$VMAE" = "0" ]; then pass "vmagent remote write: 0 errors"; else fail "vmagent remote write errors: $VMAE"; fi
 
 WEB_EXP=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active nginx_exporter 2>/dev/null || systemctl is-active apache_exporter 2>/dev/null || echo inactive")
-[ "$WEB_EXP" = "active" ] && pass "Web exporter running" || warn "Web exporter: $WEB_EXP"
+if [ "$WEB_EXP" = "active" ]; then pass "Web exporter running"; else warn "Web exporter: $WEB_EXP"; fi
 
 CRON=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null" || true)
-echo "$CRON" | grep -q "smart_backup" && pass "Cron: hourly backup" || fail "Cron: hourly backup missing"
-echo "$CRON" | grep -q "upload_backups_to_gdrive" && pass "Cron: daily gdrive upload" || warn "Cron: daily gdrive upload missing"
-echo "$CRON" | grep -q "send_report.sh daily" && pass "Cron: daily report" || warn "Cron: daily report missing"
-echo "$CRON" | grep -q "send_report.sh weekly" && pass "Cron: weekly report" || warn "Cron: weekly report missing"
-echo "$CRON" | grep -q "verify_backups" && pass "Cron: backup verification" || warn "Cron: backup verification missing"
-echo "$CRON" | grep -q "session-cleanup" && warn "Cron: session cleanup (unexpected — Redis handles sessions)" || pass "Cron: no session cleanup (Redis handles sessions)"
+if echo "$CRON" | grep -q "smart_backup"; then pass "Cron: hourly backup"; else fail "Cron: hourly backup missing"; fi
+if echo "$CRON" | grep -q "upload_backups_to_gdrive"; then pass "Cron: daily gdrive upload"; else warn "Cron: daily gdrive upload missing"; fi
+if echo "$CRON" | grep -q "send_report.sh daily"; then pass "Cron: daily report"; else warn "Cron: daily report missing"; fi
+if echo "$CRON" | grep -q "send_report.sh weekly"; then pass "Cron: weekly report"; else warn "Cron: weekly report missing"; fi
+if echo "$CRON" | grep -q "verify_backups"; then pass "Cron: backup verification"; else warn "Cron: backup verification missing"; fi
+if echo "$CRON" | grep -q "session-cleanup"; then warn "Cron: session cleanup (unexpected — Redis handles sessions)"; else pass "Cron: no session cleanup (Redis handles sessions)"; fi
 
 # --- Backup ---
 SCRIPTS_DIR="/home/ubuntu/Scripts"
 for script in smart_backup.sh upload_backups_to_gdrive.sh verify_backups.sh; do
-    ssh ubuntu@"$SERVER_IP" "test -f $SCRIPTS_DIR/$script" && pass "Script: $script" || fail "Script: $script missing"
+    if ssh ubuntu@"$SERVER_IP" "test -f $SCRIPTS_DIR/$script"; then pass "Script: $script"; else fail "Script: $script missing"; fi
 done
 
 GDRIVE=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | grep . || rclone lsf gdrive:DreamSeed/backups/project/ --max-depth 1 2>/dev/null | sort -r | head -1 || echo NO_BACKUPS")
-[ "$GDRIVE" != "NO_BACKUPS" ] && pass "GDrive backups: $(echo "$GDRIVE" | tr -d '\n')" || fail "GDrive backups: not found"
+if [ "$GDRIVE" != "NO_BACKUPS" ]; then pass "GDrive backups: $(echo "$GDRIVE" | tr -d '\n')"; else fail "GDrive backups: not found"; fi
 
 # --- Map tiles (separate backup artifact, excluded from the project archive) ---
 # Accept local OR cloud: right after the cloud path is exercised the local copy
@@ -158,13 +158,13 @@ else
     fi
 fi
 
-ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban modx-admin jail" || warn "fail2ban modx-admin: disabled (behind CF)"
-ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'" && pass "fail2ban grafana jail" || fail "fail2ban grafana jail missing"
+if ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status modx-admin 2>/dev/null | grep -q 'Total banned'"; then pass "fail2ban modx-admin jail"; else warn "fail2ban modx-admin: disabled (behind CF)"; fi
+if ssh ubuntu@"$SERVER_IP" "sudo fail2ban-client status grafana 2>/dev/null | grep -q 'Total banned'"; then pass "fail2ban grafana jail"; else fail "fail2ban grafana jail missing"; fi
 
 # --- Redis ---
-ssh ubuntu@"$SERVER_IP" "systemctl is-active redis-server" && pass "Redis server running" || fail "Redis server"
+if ssh ubuntu@"$SERVER_IP" "systemctl is-active redis-server"; then pass "Redis server running"; else fail "Redis server"; fi
 REDIS_EXP=$(ssh ubuntu@"$SERVER_IP" "systemctl is-active redis_exporter 2>/dev/null || echo inactive")
-[ "$REDIS_EXP" = "active" ] && pass "Redis exporter running" || warn "Redis exporter: $REDIS_EXP"
+if [ "$REDIS_EXP" = "active" ]; then pass "Redis exporter running"; else warn "Redis exporter: $REDIS_EXP"; fi
 
 REDIS_BACKUP=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/redis/redis_dump_*.rdb 2>/dev/null | head -1 || echo ''")
 if [ -n "$REDIS_BACKUP" ]; then
@@ -213,26 +213,26 @@ fi
 
 # --- Promtail ---
 PROMTAIL_POS=$(ssh ubuntu@"$SERVER_IP" "test -f /var/lib/promtail/positions.yml && echo yes || echo no" 2>/dev/null || echo "no")
-[ "$PROMTAIL_POS" = "yes" ] && pass "Promtail positions: /var/lib/promtail/positions.yml" || fail "Promtail positions file missing"
+if [ "$PROMTAIL_POS" = "yes" ]; then pass "Promtail positions: /var/lib/promtail/positions.yml"; else fail "Promtail positions file missing"; fi
 
 PROMTAIL_ERRS=$(ssh ubuntu@"$SERVER_IP" "journalctl -u promtail --no-pager -n 50 2>/dev/null | grep -c 'error' || true")
-[ "${PROMTAIL_ERRS:-0}" -eq 0 ] && pass "Promtail: 0 errors (last 50 lines)" || warn "Promtail: ${PROMTAIL_ERRS} errors (last 50 lines)"
+if [ "${PROMTAIL_ERRS:-0}" -eq 0 ]; then pass "Promtail: 0 errors (last 50 lines)"; else warn "Promtail: ${PROMTAIL_ERRS} errors (last 50 lines)"; fi
 
 PROMTAIL_PHP=$(ssh ubuntu@"$SERVER_IP" "curl -sf http://127.0.0.1:9080/metrics 2>/dev/null | grep -c 'promtail_read_bytes_total.*php.*fpm' || true")
-[ "${PROMTAIL_PHP:-0}" -gt 0 ] && pass "Promtail: reading PHP-FPM log" || fail "Promtail: NOT reading PHP-FPM log"
+if [ "${PROMTAIL_PHP:-0}" -gt 0 ]; then pass "Promtail: reading PHP-FPM log"; else fail "Promtail: NOT reading PHP-FPM log"; fi
 
 PHP_LOG_PERMS=$(ssh ubuntu@"$SERVER_IP" "stat -c '%a %G' /var/log/php*-fpm.log 2>/dev/null || echo 'missing'")
-echo "$PHP_LOG_PERMS" | grep -q '640 adm' && pass "PHP-FPM log: 640 adm" || fail "PHP-FPM log perms: $PHP_LOG_PERMS"
+if echo "$PHP_LOG_PERMS" | grep -q '640 adm'; then pass "PHP-FPM log: 640 adm"; else fail "PHP-FPM log perms: $PHP_LOG_PERMS"; fi
 
 MANAGER_CODE=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code}' 'https://$DOMAIN/manager/' 2>/dev/null || echo '000'")
-[ "$MANAGER_CODE" = "200" ] && pass "MODX manager: HTTP 200" || warn "MODX manager: HTTP $MANAGER_CODE"
+if [ "$MANAGER_CODE" = "200" ]; then pass "MODX manager: HTTP 200"; else warn "MODX manager: HTTP $MANAGER_CODE"; fi
 echo "modx_manager_code=$MANAGER_CODE"
 
 RESP_TIME=$(ssh ubuntu@"$SERVER_IP" "curl -sk --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{time_total}' 'https://$DOMAIN/' 2>/dev/null || echo '0'" | tr ',' '.')
 # time_total is seconds — report real ms (%.0f on seconds always showed 0ms and never tripped the 2s warn)
 RESP_MS=$(awk -v t="$RESP_TIME" 'BEGIN { printf "%d", t * 1000 }' 2>/dev/null || echo 0)
 echo "response_time_ms=$RESP_MS"
-[ "${RESP_MS:-999}" -lt 2000 ] && pass "Response time: ${RESP_MS}ms" || warn "Response time: ${RESP_MS}ms (slow)"
+if [ "${RESP_MS:-999}" -lt 2000 ]; then pass "Response time: ${RESP_MS}ms"; else warn "Response time: ${RESP_MS}ms (slow)"; fi
 
 MEM_TOTAL=$(ssh ubuntu@"$SERVER_IP" "free -m | awk 'NR==2 {print \$2}'" 2>/dev/null || echo "0")
 MEM_USED=$(ssh ubuntu@"$SERVER_IP" "free -m | awk 'NR==2 {print \$3}'" 2>/dev/null || echo "0")
@@ -259,10 +259,10 @@ echo "exporter_vm=$EXP_VM"
 
 CRON_COUNT=$(ssh ubuntu@"$SERVER_IP" "crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$' | wc -l" || echo 0)
 echo "cron_jobs=$CRON_COUNT"
-[ "${CRON_COUNT:-0}" -ge 5 ] && pass "Cron jobs: $CRON_COUNT" || warn "Cron jobs: ${CRON_COUNT:-0} (expected 5+)"
+if [ "${CRON_COUNT:-0}" -ge 5 ]; then pass "Cron jobs: $CRON_COUNT"; else warn "Cron jobs: ${CRON_COUNT:-0} (expected 5+)"; fi
 
 GRAFANA_LOGIN=$(ssh ubuntu@"$SERVER_IP" 'PW=$(sudo grep -oP "(?<=GF_SECURITY_ADMIN_PASSWORD=).*" /etc/grafana/grafana.env 2>/dev/null || true); if [ -z "$PW" ]; then echo "no-env"; exit 0; fi; F=$(mktemp); chmod 600 "$F"; printf "machine 127.0.0.1\nlogin admin\npassword %s\n" "$PW" > "$F"; R=$(curl -s -o /dev/null -w "%{http_code}" --netrc-file "$F" http://127.0.0.1:3000/api/user 2>/dev/null || echo "000"); rm -f "$F"; echo "$R"' 2>/dev/null || echo "000")
-[ "${GRAFANA_LOGIN:-000}" = "200" ] && pass "Grafana admin login OK (HTTP 200)" || warn "Grafana admin login: HTTP ${GRAFANA_LOGIN:-000}"
+if [ "${GRAFANA_LOGIN:-000}" = "200" ]; then pass "Grafana admin login OK (HTTP 200)"; else warn "Grafana admin login: HTTP ${GRAFANA_LOGIN:-000}"; fi
 
 # ==== Checks end ====
 echo "test_summary=P:${P} F:${F} W:${W}"
