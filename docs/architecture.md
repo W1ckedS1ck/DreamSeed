@@ -170,7 +170,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
                                               ┌─────────────────┐     ┌─────────────────────┐
                                               │   Grafana       │     │  Grafana Cloud      │
                                               │  :3000          │     │  hosted metrics     │
-                                              │  29 alerts      │     │  5 community        │
+                                              │  28 alerts      │     │  5 community        │
                                               │ 6/5 dashboards  │     │  (gnet 1860/...)    │
                                               └────────┬────────┘     └─────────────────────┘
                                                        │ Telegram point
@@ -183,7 +183,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 ```
 Better Stack (cloud)
    │
-   ├─ 3 HTTP monitors ── main site + /manager/ + /grafana (3min, 4 regions: EU/US/Asia/AU)
+   ├─ 6 HTTP monitors ── main + /manager/ + /grafana + /bot-health + /catalog/bamboo + /personal-account/registration (3min, admin 5min, 4 regions: EU/US/Asia/AU)
    ├─ 6 cron heartbeats ── backup, gdrive, report-daily, report-weekly, verify-backups, check-services
    └─ Status page ──────── status.dreamseed.online
    │
@@ -193,7 +193,7 @@ Better Stack (cloud)
          └─ Resolve (incident resolved) → Telegram
 ```
 
-### Alert Rules (Grafana — 29 rules)
+### Alert Rules (Grafana — 28 rules)
 
 > Two classes:
 >
@@ -239,11 +239,14 @@ Better Stack (cloud)
 | VMAgent Remote Write Failing | critical | vmagent_remote_write_ok == 0 | check_services 5m, for: 10m |
 | Cloud Upload Failed | warning | upload_last_success_timestamp >2h | upload script 1h, for: 5m |
 
+> Nginx Down and Apache Down are two separate rules; the table shows them in
+> one row, so 27 rows describe 28 rules.
+
 ### External Monitoring
 
 | Type | Provider | Items | Delivery |
 |------|----------|-------|----------|
-| Uptime | Better Stack | 3 monitors, 6 heartbeats, status page | Telegram webhooks |
+| Uptime | Better Stack | 6 monitors, 6 heartbeats, status page | Telegram webhooks |
 | Real User Monitoring | Grafana Cloud (Faro) | LCP/CLS/INP/TTFB, JS errors, sessions by browser/country | Grafana Cloud dashboard |
 | Synthetic Monitoring | Grafana Cloud SM | 4 checks (HTTP main every 10 min from 5 global probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 3 global probes) | Grafana Cloud dashboard |
 

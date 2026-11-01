@@ -1,6 +1,6 @@
 # Environment Variables Guide
 
-How to obtain and use every variable in `secrets/.env` and `.env.example`.
+How to obtain and use the main variables in `secrets/.env` and `.env.example`. Tuning/version knobs (`*_VERSION`, `*_SERVER_TYPE`, `*_LOCATION`, `MAX_LOG_FILES`) are documented inline in `.env.example`.
 
 > Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog.
 

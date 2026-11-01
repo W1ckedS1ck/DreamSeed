@@ -12,7 +12,7 @@
 - [How to connect](#how-to-connect)
 - [Alert Channels Overview](#alert-channels-overview)
 - [Layer 1: Grafana Alerts (G1–G29)](#-layer-1-grafana-alerts)
-- [Layer 2: Better Stack Alerts (B1–B10)](#-layer-2-better-stack-alerts)
+- [Layer 2: Better Stack Alerts (B1–B13)](#-layer-2-better-stack-alerts)
 - [Layer 3: Script Direct Alerts (S1–S2)](#-layer-3-script-direct-alerts)
 - [Layer 4: CI/CD & Infrastructure Alerts (D1)](#-layer-4-cicd-and-infrastructure-alerts)
 - [Quick Reference — What to do first](#quick-reference--what-to-do-first)
@@ -128,6 +128,10 @@ If you're not in the chat — ask to be added.
 All commands in this document run **on the server via SSH**.
 Use your **own SSH key** (set up in the prerequisites above).
 
+> Alias note: `prod` / `dev-hetz` below are examples — the owner of this repo uses
+> `dream` (prod-hetz), `hetz` (dev-hetz) and `aws` (dev-aws). Any alias works as
+> long as it points at the right host; create yours in `~/.ssh/config`.
+
 ### Connect using the SSH alias (recommended)
 
 ```bash
@@ -157,7 +161,7 @@ Use cloud console to restart:
 | Layer | Prefix | Source | What it monitors | Survives server death? |
 |-------|--------|--------|-----------------|----------------------|
 | 1 | G1–G29 | Grafana (on-server) | CPU, RAM, Disk, Swap, Nginx/Apache, MySQL, PHP-FPM, Site, Site slow, MODX core, MODX cache, VictoriaMetrics, Redis, Backup cron, Site check, Service check, SSL, Admin login, MiniShop2, DB tables, Backup verify, VMAgent, Cloud Upload, Fail2ban, Promtail, Node Exporter, Telegram Bot (+ 2 metric-only sections) | ❌ No |
-| 2 | B1–B10 | Better Stack (cloud) | HTTP uptime (3 monitors), Cron heartbeats (6 heartbeats), Grafana Cloud SM | ✅ Yes |
+| 2 | B1–B13 | Better Stack (cloud) | HTTP uptime (6 monitors), Cron heartbeats (6 heartbeats), Grafana Cloud SM | ✅ Yes |
 | 3 | S1–S2 | Scripts (on-server) | Backup failures, GDrive upload failures | ❌ No |
 
 All alerts → same Telegram topic.
@@ -1117,7 +1121,7 @@ crontab -l | grep upload
 bash /home/ubuntu/Scripts/upload_backups_to_gdrive.sh
 
 # Check rclone config
-rclone lsf gdrive-crypt:DreamSeed/backups/project-dev/ --files-only 2>/dev/null | head -3
+rclone lsf gdrive-crypt:DreamSeed/backups/project-dev-hetz/ --files-only 2>/dev/null | head -3
 
 # Check if VictoriaMetrics received the metric
 curl -s "http://127.0.0.1:8428/api/v1/query?query=upload_last_success_timestamp" | \
@@ -1485,7 +1489,8 @@ ssh prod "curl -sS -o /dev/null -w '%{http_code}' https://localhost/"
 #    Cloudflare Dashboard → Analytics → Edge Status Codes
 
 # 3. Check the SM check details in Grafana Cloud:
-#    https://vitalikuts.grafana.net → Synthetic Monitoring → Checks
+#    prod: https://dreamseed.grafana.net → Synthetic Monitoring → Checks
+#    dev:  https://vitalikuts.grafana.net → Synthetic Monitoring → Checks
 
 # 4. Check provider status pages
 open https://health.aws.amazon.com
@@ -1553,6 +1558,88 @@ ssh prod "bash /home/ubuntu/Scripts/check_services.sh"
 ```bash
 ssh prod "sudo systemctl restart check-services.timer"
 ```
+
+---
+
+### B11. 🔴 BetterStack Alert — Telegram Bot health
+
+**What triggered:** Better Stack (4 regions) gets a non-2xx status from `https://dreamseed.online/bot-health`
+**Severity:** Warning — the alerting/reporting bot may be down. The monitor probes nginx → `127.0.0.1:8553/health`, which runs **inside** `telegram-bot.service`
+**Causes:**
+
+1. `telegram-bot.service` stopped/crashed (the health endpoint dies with it)
+2. nginx `/bot-health` location broken
+3. `TG_TOKEN` revoked/invalid — the bot now exits non-zero instead of pretending to be healthy
+
+**Diagnose:**
+
+```bash
+ssh prod "sudo systemctl status telegram-bot"
+ssh prod "curl -sk --resolve dreamseed.online:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://dreamseed.online/bot-health"
+ssh prod "sudo journalctl -u telegram-bot --no-pager -n 50"
+```
+
+**Fix:**
+
+```bash
+ssh prod "sudo systemctl restart telegram-bot"
+```
+
+- If logs show `TG_TOKEN not set` or `Unauthorized` → rotate `TG_TOKEN` in `secrets/.env` + GitHub Secret, redeploy
+- If nginx returns 404/502 but the service is healthy → see Web Server Down (G6), check the `/bot-health` location
+
+---
+
+### B12. 🔴 BetterStack Alert — Registration Page
+
+**What triggered:** Better Stack (4 regions) gets a non-2xx/3xx status from `https://dreamseed.online/personal-account/registration`
+**Severity:** High — new users cannot sign up
+**Causes:**
+
+1. PHP-FPM down / 502 (see G5)
+2. MODX error or missing template/chunk
+3. nginx route rewrite broken after a vhost change
+4. Maintenance mode / 503
+
+**Diagnose:**
+
+```bash
+ssh prod "curl -sk --resolve dreamseed.online:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://dreamseed.online/personal-account/registration"
+ssh prod "sudo tail -50 /var/log/nginx/error.log"
+ssh prod "sudo tail -50 /var/www/html/core/cache/logs/error.log 2>/dev/null"
+```
+
+**Fix:**
+
+- 502 → restart PHP-FPM (G5)
+- 500/blank → clear MODX cache and check the PHP error log
+- 404 → verify the vhost rewrite and that the page still exists in MODX
+
+---
+
+### B13. 🔴 BetterStack Alert — Product Lucky Bamboo
+
+**What triggered:** Better Stack (4 regions) cannot reach `https://dreamseed.online/catalog/bamboo`, or the keyword **`Lucky Bamboo Bonsai`** is missing
+**Severity:** Medium — product page broken/empty (SEO + checkout path)
+**Causes:**
+
+1. Product unpublished / renamed in MODX
+2. MiniShop2 or template error
+3. Cache serving an empty page after an edit
+4. nginx/PHP-FPM issue (see G5/G6)
+
+**Diagnose:**
+
+```bash
+ssh prod "curl -sk --resolve dreamseed.online:443:127.0.0.1 https://dreamseed.online/catalog/bamboo | grep -o 'Lucky Bamboo Bonsai' | head -1"
+ssh prod "sudo tail -50 /var/log/nginx/error.log"
+```
+
+**Fix:**
+
+- If the page is 200 but the keyword is gone → product/template changed; republish or restore the resource
+- If 5xx → follow G5/G6
+- If only the edge sees it → Cloudflare cache: purge `/catalog/bamboo` (see "Deleting sensitive files from webroot" note in CLAUDE.md)
 
 ---
 
@@ -1741,11 +1828,12 @@ ssh prod "rclone delete gdrive-crypt:DreamSeed/backups/old_file --dry-run 2>&1"
 
 - **Whois / DNS check:** <https://dns.google>
 - **SSL check:** <https://www.ssllabs.com/ssltest/>
-- **Uptime history:** <https://go-dreams.betterstackstatus.com>
+- **Uptime history:** <https://status.dreamseed.online>
 - **Grafana (on-server):** <https://dreamseed.online/grafana>
-- **Grafana Cloud (hosted):** <https://vitalikuts.grafana.net>
+- **Grafana Cloud (prod):** <https://dreamseed.grafana.net>
+- **Grafana Cloud (dev):** <https://vitalikuts.grafana.net>
 
-> **If Better Stack is completely unavailable:** fall back to Layer 1 (Grafana on-server via dreamseed.online/grafana) and Grafana Cloud Synthetic Monitoring (via vitalikuts.grafana.net). Better Stack is an external layer — its absence does not indicate server issues.
+> **If Better Stack is completely unavailable:** fall back to Layer 1 (Grafana on-server via dreamseed.online/grafana) and Grafana Cloud Synthetic Monitoring (prod: dreamseed.grafana.net, dev: vitalikuts.grafana.net). Better Stack is an external layer — its absence does not indicate server issues.
 
 ---
 
