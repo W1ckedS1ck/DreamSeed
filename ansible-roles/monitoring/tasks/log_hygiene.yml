@@ -1,4 +1,13 @@
 ---
+- name: Ensure journald drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
 - name: Cap systemd journal size and retention
   ansible.builtin.template:
     src: journald-size.conf.j2
