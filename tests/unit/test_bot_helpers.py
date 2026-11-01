@@ -29,7 +29,13 @@ _stub(
 )  # bot loads scripts/.env at import; CI has none
 _stub("telegram", Update=_Any)
 _stub("telegram.error", NetworkError=Exception)
-_stub("telegram.ext", ApplicationBuilder=_Any, CommandHandler=_Any, ContextTypes=_Any)
+_stub(
+    "telegram.ext",
+    ApplicationBuilder=_Any,
+    CommandHandler=_Any,
+    # Handler annotations are evaluated at import on Python < 3.14, so DEFAULT_TYPE must exist.
+    ContextTypes=types.SimpleNamespace(DEFAULT_TYPE=object),
+)
 
 bot = importlib.import_module("telegram_bot")
 
