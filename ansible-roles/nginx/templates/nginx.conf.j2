@@ -44,6 +44,18 @@ http {
     limit_req_zone $binary_remote_addr$request_method zone=modx_login:10m rate=120r/m;
     limit_req_zone $binary_remote_addr$request_method zone=modx_admin:10m rate=300r/m;
 
+    # CSP violation reports (see /csp-report in vhost-ssl.conf.j2). $request_body is only
+    # populated when the request is proxied, hence the loopback sink below.
+    limit_req_zone $binary_remote_addr zone=csp_report:1m rate=30r/m;
+    log_format csp_report '$time_iso8601 $remote_addr "$http_user_agent" $request_body';
+    server {
+        listen 127.0.0.1:8099;
+        access_log off;
+        location / {
+            return 204;
+        }
+    }
+
     # WebSocket support for Grafana Live
     map $http_upgrade $connection_upgrade {
         default upgrade;
