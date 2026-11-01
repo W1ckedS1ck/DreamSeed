@@ -29,7 +29,7 @@ jobs:
       - name: 🚀 Start
         run: echo "ShellCheck started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - name: Install ShellCheck
-        run: pip install shellcheck-py
+        run: pip install -r ci/requirements.txt
       - name: Run ShellCheck
         run: bash scripts/lint.sh --ci --shellcheck
       - name: Cloudflare IP updater selftest
@@ -150,14 +150,14 @@ jobs:
           grep "linux_amd64.tar.gz$" checksums.txt | sha256sum -c -
           sudo tar -xzf "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin actionlint
       - name: Install shellcheck (inline run scripts)
-        run: pip install shellcheck-py
+        run: pip install -r ci/requirements.txt
       - name: Run actionlint
         run: actionlint -shellcheck="$(command -v shellcheck)" -ignore 'specifying action "\$/.+" in invalid format because ref is missing'
       - name: Verify required checks match ci.yml
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pip install pyyaml
+          pip install -r ci/requirements.txt
           python3 scripts/check_required_checks.py
 
   yamllint:
@@ -236,7 +236,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           BEFORE: ${{ github.event.before }}
         run: |
-          pip install pre-commit shellcheck-py
+          pip install -r ci/requirements.txt
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             REF="origin/$BASE_REF"
           elif [[ -n "$BEFORE" && "$BEFORE" != "0000000000000000000000000000000000000000" ]]; then

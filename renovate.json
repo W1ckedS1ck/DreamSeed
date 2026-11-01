@@ -15,7 +15,8 @@
   "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "custom.regex"],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^ansible/requirements-deploy\\.txt$/"
+      "/^ansible/requirements-deploy\\.txt$/",
+      "/^ci/requirements\\.txt$/"
     ]
   },
   "ansible-galaxy": {
