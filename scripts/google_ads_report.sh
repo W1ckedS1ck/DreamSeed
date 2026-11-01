@@ -14,7 +14,7 @@ for var in GOOGLE_ADS_CLIENT_ID GOOGLE_ADS_CLIENT_SECRET GOOGLE_ADS_REFRESH_TOKE
     [[ -n "${!var:-}" ]] || exit 0
 done
 
-API_VERSION="${GOOGLE_ADS_API_VERSION:-v21}"
+API_VERSION="${GOOGLE_ADS_API_VERSION:-v25}"
 CUSTOMER_ID="${GOOGLE_ADS_CUSTOMER_ID//-/}"
 LOGIN_CUSTOMER_ID="${GOOGLE_ADS_LOGIN_CUSTOMER_ID:-}"
 LOGIN_CUSTOMER_ID="${LOGIN_CUSTOMER_ID//-/}"
@@ -55,6 +55,11 @@ api_resp=$(curl -s -m 30 -X POST --config "$cfg" --data-binary "$body") || api_r
 api_err=$(jq -r 'if type == "object" then (.error.message // empty) else empty end' <<<"$api_resp" 2>/dev/null || true)
 if [[ -n "$api_err" || -z "$api_resp" ]]; then
     echo "ERROR: Google Ads API request failed: ${api_err:-no response}" >&2
+    exit 1
+fi
+# A sunset API version returns an HTML 404 page, not JSON.
+if ! jq -e . >/dev/null 2>&1 <<<"$api_resp"; then
+    echo "ERROR: Google Ads API returned non-JSON (API version $API_VERSION sunset?)" >&2
     exit 1
 fi
 

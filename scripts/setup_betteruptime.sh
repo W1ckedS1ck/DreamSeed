@@ -102,11 +102,11 @@ write_key_to_env() {
         return 1
     }
 
-    if grep -qP "^${var_name}=" "$tmpfile"; then
-        grep -vP "^${var_name}=" "$tmpfile" >"$tmpfile.new"
-        _SETUP_TMPFILES+=("$tmpfile.new")
-        mv "$tmpfile.new" "$tmpfile"
-    fi
+    # Portable replacement for GNU-only grep -P (BSD grep broke key replacement).
+    awk -v k="$var_name" 'index($0, k "=") != 1' "$tmpfile" >"$tmpfile.new"
+    chmod 600 "$tmpfile.new"
+    _SETUP_TMPFILES+=("$tmpfile.new")
+    mv "$tmpfile.new" "$tmpfile"
     echo "${var_name}=\"${value}\"" >>"$tmpfile"
 
     # Encrypt into a temp file, validate it, then atomically mv into place.
@@ -206,7 +206,7 @@ fi
 
 echo -e "\n${CYAN}Better Stack — HTTP monitors${NC}\n"
 # Note: widget type for status page (history/response_time) is UI-only.
-# After first run, go to Better Stack → Status Pages → go-dreams
+# After first run, open Status Pages → DreamSeed (status.dreamseed.online)
 # and set Response time for main monitor (🌐 dreamseed.online).
 
 existing_mon=$(curl -s -X GET "$API/monitors" --config <(bu_auth) || echo '{"data":[]}')
@@ -231,6 +231,7 @@ for spec in \
     "https://${DOMAIN}/|Main site|The Dreamers|180|keyword" \
     "https://${DOMAIN}/manager/|Admin panel|MODX|300|keyword" \
     "https://${DOMAIN}/grafana|Grafana|Grafana|180|keyword" \
+    "https://${DOMAIN}/bot-health|Telegram Bot||180|status" \
     "https://${DOMAIN}/catalog/bamboo|Product Lucky Bamboo|Lucky Bamboo Bonsai|180|keyword" \
     "https://${DOMAIN}/personal-account/registration|Registration Page||180|status"; do
 

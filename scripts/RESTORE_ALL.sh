@@ -86,8 +86,12 @@ START_TIME=$(date +%s)
 
 SERVICES_STOPPED=0
 RESTORE_TEMP_DIRS=()
+CLEANED=0
 
 cleanup_trap() {
+    # Idempotent: a second signal during cleanup must not re-run it.
+    [ "$CLEANED" -eq 1 ] && return 0
+    CLEANED=1
     # Do NOT unlink the lock file: flock locks the inode, and deleting it here
     # (before the fd closes) lets a concurrent restore create a fresh inode and
     # acquire the lock while we're still running (TOCTOU). The lock is released
@@ -119,7 +123,10 @@ cleanup_trap() {
         sudo systemctl start "$PHP_FPM" "$WEB_SERVICE" 2>/dev/null || true
     fi
 }
-trap cleanup_trap EXIT INT TERM
+trap cleanup_trap EXIT
+# INT/TERM must exit; the EXIT trap runs cleanup once (130/143 = 128+signal).
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 print_header() {
     echo ""

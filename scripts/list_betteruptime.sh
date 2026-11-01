@@ -104,9 +104,9 @@ for item in data.get('data', []):
         sub = a.get('subdomain', '')
         cd = a.get('custom_domain', '')
         public = 'no' if a.get('whitelabeled') else 'yes'
-        url_suffix = "  (custom: %s)" % cd if cd else ""
+        url = "https://%s" % cd if cd else "https://%s.betterstackstatus.com" % sub
         print("  %s" % a.get('company_name', '-'))
-        print("    URL:      https://%s.betterstackstatus.com%s" % (sub, url_suffix))
+        print("    URL:      %s" % url)
         print("    Timezone: %s" % a.get('timezone', '-'))
         print("    Public:   %s" % public)
         print("    Created:  %s" % a['created_at'])
