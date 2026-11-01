@@ -66,8 +66,8 @@ resource "aws_security_group" "web" {
     from_port        = 22
     to_port          = 22
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-ingress-sgr
-    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-ingress-sgr
+    cidr_blocks      = ["0.0.0.0/0"] #trivy:ignore:AWS-0107
+    ipv6_cidr_blocks = ["::/0"]      #trivy:ignore:AWS-0107
   }
 
   ingress {
@@ -92,13 +92,14 @@ resource "aws_security_group" "web" {
   # Ports 80/443 cover apt, rclone, certbot, vmagent, curl, git+https.
   # If a new service needs a different port (e.g. SSH:22, git:9418) —
   # add it here explicitly. Do NOT open 0.0.0.0/0 all-ports.
+  # Egress is limited to the listed ports; AWS-0104 flags any 0.0.0.0/0 rule regardless of port.
   egress {
     description      = "HTTP (apt, certbot)"
     from_port        = 80
     to_port          = 80
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
-    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-egress-sgr
+    cidr_blocks      = ["0.0.0.0/0"] #trivy:ignore:AWS-0104
+    ipv6_cidr_blocks = ["::/0"]      #trivy:ignore:AWS-0104
   }
 
   egress {
@@ -106,8 +107,8 @@ resource "aws_security_group" "web" {
     from_port        = 443
     to_port          = 443
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
-    ipv6_cidr_blocks = ["::/0"]      #tfsec:ignore:aws-ec2-no-public-egress-sgr
+    cidr_blocks      = ["0.0.0.0/0"] #trivy:ignore:AWS-0104
+    ipv6_cidr_blocks = ["::/0"]      #trivy:ignore:AWS-0104
   }
 
   egress {
@@ -115,7 +116,7 @@ resource "aws_security_group" "web" {
     from_port   = 53
     to_port     = 53
     protocol    = "udp"
-    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
+    cidr_blocks = ["0.0.0.0/0"] #trivy:ignore:AWS-0104
   }
 
   egress {
@@ -123,7 +124,7 @@ resource "aws_security_group" "web" {
     from_port   = 123
     to_port     = 123
     protocol    = "udp"
-    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
+    cidr_blocks = ["0.0.0.0/0"] #trivy:ignore:AWS-0104
   }
 
   egress {
@@ -131,7 +132,7 @@ resource "aws_security_group" "web" {
     from_port   = 587
     to_port     = 587
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
+    cidr_blocks = ["0.0.0.0/0"] #trivy:ignore:AWS-0104
   }
 
   tags = {
