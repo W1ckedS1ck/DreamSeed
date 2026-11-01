@@ -1,4 +1,3 @@
-# SC2034: globals defined in one sourced lib and consumed in another (deploy.sh,
-# lib/cli.sh etc.) are reported unused by single-file shellcheck runs. They are
-# used — cross-file — so the check is a false positive here.
-disable=SC2034
+# No global rules. SC2034 is suppressed per file, with the reason, where a
+# variable is consumed by another file (lib/cli.sh, lib/env.sh, scripts/smart_backup.sh,
+# scripts/verify_backups.sh).

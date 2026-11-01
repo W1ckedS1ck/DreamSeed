@@ -1,5 +1,6 @@
 # Environment variable handling for deploy.sh
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # ENV_SRC is read by lib/preflight.sh
 # Sourced by deploy.sh — do not execute directly.
 
 # Safe .env parser: no `source`/eval → no RCE. Supports quoted/multi-line values,

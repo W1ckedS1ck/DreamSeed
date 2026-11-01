@@ -169,10 +169,8 @@ if [ "$REDIS_EXP" = "active" ]; then pass "Redis exporter running"; else warn "R
 REDIS_BACKUP=$(ssh ubuntu@"$SERVER_IP" "ls -1 /home/ubuntu/backups/redis/redis_dump_*.rdb 2>/dev/null | head -1 || echo ''")
 if [ -n "$REDIS_BACKUP" ]; then
     pass "Redis backup exists: $(basename "$REDIS_BACKUP")"
-    REDIS_BACKUP_NAME=$(basename "$REDIS_BACKUP")
 else
     fail "Redis backup: not found"
-    REDIS_BACKUP_NAME="none"
 fi
 
 REDIS_CLOUD=$(ssh ubuntu@"$SERVER_IP" "rclone lsf gdrive-crypt:DreamSeed/backups/redis/ --max-depth 1 2>/dev/null | wc -l")

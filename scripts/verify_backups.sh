@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2034  # LOG_FILE is read by log() in scripts/common_functions.sh
 # Usage: verify_backups.sh [--no-alert]   (or VERIFY_NO_ALERT=1)
 #   --no-alert  diagnostic run: suppress Telegram alert + heartbeat ping
 set -euo pipefail
