@@ -10,7 +10,7 @@
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_cloudflare"></a> [cloudflare](#provider\_cloudflare) | 5.28.0 |
+| <a name="provider_cloudflare"></a> [cloudflare](#provider\_cloudflare) | 5.28.1 |
 
 ## Modules
 
