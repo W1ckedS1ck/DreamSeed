@@ -93,27 +93,29 @@ jobs:
           cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare_firewall_token: ${{ secrets.CLOUDFLARE_FIREWALL_TOKEN }}
           hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-          prod_hetz_hcloud_token: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
+          # Prod credentials only for prod* targets; dev runs must not receive them.
+          # NOTE: repo-level secrets are still readable by a dev-edited workflow.
+          prod_hetz_hcloud_token: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_HETZ_HCLOUD_TOKEN || '' }}
           grafana_pass: ${{ secrets.GRAFANA_PASS }}
           betteruptime_api_token: ${{ secrets.BETTERUPTIME_API_TOKEN }}
           betteruptime_backup_key: ${{ secrets.BETTERUPTIME_BACKUP_KEY }}
           betteruptime_gdrive_key: ${{ secrets.BETTERUPTIME_GDRIVE_KEY }}
           betteruptime_report_daily_key: ${{ secrets.BETTERUPTIME_REPORT_DAILY_KEY }}
           betteruptime_report_weekly_key: ${{ secrets.BETTERUPTIME_REPORT_WEEKLY_KEY }}
-          google_ads_client_id: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
-          google_ads_client_secret: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
-          google_ads_refresh_token: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
-          google_ads_developer_token: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
-          google_ads_customer_id: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
-          google_ads_login_customer_id: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+          google_ads_client_id: ${{ startsWith(inputs.environment, 'prod') && secrets.GOOGLE_ADS_CLIENT_ID || '' }}
+          google_ads_client_secret: ${{ startsWith(inputs.environment, 'prod') && secrets.GOOGLE_ADS_CLIENT_SECRET || '' }}
+          google_ads_refresh_token: ${{ startsWith(inputs.environment, 'prod') && secrets.GOOGLE_ADS_REFRESH_TOKEN || '' }}
+          google_ads_developer_token: ${{ startsWith(inputs.environment, 'prod') && secrets.GOOGLE_ADS_DEVELOPER_TOKEN || '' }}
+          google_ads_customer_id: ${{ startsWith(inputs.environment, 'prod') && secrets.GOOGLE_ADS_CUSTOMER_ID || '' }}
+          google_ads_login_customer_id: ${{ startsWith(inputs.environment, 'prod') && secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID || '' }}
           betteruptime_verify_key: ${{ secrets.BETTERUPTIME_VERIFY_KEY }}
           betteruptime_check_services_key: ${{ secrets.BETTERUPTIME_CHECK_SERVICES_KEY }}
           dev_grafana_cloud_url: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           dev_grafana_cloud_username: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
           dev_grafana_cloud_token: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
-          prod_grafana_cloud_url: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
-          prod_grafana_cloud_username: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
-          prod_grafana_cloud_token: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
+          prod_grafana_cloud_url: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_GRAFANA_CLOUD_URL || '' }}
+          prod_grafana_cloud_username: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_GRAFANA_CLOUD_USERNAME || '' }}
+          prod_grafana_cloud_token: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_GRAFANA_CLOUD_TOKEN || '' }}
           loki_url: ${{ vars.LOKI_URL }}
           loki_username: ${{ vars.LOKI_USERNAME }}
           loki_url_prod: ${{ vars.LOKI_URL_PROD }}
@@ -124,12 +126,12 @@ jobs:
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
           dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
-          prod_access_key: ${{ secrets.PROD_ACCESS_KEY }}
-          prod_secret_key: ${{ secrets.PROD_SECRET_KEY }}
-          prod_region: ${{ secrets.PROD_REGION }}
+          prod_access_key: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_ACCESS_KEY || '' }}
+          prod_secret_key: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_SECRET_KEY || '' }}
+          prod_region: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_REGION || '' }}
           user_ssh_public_key: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           vitali_ssh_public_key: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
-          prod_host_ssh_public_key: ${{ secrets.PROD_HOST_SSH_PUBLIC_KEY }}
+          prod_host_ssh_public_key: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_HOST_SSH_PUBLIC_KEY || '' }}
           rclone_crypt_password: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault_password: ${{ secrets.VAULT_PASSWORD }}
@@ -464,8 +466,8 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
           SERVER_IP: ${{ steps.deploy.outputs.server_ip }}
-          PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
-          DEV_SA_TOKEN: ${{ secrets.DEV_GRAFANA_CLOUD_SA_TOKEN }}
+          PROD_SA_TOKEN: ${{ startsWith(inputs.environment, 'prod') && secrets.PROD_GRAFANA_CLOUD_SA_TOKEN || '' }}
+          DEV_SA_TOKEN: ${{ !startsWith(inputs.environment, 'prod') && secrets.DEV_GRAFANA_CLOUD_SA_TOKEN || '' }}
         run: |
           case "$ENV_NAME" in
             prod|prod-hetz)
