@@ -5,6 +5,7 @@ server during deploy. Every undeclared variable gets a dummy value, so a
 missing default is not reported here.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -30,15 +31,22 @@ ENV = jinja2.Environment(
     keep_trailing_newline=True,
 )
 ENV.filters["regex_replace"] = _regex_replace
+ENV.filters["to_json"] = json.dumps
+ENV.filters["bool"] = lambda value: str(value).lower() in ("1", "true", "yes", "on")
 
 
-def _render(name: str) -> str:
+def _render(name: str, context: dict | None = None) -> str:
     source, _, _ = ENV.loader.get_source(ENV, name)
     names = meta.find_undeclared_variables(ENV.parse(source))
-    return ENV.from_string(source).render({n: "x" for n in names})
+    values = {n: "x" for n in names}
+    values.update(context or {})
+    return ENV.from_string(source).render(values)
 
 
-@pytest.mark.parametrize("name", ["vhost-ssl.conf.j2", "nginx.conf.j2"])
+@pytest.mark.parametrize(
+    "name",
+    ["vhost-ssl.conf.j2", "nginx.conf.j2", "faro-loader.js.j2"],
+)
 def test_template_renders(name: str) -> None:
     assert _render(name).strip()
 
@@ -48,3 +56,20 @@ def test_vhost_has_csp_report_collector() -> None:
     rendered = _render("vhost-ssl.conf.j2")
     assert "location = /csp-report" in rendered
     assert "proxy_pass http://127.0.0.1:8099;" in rendered
+
+
+def test_vhost_uses_sampled_faro_loader() -> None:
+    rendered = _render(
+        "vhost-ssl.conf.j2",
+        {
+            "faro_enabled": True,
+            "faro_collector_url": "https://collector.example/collect/key",
+            "faro_collect_path": "/rum-collect",
+            "faro_loader_path": "/theme/js/vendor/faro-loader.js",
+            "faro_loader_version": "1",
+        },
+    )
+    assert "location = /rum-collect" in rendered
+    assert "faro-loader.js" in rendered
+    assert "faro-web-tracing" not in rendered
+    assert "return 204;" in rendered

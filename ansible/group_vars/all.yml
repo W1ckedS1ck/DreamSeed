@@ -132,12 +132,20 @@ additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per lin
 
 # ==== Frontend Observability (Faro — RUM) ====
 
-# Disabled on prod 2026-10-25 (/faro-collect saturated mobile connection pools).
-# Faro block stays in vhost-ssl.conf.j2 for re-enable; set true to restore.
-faro_enabled: false
+# Enabled on dev-hetz first. Prod stays on the disabled 204 sink until the
+# sampled loader is verified end-to-end and explicitly promoted.
+faro_enabled: "{{ deploy_env in ['dev-hetz'] }}"
+faro_debug: "{{ deploy_env in ['dev-hetz'] }}"  # allows ?faro=1 to bypass sampling/consent on dev only
 faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
 faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
 faro_sdk_version: "2.13.0"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
+faro_loader_path: "/theme/js/vendor/faro-loader.js"
+faro_loader_version: "1"
+faro_sdk_path: "/theme/js/vendor/faro-web-sdk-{{ faro_sdk_version }}.iife.js"
+faro_collect_path: "/rum-collect"
+faro_app_version: "1.0.1"
+faro_mobile_sample: 0.01
+faro_desktop_sample: 0.10
 
 # ==== SSL ====
 

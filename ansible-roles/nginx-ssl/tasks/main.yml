@@ -30,6 +30,41 @@
     backup: true
   notify: Reload Nginx
 
+- name: Ensure Faro vendor directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ web_root }}/theme/js/vendor"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "2775"
+  when: faro_enabled | bool and faro_collector_url | length > 0
+
+- name: Deploy Faro loader
+  become: true
+  ansible.builtin.template:
+    src: faro-loader.js.j2
+    dest: "{{ web_root }}{{ faro_loader_path }}"
+    owner: www-data
+    group: www-data
+    mode: "0644"
+  when: faro_enabled | bool and faro_collector_url | length > 0
+
+- name: Download Faro Web SDK
+  become: true
+  ansible.builtin.get_url:
+    url: "https://unpkg.com/@grafana/faro-web-sdk@{{ faro_sdk_version }}/dist/bundle/faro-web-sdk.iife.js"
+    dest: "{{ web_root }}{{ faro_sdk_path }}"
+    owner: www-data
+    group: www-data
+    mode: "0644"
+    force: false
+  register: faro_sdk_download
+  retries: 3
+  delay: 2
+  until: faro_sdk_download is succeeded
+  when: faro_enabled | bool and faro_collector_url | length > 0
+
 - name: Deploy Nginx SSL vhost
   become: true
   ansible.builtin.template:

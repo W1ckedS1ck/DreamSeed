@@ -811,12 +811,12 @@ fi
 # sysctl functional check (already done above, just reference)
 echo "    sysctl: syncookies=$_syncookies rp_filter=$_rpfilter srcroute=$_sourceroute"
 
-# Faro RUM (nginx sub_filter)
-_faro=$(curl -sk --max-time 5 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/" 2>/dev/null | grep -c 'faro-web-sdk' || true)
+# Faro RUM (sampled first-party loader; SDK loads only for sampled sessions)
+_faro=$(curl -sk --max-time 5 "${CURL_RESOLVE[@]}" "https://${DOMAIN}/" 2>/dev/null | grep -c 'faro-loader.js' || true)
 if [[ "$_faro" -ge 1 ]]; then
-    ok "Faro RUM (sub_filter active)" "functional_faro"
+    ok "Faro RUM (loader active)" "functional_faro"
 else
-    warn "Faro RUM not found (sub_filter missing?)" "functional_faro"
+    info "Faro RUM disabled or loader not found" "functional_faro"
 fi
 
 # Promtail log shipping (Loki is remote SaaS; gauge shipped bytes from Promtail's own /metrics)
