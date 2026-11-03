@@ -1,0 +1,100 @@
+/* Faro RUM loader — managed by Ansible.
+ *
+ * Keep this file tiny: it is injected into every HTML response. The SDK is a
+ * separate first-party file and is loaded only after the page is idle, and only
+ * for a sampled session. Web-tracing is intentionally NOT loaded.
+ */
+(function () {
+    "use strict";
+
+    if (window.__DS_FARO_STARTED) return;
+    window.__DS_FARO_STARTED = true;
+
+    var path = window.location.pathname || "";
+    if (path.indexOf("/manager") === 0 ||
+        path.indexOf("/assets/") === 0 ||
+        path.indexOf("/grafana") === 0) return;
+
+    var debug = {{ faro_debug | bool | to_json }};
+    var force = debug && /(?:^|[?&])faro=1(?:&|$)/.test(window.location.search);
+    var deny = /(?:^|[?&])faro=0(?:&|$)/.test(window.location.search);
+    if (deny) return;
+    if (!force && window.__DS_CONSENT_GRANTED !== true) return;
+
+    var connection = navigator.connection || {};
+    if (!force && (connection.saveData ||
+        connection.effectiveType === "slow-2g" ||
+        connection.effectiveType === "2g")) return;
+
+    var mobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    var rate = mobile ? {{ faro_mobile_sample }} : {{ faro_desktop_sample }};
+
+    function sampled() {
+        if (force) return true;
+        if (rate >= 1) return true;
+        if (rate <= 0) return false;
+        try {
+            var key = "ds_rum_v1";
+            var value = window.localStorage.getItem(key);
+            if (value === "1") return true;
+            if (value === "0") return false;
+            value = Math.random() < rate ? "1" : "0";
+            window.localStorage.setItem(key, value);
+            return value === "1";
+        } catch (e) {
+            return Math.random() < rate;
+        }
+    }
+
+    if (!sampled()) return;
+
+    function start() {
+        if (window.__DS_FARO_LOADING) return;
+        window.__DS_FARO_LOADING = true;
+
+        var script = document.createElement("script");
+        script.src = {{ faro_sdk_path | to_json }};
+        script.async = true;
+        script.onload = function () {
+            try {
+                if (!window.GrafanaFaroWebSdk) return;
+                window.GrafanaFaroWebSdk.initializeFaro({
+                    url: {{ faro_collect_path | to_json }},
+                    app: {
+                        name: {{ faro_app_name | to_json }},
+                        version: {{ faro_app_version | to_json }},
+                        environment: {{ ("dev" if deploy_env == "dev-hetz" else "production") | to_json }}
+                    },
+                    sessionTracking: {
+                        samplingRate: 1,
+                        persistent: true
+                    },
+                    batching: {
+                        enabled: true,
+                        sendTimeout: 5000,
+                        itemLimit: 50
+                    },
+                    beforeSend: function (item) {
+                        if (item && item.type === "log") return null;
+                        return item;
+                    }
+                });
+            } catch (e) {
+                /* Never let observability break the page. */
+            }
+        };
+        script.onerror = function () {};
+        document.head.appendChild(script);
+    }
+
+    function idle() {
+        if ("requestIdleCallback" in window) {
+            window.requestIdleCallback(start, { timeout: 3000 });
+        } else {
+            window.setTimeout(start, 1500);
+        }
+    }
+
+    if (document.readyState === "complete") idle();
+    else window.addEventListener("load", idle, { once: true });
+})();
