@@ -132,9 +132,9 @@ additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per lin
 
 # ==== Frontend Observability (Faro — RUM) ====
 
-# Enabled on dev-hetz first. Prod stays on the disabled 204 sink until the
-# sampled loader is verified end-to-end and explicitly promoted.
-faro_enabled: "{{ deploy_env in ['dev-hetz'] }}"
+# Dev-hetz is the canary; prod is promoted only after the sampled loader has
+# been verified there. Keep the prod 204 sink for old cached clients either way.
+faro_enabled: "{{ deploy_env in ['dev-hetz', 'prod-hetz', 'prod'] }}"
 faro_debug: "{{ deploy_env in ['dev-hetz'] }}"  # allows ?faro=1 to bypass sampling/consent on dev only
 faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
 faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
