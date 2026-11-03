@@ -61,6 +61,8 @@ fail2ban_ignoreip: ""
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented
 # expected version — Renovate PRs are the release radar, deploy log shows drift.
 grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.3.0', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+# Grafana log verbosity. warn drops the per-query INFO flood from grafana_scheduler.
+grafana_log_level: "{{ lookup('env', 'GRAFANA_LOG_LEVEL') | default('warn', true) }}"
 # Grafana admin password (used by /etc/grafana/grafana.env systemd EnvironmentFile)
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_PASS') | mandatory('GRAFANA_PASS env var is required') }}"
 # Nginx-level auth in front of /grafana (defense-in-depth: gates the
