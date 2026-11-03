@@ -1,0 +1,55 @@
+name: Faro log check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query prod Grafana Loki
+        env:
+          GRAFANA_URL: https://dreamseed.grafana.net
+          SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SA_TOKEN:-}" ]; then echo "::error::missing token"; exit 1; fi
+          auth=(-H "Authorization: Bearer $SA_TOKEN")
+          echo "== faro apps =="
+          curl -sS --max-time 20 "${auth[@]}" "$GRAFANA_URL/api/plugin-proxy/grafana-kowalski-app/api-proxy/api/v1/app" -o /tmp/apps.json -w 'http=%{http_code}\n' || true
+          jq -r 'if type=="array" then .[] | [.id,.name,.collectEndpointURL] | @tsv else . end' /tmp/apps.json 2>/dev/null | head -30 || head -c 1000 /tmp/apps.json
+          echo
+          app_id=$(jq -r 'if type=="array" then .[] | select((.collectEndpointURL // "") | tostring | test("f72857378cea279f287cc5c4bfd27707")) | .id else empty end' /tmp/apps.json 2>/dev/null | head -1)
+          echo "prod_app_id=${app_id:-none}"
+          echo "== datasources =="
+          curl -sS --max-time 20 "${auth[@]}" "$GRAFANA_URL/api/datasources" -o /tmp/ds.json -w 'http=%{http_code}\n' || true
+          jq -r 'if type=="array" then .[] | [.uid,.name,.type] | @tsv else . end' /tmp/ds.json 2>/dev/null | head -40 || head -c 1000 /tmp/ds.json
+          uid=$(jq -r 'if type=="array" then .[] | select(.type|test("loki";"i")) | .uid else empty end' /tmp/ds.json 2>/dev/null | head -1)
+          echo "loki_uid=${uid:-none}"
+          if [ -n "$uid" ]; then
+            base="$GRAFANA_URL/api/datasources/proxy/uid/$uid/loki/api/v1"
+            echo "== app_name labels =="
+            curl -sS --max-time 20 "${auth[@]}" "$base/label/app_name/values" -o /tmp/labels.json -w 'http=%{http_code}\n' || true
+            head -c 1500 /tmp/labels.json; echo
+            for app in dreamseed.online hetz.vitalikuts.online; do
+              echo "== app_name=$app =="
+              curl -sS --max-time 20 "${auth[@]}" --get "$base/query_range" \
+                --data-urlencode "query={app_name=\"$app\"}" \
+                --data-urlencode "limit=5" \
+                --data-urlencode "start=$(date -u -d '2 hours ago' +%s)000000000" \
+                --data-urlencode "end=$(date -u +%s)000000000" \
+                -o /tmp/loki.json -w 'http=%{http_code}\n' || true
+              jq -r 'if .status=="success" then "status=\(.status) streams=\(.data.result|length // 0) lines=\([.data.result[]?.values[]?]|length // 0) sample=\(([.data.result[]?.values[]?]|.[0] // null)|tostring|.[0:700])" else . end' /tmp/loki.json 2>/dev/null || head -c 700 /tmp/loki.json
+              echo
+            done
+            if [ -n "${app_id:-}" ] && [ "$app_id" != "none" ]; then
+              echo "== app_id=$app_id =="
+              curl -sS --max-time 20 "${auth[@]}" --get "$base/query_range" \
+                --data-urlencode "query={app_id=\"$app_id\"}" \
+                --data-urlencode "limit=5" \
+                --data-urlencode "start=$(date -u -d '2 hours ago' +%s)000000000" \
+                --data-urlencode "end=$(date -u +%s)000000000" \
+                -o /tmp/loki2.json -w 'http=%{http_code}\n' || true
+              jq -r 'if .status=="success" then "status=\(.status) streams=\(.data.result|length // 0) lines=\([.data.result[]?.values[]?]|length // 0) sample=\(([.data.result[]?.values[]?]|.[0] // null)|tostring|.[0:700])" else . end' /tmp/loki2.json 2>/dev/null || head -c 700 /tmp/loki2.json
+            fi
+          fi
