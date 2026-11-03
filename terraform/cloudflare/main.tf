@@ -117,7 +117,9 @@ resource "cloudflare_ruleset" "cache" {
         mode = "respect_origin"
       }
     }
-    expression  = "(not starts_with(http.request.uri.path, \"/manager/\")) and (not starts_with(http.request.uri.path, \"/connectors/\")) and (not starts_with(http.request.uri.path, \"/cart\")) and (not starts_with(http.request.uri.path, \"/personal-account\")) and (not starts_with(http.request.uri.path, \"/canceled-order-completion\")) and (not starts_with(http.request.uri.path, \"/successful-order-completion\")) and (not starts_with(http.request.uri.path, \"/assets/components/minishop2/payment/\")) and (not http.request.uri.query contains \"msorder=\") and (not http.cookie contains \"PHPSESSID\") and (not http.cookie contains \"ds_auth=\") and (not http.cookie contains \"lifebalance_guest_completed\")"
+    # hauth callback must never be cached: Cloudflare caching the Google OAuth
+    # redirect breaks login on some mobile browsers. This mirrors the live rule.
+    expression  = "(not starts_with(http.request.uri.path, \"/manager/\")) and (not starts_with(http.request.uri.path, \"/connectors/\")) and (not starts_with(http.request.uri.path, \"/cart\")) and (not starts_with(http.request.uri.path, \"/personal-account\")) and (not starts_with(http.request.uri.path, \"/canceled-order-completion\")) and (not starts_with(http.request.uri.path, \"/successful-order-completion\")) and (not starts_with(http.request.uri.path, \"/assets/components/minishop2/payment/\")) and (not http.request.uri.query contains \"msorder=\") and (not http.request.uri.query contains \"hauth\") and (not http.cookie contains \"PHPSESSID\") and (not http.cookie contains \"ds_auth=\") and (not http.cookie contains \"lifebalance_guest_completed\")"
     description = "Cache: all except admin, connector AJAX, cart, account, order and payment pages, and logged-in users"
     enabled     = true
   }]
