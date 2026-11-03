@@ -7,7 +7,7 @@
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
 
-![Terraform](https://img.shields.io/badge/Terraform-1.16-7B42BC?logo=terraform)
+![Terraform](https://img.shields.io/badge/Terraform-1.17-7B42BC?logo=terraform)
 ![Ansible](https://img.shields.io/badge/Ansible--core-2.21-EE0000?logo=ansible)
 ![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonwebservices)
 ![Hetzner](https://img.shields.io/badge/Hetzner-Cloud-D50C2D?logo=hetzner)
@@ -28,30 +28,30 @@
 
 ## 📑 Table of Contents
 
-- [About the Product](#about-the-product)
-- [Quick Start](#quick-start)
-- [By the Numbers](#by-the-numbers)
-- [Global Observability](#global-observability)
-- [My Role](#my-role)
-- [Tech Stack](#tech-stack)
-- [Architecture at a Glance](#architecture-at-a-glance)
-- [Deploy Commands](#deploy-commands)
-- [Project Layout](#project-layout)
-- [Infrastructure Highlights](#infrastructure-highlights)
-- [Key Engineering Decisions](#key-engineering-decisions)
-- [Live Environments](#live-environments)
+- [About the Product](#-about-the-product)
+- [Quick Start](#-quick-start)
+- [By the Numbers](#-by-the-numbers)
+- [Global Observability](#-global-observability)
+- [My Role](#-my-role)
+- [Tech Stack](#-tech-stack)
+- [Architecture at a Glance](#-architecture-at-a-glance)
+- [Deploy Commands](#-deploy-commands)
+- [Project Layout](#-project-layout)
+- [Infrastructure Highlights](#-infrastructure-highlights)
+- [Key Engineering Decisions](#-key-engineering-decisions)
+- [Live Environments](#-live-environments)
 
 ---
 
-## 🌍 About the Product {#about-the-product}
+## 🌍 About the Product
 
-**DreamSeed** ([dreamseed.online](https://dreamseed.online)) is a live global social experiment — *"The Dreamers"*. Participants take a **Wheel of Life** self-assessment, choose a virtual bonsai tree symbolising their dream, and pay $1.99 as a personal pledge to pursue it. Trees are placed on a live world map, building a global dataset.
+**DreamSeed** ([dreamseed.online](https://dreamseed.online)) is a live global social experiment — *"The Dreamers"*. Participants take a **Wheel of Life** self-assessment, choose a virtual bonsai tree symbolising their dream, and pay $2.99 as a personal pledge to pursue it. Trees are placed on a live world map, building a global dataset.
 
 **This repo contains ALL infrastructure** behind a production website serving real users with real payments, real accounts, and real data. Not a demo. Not a side project. Live at `dreamseed.online`.
 
 ---
 
-## ⚡ Quick Start {#quick-start}
+## ⚡ Quick Start
 
 ```bash
 # 1. Check everything lints clean (2 min)
@@ -67,39 +67,39 @@
 ./deploy.sh dev-hetz -x
 ```
 
-> 🛡️ **Production** (`prod` / `prod-hetz`) requires manual confirmation — deploy asks `[y/N]`, destroy requires typing `destroy <target>`. Full reference below in [Deploy Commands](#deploy-commands).
+> 🛡️ **Production** (`prod` / `prod-hetz`) requires manual confirmation — deploy asks `[y/N]`, destroy requires typing `destroy <target>`. Full reference below in [Deploy Commands](#-deploy-commands).
 
 ---
 
-## 📊 By the Numbers {#by-the-numbers}
+## 📊 By the Numbers
 
 | Metric | Value |
 |--------|-------|
 | Deploy time | ~8-10 min (zero to live, either cloud) |
 | Recovery time (RTO) | <5 min (tested `RESTORE_ALL.sh --auto-latest`) |
 | Backup frequency (RPO) | hourly local (5/15, map tiles 3) → hourly Google Drive (10/100, map tiles 3) |
-| Uptime coverage | 29 Grafana alert rules + 3 Better Stack monitors + 6 cron heartbeats → Telegram |
+| Uptime coverage | 28 Grafana alert rules + 6 Better Stack monitors + 6 cron heartbeats → Telegram |
 | CI checks per push | 12 jobs, 11 required for merge (lint → security → validate) |
 | Security | Hardened Ubuntu 24.04 — SSH hardening, 6 fail2ban jails (edge bans via Cloudflare API), sysctl/PAM hardening |
 
 ---
 
-## 🌍 Global Observability {#global-observability}
+## 🌍 Global Observability
 
 **Two independent watchdog layers** monitor the site from **4 continents / 9 probe locations** — nothing is left to a single vantage point, and no single provider's outage blinds us.
 
 | Layer | Probes / regions | Frequency | Checks | Coverage |
 |-------|------------------|-----------|--------|----------|
 | **Grafana Cloud Synthetic Monitoring** | 5 probes — NorthCalifornia, Ohio, Montreal, **London, Singapore** | every **10 min** | HTTP main, MultiHTTP user-flow, Grafana, SSL | 3 continents (NA · EU · Asia) |
-| **Better Stack** (external) | 4 regions — EU · US · Asia · Australia | every 3 min | Main site (+keyword), admin `/manager/`, Grafana | 4 continents |
-| **Grafana on-server** (local) | 127.0.0.1 | 15s scrape / 1m site check | 29 alert rules → Telegram | survives only if server lives |
+| **Better Stack** (external) | 4 regions — EU · US · Asia · Australia | every 3 min (admin 5 min) | Main site (+keyword), admin `/manager/`, Grafana, bot `/bot-health`, product `/catalog/bamboo`, registration | 4 continents |
+| **Grafana on-server** (local) | 127.0.0.1 | 15s scrape / 1m site check | 28 alert rules → Telegram | survives only if server lives |
 | **Better Stack heartbeats** | 6 cron heartbeats | 5m – 7d | backup, upload, reports, verify, check-services | dead-man switch |
 
 > 🌐 The **cloud-hosted** layers (SM + Better Stack) keep watch even if the server dies — real multi-region resilience, not just redundancy for show.
 
 ---
 
-## 🔧 My Role {#my-role}
+## 🔧 My Role
 
 I own **everything below the application layer** — provisioning, configuration, SSL, monitoring, backups, security, CI/CD, disaster recovery. The developer builds features; I make sure they reach the world.
 
@@ -107,7 +107,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 - **Multi-cloud provisioning** — Terraform modules for AWS EC2 and Hetzner Cloud from a single `deploy.sh` command
 - **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 09-pro → 04-security → 05-monitor → 06-backup → 08-promtail → 07-grafana)
-- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 29 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 3 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
+- **Observability** — VictoriaMetrics + Promtail + Grafana stack with 28 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 6 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 project/DB + 3 map-tiles version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
 - **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 11 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy, docs and scorecard workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls
@@ -115,7 +115,7 @@ I own **everything below the application layer** — provisioning, configuration
 
 ---
 
-## 🧰 Tech Stack {#tech-stack}
+## 🧰 Tech Stack
 
 | Layer | Tools |
 |---|---|
@@ -123,14 +123,14 @@ I own **everything below the application layer** — provisioning, configuration
 | **Configuration** | Ansible (17 custom roles) |
 | **Platform** | MODX CMS · Nginx / Apache · PHP 8.3 · MariaDB · Redis |
 | **SSL** | Cloudflare proxy (Full SSL) · Let's Encrypt origin cert (certbot) · self-signed fallback |
-| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 29 alert rules → Telegram · Better Stack (3 HTTP monitors + 6 cron heartbeats + status page) |
+| **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 28 alert rules → Telegram · Better Stack (6 HTTP monitors + 6 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy |
-| **CI/CD** | GitHub Actions (10 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **CI/CD** | GitHub Actions (11 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
-## 🏛️ Architecture at a Glance {#architecture-at-a-glance}
+## 🏛 Architecture at a Glance
 
 ```mermaid
 flowchart LR
@@ -140,7 +140,7 @@ flowchart LR
     ANS -->|configure via SSH| SRV
     SRV --> CF[Cloudflare CDN + WAF]
     CF --> SITE["🌐 dreamseed.online"]
-    SRV --> OBS[Grafana + VictoriaMetrics<br/>29 alert rules → Telegram]
+    SRV --> OBS[Grafana + VictoriaMetrics<br/>28 alert rules → Telegram]
     SRV --> BCK[Backups → Google Drive<br/>rclone crypt AES-256]
 ```
 
@@ -148,7 +148,7 @@ Terraform provisions the cloud resources (EC2 or Hetzner server, firewall, IP). 
 
 ---
 
-## 🚀 Deploy Commands {#deploy-commands}
+## 🚀 Deploy Commands
 
 **Deploys and destroys run only via GitHub Actions** — `deploy.sh` locally is for lint, dry-run, logs and single-playbook debug:
 
@@ -180,7 +180,7 @@ Any prod destroy requires typing the literal phrase **`destroy <target>`** as th
 
 ---
 
-## 📂 Project Layout {#project-layout}
+## 📂 Project Layout
 
 ```
 DreamSeed/
@@ -193,7 +193,7 @@ DreamSeed/
 │   │   │                   # env/gitleaks), chatops, mask-secrets, scrub-log,
 │   │   │                   # capture-screenshot
 │   ├── scripts/            # test-restored-server.sh — post-restore verification suite
-│   └── workflows/          # 10 workflows (see CI/CD section)
+│   └── workflows/          # 11 workflows (see CI/CD section)
 ├── terraform/
 │   ├── aws/                # EC2 + Elastic IP + Security Group
 │   ├── hetzner/            # Cloud server + firewall + primary IP
@@ -219,7 +219,7 @@ DreamSeed/
 
 ---
 
-## ✨ Infrastructure Highlights {#infrastructure-highlights}
+## ✨ Infrastructure Highlights
 
 ### 🎛️ Multi-Cloud, Single Command
 
@@ -237,7 +237,7 @@ Same deployment command provisions fresh infrastructure on **AWS** or **Hetzner*
 
 ### 📊 Full Observability — Auto-Provisioned
 
-Grafana dashboards, datasources, **and 29 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
+Grafana dashboards, datasources, **and 28 alert rules** deployed automatically — no manual clicking. When a new server spins up, monitoring comes with it:
 
 **Internal (Grafana + VictoriaMetrics on-server):**
 
@@ -245,7 +245,7 @@ Grafana dashboards, datasources, **and 29 alert rules** deployed automatically �
 - **Nginx Prometheus Exporter** (`:9113`) / **Apache Exporter** (`:9117`) — web server health
 - **MySQLd Exporter** (`:9104`) — queries, connections, replication
 - **VictoriaMetrics** (`:8428`) — 3-month retention, 15s scrape interval
-- **Grafana** (`:3000`) — 6 provisioned dashboards on Nginx (5 on Apache), 29 alert rules → Telegram
+- **Grafana** (`:3000`) — 6 provisioned dashboards on Nginx (5 on Apache), 28 alert rules → Telegram
 - **check_site.sh** (systemd timer, every 1m) — pushes `site_up`, `php_fpm_up`, `modx_core_ok`, `victoria_up`
 
 **Grafana Cloud (hosted telemetry):**
@@ -258,7 +258,7 @@ Grafana dashboards, datasources, **and 29 alert rules** deployed automatically �
 
 **External (Better Stack cloud-hosted):**
 
-- **3 HTTP monitors** — main site (HTTP 200 + keyword "The Dreamers"), admin panel (`/manager/`), Grafana (`/grafana`) — every monitor checked from **4 global regions** (EU, US, Asia, Australia) at 3min interval
+- **6 HTTP monitors** — main site (HTTP 200 + keyword "The Dreamers"), admin panel (`/manager/`), Grafana (`/grafana`), Telegram bot health (`/bot-health`), product page (`/catalog/bamboo`), registration page (`/personal-account/registration`) — every monitor checked from **4 global regions** (EU, US, Asia, Australia) at 3min interval (admin at 5min)
 - **6 cron heartbeats** — backup (1h/5m), gdrive-upload (1h/5m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/5m)
 - **Public status page** — `status.dreamseed.online` with live uptime history
 - **Telegram alerts** via separate webhooks for incident start and resolve
@@ -295,13 +295,13 @@ CI (12 jobs, 11 required for merge): ShellCheck · ansible-lint · **Terraform**
 - **Deploy:** GitHub `production` environment approval gate on every prod run (manual approve step)
 - **Destroy:** typed `destroy <target>` confirmation input + the same approval gate
 - **Rollback:** requires typing `rollback <environment>` (e.g. `rollback prod-hetz`) in the workflow input
-- **Prod infra mutations** (deploy / `terraform apply` / Grafana Cloud) require environment approval in GitHub Actions
+- **Prod infra mutations** (deploy / `terraform apply` / Grafana Cloud / weekly security update) require environment approval in GitHub Actions
 - **Terraform Cloud** isolates state files per environment
 - **CI enforces** lint, security scan, secret scan, and terraform validation before any merge
 
 ---
 
-## 🔍 Key Engineering Decisions {#key-engineering-decisions}
+## 🔍 Key Engineering Decisions
 
 - **Idempotent Ansible roles** — every playbook re-runs safely; updates config without breaking live services
 - **Cloudflare-first SSL** — all environments behind Cloudflare proxy (Full SSL mode); origin cert from **Let's Encrypt via certbot** (primary), local backup restore (fallback), self-signed only as last resort. LE rate limits are avoided by backing up `renewal/` along with the live cert on destroy, so a re-deployed box re-uses its cert instead of re-issuing.
@@ -312,7 +312,7 @@ CI (12 jobs, 11 required for merge): ShellCheck · ansible-lint · **Terraform**
 
 ---
 
-## 📸 Live Environments {#live-environments}
+## 📸 Live Environments
 
 | Target | Provider | Domain | Stack |
 |--------|----------|--------|-------|

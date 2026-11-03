@@ -11,7 +11,7 @@ These are checked by `deploy.sh` on every run:
 | Tool | Required for | Install |
 |------|-------------|---------|
 | `terraform` (or `tofu`) | Provision cloud servers (AWS EC2 / Hetzner) — `deploy.sh` falls back to OpenTofu if `terraform` is absent | <https://developer.hashicorp.com/terraform/install> |
-| `ansible-playbook` | Configure server (all 9 playbooks) | `pip install ansible-core==2.21.2 && ansible-galaxy collection install -r ansible/requirements.yml` |
+| `ansible-playbook` | Configure server (all 9 playbooks) | `pip install ansible-core==2.21.5 && ansible-galaxy collection install -r ansible/requirements.yml` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible-core` |

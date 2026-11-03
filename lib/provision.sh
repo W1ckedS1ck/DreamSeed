@@ -63,7 +63,7 @@ run_terraform() {
             mv "$TF_STATE_BACKUP_TMP" "$post_backup"
             TF_STATE_BACKUP_TMP=
             _vault_encrypt_backup "$post_backup" >/dev/null || true
-            ls -1t "$bk"/${TF_WORKSPACE}_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+            ls -1t "$bk/${TF_WORKSPACE}"_[0-9]*.tfstate 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
         else
             rm -f "$TF_STATE_BACKUP_TMP"
             TF_STATE_BACKUP_TMP=

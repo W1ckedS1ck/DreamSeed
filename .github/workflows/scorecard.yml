@@ -13,6 +13,8 @@ on:
   push:
     branches: ["main"]
 
+# Deliberate: read-all is the read-only default Scorecard's Token-Permissions check asks for.
+# All writes are granted per job below, so the rest of the workflow stays read-only.
 permissions: read-all
 
 jobs:

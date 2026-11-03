@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2034  # LOG_FILE is read by log() in scripts/common_functions.sh
 set -euo pipefail
 
 for cmd in curl tar gzip find mysqldump; do

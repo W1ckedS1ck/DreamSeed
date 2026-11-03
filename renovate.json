@@ -15,7 +15,8 @@
   "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "custom.regex"],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^ansible/requirements-deploy\\.txt$/"
+      "/^ansible/requirements-deploy\\.txt$/",
+      "/^ci/requirements\\.txt$/"
     ]
   },
   "ansible-galaxy": {
@@ -99,6 +100,18 @@
       "matchStrings": ["TFLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "terraform-linters/tflint",
       "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the renovate version used to validate this config (lint.sh)",
+      "managerFilePatterns": [
+        "/^scripts/lint\\.sh$/"
+      ],
+      "matchStrings": [
+        "RENOVATE_VERSION=\"(?<currentValue>[\\w.\\-]+)\""
+      ],
+      "depNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
     },
     {
       "customType": "regex",

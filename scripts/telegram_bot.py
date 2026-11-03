@@ -6,7 +6,7 @@ import os
 import socket
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from env_loader import load_env
@@ -122,7 +122,7 @@ async def _rclone_lsf(path: str) -> list:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
         lines = [line.split(";", 2) for line in out.decode().strip().split("\n") if line]
         return sorted(lines, key=lambda x: x[0], reverse=True) if lines else []
-    except (OSError, asyncio.TimeoutError, UnicodeDecodeError):
+    except (OSError, TimeoutError, UnicodeDecodeError):
         return []
 
 
@@ -156,7 +156,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         msg += f"  🗄 {format_backup_name(line[1], DB_PREFIX)} ({get_size(line[2])})\n"
     for line in cloud_tiles[:1]:
         msg += f"  🗺 {line[1]} ({get_size(line[2])})\n"
-    msg += f"\n⏰ Last check: {datetime.now(timezone.utc).strftime('%d.%m %H:%M')}"
+    msg += f"\n⏰ Last check: {datetime.now(UTC).strftime('%d.%m %H:%M')}"
 
     await update.message.reply_text(msg, parse_mode="HTML")
 
@@ -232,10 +232,10 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 def main() -> None:
     if not TG_TOKEN:
         log.error("TG_TOKEN not set")
-        return
+        sys.exit(1)
     if not TG_CHAT_ID:
         log.error("TG_CHAT_ID not set")
-        return
+        sys.exit(1)
 
     start_health_server()
 

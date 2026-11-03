@@ -27,6 +27,7 @@
     owner: root
     group: root
     mode: "0644"
+    backup: true
   notify: Reload Nginx
 
 - name: Deploy Nginx SSL vhost
@@ -37,6 +38,7 @@
     owner: root
     group: root
     mode: "0644"
+    backup: true
   notify: Reload Nginx
 
 - name: Enable SSL site

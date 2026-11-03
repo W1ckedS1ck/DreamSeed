@@ -1,5 +1,6 @@
 # CLI argument parsing and target resolution for deploy.sh
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # globals (EXISTING_IP, PARALLEL_MODE, ...) are read by deploy.sh and lib/stages.sh
 # Sourced by deploy.sh — do not execute directly.
 
 usage() {

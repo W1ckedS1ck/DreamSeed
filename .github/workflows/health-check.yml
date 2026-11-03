@@ -27,9 +27,10 @@ jobs:
         target: ${{ github.event_name == 'schedule' && fromJSON('["prod-hetz"]') || fromJSON(format('["{0}"]', inputs.target)) }}
     name: Update ${{ matrix.target }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && contains(fromJSON('["prod", "prod-hetz"]'), matrix.target) && 'production' || '' }}
+      # Scheduled runs target prod-hetz too — keep the production gate.
+      name: ${{ contains(fromJSON('["prod", "prod-hetz"]'), matrix.target) && 'production' || '' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

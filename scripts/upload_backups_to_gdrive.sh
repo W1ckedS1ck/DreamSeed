@@ -169,7 +169,9 @@ fi
 # ==== Suppress alert on fresh servers (<1h uptime — backup cron races with manual steps) ====
 UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 999999)
 if [ "$HAS_ERROR" -eq 1 ] && [ "$UPTIME" -lt 3600 ]; then
-    exit 0
+    log_ts "⚠️ Upload errors on a fresh server (<1h uptime) — Telegram alert suppressed"
+    # Still fail so cron/Better Stack sees it (only the alert is suppressed).
+    exit 1
 fi
 
 # ==== Send alert only on failure ====

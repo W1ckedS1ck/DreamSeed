@@ -78,7 +78,6 @@ jobs:
           cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare_firewall_token: ${{ secrets.CLOUDFLARE_FIREWALL_TOKEN }}
           hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-          prod_hetz_hcloud_token: ${{ secrets.PROD_HETZ_HCLOUD_TOKEN }}
           grafana_pass: ${{ secrets.GRAFANA_PASS }}
           betteruptime_api_token: ${{ secrets.BETTERUPTIME_API_TOKEN }}
           betteruptime_backup_key: ${{ secrets.BETTERUPTIME_BACKUP_KEY }}
@@ -90,21 +89,14 @@ jobs:
           dev_grafana_cloud_url: ${{ secrets.DEV_GRAFANA_CLOUD_URL }}
           dev_grafana_cloud_username: ${{ secrets.DEV_GRAFANA_CLOUD_USERNAME }}
           dev_grafana_cloud_token: ${{ secrets.DEV_GRAFANA_CLOUD_TOKEN }}
-          prod_grafana_cloud_url: ${{ secrets.PROD_GRAFANA_CLOUD_URL }}
-          prod_grafana_cloud_username: ${{ secrets.PROD_GRAFANA_CLOUD_USERNAME }}
-          prod_grafana_cloud_token: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
           loki_url: ${{ vars.LOKI_URL }}
           loki_username: ${{ vars.LOKI_USERNAME }}
           faro_collector_url: ${{ vars.FARO_COLLECTOR_URL }}
           dev_aws_access_key: ${{ secrets.DEV_AWS_ACCESS_KEY }}
           dev_aws_secret_key: ${{ secrets.DEV_AWS_SECRET_KEY }}
           dev_aws_region: ${{ secrets.DEV_AWS_REGION }}
-          prod_access_key: ${{ secrets.PROD_ACCESS_KEY }}
-          prod_secret_key: ${{ secrets.PROD_SECRET_KEY }}
-          prod_region: ${{ secrets.PROD_REGION }}
           user_ssh_public_key: ${{ secrets.USER_SSH_PUBLIC_KEY }}
           vitali_ssh_public_key: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
-          prod_host_ssh_public_key: ${{ secrets.PROD_HOST_SSH_PUBLIC_KEY }}
           rclone_crypt_password: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           vault_password: ${{ secrets.VAULT_PASSWORD }}

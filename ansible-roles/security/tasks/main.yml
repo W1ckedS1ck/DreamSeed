@@ -14,6 +14,9 @@
     owner: root
     group: root
     mode: "0644"
+    # Validate before write; -o HostKey because -f treats the fragment as a full config.
+    validate: /usr/sbin/sshd -t -f %s -o HostKey=/etc/ssh/ssh_host_ed25519_key
+    backup: true
   notify: Restart sshd
 
 - name: Validate sshd configuration
@@ -223,7 +226,7 @@
     path: "{{ web_root }}/core"
     owner: root
     group: www-data
-    mode: "u=rwX,g=rwX,o="
+    mode: "u=rwX,g=rX,o="
     recurse: true
   when: modx_config_file.stat.exists
 
@@ -276,24 +279,24 @@
     groups: www-data
     append: true
 
-# Site is owned www-data:www-data but carries modes from the backup archive
-# (0644/0755), so the www-data group — and thus the ubuntu dev — has no write
-# bit. Run after restore (playbook-04 > playbook-03) to re-grant group write
-# every deploy: files -> g+w, dirs -> g+w + setgid so new files inherit www-data.
-- name: Grant www-data group write access across site tree (files + setgid dirs)
+# Group-write only on MODX-writable paths; core/ PHP stays read-only for www-data.
+- name: Grant www-data group write access on writable paths (files + setgid dirs)
   become: true
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
       _web="{{ web_root }}"
       [ -d "$_web" ] || exit 0
-      chmod -R g+w "$_web"
+      for _p in assets uploads core/cache core/logs core/export core/packages core/components; do
+          if [ -d "$_web/$_p" ]; then
+              chmod -R g+w "$_web/$_p"
+          fi
+      done
       find "$_web" -type d -exec chmod g+s {} +
     executable: /bin/bash
   changed_when: false
 
-# The recursive g+w above also re-enables group write on the DB config.
-# Re-secure it: root-owned, group may read but not write.
+# Defence in depth: MODX config stays root-owned 0640.
 - name: Re-secure MODX config after recursive chmod
   become: true
   ansible.builtin.file:

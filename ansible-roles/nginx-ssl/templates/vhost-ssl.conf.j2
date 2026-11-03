@@ -1,3 +1,5 @@
+{%- set csp_head = "default-src 'self'; script-src 'self' https://unpkg.com " -%}
+{%- set csp_tail = "https://connect.facebook.net https://*.clarity.ms https://*.googletagmanager.com https://*.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com https://cdn.paddle.com https://*.paddle.com https://buy.paddle.com https://public.profitwell.com https://*.profitwell.com https://js.stripe.com https://*.stripe.com https://www.googleadservices.com https://www.google.com https://www.google.ru https://*.g.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://yastatic.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.paddle.com https://buy.paddle.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com https://server.arcgisonline.com https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://*.profitwell.com https://*.stripe.com https://*.googletagmanager.com https://*.google-analytics.com https://*.g.doubleclick.net https://*.google.com https://www.google.ru https://www.googleadservices.com https://pagead2.googlesyndication.com https://ad.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://yastatic.net https://google.by https://*.google.by https://yandex.ru https://*.yandex.ru; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://*.clarity.ms https://connect.facebook.net https://www.facebook.com https://cloudflareinsights.com https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://checkout-service.paddle.com https://checkout-analytics.paddle.com https://*.profitwell.com https://*.stripe.com https://api.stripe.com https://*.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net https://*.google.com https://www.google.ru https://www.googleadservices.com https://pagead2.googlesyndication.com https://ad.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://*.mc.yandex.ru https://*.mc.yandex.com https://yastatic.net https://mpc-prod-27-s6uit34pua-uk.a.run.app https://mm-b87d1f4411634570a31077b00488b380.ecs.us-east-1.on.aws; frame-src https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://js.stripe.com https://*.stripe.com https://m.stripe.network https://*.googletagmanager.com https://td.doubleclick.net https://bid.g.doubleclick.net https://www.google.com https://www.google.ru https://mc.yandex.ru https://mc.yandex.com https://www.facebook.com https://*.facebook.com; frame-ancestors 'self';" -%}
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
@@ -48,7 +50,10 @@ server {
     # GA diagnostics flagged missing analytics.google.com / ad.doubleclick.net — use Google wildcards.
     # Paddle checkout embeds buy.paddle.com + Stripe (js.stripe.com / m.stripe.network).
     # Missing Stripe frame-src can surface as Paddle overlay E-403 for card entry.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline' https://connect.facebook.net https://*.clarity.ms https://*.googletagmanager.com https://*.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com https://cdn.paddle.com https://*.paddle.com https://buy.paddle.com https://public.profitwell.com https://*.profitwell.com https://js.stripe.com https://*.stripe.com https://www.googleadservices.com https://www.google.com https://www.google.ru https://*.g.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://yastatic.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.paddle.com https://buy.paddle.com; img-src 'self' data: https://www.gravatar.com https://www.facebook.com https://*.clarity.ms https://c.bing.com https://server.arcgisonline.com https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://*.profitwell.com https://*.stripe.com https://*.googletagmanager.com https://*.google-analytics.com https://*.g.doubleclick.net https://*.google.com https://www.google.ru https://www.googleadservices.com https://pagead2.googlesyndication.com https://ad.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://yastatic.net https://google.by https://*.google.by https://yandex.ru https://*.yandex.ru; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://*.clarity.ms https://connect.facebook.net https://www.facebook.com https://cloudflareinsights.com https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://checkout-service.paddle.com https://checkout-analytics.paddle.com https://*.profitwell.com https://*.stripe.com https://api.stripe.com https://*.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net https://*.google.com https://www.google.ru https://www.googleadservices.com https://pagead2.googlesyndication.com https://ad.doubleclick.net https://mc.yandex.ru https://mc.yandex.com https://*.mc.yandex.ru https://*.mc.yandex.com https://yastatic.net https://mpc-prod-27-s6uit34pua-uk.a.run.app https://mm-b87d1f4411634570a31077b00488b380.ecs.us-east-1.on.aws; frame-src https://*.paddle.com https://*.paddle.io https://buy.paddle.com https://js.stripe.com https://*.stripe.com https://m.stripe.network https://*.googletagmanager.com https://td.doubleclick.net https://bid.g.doubleclick.net https://www.google.com https://www.google.ru https://mc.yandex.ru https://mc.yandex.com https://www.facebook.com https://*.facebook.com; frame-ancestors 'self';" always;
+    add_header Content-Security-Policy "{{ csp_head }}'unsafe-inline' {{ csp_tail }}" always;
+    # Report-Only target: same policy without 'unsafe-inline' in script-src. Violations go to
+    # /csp-report, so inline scripts/handlers can be hashed or moved before enforcing.
+    add_header Content-Security-Policy-Report-Only "{{ csp_head }}{{ csp_tail }} report-uri /csp-report;" always;
 
     # HTML cache: per-request TTL from dreamseed-cache-map.conf (logged-in and account/cart paths: no-store).
     add_header Cache-Control $dreamseed_cache_control always;
@@ -86,6 +91,22 @@ server {
     }
     location = /karta-mechtatelej/ {
         return 301 /garden-of-dreamers;
+    }
+
+    # Duplicate cart URL: one canonical address for search engines
+    location = /cart/ {
+        return 301 /cart;
+    }
+
+    # CSP violation reports, POST only. Proxied to the loopback sink so the body gets logged;
+    # written to its own file, which promtail already ships (glob *access*).
+    location = /csp-report {
+        limit_except POST { deny all; }
+        limit_req zone=csp_report burst=20 nodelay;
+        client_max_body_size 8k;
+        access_log /var/log/nginx/{{ domain }}-csp-access.log csp_report;
+        add_header Cache-Control "no-store" always;
+        proxy_pass http://127.0.0.1:8099;
     }
 
     location / {

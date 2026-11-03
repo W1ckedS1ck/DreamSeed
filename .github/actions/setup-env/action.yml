@@ -348,7 +348,6 @@ runs:
           emit_env CLOUDFLARE_API_TOKEN "$CLOUDFLARE_API_TOKEN"
           emit_env CLOUDFLARE_FIREWALL_TOKEN "$CLOUDFLARE_FIREWALL_TOKEN"
           emit_env HCLOUD_TOKEN "$HCLOUD_TOKEN"
-          emit_env PROD_HETZ_HCLOUD_TOKEN "$PROD_HETZ_HCLOUD_TOKEN"
           emit_env GRAFANA_PASS "$GRAFANA_PASS"
           emit_env BETTERUPTIME_API_TOKEN "$BETTERUPTIME_API_TOKEN"
           emit_env BETTERUPTIME_BACKUP_KEY "$BETTERUPTIME_BACKUP_KEY"
@@ -368,22 +367,31 @@ runs:
           emit_env BETTERUPTIME_CHECK_SERVICES_KEY "$BETTERUPTIME_CHECK_SERVICES_KEY"
           echo "SSH_PRIVATE_KEY_PATH=${HOME}/.ssh/deploy_key"
           echo "SSH_PUBLIC_KEY_PATH=${HOME}/.ssh/deploy_key.pub"
-          if [ -n "$USER_SSH_PUBLIC_KEY" ] || [ -n "$VITALI_SSH_PUBLIC_KEY" ] || [ -n "$PROD_HOST_SSH_PUBLIC_KEY" ]; then
-            printf 'ADDITIONAL_SSH_KEYS="%s\n%s\n%s"\n' "${USER_SSH_PUBLIC_KEY:-}" "${VITALI_SSH_PUBLIC_KEY:-}" "${PROD_HOST_SSH_PUBLIC_KEY:-}"
+          _prod_host=""; case "$ENVIRONMENT" in prod*) _prod_host="${PROD_HOST_SSH_PUBLIC_KEY:-}" ;; esac
+          if [ -n "$USER_SSH_PUBLIC_KEY" ] || [ -n "$VITALI_SSH_PUBLIC_KEY" ] || [ -n "$_prod_host" ]; then
+            printf 'ADDITIONAL_SSH_KEYS="%s\n%s\n%s"\n' "${USER_SSH_PUBLIC_KEY:-}" "${VITALI_SSH_PUBLIC_KEY:-}" "$_prod_host"
           fi
-          emit_env DEV_GRAFANA_CLOUD_URL "$DEV_GRAFANA_CLOUD_URL"
-          emit_env DEV_GRAFANA_CLOUD_USERNAME "$DEV_GRAFANA_CLOUD_USERNAME"
-          emit_env DEV_GRAFANA_CLOUD_TOKEN "$DEV_GRAFANA_CLOUD_TOKEN"
-          emit_env PROD_GRAFANA_CLOUD_URL "$PROD_GRAFANA_CLOUD_URL"
-          emit_env PROD_GRAFANA_CLOUD_USERNAME "$PROD_GRAFANA_CLOUD_USERNAME"
-          emit_env PROD_GRAFANA_CLOUD_TOKEN "$PROD_GRAFANA_CLOUD_TOKEN"
+          # Prod credentials only for prod targets; dev/test get DEV_* (defence in depth).
+          case "$ENVIRONMENT" in
+            prod*)
+              emit_env PROD_HETZ_HCLOUD_TOKEN "$PROD_HETZ_HCLOUD_TOKEN"
+              emit_env PROD_GRAFANA_CLOUD_URL "$PROD_GRAFANA_CLOUD_URL"
+              emit_env PROD_GRAFANA_CLOUD_USERNAME "$PROD_GRAFANA_CLOUD_USERNAME"
+              emit_env PROD_GRAFANA_CLOUD_TOKEN "$PROD_GRAFANA_CLOUD_TOKEN"
+              emit_env PROD_ACCESS_KEY "$PROD_ACCESS_KEY"
+              emit_env PROD_SECRET_KEY "$PROD_SECRET_KEY"
+              emit_env PROD_REGION "$PROD_REGION"
+              ;;
+            *)
+              emit_env DEV_GRAFANA_CLOUD_URL "$DEV_GRAFANA_CLOUD_URL"
+              emit_env DEV_GRAFANA_CLOUD_USERNAME "$DEV_GRAFANA_CLOUD_USERNAME"
+              emit_env DEV_GRAFANA_CLOUD_TOKEN "$DEV_GRAFANA_CLOUD_TOKEN"
+              emit_env DEV_AWS_ACCESS_KEY "$DEV_AWS_ACCESS_KEY"
+              emit_env DEV_AWS_SECRET_KEY "$DEV_AWS_SECRET_KEY"
+              emit_env DEV_AWS_REGION "$DEV_AWS_REGION"
+              ;;
+          esac
           # LOKI_* / FARO_COLLECTOR_URL are emitted earlier, selected by environment.
-          emit_env DEV_AWS_ACCESS_KEY "$DEV_AWS_ACCESS_KEY"
-          emit_env DEV_AWS_SECRET_KEY "$DEV_AWS_SECRET_KEY"
-          emit_env DEV_AWS_REGION "$DEV_AWS_REGION"
-          emit_env PROD_ACCESS_KEY "$PROD_ACCESS_KEY"
-          emit_env PROD_SECRET_KEY "$PROD_SECRET_KEY"
-          emit_env PROD_REGION "$PROD_REGION"
           emit_env RCLONE_CRYPT_PASSWORD "$RCLONE_CRYPT_PASSWORD"
           emit_env UBUNTU_PRO_TOKEN "$UBUNTU_PRO_TOKEN"
         } > secrets/.env

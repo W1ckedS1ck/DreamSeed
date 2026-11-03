@@ -208,7 +208,7 @@ fi
 
 # --- VictoriaMetrics (retry 10 times × 2s — may still be starting) ---
 _vm_ok=0
-for i in $(seq 1 10); do
+for _ in $(seq 1 10); do
     vm=$(curl -sf --max-time 3 "http://127.0.0.1:8428/health" 2>/dev/null || echo "")
     if [[ "$vm" == "OK" ]]; then
         _vm_ok=1
@@ -229,7 +229,7 @@ fi
 _check_ep() {
     local p=$1 k=$2 n=$3
     local raw
-    for i in $(seq 1 5); do
+    for _ in $(seq 1 5); do
         raw=$(curl -sf --max-time 3 "http://127.0.0.1:$p/metrics" 2>/dev/null) || {
             sleep 2
             continue

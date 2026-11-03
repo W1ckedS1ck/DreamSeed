@@ -50,6 +50,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 | `SSH_PRIVATE_KEY` | Deploy key (Ansible) | See above |
 | `USER_SSH_PUBLIC_KEY` | Developer's public key → `ADDITIONAL_SSH_KEYS` | `deploy.yml`, `test-restore.yml` |
 | `VITALI_SSH_PUBLIC_KEY` | Vitali's public key → `ADDITIONAL_SSH_KEYS` + AWS prod Terraform | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml` |
+| `PROD_HOST_SSH_PUBLIC_KEY` | Public key of the prod-hetz host user (`dev@dreamseed-prod-hetz`) → `ADDITIONAL_SSH_KEYS` | `deploy.yml` |
 
 ---
 
@@ -59,7 +60,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 | Secret | Purpose | Used in |
 |--------|---------|---------|
-| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `test-restore.yml`, `terraform-apply.yml`, `drift-detection.yml` |
+| `PROD_ACCESS_KEY` | AWS Access Key | `deploy.yml`, `terraform-apply.yml`, `drift-detection.yml` |
 | `PROD_SECRET_KEY` | AWS Secret Key | Same |
 | `PROD_REGION` | AWS region (`us-west-1`) | Same |
 
@@ -78,7 +79,7 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 | Secret | Target | Purpose | Used in |
 |--------|--------|---------|---------|
 | `HCLOUD_TOKEN` | dev-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `drift-detection.yml`, `terraform-apply.yml`, `ci.yml` |
-| `PROD_HETZ_HCLOUD_TOKEN` | prod-hetz | Hetzner Cloud API token | `deploy.yml`, `test-restore.yml`, `drift-detection.yml`, `terraform-apply.yml` |
+| `PROD_HETZ_HCLOUD_TOKEN` | prod-hetz | Hetzner Cloud API token | `deploy.yml`, `drift-detection.yml`, `terraform-apply.yml` |
 
 ---
 
@@ -93,9 +94,9 @@ The URL points to the Prometheus endpoint, **not** the Grafana instance.
 | `DEV_GRAFANA_CLOUD_URL` | dev | Prometheus remote_write endpoint (e.g. `prometheus-prod-39-prod-eu-north-0.grafana.net`) | `deploy.yml`, `test-restore.yml` |
 | `DEV_GRAFANA_CLOUD_USERNAME` | dev | vmagent username (numeric instance ID) | `deploy.yml`, `test-restore.yml` |
 | `DEV_GRAFANA_CLOUD_TOKEN` | dev | Cloud Access Policy token for vmagent (`glc_*`, scope=metrics:write) | `deploy.yml`, `test-restore.yml` |
-| `PROD_GRAFANA_CLOUD_URL` | prod | Prometheus remote_write endpoint | `deploy.yml`, `test-restore.yml` |
-| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username (numeric instance ID) | `deploy.yml`, `test-restore.yml` |
-| `PROD_GRAFANA_CLOUD_TOKEN` | prod | Cloud Access Policy token for vmagent (`glc_*`, scope=metrics:write) | `deploy.yml`, `test-restore.yml` |
+| `PROD_GRAFANA_CLOUD_URL` | prod | Prometheus remote_write endpoint | `deploy.yml` |
+| `PROD_GRAFANA_CLOUD_USERNAME` | prod | vmagent username (numeric instance ID) | `deploy.yml` |
+| `PROD_GRAFANA_CLOUD_TOKEN` | prod | Cloud Access Policy token for vmagent (`glc_*`, scope=metrics:write) | `deploy.yml` |
 
 ### Terraform (Grafana API — dashboards, folders, SM)
 

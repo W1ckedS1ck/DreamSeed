@@ -31,7 +31,9 @@ jobs:
   plan:
     name: TF plan ${{ inputs.workspace }} (${{ inputs.provider }})
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    outputs:
+      plan_fp: ${{ steps.plan.outputs.plan_fp }}
     env:
       TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
 
@@ -122,17 +124,8 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: terraform init -input=false
 
-      - name: Remove stale resources from state
-        if: inputs.mode == 'refresh-only' && inputs.provider == 'hetzner'
-        working-directory: ${{ env.TF_DIR }}
-        continue-on-error: true
-        run: |
-          terraform state rm hcloud_primary_ip.main 2>/dev/null || true
-          terraform state rm hcloud_ssh_key.ci_key 2>/dev/null || true
-          terraform state rm hcloud_ssh_key.ci_key[0] 2>/dev/null || true
-          echo "Stale resources removed from state"
-
       - name: Terraform plan
+        id: plan
         working-directory: ${{ env.TF_DIR }}
         env:
           SSH_KEY_SECRET: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
@@ -154,10 +147,8 @@ jobs:
           elif [ "$PROV" = "hetzner" ]; then
             EXTRA_VARS+=(-var="environment=$WS")
           fi
-          # All backends are remote (Terraform Cloud) — it does not support
-          # saving a plan locally, so plan without -out. The apply job below
-          # re-plans and applies (the environment approval gate is the review).
-          terraform plan -no-color -input=false -detailed-exitcode $MODE_FLAG \
+          # TFC remote backend can't save a plan; fingerprint the diff so apply can verify it.
+          terraform plan -no-color -input=false -detailed-exitcode -lock-timeout=10m $MODE_FLAG \
             "${EXTRA_VARS[@]}" 2>&1 | tee /tmp/plan.txt
           rc=${PIPESTATUS[0]}
           case "$rc" in
@@ -165,6 +156,10 @@ jobs:
             2) echo "Plan: changes detected — review the diff in the job summary, then approve apply" ;;
             *) echo "::error::terraform plan failed (rc=$rc)"; exit "$rc" ;;
           esac
+          # Hash the change set only (skip refresh noise); empty diff = stable constant.
+          PLAN_FP=$(awk '/Terraform will perform the following actions|Changes to Outputs:|Note: Objects have changed outside of Terraform/{p=1} p && (/^[[:space:]]*(#|[~+-]) / || /^Plan:/ || /^Changes to Outputs/ || /^No changes\./)' /tmp/plan.txt | sha256sum | cut -d' ' -f1)
+          echo "plan_fp=$PLAN_FP" >> "$GITHUB_OUTPUT"
+          echo "Plan fingerprint: $PLAN_FP"
 
       - name: Write plan summary
         if: always()
@@ -190,7 +185,7 @@ jobs:
     name: TF ${{ inputs.mode }} ${{ inputs.workspace }} (${{ inputs.provider }})
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     environment:
       name: ${{ (startsWith(inputs.workspace, 'prod') || inputs.workspace == 'cloudflare-prod') && 'production' || '' }}
     env:
@@ -287,17 +282,15 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: terraform init -input=false
 
-      - name: Terraform ${{ inputs.mode }}
+      - name: Verify the approved plan is unchanged
         working-directory: ${{ env.TF_DIR }}
         env:
           SSH_KEY_SECRET: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
           TF_MODE: ${{ inputs.mode }}
           PROV: ${{ inputs.provider }}
           WS: ${{ inputs.workspace }}
+          APPROVED_FP: ${{ needs.plan.outputs.plan_fp }}
         run: |
-          # Remote backend cannot apply a saved local plan, so apply re-plans
-          # and auto-approves. The environment approval gate (and the plan job
-          # above) provide the human review before this runs.
           MODE_FLAG=""
           [ "$TF_MODE" = "refresh-only" ] && MODE_FLAG="-refresh-only"
           EXTRA_VARS=()
@@ -312,7 +305,49 @@ jobs:
           elif [ "$PROV" = "hetzner" ]; then
             EXTRA_VARS+=(-var="environment=$WS")
           fi
-          terraform apply -auto-approve -no-color -input=false $MODE_FLAG "${EXTRA_VARS[@]}"
+          # Re-plan and compare with the approved change set.
+          set +e
+          terraform plan -no-color -input=false -detailed-exitcode -lock-timeout=10m $MODE_FLAG \
+            "${EXTRA_VARS[@]}" > /tmp/plan-apply.txt 2>&1
+          rc=$?
+          set -e
+          case "$rc" in
+            0|2) ;;
+            *) cat /tmp/plan-apply.txt; echo "::error::terraform plan failed (rc=$rc)"; exit "$rc" ;;
+          esac
+          FP=$(awk '/Terraform will perform the following actions|Changes to Outputs:|Note: Objects have changed outside of Terraform/{p=1} p && (/^[[:space:]]*(#|[~+-]) / || /^Plan:/ || /^Changes to Outputs/ || /^No changes\./)' /tmp/plan-apply.txt | sha256sum | cut -d' ' -f1)
+          echo "approved=$APPROVED_FP"
+          echo "current =$FP"
+          if [ "$FP" != "$APPROVED_FP" ]; then
+            echo "::error::Infrastructure changed after the plan was approved — refusing to apply"
+            exit 1
+          fi
+          echo "Plan fingerprint matches the approved plan"
+
+      - name: Terraform ${{ inputs.mode }}
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          SSH_KEY_SECRET: ${{ secrets.VITALI_SSH_PUBLIC_KEY }}
+          TF_MODE: ${{ inputs.mode }}
+          PROV: ${{ inputs.provider }}
+          WS: ${{ inputs.workspace }}
+        run: |
+          # Change set verified above; apply re-plans (TFC cannot apply a saved plan).
+          MODE_FLAG=""
+          [ "$TF_MODE" = "refresh-only" ] && MODE_FLAG="-refresh-only"
+          EXTRA_VARS=()
+          if [ "$PROV" = "aws" ]; then
+            case "$WS" in
+              prod)    : ;;
+              dev-aws) : ;;
+              *)       echo "::error::Unknown workspace $WS for AWS provider"; exit 1 ;;
+            esac
+            echo "$SSH_KEY_SECRET" > /tmp/key.pub
+            EXTRA_VARS+=(-var="ssh_public_key_path=/tmp/key.pub" -var="environment=$WS")
+          elif [ "$PROV" = "hetzner" ]; then
+            EXTRA_VARS+=(-var="environment=$WS")
+          fi
+          terraform apply -auto-approve -no-color -input=false -lock-timeout=10m $MODE_FLAG "${EXTRA_VARS[@]}"
 
       - name: Write job summary
         if: always()
