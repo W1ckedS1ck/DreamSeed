@@ -132,20 +132,21 @@ additional_ssh_keys: []  # Add extra SSH public keys here if needed (one per lin
 
 # ==== Frontend Observability (Faro — RUM) ====
 
-# Dev-hetz is the canary; prod is promoted only after the sampled loader has
-# been verified there. Keep the prod 204 sink for old cached clients either way.
+# Faro is enabled on dev and prod. Tracing is off and the SDK is loaded after
+# idle, so full session coverage is safe to test; monitor mobile performance and
+# /rum-collect volume, and set either rate back if anything regresses.
 faro_enabled: "{{ deploy_env in ['dev-hetz', 'prod-hetz', 'prod'] }}"
 faro_debug: "{{ deploy_env in ['dev-hetz'] }}"  # allows ?faro=1 to bypass sampling/consent on dev only
 faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
 faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
 faro_sdk_version: "2.13.0"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
 faro_loader_path: "/theme/js/vendor/faro-loader.js"
-faro_loader_version: "1"
+faro_loader_version: "2"  # bump when the loader content changes (cache-busting)
 faro_sdk_path: "/theme/js/vendor/faro-web-sdk-{{ faro_sdk_version }}.iife.js"
 faro_collect_path: "/rum-collect"
 faro_app_version: "1.0.1"
-faro_mobile_sample: 0.01
-faro_desktop_sample: 0.10
+faro_mobile_sample: 1.0
+faro_desktop_sample: 1.0
 
 # ==== SSL ====
 
