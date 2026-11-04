@@ -67,7 +67,7 @@
   ansible.builtin.copy:
     dest: "/etc/logrotate.d/php{{ php_version }}-fpm"
     content: |
-      /var/log/php{{ php_version }}-fpm.log {
+      /var/log/php{{ php_version }}-fpm.log /var/log/php{{ php_version }}-fpm-slow.log {
           rotate 14
           daily
           missingok
