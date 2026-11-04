@@ -127,7 +127,9 @@ answers), `both`, `dev-aws`, or `dev-hetz`; prod always monitors
 `dreamseed.online`. Explicit values keep checks even if that instance is down,
 while `auto` only monitors reachable instances. Under the hood the Terraform
 module takes a `domains` list and creates one set of checks per domain
-(~29.6k checks/mo each, so two domains still fit the free tier).
+(~29.6k checks/mo each, so two domains still fit the free tier). Use
+`apply_scope=synthetic-monitoring-only` to update only the SM checks without
+touching dashboards.
 
 ### Push URL (vmagent)
 

@@ -21,6 +21,14 @@ on:
           - both
           - dev-aws
           - dev-hetz
+      apply_scope:
+        description: 'Apply everything, or only the Synthetic Monitoring checks'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - synthetic-monitoring-only
 
 concurrency:
   group: grafana-cloud-${{ inputs.workspace }}
@@ -172,11 +180,35 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/grafana
-        run: terraform plan -input=false
+        env:
+          APPLY_SCOPE: ${{ inputs.apply_scope }}
+        run: |
+          TARGETS=()
+          if [[ "$APPLY_SCOPE" == "synthetic-monitoring-only" ]]; then
+            TARGETS=(
+              -target=grafana_synthetic_monitoring_check.http_main
+              -target=grafana_synthetic_monitoring_check.multi_main
+              -target=grafana_synthetic_monitoring_check.http_grafana
+              -target=grafana_synthetic_monitoring_check.ssl_main
+            )
+          fi
+          terraform plan -input=false "${TARGETS[@]}"
 
       - name: Terraform Apply
         working-directory: terraform/grafana
-        run: terraform apply -auto-approve -input=false
+        env:
+          APPLY_SCOPE: ${{ inputs.apply_scope }}
+        run: |
+          TARGETS=()
+          if [[ "$APPLY_SCOPE" == "synthetic-monitoring-only" ]]; then
+            TARGETS=(
+              -target=grafana_synthetic_monitoring_check.http_main
+              -target=grafana_synthetic_monitoring_check.multi_main
+              -target=grafana_synthetic_monitoring_check.http_grafana
+              -target=grafana_synthetic_monitoring_check.ssl_main
+            )
+          fi
+          terraform apply -auto-approve -input=false "${TARGETS[@]}"
 
       - name: Verify folder exists
         working-directory: terraform/grafana
@@ -194,6 +226,7 @@ jobs:
         env:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
           DEV_INSTANCES: ${{ inputs.dev_instances }}
+          APPLY_SCOPE: ${{ inputs.apply_scope }}
         run: |
           M="$GITHUB_STEP_SUMMARY"
 
@@ -216,6 +249,7 @@ jobs:
             echo "| **Target** | \`${TARGET}\` |"
             echo "| **Grafana** | ${GRAFANA_URL} |"
             echo "| **Domains** | \`${DOMAINS:-n/a}\` |"
+            echo "| **Apply scope** | \`${APPLY_SCOPE}\` |"
             if [[ "$WORKSPACE_INPUT" != "prod" ]]; then
               echo "| **Dev source** | \`${DEV_INSTANCES}\` |"
             fi
