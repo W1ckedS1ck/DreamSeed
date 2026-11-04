@@ -1,0 +1,52 @@
+name: "CF Purge (one-shot)"
+
+# Temporary helper: purges the whole Cloudflare zone from CI, because the
+# token lives only in repository secrets. Runs only when the pushed commit
+# message contains the "[cf-purge]" marker, so normal pushes are unaffected.
+# Safe to delete once the deploy workflow purges on its own.
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  purge:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[cf-purge]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Purge dreamseed.online
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4"
+          ZONE="dreamseed.online"
+
+          if [[ -z "${CF_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set"
+            exit 1
+          fi
+
+          zone_id=$(curl -sS --fail-with-body -m 20 \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            "$API/zones?name=$ZONE" | jq -r '.result[0].id // empty')
+          if [[ -z "$zone_id" ]]; then
+            echo "::error::Cloudflare zone not found: $ZONE"
+            exit 1
+          fi
+
+          echo "Purging $ZONE ($zone_id)"
+          response=$(curl -sS --fail-with-body -m 30 -X POST \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data '{"purge_everything":true}' \
+            "$API/zones/$zone_id/purge_cache")
+          echo "$response" | jq -c '{success, errors}'
+          echo "$response" | jq -e '.success == true' >/dev/null
