@@ -1,0 +1,79 @@
+name: "[M] Cloudflare Purge"
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'URLs to purge (one per line or comma-separated)'
+        required: true
+        default: |-
+          https://hetz.vitalikuts.online/gift
+          https://hetz.vitalikuts.online/gift/
+          https://dreamseed.online/gift
+          https://dreamseed.online/gift/
+
+concurrency:
+  group: cloudflare-purge
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  purge:
+    name: Purge Cloudflare cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Purge URLs
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          URLS_INPUT: ${{ inputs.urls }}
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4"
+          if [[ -z "${CF_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set"
+            exit 1
+          fi
+
+          mapfile -t URLS < <(printf '%s\n' "$URLS_INPUT" | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | grep -v '^$')
+          if [[ ${#URLS[@]} -eq 0 ]]; then
+            echo "::error::No URLs provided"
+            exit 1
+          fi
+
+          # Group by Cloudflare zone. The only zones used by this repo are these two.
+          declare -A ZONE_FILES=()
+          for url in "${URLS[@]}"; do
+            case "$url" in
+              *vitalikuts.online*) zone="vitalikuts.online" ;;
+              *dreamseed.online*)  zone="dreamseed.online" ;;
+              *) echo "::warning::Skipping URL outside known zones: $url"; continue ;;
+            esac
+            if [[ -z "${ZONE_FILES[$zone]:-}" ]]; then
+              ZONE_FILES[$zone]="$url"
+            else
+              ZONE_FILES[$zone]+=$'\n'"$url"
+            fi
+          done
+
+          for zone in "${!ZONE_FILES[@]}"; do
+            zone_id=$(curl -sS --fail-with-body -m 20 \
+              -H "Authorization: Bearer $CF_TOKEN" \
+              "$API/zones?name=$zone" | jq -r '.result[0].id // empty')
+            if [[ -z "$zone_id" ]]; then
+              echo "::error::Cloudflare zone not found: $zone"
+              exit 1
+            fi
+
+            files_json=$(printf '%s\n' "${ZONE_FILES[$zone]}" | jq -R . | jq -s .)
+            echo "Purging $zone ($zone_id): $files_json"
+            response=$(curl -sS --fail-with-body -m 30 -X POST \
+              -H "Authorization: Bearer $CF_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data "$(jq -n --argjson files "$files_json" '{files: $files}')" \
+              "$API/zones/$zone_id/purge_cache")
+            echo "$response" | jq -c '{success, errors, result}'
+            echo "$response" | jq -e '.success == true' >/dev/null
+          done
