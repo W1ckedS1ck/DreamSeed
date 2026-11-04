@@ -58,9 +58,6 @@ server {
     # Paddle checkout embeds buy.paddle.com + Stripe (js.stripe.com / m.stripe.network).
     # Missing Stripe frame-src can surface as Paddle overlay E-403 for card entry.
     add_header Content-Security-Policy "{{ csp_head }}'unsafe-inline' {{ csp_tail }}" always;
-    # Report-Only target: same policy without 'unsafe-inline' in script-src. Violations go to
-    # /csp-report, so inline scripts/handlers can be hashed or moved before enforcing.
-    add_header Content-Security-Policy-Report-Only "{{ csp_head }}{{ csp_tail }} report-uri /csp-report;" always;
 
     # HTML cache: per-request TTL from dreamseed-cache-map.conf (logged-in and account/cart paths: no-store).
     add_header Cache-Control $dreamseed_cache_control always;
