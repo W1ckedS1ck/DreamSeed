@@ -10,8 +10,8 @@
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 4.46.0 |
-| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 4.46.0 |
+| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 4.53.0 |
+| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 4.53.0 |
 
 ## Modules
 
@@ -33,7 +33,7 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_domain"></a> [domain](#input\_domain) | Domain to monitor (e.g. dreamseed.online) | `string` | n/a | yes |
+| <a name="input_domains"></a> [domains](#input\_domains) | Domains to monitor (e.g. ["dreamseed.online"] or ["aws.vitalikuts.online", "hetz.vitalikuts.online"]) | `list(string)` | n/a | yes |
 | <a name="input_grafana_cloud_token"></a> [grafana\_cloud\_token](#input\_grafana\_cloud\_token) | Grafana Cloud Service Account token (glsa\_*) | `string` | n/a | yes |
 | <a name="input_grafana_cloud_url"></a> [grafana\_cloud\_url](#input\_grafana\_cloud\_url) | Grafana Cloud instance URL (e.g. https://vitalikuts.grafana.net) | `string` | n/a | yes |
 | <a name="input_sm_access_token"></a> [sm\_access\_token](#input\_sm\_access\_token) | Synthetic Monitoring access token (falls back to grafana\_cloud\_token) | `string` | `""` | no |
@@ -47,5 +47,5 @@ No modules.
 | <a name="output_dashboard_uids"></a> [dashboard\_uids](#output\_dashboard\_uids) | Map of dashboard names to UIDs |
 | <a name="output_dashboard_urls"></a> [dashboard\_urls](#output\_dashboard\_urls) | Map of dashboard names to URLs |
 | <a name="output_folder_uid"></a> [folder\_uid](#output\_folder\_uid) | DreamSeed folder UID in Grafana Cloud |
-| <a name="output_sm_check_ids"></a> [sm\_check\_ids](#output\_sm\_check\_ids) | Map of synthetic monitoring check names to IDs |
+| <a name="output_sm_check_ids"></a> [sm\_check\_ids](#output\_sm\_check\_ids) | Map of synthetic monitoring check IDs keyed by type/domain |
 <!-- END_TF_DOCS -->

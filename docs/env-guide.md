@@ -121,6 +121,14 @@ Two separate stacks exist:
 - **prod** — `dreamseed.grafana.net` (org id 1)
 - **dev** — `vitalikuts.grafana.net` (org id 2, shared by dev-aws + dev-hetz)
 
+Synthetic Monitoring can watch one or both dev instances. The `[M] Grafana Cloud`
+workflow input `dev_instances` accepts `auto` (probe both and monitor whichever
+answers), `both`, `dev-aws`, or `dev-hetz`; prod always monitors
+`dreamseed.online`. Explicit values keep checks even if that instance is down,
+while `auto` only monitors reachable instances. Under the hood the Terraform
+module takes a `domains` list and creates one set of checks per domain
+(~29.6k checks/mo each, so two domains still fit the free tier).
+
 ### Push URL (vmagent)
 
 ```

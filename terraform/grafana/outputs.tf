@@ -18,11 +18,11 @@ output "dashboard_urls" {
 }
 
 output "sm_check_ids" {
-  description = "Map of synthetic monitoring check names to IDs"
-  value = var.sm_enabled ? {
-    http_main    = try(grafana_synthetic_monitoring_check.http_main[0].id, null)
-    multi_main   = try(grafana_synthetic_monitoring_check.multi_main[0].id, null)
-    http_grafana = try(grafana_synthetic_monitoring_check.http_grafana[0].id, null)
-    ssl_main     = try(grafana_synthetic_monitoring_check.ssl_main[0].id, null)
-  } : {}
+  description = "Map of synthetic monitoring check IDs keyed by type/domain"
+  value = var.sm_enabled ? merge(
+    { for i, c in grafana_synthetic_monitoring_check.http_main : "http_main/${var.domains[i]}" => c.id },
+    { for i, c in grafana_synthetic_monitoring_check.multi_main : "multi_main/${var.domains[i]}" => c.id },
+    { for i, c in grafana_synthetic_monitoring_check.http_grafana : "http_grafana/${var.domains[i]}" => c.id },
+    { for i, c in grafana_synthetic_monitoring_check.ssl_main : "ssl_main/${var.domains[i]}" => c.id }
+  ) : {}
 }

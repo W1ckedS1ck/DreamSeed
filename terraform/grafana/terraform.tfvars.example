@@ -6,5 +6,5 @@ grafana_cloud_url   = "https://<your-org>.grafana.net"        # Web UI URL
 grafana_cloud_token = "glsa_..."                              # Service Account token
 sm_access_token     = "eyJr..."                               # Synthetic Monitoring token (optional)
 sm_enabled          = true                                     # Enable Synthetic Monitoring
-domain              = "dreamseed.online"                       # Your domain
+domains             = ["dreamseed.online"]                    # One or more domains to monitor
 sm_url              = "https://synthetic-monitoring-api-us-east-0.grafana.net"  # SM API region URL

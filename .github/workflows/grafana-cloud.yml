@@ -11,6 +11,16 @@ on:
         options:
           - prod
           - dev
+      dev_instances:
+        description: 'Dev instance(s) to monitor (ignored when workspace=prod)'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - both
+          - dev-aws
+          - dev-hetz
 
 concurrency:
   group: grafana-cloud-${{ inputs.workspace }}
@@ -68,6 +78,7 @@ jobs:
         working-directory: terraform/grafana
         env:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
+          DEV_INSTANCES: ${{ inputs.dev_instances }}
           PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
           PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
           PROD_SM_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
@@ -78,23 +89,57 @@ jobs:
             TOKEN="${PROD_SA_TOKEN:-$PROD_TOKEN}"
             SM_TOKEN="$PROD_SM_TOKEN"
             GRAFANA_URL="https://dreamseed.grafana.net"
-            DOMAIN="dreamseed.online"
+            DOMAINS_JSON='["dreamseed.online"]'
             SM_URL="https://synthetic-monitoring-api-us-east-0.grafana.net"
           else
             TOKEN="$DEV_SA_TOKEN"
             SM_TOKEN="$DEV_SM_TOKEN"
             GRAFANA_URL="https://vitalikuts.grafana.net"
-            DOMAIN="aws.vitalikuts.online"
             SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
+
+            case "$DEV_INSTANCES" in
+              dev-aws)
+                DOMAINS_JSON='["aws.vitalikuts.online"]'
+                ;;
+              dev-hetz)
+                DOMAINS_JSON='["hetz.vitalikuts.online"]'
+                ;;
+              both)
+                DOMAINS_JSON='["aws.vitalikuts.online","hetz.vitalikuts.online"]'
+                ;;
+              auto)
+                DOMAINS=()
+                for domain in aws.vitalikuts.online hetz.vitalikuts.online; do
+                  body=$(mktemp)
+                  code=$(curl -sS -L --max-redirs 3 -A 'DreamSeed-Grafana-SM/1.0' -H 'Cache-Control: no-cache' -o "$body" -w '%{http_code}' --max-time 20 "https://$domain/" || true)
+                  echo "Probe https://$domain/ -> ${code:-000}"
+                  if [[ "$code" == "200" ]] && grep -qi 'DreamSeed' "$body"; then
+                    DOMAINS+=("\"$domain\"")
+                  fi
+                  rm -f "$body"
+                done
+                if [[ ${#DOMAINS[@]} -eq 0 ]]; then
+                  echo "::error::No dev instance is reachable (aws.vitalikuts.online / hetz.vitalikuts.online). Choose dev-aws, dev-hetz, or both explicitly."
+                  exit 1
+                fi
+                DOMAINS_JSON="[$(IFS=,; echo "${DOMAINS[*]}")]"
+                ;;
+              *)
+                echo "::error::Unknown dev_instances value: $DEV_INSTANCES"
+                exit 1
+                ;;
+            esac
           fi
+
+          echo "Monitoring domains: $DOMAINS_JSON"
           jq -n \
             --arg url "$GRAFANA_URL" \
             --arg token "$TOKEN" \
             --arg sm_token "$SM_TOKEN" \
-            --arg domain "$DOMAIN" \
+            --argjson domains "$DOMAINS_JSON" \
             --arg sm_url "$SM_URL" \
             --arg sm_enabled "true" \
-            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_enabled == "true")}' \
+            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domains: $domains, sm_url: $sm_url, sm_enabled: ($sm_enabled == "true")}' \
             > terraform.tfvars.json
 
       - name: Terraform Init
@@ -124,6 +169,7 @@ jobs:
         if: always()
         env:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
+          DEV_INSTANCES: ${{ inputs.dev_instances }}
         run: |
           M="$GITHUB_STEP_SUMMARY"
 
@@ -135,6 +181,7 @@ jobs:
             GRAFANA_URL="vitalikuts.grafana.net"
           fi
 
+          DOMAINS=$(jq -r '.domains | join(", ")' terraform.tfvars.json 2>/dev/null || echo "n/a")
           STATUS="${{ job.status == 'success' && '✅' || '❌' }}"
 
           {
@@ -144,6 +191,10 @@ jobs:
             echo "|---|---|"
             echo "| **Target** | \`${TARGET}\` |"
             echo "| **Grafana** | ${GRAFANA_URL} |"
+            echo "| **Domains** | \`${DOMAINS:-n/a}\` |"
+            if [[ "$WORKSPACE_INPUT" != "prod" ]]; then
+              echo "| **Dev source** | \`${DEV_INSTANCES}\` |"
+            fi
           } >> "$M"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")
