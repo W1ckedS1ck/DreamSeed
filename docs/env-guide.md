@@ -236,6 +236,13 @@ GitHub Variable (not a secret): `FARO_COLLECTOR_URL`. `FARO_APP_NAME` needs no s
 | `FARO_COLLECTOR_URL` | `https://faro-collector-prod-eu-north-0.grafana.net/collect/<app_id>` | `https://faro-collector-prod-us-east-2.grafana.net/collect/<app_id>` |
 | `FARO_APP_NAME` | *(auto = domain)* | *(auto = domain)* |
 
+The dev stack uses one shared Faro app — `DreamSeed (dev)` — for `aws`,
+`hetz`, and `test` instances; its CORS origins must list all of them. Grafana
+does not allow renaming a Faro app after it has received data, so changing the
+display name requires creating a new app and updating `FARO_COLLECTOR_URL`. The
+SDK `app.name` (`FARO_APP_NAME`) still distinguishes instances via
+`service.name`.
+
 ---
 
 ## Rclone Crypt (backup encryption)
