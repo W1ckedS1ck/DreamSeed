@@ -212,6 +212,49 @@ jobs:
           perl -pe 's/\e\[[\d;]*[mK]//g' /tmp/deploy.log > /tmp/deploy-summary.txt
           exit "$rc"
 
+      - name: Purge Cloudflare cache
+        if: success() && inputs.action == 'deploy'
+        continue-on-error: true
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOY_ENV: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4"
+
+          case "$DEPLOY_ENV" in
+            prod|prod-hetz|prod-aws) ZONE="dreamseed.online" ;;
+            dev|dev-hetz|dev-aws)    ZONE="vitalikuts.online" ;;
+            *)
+              echo "::warning::Unknown environment '$DEPLOY_ENV' — skipping Cloudflare purge"
+              exit 0
+              ;;
+          esac
+
+          if [[ -z "${CF_TOKEN:-}" ]]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set — skipping Cloudflare purge"
+            exit 0
+          fi
+
+          zone_id=$(curl -sS --fail-with-body -m 20 \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            "$API/zones?name=$ZONE" | jq -r '.result[0].id // empty')
+          if [[ -z "$zone_id" ]]; then
+            echo "::error::Cloudflare zone not found: $ZONE"
+            exit 1
+          fi
+
+          # Edge caches HTML far longer than the origin's max-age=120, so after a
+          # deploy users keep seeing the previous page for hours. Purge the whole
+          # zone so HTML (and any changed assets) go live immediately.
+          response=$(curl -sS --fail-with-body -m 30 -X POST \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data '{"purge_everything":true}' \
+            "$API/zones/$zone_id/purge_cache")
+          echo "$response" | jq -c '{success, errors}'
+          echo "$response" | jq -e '.success == true' >/dev/null
+
       - name: Scrub secrets from deploy log
         if: always() && inputs.action == 'deploy' && failure()
         uses: $/.github/actions/scrub-log
