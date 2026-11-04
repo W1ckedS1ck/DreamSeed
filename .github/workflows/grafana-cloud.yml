@@ -74,6 +74,30 @@ jobs:
         run: |
           echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
 
+      - name: Use local Terraform execution
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          WORKSPACE_INPUT: ${{ inputs.workspace }}
+        run: |
+          # terraform/grafana reads dashboard JSON from ../../ansible-roles/grafana/files.
+          # Terraform Cloud's remote runner only uploads terraform/grafana, so run
+          # plan/apply on this runner while keeping state in Terraform Cloud.
+          WS_NAME="dreamseed-grafana-cloud-${WORKSPACE_INPUT}"
+          WS_ID=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $TF_API_TOKEN" \
+            "https://app.terraform.io/api/v2/organizations/DreamSeed/workspaces/${WS_NAME}" \
+            | jq -r '.data.id')
+          if [[ -z "$WS_ID" || "$WS_ID" == "null" ]]; then
+            echo "::error::Terraform Cloud workspace ${WS_NAME} not found"
+            exit 1
+          fi
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TF_API_TOKEN" \
+            -H "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/workspaces/${WS_ID}" \
+            -d '{"data":{"type":"workspaces","attributes":{"execution-mode":"local"}}}' \
+            | jq -r '"Terraform execution mode: " + .data.attributes["execution-mode"]'
+
       - name: Write terraform.tfvars.json
         working-directory: terraform/grafana
         env:
