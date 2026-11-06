@@ -24,7 +24,7 @@ CI_MODE=false
 # Pinned — Renovate tracks these via renovate.json regex managers.
 ZIZMOR_VERSION="1.32.0"
 YAMLLINT_VERSION="1.38.0"
-RENOVATE_VERSION="44.218.0"
+RENOVATE_VERSION="44.221.5"
 
 TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
