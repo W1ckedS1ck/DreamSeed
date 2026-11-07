@@ -174,6 +174,10 @@ set -o pipefail
 
 if [ "${DUMP_RC[0]}" -eq 0 ] && [ "${DUMP_RC[1]}" -eq 0 ] && [ -s "$TMP_DB_BACKUP" ]; then
     mv "$TMP_DB_BACKUP" "$DB_BACKUP"
+    # The upload cron runs as ubuntu. A root-run backup (duplicate cron entry)
+    # would leave the dump 0600 root:root and every upload would fail with
+    # "permission denied" — same hardening as project/redis below.
+    sudo chown ubuntu:ubuntu "$DB_BACKUP" 2>/dev/null || true
     DB_STATUS="✅ Database backed up"
     rotate_files "$BACKUP_DIR/db/db_*.sql.gz" "$DB_KEEP"
 else
