@@ -15,7 +15,7 @@ runs:
         key: pip-${{ runner.os }}-${{ hashFiles('ansible/requirements-deploy.txt') }}
         restore-keys: pip-${{ runner.os }}-
 
-    - run: pip install -r ansible/requirements-deploy.txt --quiet
+    - run: pip install --require-hashes -r ansible/requirements-deploy.txt --quiet
       shell: bash
 
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
