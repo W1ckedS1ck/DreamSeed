@@ -86,6 +86,9 @@ class Report:
     findings: list[Finding] = field(default_factory=list)
     scorecard: float | None = None
     notes: list[str] = field(default_factory=list)
+    # Checks whose data could not be read this run. Their previous findings
+    # must never be reported as resolved.
+    unavailable: set[str] = field(default_factory=set)
 
     @property
     def counts(self) -> dict[str, int]:
@@ -106,21 +109,31 @@ class Report:
 
 
 class GitHub:
-    """Tiny GitHub REST client with an anonymous fallback for public repos."""
+    """Tiny GitHub REST client with token, fallback-token and anonymous modes."""
 
-    def __init__(self, token: str | None = None, timeout: int = 20) -> None:
-        self.token = token
+    def __init__(
+        self,
+        token: str | None = None,
+        fallback: str | None = None,
+        timeout: int = 20,
+    ) -> None:
+        # POSTURE_TOKEN may be narrower than GITHUB_TOKEN (e.g. no Code
+        # scanning alerts read). Try the primary token, then the fallback,
+        # then anonymous — a missing scope must not blind a check that the
+        # other token can read.
+        self.tokens = [t for t in (token, fallback) if t]
         self.timeout = timeout
 
     def get(self, path_or_url: str) -> tuple[int, object | None]:
         url = path_or_url if path_or_url.startswith("http") else API + path_or_url
-        status, data = self._request(url, self.token)
-        # GITHUB_TOKEN may lack an admin scope; the repo is public, so a
-        # second unauthenticated attempt often still succeeds.
-        if status in (401, 403, 404) and self.token:
-            anon_status, anon_data = self._request(url, None)
-            if anon_status == 200:
-                return anon_status, anon_data
+        status: int = 0
+        data: object | None = None
+        for token in [*self.tokens, None]:
+            status, data = self._request(url, token)
+            if status == 200:
+                return status, data
+            if status not in (401, 403, 404):
+                return status, data
         return status, data
 
     def get_public(self, url: str) -> tuple[int, object | None]:
@@ -192,7 +205,7 @@ def check_secret_scanning(github: GitHub, repo: str) -> tuple[str, list[Finding]
                 key="secret_scanning:token",
             )
         ]
-        return _status_for(findings), findings, []
+        return _status_for(findings), findings, ["secret scanning alerts unreadable (HTTP 403)"]
     if status != 200 or not isinstance(alerts, list):
         return "skipped", [], [f"secret scanning alerts unreadable (HTTP {status})"]
 
@@ -232,7 +245,7 @@ def check_dependabot(github: GitHub, repo: str) -> tuple[str, list[Finding], lis
                 key="dependabot:token",
             )
         ]
-        return _status_for(findings), findings, []
+        return _status_for(findings), findings, ["Dependabot alerts unreadable (HTTP 403)"]
     if status != 200 or not isinstance(alerts, list):
         return "skipped", [], [f"Dependabot alerts unreadable (HTTP {status})"]
 
@@ -272,6 +285,19 @@ def check_code_scanning(github: GitHub, repo: str) -> tuple[str, list[Finding], 
     status, alerts = github.get(
         f"/repos/{repo}/code-scanning/alerts?state=open&per_page={PER_PAGE}"
     )
+    if status == 403:
+        findings = [
+            Finding(
+                check="code_scanning",
+                severity="medium",
+                title="Code scanning alerts are unreadable with the current token",
+                detail="POSTURE_TOKEN needs Code scanning alerts: read, or the "
+                "workflow must grant security-events: read to GITHUB_TOKEN.",
+                url=f"https://github.com/{repo}/settings/secrets/actions",
+                key="code_scanning:token",
+            )
+        ]
+        return _status_for(findings), findings, ["code scanning alerts unreadable (HTTP 403)"]
     if status != 200 or not isinstance(alerts, list):
         return "skipped", [], [f"code scanning alerts unreadable (HTTP {status})"]
 
@@ -467,7 +493,7 @@ def check_ruleset(
                 key="ruleset:unreadable",
             )
         ]
-        return _status_for(findings), findings, []
+        return _status_for(findings), findings, [f"rulesets unreadable (HTTP {status})"]
 
     name = str(detail.get("name") or "unnamed")
     findings: list[Finding] = []
@@ -703,6 +729,12 @@ def collect(
         report.checks[name] = state
         report.findings.extend(findings)
         report.notes.extend(notes)
+        # A check whose data source failed must not have its previous findings
+        # treated as resolved below.
+        if state == "skipped" or any(
+            "unreadable" in note or "unavailable" in note for note in notes
+        ):
+            report.unavailable.add(name)
 
     if include_scorecard:
         state, findings, notes, score = check_scorecard(github, repo)
@@ -710,6 +742,8 @@ def collect(
         report.findings.extend(findings)
         report.notes.extend(notes)
         report.scorecard = score
+        if state == "skipped":
+            report.unavailable.add("scorecard")
 
     for key, message in config_errors or []:
         report.findings.append(
@@ -724,6 +758,11 @@ def collect(
         )
         if report.checks.get("config") is None:
             report.checks["config"] = "warn"
+
+    if any(key.startswith("config:") for key, _ in config_errors or []):
+        # The ruleset comparison depends on ci.yml and the committed ruleset
+        # file; without them the check cannot be trusted.
+        report.unavailable.add("ruleset")
 
     report.notes = list(dict.fromkeys(report.notes))
     return report
@@ -823,7 +862,11 @@ def new_and_resolved(
 ) -> tuple[list[Finding], list[str]]:
     current = {f.fingerprint for f in report.findings}
     new = [f for f in report.sorted_findings() if f.fingerprint not in baseline]
-    resolved = [title for fid, title in baseline.items() if fid not in current]
+    resolved = [
+        title
+        for fid, title in baseline.items()
+        if fid not in current and fid.split(":", 1)[0] not in report.unavailable
+    ]
     return new, resolved
 
 
@@ -976,7 +1019,10 @@ def main(argv: list[str] | None = None) -> int:
 
     report = collect(
         args.repo,
-        GitHub(args.token),
+        GitHub(
+            args.token,
+            fallback=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
+        ),
         expected_checks=expected,
         ruleset_name=args.ruleset,
         include_scorecard=not args.no_scorecard,
