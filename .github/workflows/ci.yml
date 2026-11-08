@@ -15,7 +15,7 @@ permissions:
 env:
   # Every CI tool version lives here. Renovate bumps these lines (customManagers
   # in renovate.json); the installs read them through install-pinned-binary.
-  TFLINT_VERSION: "v0.65.0"
+  TFLINT_VERSION: "v0.66.0"
   GITLEAKS_VERSION: "8.30.1"
   ACTIONLINT_VERSION: "1.7.12"
   TERRAFORM_VERSION: "1.17.1"
