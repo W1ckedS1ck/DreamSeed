@@ -43,6 +43,9 @@ matches.
 - An input that cannot be read (`ci.yml` does not parse, `pip install` failed
   and `pyyaml` is missing, the ruleset file is malformed) becomes a `medium`
   `config` finding. The check it feeds is never silently dropped.
+- A check whose data source is unreadable is **never reported as resolved**.
+  Its previous findings stay in the baseline until the check can be read
+  again — otherwise a missing token scope would look like a fix.
 
 Secret scanning validity checks and non-provider patterns are reported as
 **notes**, not findings: they require paid GitHub Secret Protection, so
@@ -123,11 +126,15 @@ a `medium` finding** instead of silently skipping it — a blind security check
 is worse than a noisy one. `404` (feature disabled or unavailable on the plan)
 is recorded as a note.
 
+`POSTURE_TOKEN` is tried first, then `GITHUB_TOKEN`, then anonymous. Fine-grained
+PATs are per-permission, so a missing scope in `POSTURE_TOKEN` degrades to the
+next token instead of blinding the check; only when every token is denied does
+the check become a `medium` finding.
+
 To get full coverage, create a **fine-grained PAT** scoped to this repository
 with read-only access to *Secret scanning alerts*, *Dependabot alerts* and
-*Administration*, and store it as the `POSTURE_TOKEN` secret. The workflow
-prefers it automatically; without it, code scanning, rulesets, settings and
-Scorecard still work.
+*Administration*, and store it as the `POSTURE_TOKEN` secret. Code scanning is
+covered by `GITHUB_TOKEN` via `security-events: read`.
 
 ## Metrics (not wired yet)
 

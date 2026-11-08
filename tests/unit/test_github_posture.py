@@ -17,6 +17,8 @@ import github_posture as gp
 REPO = "acme/demo"
 SCORECARD_URL = gp.SCORECARD_API.format(repo=REPO)
 FAKE_TOKEN = "test-token"
+PRIMARY_TOKEN = "primary-token"
+FALLBACK_TOKEN = "fallback-token"
 
 
 class FakeGitHub:
@@ -304,6 +306,36 @@ def test_baseline_diff_reports_only_changes(tmp_path: Path) -> None:
     assert "Resolved: 1" in gp.render_telegram(fixed, new=[], resolved=resolved)
 
 
+def test_github_tries_the_fallback_token(monkeypatch) -> None:
+    calls: list[str | None] = []
+
+    def fake_request(_self, _url, token, github=True):
+        calls.append(token)
+        return (200 if token == FALLBACK_TOKEN else 403), {}
+
+    monkeypatch.setattr(gp.GitHub, "_request", fake_request)
+    status, _ = gp.GitHub(token=PRIMARY_TOKEN, fallback=FALLBACK_TOKEN).get("/x")
+    assert status == 200
+    assert calls == [PRIMARY_TOKEN, FALLBACK_TOKEN]
+
+
+def test_unreadable_check_never_resolves_its_previous_findings() -> None:
+    code_path = f"/repos/{REPO}/code-scanning/alerts?state=open&per_page=100"
+    readable = healthy_routes()
+    readable[code_path] = (200, [{"rule": {"id": "py/unsafe", "severity": "error"}}])
+    baseline = {f.fingerprint: f.title for f in build(readable).findings}
+    assert "code_scanning:alerts:high" in baseline
+
+    unreadable = healthy_routes()
+    unreadable[code_path] = (403, {"message": "Forbidden"})
+    current = build(unreadable)
+
+    assert "code_scanning" in current.unavailable
+    new, resolved = gp.new_and_resolved(current, baseline)
+    assert [f.key for f in new] == ["code_scanning:token"]
+    assert resolved == []
+
+
 def test_clean_run_sends_nothing_to_telegram() -> None:
     report = build(healthy_routes())
     assert gp.render_telegram(report, new=[], resolved=[]) == ""
@@ -459,7 +491,7 @@ def test_unreadable_config_input_becomes_a_finding() -> None:
 
 
 def _exit_code(routes: dict, capsys, *extra: str, monkeypatch, ruleset_file: Path) -> int:
-    monkeypatch.setattr(gp, "GitHub", lambda token=None: FakeGitHub(routes))
+    monkeypatch.setattr(gp, "GitHub", lambda token=None, fallback=None: FakeGitHub(routes))
     code = gp.main([
         "--repo", REPO, "--no-scorecard", "--format", "json",
         "--expected-checks", "lint,test", "--ruleset-file", str(ruleset_file), *extra,
