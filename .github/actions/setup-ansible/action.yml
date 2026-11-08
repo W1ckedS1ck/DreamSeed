@@ -4,10 +4,10 @@ description: Cache pip and install dependencies
 runs:
   using: composite
   steps:
-    # ansible-core 2.22+ requires Python >=3.13 on the controller.
+    # ansible-core 2.22 requires Python >=3.13 and is tested on 3.12-3.14.
     - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
-        python-version: '3.13'
+        python-version: '3.14'
 
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
