@@ -251,10 +251,9 @@ def test_telegram_escapes_html() -> None:
         200,
         [{"secret_type_display_name": "<script>alert(1)</script>"}],
     )
-    message = gp.render_telegram(build(routes), "https://example.test/run?a=1&b=2")
+    message = gp.render_telegram(build(routes))
     assert "<script>" not in message
     assert "&lt;script&gt;" in message
-    assert "a=1&amp;b=2" in message
 
 
 def test_expected_checks_from_ci_excludes_push_only_jobs() -> None:
@@ -303,7 +302,12 @@ def test_baseline_diff_reports_only_changes(tmp_path: Path) -> None:
     new, resolved = gp.new_and_resolved(fixed, baseline)
     assert new == []
     assert resolved == ["Secret scanning: 1 open Stripe API key alert(s)"]
-    assert "Resolved: 1" in gp.render_telegram(fixed, new=[], resolved=resolved)
+    message = gp.render_telegram(fixed, new=[], resolved=resolved)
+    assert "All clear" in message
+    assert "No new findings" not in message
+    assert "<s>Secret scanning: 1 open Stripe API key alert(s)</s>" in message
+    assert "7/7 checks green" in message
+    assert "Scorecard 8.4/10" in message
 
 
 def test_github_tries_the_fallback_token(monkeypatch) -> None:
