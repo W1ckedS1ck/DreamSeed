@@ -15,6 +15,7 @@
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/W1ckedS1ck/DreamSeed/badge)](https://scorecard.dev/viewer/?uri=github.com/W1ckedS1ck/DreamSeed)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16449/badge)](https://www.bestpractices.dev/projects/16449)
 ![Posture](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/github-posture.yml/badge.svg)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
