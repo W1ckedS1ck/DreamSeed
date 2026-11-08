@@ -22,7 +22,10 @@
   "pip-compile": {
     "managerFilePatterns": [
       "/^ci/requirements\\.txt$/"
-    ]
+    ],
+    "lockFileMaintenance": {
+      "enabled": false
+    }
   },
   "ansible-galaxy": {
     "managerFilePatterns": [
