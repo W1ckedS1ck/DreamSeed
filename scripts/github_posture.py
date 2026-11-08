@@ -928,7 +928,8 @@ def render_telegram(
         parts = [
             f"{SEVERITY_ICON[sev]} {counts[sev]}" for sev in SEVERITY_RANK if counts.get(sev)
         ]
-        headline = f"⚠️ <b>{len(new)} new finding(s)</b> · " + " · ".join(parts)
+        noun = "finding" if len(new) == 1 else "findings"
+        headline = f"⚠️ <b>{len(new)} new {noun}</b> · " + " · ".join(parts)
         if resolved:
             headline += f" · ✅ {len(resolved)} resolved"
         lines += [headline, ""]
@@ -950,6 +951,8 @@ def render_telegram(
             lines.append(f"… and {len(resolved) - 3} more")
         lines.append("")
 
+    if lines[-1] != "":
+        lines.append("")
     green = sum(1 for state in report.checks.values() if state == "ok")
     footer = f"{green}/{len(report.checks)} checks green"
     if report.scorecard is not None:
