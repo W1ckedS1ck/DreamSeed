@@ -17,6 +17,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 | [Linters](linters) | Local and CI linting tools and configuration |
 | [ChatOps](chatops) | `/deploy` and `/destroy` via issue comments |
 | [GitHub Posture](github-posture) | Repo-side audit — security alerts, ruleset drift, Actions hardening |
+| [OpenSSF Best Practices](ossf-best-practices) | Badge worksheet, criteria, and evidence |
 | [Code Map](https://w1ckeds1ck.github.io/DreamSeed/) | Interactive map of the codebase — modules, edges, flows |
 | [ADRs](adr/) | Architecture Decision Records — the "why" behind the infrastructure |
 
