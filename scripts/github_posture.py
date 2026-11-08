@@ -909,7 +909,6 @@ def render_prometheus(report: Report) -> str:
 
 def render_telegram(
     report: Report,
-    run_url: str | None = None,
     new: list[Finding] | None = None,
     resolved: list[str] | None = None,
 ) -> str:
@@ -921,6 +920,7 @@ def render_telegram(
 
     esc = html.escape
     lines = [f"🩺 <b>GitHub Posture</b> — {esc(report.repo)}"]
+
     if new:
         counts = {sev: 0 for sev in SEVERITY_RANK}
         for finding in new:
@@ -928,32 +928,34 @@ def render_telegram(
         parts = [
             f"{SEVERITY_ICON[sev]} {counts[sev]}" for sev in SEVERITY_RANK if counts.get(sev)
         ]
-        lines.append(f"<b>{len(new)} new finding(s)</b> · " + " · ".join(parts))
-        lines.append("")
+        headline = f"⚠️ <b>{len(new)} new finding(s)</b> · " + " · ".join(parts)
+        if resolved:
+            headline += f" · ✅ {len(resolved)} resolved"
+        lines += [headline, ""]
         for finding in new[:6]:
             lines.append(f"{SEVERITY_ICON[finding.severity]} {esc(finding.title)}")
         if len(new) > 6:
             lines.append(f"… and {len(new) - 6} more")
+        if resolved:
+            lines.append("")
     else:
-        lines.append("✅ <b>No new findings</b>")
+        lines += [f"✅ <b>All clear</b> · {len(resolved)} resolved", ""]
 
     if resolved:
-        lines += ["", f"✅ Resolved: {len(resolved)}"]
+        lines.append(f"✅ <b>Resolved</b> ({len(resolved)})")
         for title in resolved[:3]:
-            lines.append(f"• {esc(title)}")
+            # Strikethrough makes it unambiguous that the state is in the past.
+            lines.append(f"• <s>{esc(title)}</s>")
+        if len(resolved) > 3:
+            lines.append(f"… and {len(resolved) - 3} more")
+        lines.append("")
 
-    if run_url:
-        lines += ["", f'<a href="{esc(run_url)}">Open run</a>']
+    green = sum(1 for state in report.checks.values() if state == "ok")
+    footer = f"{green}/{len(report.checks)} checks green"
+    if report.scorecard is not None:
+        footer += f" · Scorecard {report.scorecard:.1f}/10"
+    lines.append(footer)
     return "\n".join(lines)
-
-
-def _run_url() -> str | None:
-    server = os.environ.get("GITHUB_SERVER_URL")
-    repo = os.environ.get("GITHUB_REPOSITORY")
-    run_id = os.environ.get("GITHUB_RUN_ID")
-    if server and repo and run_id:
-        return f"{server}/{repo}/actions/runs/{run_id}"
-    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1040,7 +1042,7 @@ def main(argv: list[str] | None = None) -> int:
         new_findings, resolved = new_and_resolved(report, baseline)
 
     def telegram_message() -> str:
-        return render_telegram(report, _run_url(), new=new_findings, resolved=resolved)
+        return render_telegram(report, new=new_findings, resolved=resolved)
 
     renderers = {
         "markdown": render_markdown,
