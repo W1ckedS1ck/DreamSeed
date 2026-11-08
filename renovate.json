@@ -15,13 +15,14 @@
   "enabledManagers": ["github-actions", "terraform", "pip_requirements", "pip-compile", "ansible-galaxy", "custom.regex"],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^ansible/requirements-deploy\\.txt$/",
+      "/^ansible/requirements-deploy\\.in$/",
       "/^ci/requirements\\.in$/"
     ]
   },
   "pip-compile": {
     "managerFilePatterns": [
-      "/^ci/requirements\\.txt$/"
+      "/^ci/requirements\\.txt$/",
+      "/^ansible/requirements-deploy\\.txt$/"
     ],
     "lockFileMaintenance": {
       "enabled": false

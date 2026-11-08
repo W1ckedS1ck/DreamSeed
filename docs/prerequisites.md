@@ -22,7 +22,7 @@ These are checked by `deploy.sh` on every run:
 
 ```bash
 # Core
-pip install -r ansible/requirements-deploy.txt
+pip install --require-hashes -r ansible/requirements-deploy.txt
 
 # Collections (for MariaDB and POSIX modules) — versions pinned in requirements.yml
 ansible-galaxy collection install -r ansible/requirements.yml
@@ -111,7 +111,7 @@ brew install shellcheck
 pip install ruff
 
 # Ansible (pinned version matching CI)
-pip install -r ansible/requirements-deploy.txt
+pip install --require-hashes -r ansible/requirements-deploy.txt
 
 # Terraform
 brew install tflint
