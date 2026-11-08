@@ -10,8 +10,8 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret / Var | Purpose | Used in |
 |-------------|---------|---------|
-| `TG_TOKEN` | Telegram bot token | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
-| `TG_CHAT_ID` (var) | Telegram chat ID | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
+| `TG_TOKEN` | Telegram bot token | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml`, `github-posture.yml` |
+| `TG_CHAT_ID` (var) | Telegram chat ID | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml`, `github-posture.yml` |
 | `TG_THREAD_ID` (var) | Telegram thread/topic ID | Same |
 | `DB_PASS` | MySQL password for MODX | `deploy.yml`, `test-restore.yml` |
 | `GRAFANA_PASS` | Grafana admin password | `deploy.yml`, `test-restore.yml` |
@@ -140,6 +140,18 @@ All set in `deploy.yml` and consumed by the respective server scripts.
 | `GOOGLE_ADS_DEVELOPER_TOKEN` | `google_ads_report.sh` (API Center) |
 | `GOOGLE_ADS_CUSTOMER_ID` | `google_ads_report.sh` |
 | `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | `google_ads_report.sh` (MCC only) |
+
+---
+
+## GitHub Posture (optional)
+
+Used only by `github-posture.yml`. Both are optional: the audit still runs
+without them, with reduced coverage.
+
+| Secret | Purpose |
+|--------|---------|
+| `POSTURE_TOKEN` | Fine-grained PAT, read-only: *Secret scanning alerts*, *Dependabot alerts*, *Administration*. Without it those endpoints return 403 and are reported as medium findings. |
+| `POSTURE_HEARTBEAT_KEY` | Better Stack heartbeat for the daily audit. Without it the ping step is a no-op (no dead-man's switch). |
 
 ---
 

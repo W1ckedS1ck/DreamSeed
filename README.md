@@ -15,6 +15,7 @@
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-WAF%2BCache-F38020?logo=cloudflare)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/W1ckedS1ck/DreamSeed/badge)](https://scorecard.dev/viewer/?uri=github.com/W1ckedS1ck/DreamSeed)
+![Posture](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/github-posture.yml/badge.svg)
 
 > **Production infrastructure powering a global social experiment — `dreamseed.online`**
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~8–10 min.
@@ -80,6 +81,7 @@
 | Backup frequency (RPO) | hourly local (5/15, map tiles 3) → hourly Google Drive (10/100, map tiles 3) |
 | Uptime coverage | 28 Grafana alert rules + 6 Better Stack monitors + 6 cron heartbeats → Telegram |
 | CI checks per push | 12 jobs, 11 required for merge (lint → security → validate) |
+| Repo-side posture | 8 checks daily → Telegram, only new/resolved findings |
 | Security | Hardened Ubuntu 24.04 — SSH hardening, 6 fail2ban jails (edge bans via Cloudflare API), sysctl/PAM hardening |
 
 ---
@@ -109,7 +111,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 09-pro → 04-security → 05-monitor → 06-backup → 08-promtail → 07-grafana)
 - **Observability** — VictoriaMetrics + Promtail + Grafana stack with 28 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 6 HTTP monitors + 6 cron heartbeats → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 project/DB + 3 map-tiles version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 11 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy, docs and scorecard workflows
+- **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 11 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy, docs, scorecard and github-posture workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls
 - **Production safety** — GitHub `production` environment approval gate on prod deploy/destroy/rollback/terraform-apply; destroy requires typing `destroy <target>` as the workflow confirmation input
 
@@ -126,7 +128,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 28 alert rules → Telegram · Better Stack (6 HTTP monitors + 6 cron heartbeats + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy |
-| **CI/CD** | GitHub Actions (11 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **CI/CD** | GitHub Actions (14 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -193,7 +195,7 @@ DreamSeed/
 │   │   │                   # env/gitleaks), chatops, mask-secrets, scrub-log,
 │   │   │                   # capture-screenshot
 │   ├── scripts/            # test-restored-server.sh — post-restore verification suite
-│   └── workflows/          # 11 workflows (see CI/CD section)
+│   └── workflows/          # 14 workflows (see CI/CD section)
 ├── terraform/
 │   ├── aws/                # EC2 + Elastic IP + Security Group
 │   ├── hetzner/            # Cloud server + firewall + primary IP
@@ -271,7 +273,7 @@ Grafana dashboards, datasources, **and 28 alert rules** deployed automatically �
 - **Telegram bot** (`telegram-bot.service`) — check `/status` or `/backups` anytime
 - **Alerts:** hourly backup failure → Telegram. No cron for 2h → Grafana alert → Telegram
 
-### 🧪 CI/CD Pipeline — 11 Workflows + Renovate
+### 🧪 CI/CD Pipeline — 14 Workflows + Renovate
 
 | Workflow | Trigger |
 |----------|---------|
@@ -281,13 +283,18 @@ Grafana dashboards, datasources, **and 28 alert rules** deployed automatically �
 | **Drift Detection** — terraform plan on 5 targets | Daily 07:05 UTC |
 | **Rollback** — emergency restore | Manual with prod confirmation |
 | **Grafana Cloud** — dashboard provisioning | Manual dispatch (prod requires approval) |
+| **Cloudflare Purge** — purge specific URLs from the zone | Manual dispatch |
+| **CF Purge (one-shot)** — whole-zone purge via a `[cf-purge]` commit marker | Push to `dev` with marker + manual |
 | **Health Check** — weekly server update | Weekly Monday + manual |
 | **TF: Infra + Cloudflare** — terraform apply (infra + WAF/cache rulesets) | Manual dispatch (prod requires approval) |
 | **ChatOps Deploy** — `/deploy` `/destroy` via issue comments | Issue comment |
 | **Docs** — Pages site + wiki sync | Push to main + manual |
+| **GitHub Posture** — repo security + ruleset drift → Telegram | Daily 06:17 UTC + manual |
 | **OpenSSF Scorecard** — supply-chain score → SARIF + badge | Weekly Monday 05:37 UTC, on branch-protection change, push to main |
 
 CI (12 jobs, 11 required for merge): ShellCheck · ansible-lint · **Terraform** (tflint+validate+fmt) · **Checkov** · **Trivy** · **gitleaks** · **actionlint** · YAML lint · zizmor · pre-commit · .env parser contract · Deploy Check (push-only). Dependencies: **Renovate** (auto-PRs).
+
+**GitHub Posture** is the repo-side twin of the server monitoring: a read-only daily audit of open secret/Dependabot/code-scanning alerts, security switches, ruleset drift against both `ci.yml` and the committed `.github/rulesets/protect-main.json`, and Actions hardening. Telegram receives only **new or resolved** findings (the previous run is cached), so a known backlog does not re-alert every day; the full report always lands in the job summary and as an artifact. See [docs/github-posture.md](docs/github-posture.md).
 
 ### 🛑 Production Safeguards
 

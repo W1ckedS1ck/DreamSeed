@@ -16,6 +16,7 @@ Documentation for the DreamSeed infrastructure — a multi-cloud production depl
 | [Secrets Reference](secrets-reference) | Complete secret inventory, scope, and rotation |
 | [Linters](linters) | Local and CI linting tools and configuration |
 | [ChatOps](chatops) | `/deploy` and `/destroy` via issue comments |
+| [GitHub Posture](github-posture) | Repo-side audit — security alerts, ruleset drift, Actions hardening |
 | [Code Map](https://w1ckeds1ck.github.io/DreamSeed/) | Interactive map of the codebase — modules, edges, flows |
 | [ADRs](adr/) | Architecture Decision Records — the "why" behind the infrastructure |
 

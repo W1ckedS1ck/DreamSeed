@@ -326,6 +326,8 @@ Issue comment      ChatOps Deploy        Deploy via chat command
 Push / manual      Docs                  Pages site (code map) + wiki sync
 Schedule Mon 05:37 OpenSSF Scorecard     Supply-chain score → SARIF + badge
   + branch-rule change                    (also on push to main)
+Schedule 06:17     GitHub Posture        Repo-side audit → Telegram
+  daily                                   (new/resolved findings only)
 
 ```
 
