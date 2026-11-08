@@ -29,7 +29,7 @@ jobs:
       - name: 🚀 Start
         run: echo "ShellCheck started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - name: Install ShellCheck
-        run: pip install -r ci/requirements.txt
+        run: pip install --require-hashes -r ci/requirements.txt
       - name: Run ShellCheck
         run: bash scripts/lint.sh --ci --shellcheck
       - name: Cloudflare IP updater selftest
@@ -150,14 +150,14 @@ jobs:
           grep "linux_amd64.tar.gz$" checksums.txt | sha256sum -c -
           sudo tar -xzf "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin actionlint
       - name: Install shellcheck (inline run scripts)
-        run: pip install -r ci/requirements.txt
+        run: pip install --require-hashes -r ci/requirements.txt
       - name: Run actionlint
         run: actionlint -shellcheck="$(command -v shellcheck)" -ignore 'specifying action "\$/.+" in invalid format because ref is missing'
       - name: Verify required checks match ci.yml
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pip install -r ci/requirements.txt
+          pip install --require-hashes -r ci/requirements.txt
           python3 scripts/check_required_checks.py
 
   yamllint:
@@ -170,8 +170,9 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "yamllint started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - name: Install uv
-        run: pip install "uv==${{ env.UV_VERSION }}"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
       - name: Run yamllint
         run: bash scripts/lint.sh --ci --yamllint
 
@@ -236,7 +237,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           BEFORE: ${{ github.event.before }}
         run: |
-          pip install -r ci/requirements.txt
+          pip install --require-hashes -r ci/requirements.txt
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             REF="origin/$BASE_REF"
           elif [[ -n "$BEFORE" && "$BEFORE" != "0000000000000000000000000000000000000000" ]]; then
@@ -293,7 +294,7 @@ jobs:
           bash scripts/check_env_contract.sh
           python3 tests/env/fuzz_env_parsers.py
       - name: Install unit test dependencies
-        run: pip install -r ci/requirements.txt
+        run: pip install --require-hashes -r ci/requirements.txt
       - name: Run unit tests (templates, bot helpers, CI job names, posture)
         run: python3 -m pytest tests/unit -q
 
@@ -353,7 +354,8 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "zizmor started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      - name: Install uv
-        run: pip install "uv==${{ env.UV_VERSION }}"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
       - name: Run zizmor
         run: bash scripts/lint.sh --ci --zizmor

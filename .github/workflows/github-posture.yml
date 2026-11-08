@@ -77,7 +77,7 @@ jobs:
 
       - name: Install Python dependencies
         continue-on-error: true
-        run: pip install --quiet -r ci/requirements.txt
+        run: pip install --quiet --require-hashes -r ci/requirements.txt
 
       - name: Evaluate posture
         id: evaluate
