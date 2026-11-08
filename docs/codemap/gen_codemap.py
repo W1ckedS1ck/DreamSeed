@@ -9,7 +9,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
@@ -269,7 +269,7 @@ NODES = [
          "role": "Local developer tooling + repo config: unified linter (shellcheck/ruff/ansible-lint/actionlint/tflint/checkov/gitleaks/trivy/renovate/markdownlint/secrets audit/Cloudflare IP freshness), cross-parser .env contract check, plus Renovate/pre-commit/gitleaks/tflint config.",
          "entrypoints": ["scripts/lint.sh", "scripts/check_env_contract.sh"],
          "tests": ["scripts/smoke_orchestration.sh", ".github/workflows/ci.yml"],
-         "constraints": ["lint.sh is the single source of truth for CI + local linting (CLAUDE.md)", "renovate pinned to renovate@44; managerFilePatterns must stay single-slash to avoid config-migration noise (CLAUDE.md)", "run_terraform_validate temporarily stashes vaulted terraform.tfvars (lint.sh:168-182)", "3 .env parsers share one contract — run scripts/check_env_contract.sh BEFORE editing lib/env.sh, scripts/common_functions.sh or scripts/env_loader.py"],
+         "constraints": ["lint.sh is the single source of truth for CI + local linting (CLAUDE.md)", "renovate pinned exactly (RENOVATE_VERSION in ci.yml, bumped by Renovate); managerFilePatterns must stay single-slash to avoid config-migration noise (CLAUDE.md)", "run_terraform_validate temporarily stashes vaulted terraform.tfvars (lint.sh:168-182)", "3 .env parsers share one contract — run scripts/check_env_contract.sh BEFORE editing lib/env.sh, scripts/common_functions.sh or scripts/env_loader.py"],
          "evidence": [{"path": "scripts/lint.sh", "symbol": "run_ansible_lint"},
                    {"path": "scripts/lint.sh", "symbol": "run_renovate_validate"},
                    {"path": "scripts/lint.sh", "symbol": "run_gitleaks"},
@@ -536,7 +536,7 @@ FLOWS = [
 
 
 def build():
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     commit_sha = commit()
     fps = module_fingerprints()
     dirty = not working_tree_clean()

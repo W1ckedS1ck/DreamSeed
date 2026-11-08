@@ -1,0 +1,96 @@
+name: Install pinned binary
+description: One way to install a CI tool — pinned release, sha256 from the release's checksums file, per-version cache, optional go-install fallback
+
+inputs:
+  binary:
+    description: Executable name to install (e.g. tflint)
+    required: true
+  version:
+    description: Version used in the cache key. Must change whenever the URLs change
+    required: true
+  archive-url:
+    description: Release archive (.zip or .tar.gz). Its basename must appear in the checksums file
+    required: true
+  checksums-url:
+    description: Checksums file published with the release (sha256sum format)
+    required: true
+  go-package:
+    description: Optional module@version for a go-install fallback. Empty means no fallback
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/bin/${{ inputs.binary }}
+        key: ${{ inputs.binary }}-${{ runner.os }}-${{ inputs.version }}
+
+    - name: Install ${{ inputs.binary }}
+      shell: bash
+      env:
+        BIN: ${{ inputs.binary }}
+        ARCHIVE_URL: ${{ inputs.archive-url }}
+        CHECKSUMS_URL: ${{ inputs.checksums-url }}
+        GO_PACKAGE: ${{ inputs.go-package }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$BIN" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+          echo "::error::invalid binary name: $BIN"
+          exit 1
+        fi
+        cache="$HOME/.cache/bin/$BIN"
+        mkdir -p "$HOME/.cache/bin"
+
+        if [[ ! -x "$cache" ]]; then
+          work=$(mktemp -d)
+          cd "$work"
+          archive="${ARCHIVE_URL##*/}"
+
+          # The token goes to github.com only; other hosts never see it.
+          fetch() {
+            if [[ "$1" == https://github.com/* ]]; then
+              curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" -o "$2" "$1"
+            else
+              curl -fsSL --retry 3 --retry-delay 2 -o "$2" "$1"
+            fi
+          }
+          verify() {
+            local line
+            line=$(awk -v f="$archive" '{n=$2; sub(/^\*/, "", n); if (n == f) print}' checksums.txt)
+            [[ -n "$line" ]] && printf '%s\n' "$line" | sha256sum -c --status -
+          }
+          extract() {
+            case "$archive" in
+              *.zip)    unzip -oq "$archive" ;;
+              *.tar.gz) tar -xzf "$archive" ;;
+              *)        return 1 ;;
+            esac
+          }
+
+          if fetch "$ARCHIVE_URL" "$archive" \
+             && fetch "$CHECKSUMS_URL" checksums.txt \
+             && verify \
+             && extract; then
+            src=$(find . -type f -name "$BIN" | head -n 1)
+            [[ -n "$src" ]] || { echo "::error::$BIN not found in $archive"; exit 1; }
+          elif [[ -n "$GO_PACKAGE" ]]; then
+            # GitHub release assets intermittently return 504. Build the pinned
+            # tag through the Go module proxy instead; sumdb still verifies it.
+            echo "::warning::$BIN release download failed; falling back to go install"
+            mkdir -p "$HOME/.local/bin"
+            GOBIN="$HOME/.local/bin" go install "$GO_PACKAGE"
+            src="$HOME/.local/bin/$BIN"
+          else
+            echo "::error::$BIN release download or checksum verification failed (no fallback configured)"
+            exit 1
+          fi
+
+          install -m 0755 "$src" "$cache"
+          cd "$HOME"
+          rm -rf "$work"
+        fi
+
+        sudo install -m 0755 "$cache" "/usr/local/bin/$BIN"

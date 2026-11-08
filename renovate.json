@@ -69,6 +69,26 @@
     },
     {
       "customType": "regex",
+      "description": "Track the Renovate version that validates this config (ci.yml)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["RENOVATE_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track uv version used for zizmor in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["UV_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "astral-sh/uv",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
       "description": "Track tflint plugin versions (.tflint.hcl)",
       "managerFilePatterns": [
         "/^\\.tflint\\.hcl$/"

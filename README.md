@@ -192,9 +192,9 @@ DreamSeed/
 │   │                       # ansible, stages, provision, wait, inventory, playbooks,
 │   │                       # post, gen_vars.py
 ├── .github/
-│   ├── actions/            # 9 composite actions: setup-* (terraform/ansible/secrets/
-│   │   │                   # env/gitleaks), chatops, mask-secrets, scrub-log,
-│   │   │                   # capture-screenshot
+│   ├── actions/            # 9 composite actions: setup-* (terraform/ansible/
+│   │   │                   # secrets/env), install-pinned-binary, chatops,
+│   │   │                   # mask-secrets, scrub-log, capture-screenshot
 │   ├── scripts/            # test-restored-server.sh — post-restore verification suite
 │   └── workflows/          # 14 workflows (see CI/CD section)
 ├── terraform/

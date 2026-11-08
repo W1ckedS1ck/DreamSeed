@@ -84,11 +84,24 @@ run_shellcheck() {
         find . -name "*.sh" -not -path "./.git/*" -not -path "./secrets/*" -print0
     )
 
+    local rc=0
     if shellcheck --severity=warning "${sh_files[@]}"; then
         print_ok "No errors"
-        ci_annotation "ShellCheck" "pass"
     else
         print_fail "Errors found"
+        rc=1
+    fi
+
+    if python3 scripts/lint_actions.py; then
+        print_ok "Composite actions: no errors"
+    else
+        print_fail "Composite actions: errors found"
+        rc=1
+    fi
+
+    if [[ $rc -eq 0 ]]; then
+        ci_annotation "ShellCheck" "pass"
+    else
         ci_annotation "ShellCheck" "fail"
     fi
     group_end

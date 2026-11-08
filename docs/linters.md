@@ -16,7 +16,7 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 
 | # | Tool | Layer | What it checks | Language |
 |---|------|-------|----------------|----------|
-| 1 | **ShellCheck** | local + CI | `deploy.sh`, `scripts/*.sh`, `.github/scripts/*.sh` | Bash |
+| 1 | **ShellCheck** | local + CI | `deploy.sh`, `scripts/*.sh`, `.github/scripts/*.sh`, composite-action `run:` blocks | Bash |
 | 2 | **ruff** | local | `scripts/telegram_bot.py`, `scripts/env_loader.py` | Python |
 | 3 | **ansible-lint** | local + CI | `ansible/playbook-*.yml`, `ansible-roles/*/tasks/*.yml` | YAML/Ansible |
 | 4 | **tflint** | local + CI | `terraform/aws/*.tf`, `terraform/hetzner/*.tf`, `terraform/grafana/*.tf`, `terraform/cloudflare/*.tf` | HCL/Terraform |
@@ -104,7 +104,7 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 ### 12. Renovate Config Validator (JSON/RegEx)
 
 **Type:** dependency-update config validator.
-**Catches:** invalid `renovate.json` schema, broken custom manager regex patterns (e.g. double-slash wrapping after config migration). Run with `npx --yes --package renovate@44 -- renovate-config-validator`. See the Renovate section in CLAUDE.md for the `managerFilePatterns` caveat.
+**Catches:** invalid `renovate.json` schema, broken custom manager regex patterns (e.g. double-slash wrapping after config migration). Run with `npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator` (version pinned in ci.yml, bumped by Renovate). See the Renovate section in CLAUDE.md for the `managerFilePatterns` caveat.
 
 ### 18. Env parser contract (bash + python3)
 
