@@ -75,6 +75,8 @@ jobs:
       - name: Check terraform formatting
         run: bash scripts/lint.sh --ci --fmt
       - name: Run tflint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bash scripts/lint.sh --ci --tflint
       - name: Validate all providers
         run: bash scripts/lint.sh --ci --validate-terraform
@@ -229,6 +231,8 @@ jobs:
           checksums-url: https://github.com/terraform-linters/tflint/releases/download/${{ env.TFLINT_VERSION }}/checksums.txt
           go-package: github.com/terraform-linters/tflint@${{ env.TFLINT_VERSION }}
       - name: Init tflint plugins
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: tflint --init --config .tflint.hcl 2>/dev/null || true
       - name: Run pre-commit hooks (changed files only)
         env:
