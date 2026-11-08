@@ -294,7 +294,7 @@ jobs:
           python3 tests/env/fuzz_env_parsers.py
       - name: Install unit test dependencies
         run: pip install -r ci/requirements.txt
-      - name: Run unit tests (templates, bot helpers, CI job names)
+      - name: Run unit tests (templates, bot helpers, CI job names, posture)
         run: python3 -m pytest tests/unit -q
 
   deploy-check:
