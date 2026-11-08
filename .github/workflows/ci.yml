@@ -60,10 +60,30 @@ jobs:
       - name: 🚀 Start
         run: echo "Terraform checks started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - uses: $/.github/actions/setup-terraform
-      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6
-        with:
-          tflint_version: ${{ env.TFLINT_VERSION }}
-          cache: true
+      - name: Install tflint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd /tmp
+          if curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
+               -o tflint_linux_amd64.zip \
+               "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/tflint_linux_amd64.zip" \
+             && curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
+               -o tflint_checksums.txt \
+               "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/checksums.txt" \
+             && grep "tflint_linux_amd64.zip" tflint_checksums.txt | sha256sum -c - \
+             && sudo unzip -o tflint_linux_amd64.zip -d /usr/local/bin \
+             && sudo chmod +x /usr/local/bin/tflint; then
+            :
+          else
+            # GitHub release assets intermittently return 504. Build the pinned
+            # tag through the Go module proxy instead; sumdb still verifies it.
+            echo "::warning::tflint release download failed; falling back to go install"
+            mkdir -p "$HOME/.local/bin"
+            GOBIN="$HOME/.local/bin" go install "github.com/terraform-linters/tflint@${TFLINT_VERSION}"
+            sudo install -m 0755 "$HOME/.local/bin/tflint" /usr/local/bin/tflint
+          fi
+          tflint --version
       - name: Check terraform formatting
         run: bash scripts/lint.sh --ci --fmt
       - name: Run tflint
@@ -147,14 +167,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd /tmp
-          curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
-            -o "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
-            -o "checksums.txt" \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
-          grep "linux_amd64.tar.gz$" checksums.txt | sha256sum -c -
-          sudo tar -xzf "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin actionlint
+          if curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
+               -o "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+               "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+             && curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
+               -o "checksums.txt" \
+               "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_checksums.txt" \
+             && grep "linux_amd64.tar.gz$" checksums.txt | sha256sum -c - \
+             && sudo tar -xzf "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin actionlint; then
+            :
+          else
+            # GitHub release assets intermittently return 504. Build the pinned
+            # tag through the Go module proxy instead; sumdb still verifies it.
+            echo "::warning::actionlint release download failed; falling back to go install"
+            mkdir -p "$HOME/.local/bin"
+            GOBIN="$HOME/.local/bin" go install "github.com/rhysd/actionlint/cmd/actionlint@v${ACTIONLINT_VERSION}"
+            sudo install -m 0755 "$HOME/.local/bin/actionlint" /usr/local/bin/actionlint
+          fi
       - name: Install shellcheck (inline run scripts)
         run: pip install --require-hashes -r ci/requirements.txt
       - name: Run actionlint
