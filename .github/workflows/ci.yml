@@ -143,10 +143,16 @@ jobs:
         with:
           persist-credentials: false
       - name: Install actionlint (prebuilt binary)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           cd /tmp
-          curl -sSLo "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          curl -sSLo "checksums.txt" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
+            -o "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" \
+            -o "checksums.txt" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
           grep "linux_amd64.tar.gz$" checksums.txt | sha256sum -c -
           sudo tar -xzf "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin actionlint
       - name: Install shellcheck (inline run scripts)
