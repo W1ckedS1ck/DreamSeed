@@ -4,6 +4,10 @@ Working notes for the [OpenSSF Best Practices](https://www.bestpractices.dev/)
 **passing** badge for DreamSeed. Registration and the questionnaire require a
 GitHub login, so the answers below are prepared to copy into the form.
 
+**Status:** passing badge earned **2026-11-08** — project
+[16449](https://www.bestpractices.dev/projects/16449). Metal passing is 100%;
+the OSPS baseline series has not been started.
+
 - Criteria: <https://www.bestpractices.dev/en/criteria/0>
 - New project: <https://www.bestpractices.dev/en/projects/new>
 
@@ -123,13 +127,15 @@ The **passing** badge is self-certified: every **MUST** criterion must be
 
 ## After the badge is awarded
 
-1. Copy the badge ID from the project page.
-2. Add it to `README.md` next to the Scorecard badge:
+Earned on 2026-11-08. The badge is already in `README.md`:
 
-   ```markdown
-   [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/<ID>/badge)](https://www.bestpractices.dev/projects/<ID>)
-   ```
+```markdown
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16449/badge)](https://www.bestpractices.dev/projects/16449)
+```
 
-3. The weekly Scorecard run picks it up automatically
-   (`CII-Best-Practices` moves from 0/10); the posture audit needs no change.
-4. Update this page with the badge ID and the date.
+The weekly Scorecard run picks it up automatically (`CII-Best-Practices` moves
+from 0/10 to 5/10 for passing); the posture audit needs no change.
+
+Optional next step: the OSPS **baseline** series (`baseline-1/2/3`) is a
+separate checklist and does not affect Scorecard. It can be added later on the
+same project page.
