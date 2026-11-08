@@ -184,7 +184,7 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 Better Stack (cloud)
    │
    ├─ 6 HTTP monitors ── main + /manager/ + /grafana + /bot-health + /catalog/bamboo + /personal-account/registration (3min, admin 5min, 4 regions: EU/US/Asia/AU)
-   ├─ 6 cron heartbeats ── backup, gdrive, report-daily, report-weekly, verify-backups, check-services
+   ├─ 6 server cron + 1 posture heartbeat ── backup, gdrive, report-daily, report-weekly, verify-backups, check-services, posture
    └─ Status page ──────── status.dreamseed.online
    │
    └─ Outgoing webhooks
