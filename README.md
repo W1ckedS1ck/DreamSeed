@@ -328,6 +328,10 @@ CI (12 jobs, 11 required for merge): ShellCheck · ansible-lint · **Terraform**
 | `dev-hetz` | `Hetzner` | [hetz.vitalikuts.online](https://hetz.vitalikuts.online) | Nginx/Apache + PHP 8.3 + MariaDB |
 | `test` | `Hetzner` | [test.vitalikuts.online](https://test.vitalikuts.online) | `test-restore.yml` — weekly full backup/restore drill |
 
+> ⚠️ AWS targets are currently dormant: the AWS credential pairs have expired.
+> Live production runs on `prod-hetz`; AWS deploy/drift/apply stay unavailable
+> until access is restored (planned: GitHub OIDC).
+
 All environments are fully monitored, backed up, and behind Cloudflare proxy (except `test` — ephemeral, destroyed after each run).
 
 ---

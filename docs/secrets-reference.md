@@ -56,6 +56,11 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 
 ## AWS
 
+> ⚠️ **Current state:** both AWS credential pairs are expired. AWS targets are
+> dormant; `dev-aws` drift cannot authenticate and `terraform-apply`/`deploy`
+> for AWS cannot run until access is restored and GitHub OIDC is bootstrapped.
+> The live platform runs on Hetzner (`prod-hetz`).
+
 ### prod
 
 | Secret | Purpose | Used in |
