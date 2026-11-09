@@ -12,12 +12,21 @@
   "major": {
     "dependencyDashboardApproval": true
   },
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "ansible-galaxy", "custom.regex"],
+  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "pip-compile", "ansible-galaxy", "custom.regex"],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^ansible/requirements-deploy\\.txt$/",
-      "/^ci/requirements\\.txt$/"
+      "/^ansible/requirements-deploy\\.in$/",
+      "/^ci/requirements\\.in$/"
     ]
+  },
+  "pip-compile": {
+    "managerFilePatterns": [
+      "/^ci/requirements\\.txt$/",
+      "/^ansible/requirements-deploy\\.txt$/"
+    ],
+    "lockFileMaintenance": {
+      "enabled": false
+    }
   },
   "ansible-galaxy": {
     "managerFilePatterns": [
@@ -60,6 +69,26 @@
       ],
       "matchStrings": ["ACTIONLINT_VERSION: \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "rhysd/actionlint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the Renovate version that validates this config (ci.yml)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["RENOVATE_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track uv version used for zizmor in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["UV_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "astral-sh/uv",
       "datasourceTemplate": "github-releases"
     },
     {

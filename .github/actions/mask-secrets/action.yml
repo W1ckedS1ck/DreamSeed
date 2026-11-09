@@ -7,7 +7,10 @@ description: |
   IMPORTANT: every name in `vars:` MUST have a matching `env:` entry, otherwise
   `${!name}` expands to empty and the step no-ops silently (no error).
 
-  Only masks values that are non-empty. Skips silently on empty vars.
+  Only masks values that are non-empty and at least 8 characters long. GitHub
+  replaces every occurrence of a masked value, so masking a short value (for
+  example a one-digit Telegram thread ID) would shred unrelated log lines and
+  timestamps.
 
 inputs:
   vars:
@@ -25,5 +28,9 @@ runs:
         while IFS= read -r name; do
           [[ -z "$name" ]] && continue
           val="${!name:-}"
-          [[ -n "$val" ]] && echo "::add-mask::$val" || true
+          # GitHub masks every occurrence of the value. A short value (a digit,
+          # a two-letter code) would corrupt unrelated output, so skip it.
+          if [[ -n "$val" && ${#val} -ge 8 ]]; then
+            echo "::add-mask::$val"
+          fi
         done <<< "$MASK_VARS"

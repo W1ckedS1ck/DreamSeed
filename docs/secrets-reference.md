@@ -10,8 +10,8 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 
 | Secret / Var | Purpose | Used in |
 |-------------|---------|---------|
-| `TG_TOKEN` | Telegram bot token | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
-| `TG_CHAT_ID` (var) | Telegram chat ID | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml` |
+| `TG_TOKEN` | Telegram bot token | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml`, `github-posture.yml` |
+| `TG_CHAT_ID` (var) | Telegram chat ID | `deploy.yml`, `test-restore.yml`, `health-check.yml`, `rollback.yml`, `drift-detection.yml`, `github-posture.yml` |
 | `TG_THREAD_ID` (var) | Telegram thread/topic ID | Same |
 | `DB_PASS` | MySQL password for MODX | `deploy.yml`, `test-restore.yml` |
 | `GRAFANA_PASS` | Grafana admin password | `deploy.yml`, `test-restore.yml` |
@@ -22,7 +22,7 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml`, `chatops-deploy.yml`, `docs.yml` |
 | `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
 | `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml`, `test-restore.yml` → `rclone_config.yml` |
-| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml`, `test-restore.yml` |
+| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats, monitors, status page) | `deploy.yml`, `test-restore.yml` |
 | `UBUNTU_PRO_TOKEN` | Ubuntu Pro subscription token | `deploy.yml`, `test-restore.yml`, `setup-env` → Ansible (playbook-01/09) — not in Terraform/cloud-init |
 | `EMAIL_USER` / `EMAIL_PASS` / `SMTP_SERVER` / `SMTP_PORT` | Legacy SMTP credentials — **reserved, not consumed anywhere** (present in `.env.example` only — not exported by preflight, no workflow or role reads them) | — |
 
@@ -55,6 +55,11 @@ These are set as GitHub Actions **Variables**, not Secrets. They are not sensiti
 ---
 
 ## AWS
+
+> ⚠️ **Current state:** both AWS credential pairs are expired. AWS targets are
+> dormant; `dev-aws` drift cannot authenticate and `terraform-apply`/`deploy`
+> for AWS cannot run until access is restored and GitHub OIDC is bootstrapped.
+> The live platform runs on Hetzner (`prod-hetz`).
 
 ### prod
 
@@ -141,6 +146,18 @@ All set in `deploy.yml` and consumed by the respective server scripts.
 | `GOOGLE_ADS_DEVELOPER_TOKEN` | `google_ads_report.sh` (API Center) |
 | `GOOGLE_ADS_CUSTOMER_ID` | `google_ads_report.sh` |
 | `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | `google_ads_report.sh` (MCC only) |
+
+---
+
+## GitHub Posture (optional)
+
+Used only by `github-posture.yml`. Both are optional: the audit still runs
+without them, with reduced coverage.
+
+| Secret | Purpose |
+|--------|---------|
+| `POSTURE_TOKEN` | Fine-grained PAT, read-only: *Secret scanning alerts*, *Dependabot alerts*, *Administration*. Without it those endpoints return 403 and are reported as medium findings. |
+| `POSTURE_HEARTBEAT_KEY` | Better Stack heartbeat for the daily audit. Without it the ping step is a no-op (no dead-man's switch). |
 
 ---
 

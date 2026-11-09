@@ -184,8 +184,12 @@ RESTORE_ALL.sh (interactive or --auto-latest)
 Better Stack (cloud)
    │
    ├─ 6 HTTP monitors ── main + /manager/ + /grafana + /bot-health + /catalog/bamboo + /personal-account/registration (3min, admin 5min, 4 regions: EU/US/Asia/AU)
-   ├─ 6 cron heartbeats ── backup, gdrive, report-daily, report-weekly, verify-backups, check-services
-   └─ Status page ──────── status.dreamseed.online
+   ├─ 6 server cron + 1 posture heartbeat ── backup, gdrive, report-daily, report-weekly, verify-backups, check-services, posture
+   ├─ Status page ──────── status.dreamseed.online
+   │    ├─ user-facing services + internal cron health
+   │    ├─ Upstream providers: Cloudflare, Hetzner, GitHub
+   │    ├─ automatic incident reports (≥120s) + RSS feed
+   │    └─ no static announcement — the aggregate banner is live
    │
    └─ Outgoing webhooks
          │
@@ -246,7 +250,7 @@ Better Stack (cloud)
 
 | Type | Provider | Items | Delivery |
 |------|----------|-------|----------|
-| Uptime | Better Stack | 6 monitors, 6 heartbeats, status page | Telegram webhooks |
+| Uptime | Better Stack | 6 monitors, 7 heartbeats (6 server + posture), status page with auto incident reports + RSS | Telegram webhooks |
 | Real User Monitoring | Grafana Cloud (Faro) | LCP/CLS/INP/TTFB, JS errors, sessions by browser/country | Grafana Cloud dashboard |
 | Synthetic Monitoring | Grafana Cloud SM | 4 checks per monitored domain (HTTP main every 10 min from 5 global probes, MultiHTTP from 2 US probes, Grafana from 2 US probes, SSL from 3 global probes) | Grafana Cloud dashboard |
 
@@ -326,6 +330,8 @@ Issue comment      ChatOps Deploy        Deploy via chat command
 Push / manual      Docs                  Pages site (code map) + wiki sync
 Schedule Mon 05:37 OpenSSF Scorecard     Supply-chain score → SARIF + badge
   + branch-rule change                    (also on push to main)
+Schedule 06:17     GitHub Posture        Repo-side audit → Telegram
+  daily                                   (new/resolved findings only)
 
 ```
 

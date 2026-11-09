@@ -24,7 +24,7 @@ CI_MODE=false
 # Pinned — Renovate tracks these via renovate.json regex managers.
 ZIZMOR_VERSION="1.32.0"
 YAMLLINT_VERSION="1.38.0"
-RENOVATE_VERSION="44.206.3"
+RENOVATE_VERSION="44.223.1"
 
 TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
@@ -84,11 +84,24 @@ run_shellcheck() {
         find . -name "*.sh" -not -path "./.git/*" -not -path "./secrets/*" -print0
     )
 
+    local rc=0
     if shellcheck --severity=warning "${sh_files[@]}"; then
         print_ok "No errors"
-        ci_annotation "ShellCheck" "pass"
     else
         print_fail "Errors found"
+        rc=1
+    fi
+
+    if python3 scripts/lint_actions.py; then
+        print_ok "Composite actions: no errors"
+    else
+        print_fail "Composite actions: errors found"
+        rc=1
+    fi
+
+    if [[ $rc -eq 0 ]]; then
+        ci_annotation "ShellCheck" "pass"
+    else
         ci_annotation "ShellCheck" "fail"
     fi
     group_end

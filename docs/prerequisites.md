@@ -11,7 +11,7 @@ These are checked by `deploy.sh` on every run:
 | Tool | Required for | Install |
 |------|-------------|---------|
 | `terraform` (or `tofu`) | Provision cloud servers (AWS EC2 / Hetzner) — `deploy.sh` falls back to OpenTofu if `terraform` is absent | <https://developer.hashicorp.com/terraform/install> |
-| `ansible-playbook` | Configure server (all 9 playbooks) | `pip install ansible-core==2.21.5 && ansible-galaxy collection install -r ansible/requirements.yml` |
+| `ansible-playbook` | Configure server (all 9 playbooks) | `pip install --require-hashes -r ansible/requirements-deploy.txt && ansible-galaxy collection install -r ansible/requirements.yml` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible-core` |
@@ -22,7 +22,7 @@ These are checked by `deploy.sh` on every run:
 
 ```bash
 # Core
-pip install -r ansible/requirements-deploy.txt
+pip install --require-hashes -r ansible/requirements-deploy.txt
 
 # Collections (for MariaDB and POSIX modules) — versions pinned in requirements.yml
 ansible-galaxy collection install -r ansible/requirements.yml
@@ -49,7 +49,7 @@ All targets require:
 - `OWNER` — display name for Telegram reports
 - `TF_API_TOKEN` — Terraform Cloud API token
 - `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 + DNS update; zone ID auto-detected)
-- `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
+- `BETTERUPTIME_API_TOKEN` — Better Stack API token (heartbeats, monitors, status page)
 - `BETTERUPTIME_BACKUP_KEY` … `BETTERUPTIME_CHECK_SERVICES_KEY` — per-script heartbeat keys (6 total)
 - `RCLONE_CRYPT_PASSWORD` — password for rclone crypt remote (AES-256 backup encryption)
 
@@ -111,7 +111,7 @@ brew install shellcheck
 pip install ruff
 
 # Ansible (pinned version matching CI)
-pip install -r ansible/requirements-deploy.txt
+pip install --require-hashes -r ansible/requirements-deploy.txt
 
 # Terraform
 brew install tflint

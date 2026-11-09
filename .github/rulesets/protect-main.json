@@ -1,0 +1,82 @@
+{
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "enforcement": "active",
+  "name": "Protect Main",
+  "rules": [
+    {
+      "parameters": {
+        "allowed_merge_methods": [
+          "squash"
+        ],
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_extra_approval_for_unattributed_changes": true,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": false,
+        "required_reviewers": []
+      },
+      "type": "pull_request"
+    },
+    {
+      "parameters": {
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "ShellCheck"
+          },
+          {
+            "context": "Ansible Lint"
+          },
+          {
+            "context": "Terraform Lint + Validate"
+          },
+          {
+            "context": "IaC Compliance (Checkov)"
+          },
+          {
+            "context": "Terraform Security"
+          },
+          {
+            "context": "Secret Scan"
+          },
+          {
+            "context": "GitHub Actions Lint"
+          },
+          {
+            "context": "Pre-commit"
+          },
+          {
+            "context": "YAML Lint"
+          },
+          {
+            "context": ".env Parser Contract"
+          },
+          {
+            "context": "GitHub Actions Security"
+          }
+        ],
+        "strict_required_status_checks_policy": true
+      },
+      "type": "required_status_checks"
+    },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_linear_history"
+    }
+  ],
+  "target": "branch"
+}

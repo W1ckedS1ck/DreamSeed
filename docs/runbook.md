@@ -79,7 +79,7 @@ ssh prod "echo OK"
 | Grafana (on-server) | <https://dreamseed.online/grafana/> | View dashboards + alerts |
 | Grafana Cloud (prod) | <https://dreamseed.grafana.net> | Hosted metrics + Synthetic Monitoring for prod |
 | Grafana Cloud (dev) | <https://vitalikuts.grafana.net> | Hosted metrics + SM for dev-aws / dev-hetz |
-| Better Stack | <https://status.dreamseed.online> | Uptime status page |
+| Better Stack | <https://status.dreamseed.online> | Uptime status page + RSS (`/feed.rss`) |
 | Telegram bot | DM to the bot | `/status`, `/backups`, `/start` — live server/backup status without SSH |
 | Hetzner Cloud | <https://console.hetzner.cloud> | Server console + restart |
 | Hetzner Cloud (prod) | <https://console.hetzner.cloud> | Server console + restart (prod-hetz = live prod) |
