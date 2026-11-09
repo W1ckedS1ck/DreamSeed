@@ -49,7 +49,7 @@ All targets require:
 - `OWNER` — display name for Telegram reports
 - `TF_API_TOKEN` — Terraform Cloud API token
 - `CLOUDFLARE_API_TOKEN` — Cloudflare API token (for SSL DNS-01 + DNS update; zone ID auto-detected)
-- `BETTERUPTIME_API_TOKEN` — Better Stack API token (for heartbeat setup)
+- `BETTERUPTIME_API_TOKEN` — Better Stack API token (heartbeats, monitors, status page)
 - `BETTERUPTIME_BACKUP_KEY` … `BETTERUPTIME_CHECK_SERVICES_KEY` — per-script heartbeat keys (6 total)
 - `RCLONE_CRYPT_PASSWORD` — password for rclone crypt remote (AES-256 backup encryption)
 

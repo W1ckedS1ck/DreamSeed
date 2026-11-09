@@ -141,15 +141,20 @@ echo -e "\n${CYAN}Better Stack — heartbeats${NC}\n"
 
 existing_hb=$(get_existing_heartbeats)
 
+# github-posture is created manually (its key lives in GitHub Actions secrets,
+# not secrets/.env). Reconcile its period/grace if present, but never create it
+# or write the key to the server env.
 for spec in \
     "backup|BETTERUPTIME_BACKUP_KEY|3600|300" \
     "gdrive-upload|BETTERUPTIME_GDRIVE_KEY|3600|300" \
     "report-daily|BETTERUPTIME_REPORT_DAILY_KEY|86400|1800" \
     "report-weekly|BETTERUPTIME_REPORT_WEEKLY_KEY|604800|3600" \
     "verify-backups|BETTERUPTIME_VERIFY_KEY|86400|600" \
-    "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|300"; do
+    "check-services|BETTERUPTIME_CHECK_SERVICES_KEY|300|300" \
+    "github-posture|POSTURE_HEARTBEAT_KEY|93600|18000|noenv"; do
 
-    IFS='|' read -r name var_name period grace <<<"$spec"
+    IFS='|' read -r name var_name period grace env_mode <<<"$spec"
+    env_mode="${env_mode:-env}"
 
     hb_id="" hb_url="" hb_period="" hb_grace=""
     hb_line=$(heartbeat_lookup "$name" "$existing_hb" || true)
@@ -173,6 +178,10 @@ for spec in \
             fi
         fi
     else
+        if [[ "$env_mode" == "noenv" ]]; then
+            echo -e "  ${YELLOW}⚠${NC} $name — not found; create it manually and set $var_name in GitHub Actions secrets" >&2
+            continue
+        fi
         json=$(printf '{"name":"%s","period":%s,"grace":%s,"email":true,"push":true}' "$name" "$period" "$grace")
         resp=$(curl -s -X POST "$API/heartbeats" --config <(bu_auth) -H "Content-Type: application/json" -d "$json" || echo "")
         url=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['attributes']['url'])" 2>/dev/null || echo "")
@@ -187,12 +196,14 @@ for spec in \
         fi
     fi
 
-    if $WRITE_ENV; then
+    if $WRITE_ENV && [[ "$env_mode" == "env" ]]; then
         current=$(find_key_in_env "$var_name")
         if [[ "$current" != "$key" ]]; then
             write_key_to_env "$var_name" "$key"
             echo -e "    ${YELLOW}→${NC} Updated $var_name in .env"
         fi
+    elif $WRITE_ENV; then
+        echo -e "    ${YELLOW}→${NC} $var_name stays in GitHub Actions secrets (not secrets/.env)"
     fi
 done
 
@@ -273,11 +284,87 @@ print(json.dumps(payload))
     fi
 done
 
-# ==== Status page resources ====
+# ==== Status page ====
 
-SP_ID=$(curl -s -X GET "$API/status-pages" --config <(bu_auth) | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')" 2>/dev/null)
+SP_JSON=$(curl -s -X GET "$API/status-pages" --config <(bu_auth) || echo '{"data":[]}')
+SP_ID=$(echo "$SP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); print(d[0]['id'] if d else '')" 2>/dev/null)
+SP_CUSTOM_DOMAIN=$(echo "$SP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); print((d[0]['attributes'].get('custom_domain') or '') if d else '')" 2>/dev/null)
+SP_SUBDOMAIN=$(echo "$SP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); print((d[0]['attributes'].get('subdomain') or '') if d else '')" 2>/dev/null)
 
 if [[ -n "$SP_ID" ]]; then
+    # Refresh inventories: the create/update loops above may have just added
+    # monitors or heartbeats that are not in the earlier snapshots.
+    existing_mon=$(curl -s -X GET "$API/monitors" --config <(bu_auth) || echo '{"data":[]}')
+    existing_hb=$(get_existing_heartbeats)
+
+    # --- settings ---
+    echo -e "\n${CYAN}Better Stack — status page settings${NC}\n"
+
+    # Subscriptions are plan-gated (the free plan rejects the PATCH), so they
+    # are intentionally not managed here. Enable them in the UI if available.
+    if [[ -n "$SP_CUSTOM_DOMAIN" ]]; then
+        feed_host="$SP_CUSTOM_DOMAIN"
+    elif [[ -n "$SP_SUBDOMAIN" ]]; then
+        feed_host="${SP_SUBDOMAIN}.betterstackstatus.com"
+    else
+        feed_host="status.${DOMAIN}"
+    fi
+    settings_json=$(python3 -c '
+import json, sys
+domain, feed_host = sys.argv[1], sys.argv[2]
+print(json.dumps({
+    "design": "v2",
+    "automatic_reports": True,
+    "min_incident_length": 120,
+    "announcement": None,
+    "company_url": "https://" + domain,
+    "contact_url": "https://" + domain,
+    "navigation_links": [
+        {"text": "Status", "href": "/"},
+        {"text": "Maintenance", "href": "/maintenance"},
+        {"text": "Previous incidents", "href": "/incidents"},
+        {"text": "RSS", "href": "https://" + feed_host + "/feed.rss"},
+    ],
+}))
+' "$DOMAIN" "$feed_host")
+    resp=$(curl -s -X PATCH "$API/status-pages/$SP_ID" --config <(bu_auth) -H "Content-Type: application/json" -d "$settings_json" || echo "")
+    if echo "$resp" | grep -q '"id"'; then
+        echo -e "  ${GREEN}✓${NC} auto incidents, 120s threshold, RSS nav, public URLs"
+    else
+        err=$(echo "$resp" | grep -o '"errors": *"[^"]*"' | head -1)
+        echo -e "  ${RED}✗${NC} settings — ${err:-unknown}" >&2
+    fi
+
+    # --- sections ---
+    sections_json=$(curl -s -X GET "$API/status-pages/$SP_ID/sections" --config <(bu_auth) || echo '{"data":[]}')
+    core_section=$(echo "$sections_json" | python3 -c "
+import sys, json
+d = json.load(sys.stdin).get('data', [])
+d.sort(key=lambda s: s['attributes'].get('position', 0))
+print(d[0]['id'] if d else '')
+" 2>/dev/null)
+    upstream_section=$(echo "$sections_json" | python3 -c "
+import sys, json
+for s in json.load(sys.stdin).get('data', []):
+    if s['attributes'].get('name') == 'Upstream providers':
+        print(s['id'])
+        break
+" 2>/dev/null)
+
+    if [[ -z "$upstream_section" ]]; then
+        resp=$(curl -s -X POST "$API/status-pages/$SP_ID/sections" --config <(bu_auth) \
+            -H "Content-Type: application/json" \
+            -d '{"name":"Upstream providers","position":1}' || echo "")
+        upstream_section=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('id',''))" 2>/dev/null)
+        if [[ -n "$upstream_section" ]]; then
+            echo -e "  ${GREEN}✓${NC} Upstream providers section"
+        else
+            err=$(echo "$resp" | grep -o '"errors": *"[^"]*"' | head -1)
+            echo -e "  ${RED}✗${NC} Upstream providers section — ${err:-unknown}" >&2
+        fi
+    fi
+
+    # --- resources ---
     echo -e "\n${CYAN}Better Stack — status page resources${NC}\n"
 
     existing_sp=$(curl -s -X GET "$API/status-pages/$SP_ID/resources" --config <(bu_auth) || echo '{"data":[]}')
@@ -295,38 +382,114 @@ for r in json.load(sys.stdin).get('data', []):
 " "$rtype" "$rid" 2>/dev/null
     }
 
-    for spec in \
-        "Monitor|🌐 ${DOMAIN}|https://${DOMAIN}/|0" \
-        "Monitor|🔐 Admin panel|https://${DOMAIN}/manager/|1" \
-        "Monitor|📊 Grafana|https://${DOMAIN}/grafana|2"; do
+    make_sp_payload() {
+        local mode="$1" rtype="$2" rid="$3" name="$4" pos="$5" section="$6" widget="$7" expl="$8"
+        python3 -c '
+import json, sys
+mode, rtype, rid, name, pos, section, widget, expl = sys.argv[1:9]
+d = {"public_name": name, "position": int(pos)}
+if section:
+    d["status_page_section_id"] = int(section)
+if widget:
+    d["widget_type"] = widget
+if expl:
+    d["explanation"] = expl
+if mode == "create":
+    d["resource_type"] = rtype
+    d["resource_id"] = int(rid)
+print(json.dumps(d))
+' "$mode" "$rtype" "$rid" "$name" "$pos" "$section" "$widget" "$expl"
+    }
 
-        IFS='|' read -r rtype name url pos <<<"$spec"
-
-        rid=$(monitor_exists "$url" "$existing_mon")
+    ensure_sp_resource() {
+        local rtype="$1" rid="$2" name="$3" pos="$4" section="$5" widget="${6:-}" explanation="${7:-}"
+        local existing_id payload resp sp_id err
         if [[ -z "$rid" ]]; then
-            echo -e "  ${YELLOW}⚠${NC} $name — monitor not found (create it first)"
-            continue
+            echo -e "  ${YELLOW}⚠${NC} $name — resource not found" >&2
+            return 0
         fi
 
         existing_id=$(sp_resource_exists "$rtype" "$rid")
-
         if [[ -n "$existing_id" ]]; then
-            curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" --config <(bu_auth) \
-                -H "Content-Type: application/json" \
-                -d "{\"public_name\":\"$name\",\"position\":$pos}" >/dev/null
-            echo -e "  ${GREEN}✓${NC} $name — already on status page"
+            payload=$(make_sp_payload update "$rtype" "$rid" "$name" "$pos" "$section" "$widget" "$explanation")
+            resp=$(curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$existing_id" --config <(bu_auth) \
+                -H "Content-Type: application/json" -d "$payload" || echo "")
+            if echo "$resp" | grep -q '"id"'; then
+                echo -e "  ${GREEN}✓${NC} $name — already on status page"
+            else
+                err=$(echo "$resp" | grep -o '"errors": *"[^"]*"' | head -1)
+                echo -e "  ${RED}✗${NC} $name — update failed ${err:-}" >&2
+            fi
         else
+            payload=$(make_sp_payload create "$rtype" "$rid" "$name" "$pos" "$section" "$widget" "$explanation")
             resp=$(curl -s -X POST "$API/status-pages/$SP_ID/resources" --config <(bu_auth) \
-                -H "Content-Type: application/json" \
-                -d "{\"resource_type\":\"$rtype\",\"resource_id\":$rid,\"public_name\":\"$name\",\"position\":$pos}" || echo "")
-            sp_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null)
+                -H "Content-Type: application/json" -d "$payload" || echo "")
+            sp_id=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('id',''))" 2>/dev/null)
             if [[ -n "$sp_id" ]]; then
                 echo -e "  ${GREEN}✓${NC} $name — added to status page"
             else
-                echo -e "  ${RED}✗${NC} $name — failed" >&2
+                err=$(echo "$resp" | grep -o '"errors": *"[^"]*"' | head -1)
+                echo -e "  ${RED}✗${NC} $name — failed ${err:-}" >&2
             fi
         fi
-    done
+    }
+
+    hb_id_for() {
+        heartbeat_lookup "$1" "$existing_hb" | cut -f1
+    }
+
+    # Public page: user-facing services only. /manager/, /catalog/bamboo and
+    # /personal-account/registration are intentionally not shown.
+    ensure_sp_resource "Monitor" "$(monitor_exists "https://${DOMAIN}/" "$existing_mon")" "🌐 ${DOMAIN}" 0 "$core_section" "response_times" "Response time & uptime"
+    ensure_sp_resource "Monitor" "$(monitor_exists "https://${DOMAIN}/grafana" "$existing_mon")" "📊 Grafana" 1 "$core_section" "history" "Grafana Monitoring"
+    ensure_sp_resource "Monitor" "$(monitor_exists "https://${DOMAIN}/bot-health" "$existing_mon")" "🤖 Telegram Bot" 2 "$core_section" "plain" ""
+    ensure_sp_resource "Heartbeat" "$(hb_id_for backup)" "📦 Backup" 3 "$core_section" "plain" ""
+    ensure_sp_resource "Heartbeat" "$(hb_id_for gdrive-upload)" "☁️ GDrive Upload" 4 "$core_section" "plain" ""
+    ensure_sp_resource "Heartbeat" "$(hb_id_for report-daily)" "📅 Daily Report" 5 "$core_section" "plain" ""
+    ensure_sp_resource "Heartbeat" "$(hb_id_for report-weekly)" "📆 Weekly Report" 6 "$core_section" "plain" ""
+    ensure_sp_resource "Heartbeat" "$(hb_id_for verify-backups)" "🔍 Verify Backups" 7 "$core_section" "intraday_history" ""
+    ensure_sp_resource "Heartbeat" "$(hb_id_for check-services)" "⏱ Check Services" 8 "$core_section" "plain" ""
+
+    # Third-party rows can only be created in the status page editor. If they
+    # already exist, file them under Upstream providers and explain them.
+    third_party_id() {
+        local name="$1"
+        echo "$existing_sp" | python3 -c "
+import sys, json
+target = sys.argv[1]
+for r in json.load(sys.stdin).get('data', []):
+    a = r['attributes']
+    if a.get('resource_type') == 'ThirdPartyService' and a.get('public_name') == target:
+        print(r['id'])
+        break
+" "$name" 2>/dev/null
+    }
+
+    ensure_third_party() {
+        local name="$1" pos="$2" explanation="$3" record_id payload resp err
+        record_id=$(third_party_id "$name")
+        if [[ -z "$record_id" ]]; then
+            echo -e "  ${YELLOW}⚠${NC} $name — add it manually in the status page editor (Third party services)" >&2
+            return 0
+        fi
+        if [[ -z "$upstream_section" ]]; then
+            echo -e "  ${YELLOW}⚠${NC} $name — no Upstream providers section" >&2
+            return 0
+        fi
+        payload=$(python3 -c 'import json,sys; print(json.dumps({"status_page_section_id": int(sys.argv[1]), "position": int(sys.argv[2]), "explanation": sys.argv[3]}))' "$upstream_section" "$pos" "$explanation")
+        resp=$(curl -s -X PATCH "$API/status-pages/$SP_ID/resources/$record_id" --config <(bu_auth) \
+            -H "Content-Type: application/json" -d "$payload" || echo "")
+        if echo "$resp" | grep -q '"id"'; then
+            echo -e "  ${GREEN}✓${NC} $name — Upstream providers"
+        else
+            err=$(echo "$resp" | grep -o '"errors": *"[^"]*"' | head -1)
+            echo -e "  ${RED}✗${NC} $name — update failed ${err:-}" >&2
+        fi
+    }
+
+    ensure_third_party "Cloudflare" 0 "CDN, DNS, WAF and TLS - external provider status"
+    ensure_third_party "Hetzner" 1 "Hosting in nbg1 (Nuremberg) - external provider status"
+    ensure_third_party "GitHub" 2 "CI/CD, Actions and repository - external provider status"
 
 fi
 
@@ -344,7 +507,9 @@ else
     ensure_webhook() {
         local name="$1" started="$2" resolved="$3" text="$4"
         local wh_json
-        wh_json=$(mktemp "${HOME:?}/.tmp_bs_webhook_XXXXXX.json")
+        # Keep the X's at the end: BSD/macOS mktemp treats a suffix as a literal
+        # filename, which makes the second call fail with "File exists".
+        wh_json=$(mktemp "${HOME:?}/.tmp_bs_webhook_XXXXXX")
         _SETUP_TMPFILES+=("$wh_json")
 
         # Check if webhook already exists by name

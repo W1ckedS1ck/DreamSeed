@@ -105,11 +105,19 @@ for item in data.get('data', []):
         cd = a.get('custom_domain', '')
         public = 'no' if a.get('whitelabeled') else 'yes'
         url = "https://%s" % cd if cd else "https://%s.betterstackstatus.com" % sub
+        nav = ', '.join('%s -> %s' % (x.get('text', '-'), x.get('href', '-'))
+                        for x in a.get('navigation_links', []))
         print("  %s" % a.get('company_name', '-'))
-        print("    URL:      %s" % url)
-        print("    Timezone: %s" % a.get('timezone', '-'))
-        print("    Public:   %s" % public)
-        print("    Created:  %s" % a['created_at'])
+        print("    URL:          %s" % url)
+        print("    Timezone:     %s" % a.get('timezone', '-'))
+        print("    Public:       %s" % public)
+        print("    Design:       %s" % a.get('design', '-'))
+        print("    Auto reports: %s" % a.get('automatic_reports'))
+        print("    Min incident: %ss" % a.get('min_incident_length'))
+        print("    Subscribable: %s" % a.get('subscribable'))
+        print("    Announcement: %s" % (a.get('announcement') or '-'))
+        print("    Nav links:    %s" % (nav or '-'))
+        print("    Created:      %s" % a['created_at'])
         print()
 PYEOF
 
@@ -122,6 +130,43 @@ fetch_and_format "monitors" "MONITORS"
 fetch_and_format "heartbeats" "HEARTBEATS"
 fetch_and_format "outgoing-webhooks" "OUTGOING WEBHOOKS"
 fetch_and_format "status-pages" "STATUS PAGES"
+
+# Sections and resources are children of the (single) status page.
+SP_ID=$(curl -s "$API/status-pages" --config <(bu_auth) \
+    | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); print(d[0]['id'] if d else '')" 2>/dev/null)
+
+if [[ -n "$SP_ID" ]]; then
+    label="STATUS PAGE SECTIONS"
+    echo -e "${CYAN}${label}${NC}"
+    printf "${CYAN}%*s${NC}\n" "${#label}" | tr ' ' '─'
+    curl -s "$API/status-pages/$SP_ID/sections?per_page=50" --config <(bu_auth) \
+        | python3 -c "
+import sys, json
+for s in json.load(sys.stdin).get('data', []):
+    a = s['attributes']
+    print('  %s (position %s)' % (a.get('name', '-'), a.get('position', '-')))
+"
+    echo
+
+    label="STATUS PAGE RESOURCES"
+    echo -e "${CYAN}${label}${NC}"
+    printf "${CYAN}%*s${NC}\n" "${#label}" | tr ' ' '─'
+    curl -s "$API/status-pages/$SP_ID/resources?per_page=50" --config <(bu_auth) \
+        | python3 -c "
+import sys, json
+for r in json.load(sys.stdin).get('data', []):
+    a = r['attributes']
+    print('  %-24s %-16s %-12s pos=%s section=%s' % (
+        a.get('public_name', '-'),
+        a.get('resource_type', '-'),
+        a.get('status', '-'),
+        a.get('position', '-'),
+        a.get('status_page_section_id', '-')))
+    if a.get('explanation'):
+        print('    %s' % a['explanation'])
+"
+    echo
+fi
 
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 echo -e "Generated: $(date '+%Y-%m-%d %H:%M %Z')"
