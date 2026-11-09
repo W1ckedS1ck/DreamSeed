@@ -37,6 +37,10 @@ permissions:
   contents: read
   security-events: read
 
+env:
+  # uv provides pyyaml in an ephemeral env for the posture script.
+  UV_VERSION: "0.13.7"
+
 jobs:
   posture:
     name: Posture
@@ -75,9 +79,20 @@ jobs:
           restore-keys: |
             github-posture-
 
+      # github_posture.py needs pyyaml to parse ci.yml. Install the hash-pinned
+      # CI lock with uv, same as every other workflow.
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: ci/requirements.txt
       - name: Install Python dependencies
-        continue-on-error: true
-        run: pip install --quiet --require-hashes -r ci/requirements.txt
+        run: uv pip install --system --require-hashes -r ci/requirements.txt
 
       - name: Evaluate posture
         id: evaluate

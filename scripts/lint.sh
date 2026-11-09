@@ -28,8 +28,8 @@ RENOVATE_VERSION="44.223.1"
 
 TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
-    "ruff:ruff:pip install ruff"
-    "ansible-lint:ansible-lint:pip install ansible-lint"
+    "ruff:ruff:uv tool install ruff"
+    "ansible-lint:ansible-lint:uv tool install ansible-lint"
     "actionlint:actionlint:brew install actionlint"
     "tflint:tflint:brew install tflint"
     "gitleaks:gitleaks:brew install gitleaks"

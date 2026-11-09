@@ -48,10 +48,12 @@ make test-env      # .env parser contract + differential fuzz
 make precommit     # all pre-commit hooks
 ```
 
-Python test dependencies are hash-pinned:
+Python test dependencies are hash-pinned and installed with uv (pip is ~10x
+slower on these locks):
 
 ```bash
-pip install --require-hashes -r ci/requirements.txt
+uv venv .venv && source .venv/bin/activate
+uv pip install --require-hashes -r ci/requirements.txt
 ```
 
 ## License

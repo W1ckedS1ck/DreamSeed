@@ -11,7 +11,7 @@ These are checked by `deploy.sh` on every run:
 | Tool | Required for | Install |
 |------|-------------|---------|
 | `terraform` (or `tofu`) | Provision cloud servers (AWS EC2 / Hetzner) — `deploy.sh` falls back to OpenTofu if `terraform` is absent | <https://developer.hashicorp.com/terraform/install> |
-| `ansible-playbook` | Configure server (all 9 playbooks) | `pip install --require-hashes -r ansible/requirements-deploy.txt && ansible-galaxy collection install -r ansible/requirements.yml` |
+| `ansible-playbook` | Configure server (all 9 playbooks) | `uv pip install --require-hashes -r ansible/requirements-deploy.txt && ansible-galaxy collection install -r ansible/requirements.yml` |
 | `ssh` | Connect to server | system package |
 | `ssh-keygen` | Clear known_hosts after server rebuild | system package |
 | `ansible-vault` | Decrypt `secrets/.env` if vault-encrypted | comes with `ansible-core` |
@@ -21,8 +21,11 @@ These are checked by `deploy.sh` on every run:
 ### Ansible collections & Python deps
 
 ```bash
+# Create/activate a venv first (uv installs into it, not into a managed Python):
+uv venv .venv && source .venv/bin/activate
+
 # Core
-pip install --require-hashes -r ansible/requirements-deploy.txt
+uv pip install --require-hashes -r ansible/requirements-deploy.txt
 
 # Collections (for MariaDB and POSIX modules) — versions pinned in requirements.yml
 ansible-galaxy collection install -r ansible/requirements.yml
@@ -95,7 +98,7 @@ after setting up the rclone config manually on the server.
 ## Pre-commit hooks (recommended)
 
 ```bash
-pip install pre-commit
+uv tool install pre-commit
 pre-commit install
 ```
 
@@ -108,10 +111,10 @@ Runs on every commit: YAML lint, large file check, secret detection, private key
 brew install shellcheck
 
 # Python
-pip install ruff
+uv tool install ruff
 
 # Ansible (pinned version matching CI)
-pip install --require-hashes -r ansible/requirements-deploy.txt
+uv pip install --require-hashes -r ansible/requirements-deploy.txt
 
 # Terraform
 brew install tflint
