@@ -102,6 +102,26 @@
     },
     {
       "customType": "regex",
+      "description": "Track uv version in the setup-ansible composite action",
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-ansible/action\\.yml$/"
+      ],
+      "matchStrings": ["default: \"(?<currentValue>[\\w.\\-]+)\"\\s+# renovate: depName=astral-sh/uv"],
+      "depNameTemplate": "astral-sh/uv",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track uv version in the GitHub posture workflow",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/github-posture\\.yml$/"
+      ],
+      "matchStrings": ["UV_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "astral-sh/uv",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
       "description": "Track Terraform CLI version in setup-terraform action",
       "managerFilePatterns": [
         "/^\\.github/actions/setup-terraform/action\\.yml$/"

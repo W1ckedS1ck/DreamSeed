@@ -33,8 +33,18 @@ jobs:
           persist-credentials: false
       - name: 🚀 Start
         run: echo "ShellCheck started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: ci/requirements.txt
       - name: Install ShellCheck
-        run: pip install --require-hashes -r ci/requirements.txt
+        run: uv pip install --system --require-hashes -r ci/requirements.txt
       - name: Run ShellCheck
         run: bash scripts/lint.sh --ci --shellcheck
       - name: Cloudflare IP updater selftest
@@ -165,15 +175,25 @@ jobs:
           archive-url: https://github.com/rhysd/actionlint/releases/download/v${{ env.ACTIONLINT_VERSION }}/actionlint_${{ env.ACTIONLINT_VERSION }}_linux_amd64.tar.gz
           checksums-url: https://github.com/rhysd/actionlint/releases/download/v${{ env.ACTIONLINT_VERSION }}/actionlint_${{ env.ACTIONLINT_VERSION }}_checksums.txt
           go-package: github.com/rhysd/actionlint/cmd/actionlint@v${{ env.ACTIONLINT_VERSION }}
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: ci/requirements.txt
       - name: Install shellcheck (inline run scripts)
-        run: pip install --require-hashes -r ci/requirements.txt
+        run: uv pip install --system --require-hashes -r ci/requirements.txt
       - name: Run actionlint
         run: actionlint -shellcheck="$(command -v shellcheck)" -ignore 'specifying action "\$/.+" in invalid format because ref is missing'
       - name: Verify required checks match ci.yml
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pip install --require-hashes -r ci/requirements.txt
+          uv pip install --system --require-hashes -r ci/requirements.txt
           python3 scripts/check_required_checks.py
 
   yamllint:
@@ -205,7 +225,13 @@ jobs:
         run: echo "Pre-commit started at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: '3.x'
+          python-version: '3.14'
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: ci/requirements.txt
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/pre-commit
@@ -241,7 +267,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           BEFORE: ${{ github.event.before }}
         run: |
-          pip install --require-hashes -r ci/requirements.txt
+          uv pip install --system --require-hashes -r ci/requirements.txt
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             REF="origin/$BASE_REF"
           elif [[ -n "$BEFORE" && "$BEFORE" != "0000000000000000000000000000000000000000" ]]; then
@@ -297,8 +323,18 @@ jobs:
         run: |
           bash scripts/check_env_contract.sh
           python3 tests/env/fuzz_env_parsers.py
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: ci/requirements.txt
       - name: Install unit test dependencies
-        run: pip install --require-hashes -r ci/requirements.txt
+        run: uv pip install --system --require-hashes -r ci/requirements.txt
       - name: Run unit tests (templates, bot helpers, CI job names, posture)
         run: python3 -m pytest tests/unit -q
 

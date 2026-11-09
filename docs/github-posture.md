@@ -40,8 +40,8 @@ matches.
 
 - A **403** or network error on a lookup is a `medium` finding, not a
   "missing protection" alarm. Only a real **404** means no ruleset exists.
-- An input that cannot be read (`ci.yml` does not parse, `pip install` failed
-  and `pyyaml` is missing, the ruleset file is malformed) becomes a `medium`
+- An input that cannot be read (`ci.yml` does not parse, `pyyaml` is missing,
+  the ruleset file is malformed) becomes a `medium`
   `config` finding. The check it feeds is never silently dropped.
 - A check whose data source is unreadable is **never reported as resolved**.
   Its previous findings stay in the baseline until the check can be read

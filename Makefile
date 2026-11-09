@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help lint lint-full fmt secrets test test-env precommit cloudflare-ips dry-run
+.PHONY: help lint lint-full fmt secrets test test-env bench-install precommit cloudflare-ips dry-run
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -29,6 +29,9 @@ test: ## Unit tests (pytest)
 test-env: ## .env parser contract fixtures + differential fuzz
 	bash scripts/check_env_contract.sh
 	python3 tests/env/fuzz_env_parsers.py
+
+bench-install: ## Compare pip vs uv install time for hash-pinned locks
+	bash scripts/bench_python_install.sh
 
 precommit: ## Run all pre-commit hooks on all files
 	pre-commit run --all-files
