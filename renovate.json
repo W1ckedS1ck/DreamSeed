@@ -12,13 +12,7 @@
   "major": {
     "dependencyDashboardApproval": true
   },
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "pip-compile", "ansible-galaxy", "custom.regex"],
-  "pip_requirements": {
-    "managerFilePatterns": [
-      "/^ansible/requirements-deploy\\.in$/",
-      "/^ci/requirements\\.in$/"
-    ]
-  },
+  "enabledManagers": ["github-actions", "terraform", "pip-compile", "ansible-galaxy", "custom.regex"],
   "pip-compile": {
     "managerFilePatterns": [
       "/^ci/requirements\\.txt$/",
@@ -274,8 +268,8 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Group and automerge non-major python dependencies",
-      "matchManagers": ["pip_requirements"],
+      "description": "Group and automerge non-major python dependencies (pip-compile updates the .in and regenerates the hashed .txt)",
+      "matchManagers": ["pip-compile"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "Python pip packages",
       "automerge": true,

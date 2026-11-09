@@ -1,6 +1,6 @@
-# Direct Ansible deploy-time tools. Exact pins; Renovate updates them via the
-# pip_requirements manager and regenerates ansible/requirements-deploy.txt
-# (with hashes) through the pip-compile manager.
+# Direct Ansible deploy-time tools. Exact pins; Renovate updates them and
+# regenerates ansible/requirements-deploy.txt (with hashes) via the pip-compile
+# manager.
 ansible-core==2.22.0
 ansible-lint==26.11.0
 PyMySQL==1.2.4
