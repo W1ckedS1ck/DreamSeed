@@ -22,7 +22,7 @@ Complete inventory of all GitHub Secrets in the [`DreamSeed`](https://github.com
 | `TF_API_TOKEN` | Terraform Cloud API token | All workflows except `ci.yml`, `chatops-deploy.yml`, `docs.yml` |
 | `RCLONE_CONF_BASE64` | Rclone config for Google Drive (backups) | `deploy.yml`, `test-restore.yml` |
 | `RCLONE_CRYPT_PASSWORD` | Password for `gdrive-crypt` encrypted remote (AES-256) | `deploy.yml`, `test-restore.yml` → `rclone_config.yml` |
-| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats) | `deploy.yml`, `test-restore.yml` |
+| `BETTERUPTIME_API_TOKEN` | Better Stack API (heartbeats, monitors, status page) | `deploy.yml`, `test-restore.yml` |
 | `UBUNTU_PRO_TOKEN` | Ubuntu Pro subscription token | `deploy.yml`, `test-restore.yml`, `setup-env` → Ansible (playbook-01/09) — not in Terraform/cloud-init |
 | `EMAIL_USER` / `EMAIL_PASS` / `SMTP_SERVER` / `SMTP_PORT` | Legacy SMTP credentials — **reserved, not consumed anywhere** (present in `.env.example` only — not exported by preflight, no workflow or role reads them) | — |
 

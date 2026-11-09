@@ -263,7 +263,7 @@ Grafana dashboards, datasources, **and 28 alert rules** deployed automatically �
 
 - **6 HTTP monitors** — main site (HTTP 200 + keyword "The Dreamers"), admin panel (`/manager/`), Grafana (`/grafana`), Telegram bot health (`/bot-health`), product page (`/catalog/bamboo`), registration page (`/personal-account/registration`) — every monitor checked from **4 global regions** (EU, US, Asia, Australia) at 3min interval (admin at 5min)
 - **6 server cron heartbeats** — backup (1h/5m), gdrive-upload (1h/5m), report-daily (24h/30m), report-weekly (7d/1h), verify-backups (24h/10m), check-services (5min/5m) — plus **1 posture heartbeat** (GitHub Actions, daily)
-- **Public status page** — `status.dreamseed.online` with live uptime history
+- **Public status page** — `status.dreamseed.online` with live uptime history, automatic incident reports, and an RSS feed (`/feed.rss`)
 - **Telegram alerts** via separate webhooks for incident start and resolve
 
 ### 💾 Real Backups, Tested Restores
