@@ -36,6 +36,7 @@ TOOLS=(
     "trivy:trivy:brew install trivy"
     "terraform:terraform:brew install terraform"
     "markdownlint-cli2:markdownlint-cli2:npm install -g markdownlint-cli2"
+    "bats:bats:brew install bats-core"
 )
 
 FAILED=false
@@ -115,12 +116,43 @@ run_ruff() {
         return 0
     fi
 
-    if ruff check scripts/; then
-        print_ok "No issues"
+    # Whole repo, not just scripts/ — lib/gen_vars.py, tests/, docs/codemap and
+    # the chatops helpers are Python too (see ruff.toml for the rule set).
+    local rc=0
+    if ruff check .; then
+        print_ok "Lint: no issues"
+    else
+        print_fail "Lint: issues found"
+        rc=1
+    fi
+    if ruff format --check .; then
+        print_ok "Format: clean"
+    else
+        print_fail "Format: drift (fix: ruff format .)"
+        rc=1
+    fi
+    if [[ $rc -eq 0 ]]; then
         ci_annotation "Ruff" "pass"
     else
-        print_fail "Issues found"
         ci_annotation "Ruff" "fail"
+    fi
+    group_end
+}
+
+run_bats() {
+    group_start "Bash unit tests (bats)"
+    if ! tool_available bats; then
+        print_skip "bats not installed (brew install bats-core)"
+        group_end
+        return 0
+    fi
+
+    if bats --print-output-on-failure tests/bats; then
+        print_ok "All tests passed"
+        ci_annotation "Bats" "pass"
+    else
+        print_fail "Tests failed"
+        ci_annotation "Bats" "fail"
     fi
     group_end
 }
@@ -360,9 +392,11 @@ run_gitleaks() {
 
     local -a args
     if [[ "$mode" == "full-history" ]]; then
-        args=(--source .)
+        # CI history scan: strict config, no secrets/ exemption.
+        args=(--source . --config .gitleaks.toml)
     else
-        args=(--source . --no-git)
+        # Local working-tree scan: same rules + the gitignored secrets/ path.
+        args=(--source . --no-git --config .gitleaks-local.toml)
     fi
 
     if gitleaks detect "${args[@]}" -v 2>&1; then
@@ -401,7 +435,9 @@ run_markdownlint() {
         return 0
     fi
 
-    if markdownlint-cli2 --config markdownlint-cli2.jsonc "docs/**/*.md" "README.md"; then
+    # Root/community files are user-facing docs too — keep them in scope.
+    if markdownlint-cli2 --config markdownlint-cli2.jsonc \
+        "docs/**/*.md" "README.md" "CONTRIBUTING.md" "CODE_OF_CONDUCT.md" ".github/**/*.md"; then
         print_ok "No issues"
         ci_annotation "markdownlint" "pass"
     else
@@ -609,7 +645,8 @@ OPTIONS:
   --ci                CI mode (::group::/::error:: annotations)
 
   --shellcheck        Run only shellcheck
-  --ruff              Run only ruff
+  --ruff              Run only ruff (lint + format check)
+  --bats              Run only the bash unit tests (bats)
   --ansible-lint      Run only ansible-lint
 
   --actionlint        Run only actionlint (GitHub Actions workflows)
@@ -639,6 +676,7 @@ EOF
 run_fast() {
     run_shellcheck
     run_ruff
+    run_bats
     run_ansible_lint
     run_actionlint
     run_zizmor
@@ -682,6 +720,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --ruff)
             MODE="ruff"
+            shift
+            ;;
+        --bats)
+            MODE="bats"
             shift
             ;;
         --ansible-lint)
@@ -761,6 +803,7 @@ case "$MODE" in
     full) run_full ;;
     shellcheck) run_shellcheck ;;
     ruff) run_ruff ;;
+    bats) run_bats ;;
     ansible-lint) run_ansible_lint ;;
     actionlint) run_actionlint ;;
     zizmor) run_zizmor ;;

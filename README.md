@@ -22,7 +22,7 @@
 > Built by the Co-founder & CTO. From empty cloud accounts to a monitored, hardened, multi-cloud platform with tested disaster recovery. Single command, ~8–10 min.
 >
 > 📖 **Documentation**: [Wiki](https://github.com/W1ckedS1ck/DreamSeed/wiki) — architecture, runbook, operations guide, and more
-> 📐 **Decisions**: [ADRs](docs/adr/README.md) — the "why" behind the infrastructure · 🔒 [Security policy](.github/SECURITY.md)
+> 📐 **Decisions**: [ADRs](docs/adr/README.md) — the "why" behind the infrastructure · 🔒 [Security policy](.github/SECURITY.md) · 🤝 [Code of Conduct](CODE_OF_CONDUCT.md)
 >
 > 🗓 Continuously updated — see [Releases](https://github.com/W1ckedS1ck/DreamSeed/releases) for the changelog
 
@@ -112,7 +112,7 @@ I own **everything below the application layer** — provisioning, configuration
 - **Server automation** — 17 idempotent Ansible roles across 9 playbooks (01-base → 02-web → 03-db → 09-pro → 04-security → 05-monitor → 06-backup → 08-promtail → 07-grafana)
 - **Observability** — VictoriaMetrics + Promtail + Grafana stack with 28 alert rules covering system, database, web server, site health, backup, security, and monitoring pipeline → Telegram. Grafana Cloud remote write via vmagent for hosted metrics + Faro RUM for real user monitoring + Loki for centralized logs. External watchdog via Better Stack: 6 HTTP monitors + 6 server cron heartbeats + 1 posture heartbeat → Telegram. All provisioned automatically, no manual setup
 - **Backup & DR** — hourly MariaDB + file backups to Google Drive via rclone, AES-256 encrypted with rclone crypt (`gdrive-crypt:` remote), 5/15 project/DB + 3 map-tiles version rotation, one-command `RESTORE_ALL.sh` for disaster recovery. RTO <5 min, RPO ≤1 hour
-- **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 11 required for merge): ShellCheck, ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy, docs, scorecard and github-posture workflows
+- **CI/CD** — 12 GitHub Actions jobs (11 on PRs, Deploy Check is push-only; 11 required for merge): ShellCheck (+ bats), ansible-lint, Terraform checks (lint+validate+fmt), Checkov, Trivy, gitleaks, actionlint, YAML lint, zizmor, pre-commit, .env parser contract, Deploy Check. Plus deploy, restore-test, drift-detection, rollback, grafana-cloud, health-check, terraform-apply, chatops-deploy, docs, scorecard and github-posture workflows
 - **Security** — SSH hardening, fail2ban with custom MODX admin login filter, Ansible Vault for secrets, Gitleaks on every push, cloud-native firewalls
 - **Production safety** — GitHub `production` environment approval gate on prod deploy/destroy/rollback/terraform-apply; destroy requires typing `destroy <target>` as the workflow confirmation input
 
@@ -129,7 +129,7 @@ I own **everything below the application layer** — provisioning, configuration
 | **Monitoring** | VictoriaMetrics · Grafana · vmagent → Grafana Cloud · Promtail → Loki · Faro RUM (real user monitoring) · Node/Nginx/MySQL/Redis exporters · 28 alert rules → Telegram · Better Stack (6 HTTP monitors + 6 server cron heartbeats + 1 posture heartbeat + status page) |
 | **Backups** | Custom Bash scripts · rclone → Google Drive · versioned retention |
 | **Security** | Fail2ban + custom MODX filter · SSH hardening · Ansible Vault · Gitleaks · Trivy |
-| **CI/CD** | GitHub Actions (12 workflows) · ShellCheck · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
+| **CI/CD** | GitHub Actions (12 workflows) · ShellCheck · ruff · bats · ansible-lint · Terraform checks · Checkov · Trivy · gitleaks · actionlint · pre-commit |
 
 ---
 
@@ -196,6 +196,8 @@ DreamSeed/
 │   │   │                   # secrets/env), install-pinned-binary, chatops,
 │   │   │                   # mask-secrets, scrub-log, capture-screenshot
 │   ├── scripts/            # test-restored-server.sh — post-restore verification suite
+│   ├── ISSUE_TEMPLATE/     # bug / feature / docs issue forms
+│   ├── PULL_REQUEST_TEMPLATE.md
 │   └── workflows/          # 12 workflows (see CI/CD section)
 ├── terraform/
 │   ├── aws/                # EC2 + Elastic IP + Security Group
@@ -214,9 +216,13 @@ DreamSeed/
 │   └── playbook-09-pro.yml        # Ubuntu Pro (ESM) attachment
 ├── ansible-roles/          # 17 reusable roles (nginx, mariadb, ssl, redis, …)
 ├── scripts/                # Backup, restore, Telegram bot, health checks
+├── tests/                  # unit/ (pytest), bats/ (shell), env/ (.env parser contract)
 ├── docs/                   # Architecture, runbook, operations guide, linters, secrets ref
 ├── secrets/                # gitignored: .env (ansible-vault), rclone.conf, tfstate-backup/, ssl/
+├── ruff.toml               # Python lint + format config (explicit rule set)
 ├── .tflint.hcl             # Terraform linter config (root, drives all providers)
+├── .gitleaks-local.toml    # Working-tree secret scan (CI history scan stays strict)
+├── CODE_OF_CONDUCT.md      # Contributor Covenant 3.0
 └── renovate.json           # Automated dependency update config
 ```
 

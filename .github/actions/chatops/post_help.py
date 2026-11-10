@@ -23,12 +23,20 @@ def main():
 Flags: -n Nginx, -a Apache, -p parallel, -i <ip> skip Terraform
 Authorized: users with write/admin access"""
 
-    subprocess.run([
-        'gh', 'issue', 'comment', issue,
-        '--repo', repo,
-        '--body', body,
-    ], check=True)
+    subprocess.run(
+        [
+            "gh",
+            "issue",
+            "comment",
+            issue,
+            "--repo",
+            repo,
+            "--body",
+            body,
+        ],
+        check=True,
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

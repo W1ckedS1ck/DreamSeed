@@ -4,7 +4,7 @@
 
 There are 2 layers of linting:
 
-- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
+- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff (lint + format), bats, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
 - **CI on GitHub**: `ci.yml` (12 jobs on push — 11 on PRs, Deploy Check is push-only; 11 required for merge)
 - **Task runner**: `make help` lists shortcuts (`make lint`, `make lint-full`, `make test-env`, ...). Each delegates to the same scripts as CI — one source of truth.
 
@@ -17,7 +17,7 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 | # | Tool | Layer | What it checks | Language |
 |---|------|-------|----------------|----------|
 | 1 | **ShellCheck** | local + CI | `deploy.sh`, `scripts/*.sh`, `.github/scripts/*.sh`, composite-action `run:` blocks | Bash |
-| 2 | **ruff** | local | `scripts/telegram_bot.py`, `scripts/env_loader.py` | Python |
+| 2 | **ruff** | local + CI (pre-commit) | every `.py` in the repo (`ruff check .`) + formatter (`ruff format --check .`); rules in `ruff.toml` | Python |
 | 3 | **ansible-lint** | local + CI | `ansible/playbook-*.yml`, `ansible-roles/*/tasks/*.yml` | YAML/Ansible |
 | 4 | **tflint** | local + CI | `terraform/aws/*.tf`, `terraform/hetzner/*.tf`, `terraform/grafana/*.tf`, `terraform/cloudflare/*.tf` | HCL/Terraform |
 | 5 | **terraform validate** | CI | `*.tf` syntax | HCL |
@@ -35,6 +35,7 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 | 17 | **Deploy Check** | CI | real `deploy.sh -c` smoke test (env parse, vault, playbook syntax) | orchestration |
 | 18 | **Env parser contract** | local + CI | `scripts/check_env_contract.sh` — all 3 .env parsers produce identical output on contract fixtures (`tests/env/`); run before editing `lib/env.sh`, `scripts/common_functions.sh` or `scripts/env_loader.py` | bash+python |
 | 19 | **terraform-docs** | local (pre-commit) | regenerates per-root `terraform/<root>/README.md` from module docs; one hook per root (aws/hetzner/grafana/cloudflare), graceful skip when binary is absent | HCL → Markdown |
+| 20 | **bats** | local + CI | `tests/bats/*.bats` — unit tests for pure helpers in `lib/` and `scripts/common_functions.sh` (arg parsing, target resolution, `.env` parsing, formatting) | Bash |
 
 ---
 
@@ -48,8 +49,9 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 
 ### 2. ruff (Python)
 
-**Type:** Python linter + formatter (replaces flake8 + isort + pyflakes).
-**Catches:** unused imports, syntax errors, naming violations, Python version incompatibility.
+**Type:** Python linter + formatter (replaces flake8 + isort + pyflakes + Black).
+**Scope:** every `.py` file in the repo — `scripts/`, `lib/`, `tests/`, `.github/actions/chatops/` and `docs/codemap/`. Rules are explicit in `ruff.toml` (`E`, `F`, `W`, `I`, `UP`, `B`, `SIM`, `S`, `RUF`) so a ruff upgrade cannot silently change the gate.
+**Catches:** unused imports, syntax errors, security issues (bandit `S` rules), pyupgrade suggestions, import order, and formatting drift (`ruff format --check`).
 
 ### 3. ansible-lint (YAML/Ansible)
 
@@ -101,16 +103,57 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 **Catches:** incorrect `uses:` references, missing permissions, shell injection, deprecated syntax.
 **Config:** runs with `-shellcheck="$(command -v shellcheck)"` (pip `shellcheck-py`) — every inline `run:` script in workflows is also checked by shellcheck (the separate ShellCheck job covers standalone `.sh` files).
 
-### 12. Renovate Config Validator (JSON/RegEx)
+### 12. yamllint (YAML)
+
+**Type:** generic YAML linter.
+**Catches:** syntax errors, indentation, duplicate keys, trailing spaces, inconsistent document markers.
+**Config:** `.yamllint.yml` (Jinja templates and vendored dashboards are excluded).
+
+### 13. zizmor (GitHub Actions security)
+
+**Type:** static security analyzer for GitHub Actions.
+**Catches:** dangerous triggers, template injection, credential leakage, unpinned actions, excessive permissions.
+**Config:** `--min-confidence medium`; findings that are safe by construction carry an inline `# zizmor: ignore[...]` justification.
+
+### 14. Renovate Config Validator (JSON/RegEx)
 
 **Type:** dependency-update config validator.
 **Catches:** invalid `renovate.json` schema, broken custom manager regex patterns (e.g. double-slash wrapping after config migration). Run with `npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator` (version pinned in ci.yml, bumped by Renovate). See the Renovate section in CLAUDE.md for the `managerFilePatterns` caveat.
+
+### 15. Cloudflare IP ranges
+
+**Type:** data-drift check (not a linter — no static analysis).
+**Purpose:** compares the vendored `ansible-roles/nginx/files/cloudflare-realip.conf` against the live `cloudflare.com/ips-v4`/`ips-v6` lists. The Terraform firewalls fetch the same lists at plan time, so a stale vendored copy would silently break real-IP detection.
+**Run:** `./scripts/lint.sh --cloudflare-ips` (part of `--fast`; skips when offline).
+
+### 16. Secrets audit
+
+**Type:** repository hygiene check (not a linter).
+**Catches:** `secrets/` tracked in git, `.env` files tracked, `.service` files committed instead of `.service.j2`, private keys, tracked `CLAUDE.md`, and common hardcoded-secret patterns.
+**Run:** `./scripts/lint.sh --secrets` — CI runs it in the `gitleaks` job alongside the full-history scan.
+
+### 17. Deploy Check
+
+**Type:** orchestration smoke test (not a linter).
+**Purpose:** runs the real `deploy.sh -c` (preflight, vault decrypt, `.env` parsing, playbook syntax, Terraform validate) on a push to `main`/`dev`. It is push-only because it loads real secrets and executes PR-modified code — never on pull requests.
+**Run:** `./deploy.sh <target> -c` (locally, without `-n` changes).
 
 ### 18. Env parser contract (bash + python3)
 
 **Type:** cross-parser behavioral check (not a linter — no static analysis).
 **Purpose:** the same `secrets/.env` flows through three independent parsers (`lib/env.sh` on the deploy controller, `common_functions.sh load_env` in server scripts, `env_loader.py` in the telegram bot). This script runs all three against the fixtures in `tests/env/` and asserts identical `KEY=VALUE` output, plus freezes the documented divergences (blocked vars / malformed lines / `ENV=`: lib/env.sh fails loudly, server side skips silently).
 **Run:** `./scripts/check_env_contract.sh` — **before editing any of the three parsers**. Zero dependencies (bash + python3); also runs in CI as the `env-contract` job on every PR and push (`ci.yml`).
+
+### 19. terraform-docs (Terraform)
+
+**Type:** documentation generator, run as a pre-commit hook (one per root: aws/hetzner/grafana/cloudflare).
+**Purpose:** keeps `terraform/<root>/README.md` in sync with variables/outputs/resources. Gracefully skips when the binary is absent.
+
+### 20. bats (Bash)
+
+**Type:** unit-test runner for shell code (bats-core; version pinned as `BATS_VERSION` in `ci.yml`, Renovate-tracked).
+**Scope:** `tests/bats/*.bats` — pure helpers that need no network or cloud: `parse_args`/`resolve_target` (`lib/cli.sh`), `parse_env_file` (`lib/env.sh`), and formatting helpers (`lib/helpers.sh`, `scripts/common_functions.sh`).
+**Run:** `make test-bash` or `bats --print-output-on-failure tests/bats`; CI runs it in the `ShellCheck` job. Tests use `$BATS_TEST_TMPDIR` (never a shared `/tmp` path) and assert exit status and output separately.
 
 ---
 
@@ -119,7 +162,8 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 ```
 PROJECT CODE
 ├── Bash (.sh)          → ShellCheck (+ pre-commit shebang)
-├── Python (.py)        → ruff
+├── Bash tests (.bats)  → bats
+├── Python (.py)        → ruff (lint + format)
 ├── Ansible (.yml)      → ansible-lint
 ├── Terraform (.tf)     → tflint + terraform validate
 │   └── Security        → Trivy + Checkov

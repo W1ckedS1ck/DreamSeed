@@ -168,7 +168,8 @@ terraform_destroy() {
 
     echo "  ━━━ Destroying resources ($TARGET)"
 
-    TF_TMP_OUT=$(mktemp /tmp/dreamseed_tf_XXXXXX)
+    # Respect TMPDIR (systemd/CI sandboxes); fall back to /tmp like mktemp does.
+    TF_TMP_OUT=$(mktemp "${TMPDIR:-/tmp}/dreamseed_tf_XXXXXX")
     set +e
     _tf destroy -auto-approve -no-color 2>&1 | tee -a "$TF_TMP_OUT"
     local tf_exit=${PIPESTATUS[0]}

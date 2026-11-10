@@ -83,7 +83,7 @@ def load_env(env_path: str = "") -> None:
         value = ""
         quote = ""
 
-    for n, raw in enumerate(lines, 1):
+    for raw in lines:
         line = raw
         if quote:
             # Multi-line quoted value — accumulate until the closing quote.
@@ -133,4 +133,6 @@ def load_env(env_path: str = "") -> None:
         commit(no_expand)
 
     if quote:
-        raise ValueError(f"Unterminated quoted value for {key} in {env_path} (reached EOF)")
+        raise ValueError(
+            f"Unterminated quoted value for {key} in {env_path} (reached EOF)"
+        )

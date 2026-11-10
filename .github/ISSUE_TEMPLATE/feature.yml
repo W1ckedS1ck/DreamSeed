@@ -1,0 +1,71 @@
+name: ✨ Feature / improvement
+description: Propose a change to the infrastructure, automation or operations.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For non-trivial changes, agree on the approach here before opening a PR
+        (see CONTRIBUTING.md). Security issues belong in private vulnerability
+        reporting, not in this form.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or goal
+      description: What is missing, slow, fragile or unsafe today?
+      placeholder: Restore drills do not verify the Telegram bot unit after a restore...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you change? Mention the affected playbooks, roles, Terraform roots or workflows.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches and why they were rejected.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Terraform (provisioning / state)
+        - Ansible (playbooks / roles)
+        - deploy.sh / lib (orchestration)
+        - CI/CD (GitHub Actions)
+        - Monitoring / alerting
+        - Backup / restore / disaster recovery
+        - Scripts (bot, reports, health checks)
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How will we know this is done? Include verification steps.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and the ADRs.
+          required: true
+        - label: This is not a security vulnerability (those go through private reporting).
+          required: true

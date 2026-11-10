@@ -20,15 +20,13 @@ regex = '''glc_[A-Za-z0-9]{20,}'''
 keywords = ["glc_"]
 tags = ["grafana", "secret"]
 
-[allowlist]
+# Global allowlist. Keep entries as narrow as possible: everything listed here
+# is invisible to EVERY rule, including ones added in the future. `secrets/` is
+# deliberately NOT here — it is only skipped for local working-tree scans via
+# .gitleaks-local.toml, so CI's full-history scan stays strict.
+[[allowlists]]
+description = "Local agent state and Terraform provider lock hashes"
 paths = [
   '''\.claude/''',
   '''\.terraform\.lock\.hcl''',
-  # secrets/ is gitignored (vault, LE private keys, rclone.conf, local .bak
-  # backups) and must never be committed. A working-tree scan (--no-git) reads
-  # those local files and fails while CI stays green, so skip them here — the
-  # gate against actually committing them is lint.sh --secrets ("secrets/ not
-  # tracked"), which CI runs alongside the history scan.
-  # Trade-off: this pattern also skips secrets/ paths in the history scan.
-  '''^secrets/''',
 ]

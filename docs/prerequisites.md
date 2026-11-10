@@ -110,6 +110,9 @@ Runs on every commit: YAML lint, large file check, secret detection, private key
 # Shell
 brew install shellcheck
 
+# Bash unit tests (bats-core)
+brew install bats-core   # or: npm install -g bats@1.13.0
+
 # Python
 uv tool install ruff
 
@@ -122,6 +125,14 @@ brew install trivy
 
 # Secrets
 brew install gitleaks
+```
+
+Run the test suites locally:
+
+```bash
+make test        # Python unit tests (pytest)
+make test-bash   # shell helpers (bats)
+make test-env    # .env parser contract + differential fuzz
 ```
 
 ## Secrets setup

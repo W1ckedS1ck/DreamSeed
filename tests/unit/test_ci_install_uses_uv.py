@@ -41,6 +41,6 @@ def test_requirements_installs_use_uv() -> None:
         text = path.read_text(encoding="utf-8")
         if "-r ci/requirements.txt" not in text:
             continue
-        assert "uv pip install --system --require-hashes -r ci/requirements.txt" in text, (
-            f"{path.relative_to(ROOT)} must install ci/requirements.txt with uv"
-        )
+        assert (
+            "uv pip install --system --require-hashes -r ci/requirements.txt" in text
+        ), f"{path.relative_to(ROOT)} must install ci/requirements.txt with uv"

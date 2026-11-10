@@ -1,0 +1,106 @@
+name: 🐛 Bug report
+description: Something in the infrastructure, deploy pipeline or scripts is broken.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Do not paste secrets, tokens, private keys or
+        decrypted vault values** — redact them as `***`. Security issues belong
+        in private vulnerability reporting (see the issue chooser), not here.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the repository is affected?
+      options:
+        - Terraform (provisioning / state)
+        - Ansible (playbooks / roles)
+        - deploy.sh / lib (orchestration)
+        - CI/CD (GitHub Actions)
+        - Monitoring / alerting
+        - Backup / restore / disaster recovery
+        - Scripts (bot, reports, health checks)
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - prod-hetz
+        - prod (AWS, dormant)
+        - dev-hetz
+        - dev-aws
+        - local / CI only
+        - not environment-specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the problem.
+      placeholder: The deploy fails at the security playbook with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or workflow inputs. Include the commit SHA if known.
+      render: shell
+      placeholder: |
+        gh workflow run deploy.yml --ref dev -f environment=dev-hetz -f action=deploy
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the error message. Redact secrets.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (optional)
+      description: Deploy log excerpt, workflow run link, or `terraform plan` output. Redact secrets.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Commit SHA, release tag or `deploy.sh` version.
+      placeholder: 9c0ba65 (v2.0.0)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and the runbook.
+          required: true
+        - label: I removed all secrets, tokens and private keys from this report.
+          required: true

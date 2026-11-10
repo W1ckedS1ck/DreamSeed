@@ -108,8 +108,7 @@ def main() -> int:
             rcs = {p: r.returncode for p, r in results.items()}
             outs = {p: r.stdout for p, r in results.items()}
             if not (
-                set(rcs.values()) == {0}
-                and outs["lib"] == outs["server"] == outs["py"]
+                set(rcs.values()) == {0} and outs["lib"] == outs["server"] == outs["py"]
             ):
                 failures += 1
                 print(f"FAIL case {n}: rc={rcs}", file=sys.stderr)

@@ -10,8 +10,8 @@
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 4.53.0 |
-| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 4.53.0 |
+| <a name="provider_grafana"></a> [grafana](#provider\_grafana) | 4.54.0 |
+| <a name="provider_grafana.sm"></a> [grafana.sm](#provider\_grafana.sm) | 4.54.0 |
 
 ## Modules
 

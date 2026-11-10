@@ -57,6 +57,16 @@
     },
     {
       "customType": "regex",
+      "description": "Track bats-core version in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["BATS_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "bats",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
       "description": "Track actionlint version in CI",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"

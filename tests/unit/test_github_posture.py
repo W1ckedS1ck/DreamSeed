@@ -105,8 +105,12 @@ def healthy_routes() -> dict:
     }
 
 
-def build(routes: dict, expected: set[str] | None = None, scorecard: float | None = 8.4):
-    public = {SCORECARD_URL: (200, {"score": scorecard})} if scorecard is not None else {}
+def build(
+    routes: dict, expected: set[str] | None = None, scorecard: float | None = 8.4
+):
+    public = (
+        {SCORECARD_URL: (200, {"score": scorecard})} if scorecard is not None else {}
+    )
     client = FakeGitHub(routes, public)
     return gp.collect(
         REPO,
@@ -161,7 +165,14 @@ def test_ruleset_bypass_and_missing_rules_are_flagged() -> None:
     routes = healthy_routes()
     detail = routes[f"/repos/{REPO}/rulesets/1"][1]
     detail["bypass_actors"] = [{"actor_type": "RepositoryRole", "actor_id": 5}]
-    detail["rules"] = [{"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "lint"}, {"context": "test"}]}}]
+    detail["rules"] = [
+        {
+            "type": "required_status_checks",
+            "parameters": {
+                "required_status_checks": [{"context": "lint"}, {"context": "test"}]
+            },
+        }
+    ]
 
     report = build(routes, expected={"lint", "test"})
     titles = " ".join(f.title for f in report.findings)
@@ -269,7 +280,9 @@ def test_json_findings_carry_stable_ids() -> None:
         [{"secret_type_display_name": "Stripe API key"}],
     )
     payload = json.loads(gp.render_json(build(routes)))
-    assert payload["findings"][0]["id"] == "secret_scanning:secret:Stripe API key:critical"
+    assert (
+        payload["findings"][0]["id"] == "secret_scanning:secret:Stripe API key:critical"
+    )
 
 
 def test_baseline_diff_reports_only_changes(tmp_path: Path) -> None:
@@ -446,14 +459,24 @@ def test_ruleset_404_is_still_critical() -> None:
 
 def test_ruleset_drift_is_flagged_and_matching_policy_is_clean() -> None:
     expected = gp.ruleset_snapshot(_ruleset_detail(healthy_routes()))
-    report = gp.collect(REPO, FakeGitHub(healthy_routes()), expected_checks={"lint", "test"},
-                        include_scorecard=False, expected_ruleset=expected)
+    report = gp.collect(
+        REPO,
+        FakeGitHub(healthy_routes()),
+        expected_checks={"lint", "test"},
+        include_scorecard=False,
+        expected_ruleset=expected,
+    )
     assert report.total == 0
 
     routes = healthy_routes()
     _ruleset_detail(routes)["bypass_actors"] = [{"actor_type": "Team", "actor_id": 9}]
-    drifted = gp.collect(REPO, FakeGitHub(routes), expected_checks={"lint", "test"},
-                         include_scorecard=False, expected_ruleset=expected)
+    drifted = gp.collect(
+        REPO,
+        FakeGitHub(routes),
+        expected_checks={"lint", "test"},
+        include_scorecard=False,
+        expected_ruleset=expected,
+    )
     drift = [f for f in drifted.findings if f.key == "ruleset:drift"]
     assert len(drift) == 1
     assert drift[0].severity == "high"
@@ -494,12 +517,26 @@ def test_unreadable_config_input_becomes_a_finding() -> None:
     assert report.checks["config"] == "warn"
 
 
-def _exit_code(routes: dict, capsys, *extra: str, monkeypatch, ruleset_file: Path) -> int:
-    monkeypatch.setattr(gp, "GitHub", lambda token=None, fallback=None: FakeGitHub(routes))
-    code = gp.main([
-        "--repo", REPO, "--no-scorecard", "--format", "json",
-        "--expected-checks", "lint,test", "--ruleset-file", str(ruleset_file), *extra,
-    ])
+def _exit_code(
+    routes: dict, capsys, *extra: str, monkeypatch, ruleset_file: Path
+) -> int:
+    monkeypatch.setattr(
+        gp, "GitHub", lambda token=None, fallback=None: FakeGitHub(routes)
+    )
+    code = gp.main(
+        [
+            "--repo",
+            REPO,
+            "--no-scorecard",
+            "--format",
+            "json",
+            "--expected-checks",
+            "lint,test",
+            "--ruleset-file",
+            str(ruleset_file),
+            *extra,
+        ]
+    )
     capsys.readouterr()
     return code
 
@@ -509,18 +546,35 @@ def test_fail_on_returns_threshold_code_and_crash_is_not_confused(
 ) -> None:
     ruleset_file = tmp_path / "rs.json"
     ruleset_file.write_text(
-        json.dumps(gp.ruleset_snapshot(_ruleset_detail(healthy_routes()))), encoding="utf-8"
+        json.dumps(gp.ruleset_snapshot(_ruleset_detail(healthy_routes()))),
+        encoding="utf-8",
     )
-    clean = _exit_code(healthy_routes(), capsys, "--fail-on", "high",
-                       monkeypatch=monkeypatch, ruleset_file=ruleset_file)
+    clean = _exit_code(
+        healthy_routes(),
+        capsys,
+        "--fail-on",
+        "high",
+        monkeypatch=monkeypatch,
+        ruleset_file=ruleset_file,
+    )
     assert clean == 0
 
     routes = healthy_routes()
     routes[f"/repos/{REPO}/secret-scanning/alerts?state=open&per_page=100"] = (
-        200, [{"secret_type_display_name": "Stripe API key"}])
-    breached = _exit_code(routes, capsys, "--fail-on", "high",
-                          monkeypatch=monkeypatch, ruleset_file=ruleset_file)
+        200,
+        [{"secret_type_display_name": "Stripe API key"}],
+    )
+    breached = _exit_code(
+        routes,
+        capsys,
+        "--fail-on",
+        "high",
+        monkeypatch=monkeypatch,
+        ruleset_file=ruleset_file,
+    )
     assert breached == gp.EXIT_THRESHOLD == 3
 
-    no_gate = _exit_code(routes, capsys, monkeypatch=monkeypatch, ruleset_file=ruleset_file)
+    no_gate = _exit_code(
+        routes, capsys, monkeypatch=monkeypatch, ruleset_file=ruleset_file
+    )
     assert no_gate == 0

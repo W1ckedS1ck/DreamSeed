@@ -7,13 +7,24 @@ def main():
     issue = sys.argv[1]
     repo = sys.argv[2]
 
-    result = subprocess.run([
-        'gh', 'run', 'list',
-        '--workflow', 'deploy.yml',
-        '--limit', '5',
-        '--json', 'conclusion,status,displayTitle,createdAt,url',
-        '--jq', r'.[] | "- \(.displayTitle)  \(.status) / \(.conclusion // "pending")  \(.url)"',
-    ], capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        [
+            "gh",
+            "run",
+            "list",
+            "--workflow",
+            "deploy.yml",
+            "--limit",
+            "5",
+            "--json",
+            "conclusion,status,displayTitle,createdAt,url",
+            "--jq",
+            r'.[] | "- \(.displayTitle)  \(.status) / \(.conclusion // "pending")  \(.url)"',
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
     lines = result.stdout.strip()
     if not lines:
@@ -21,12 +32,20 @@ def main():
 
     body = f"## Recent Deploys\n\n{lines}"
 
-    subprocess.run([
-        'gh', 'issue', 'comment', issue,
-        '--repo', repo,
-        '--body', body,
-    ], check=True)
+    subprocess.run(
+        [
+            "gh",
+            "issue",
+            "comment",
+            issue,
+            "--repo",
+            repo,
+            "--body",
+            body,
+        ],
+        check=True,
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

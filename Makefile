@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help lint lint-full fmt secrets test test-env bench-install precommit cloudflare-ips dry-run
+.PHONY: help lint lint-full fmt fmt-py secrets test test-bash test-env bench-install precommit cloudflare-ips dry-run
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -20,11 +20,17 @@ lint-full: ## Full lint suite (adds terraform validate, tflint, gitleaks, trivy,
 fmt: ## terraform fmt (via scripts/lint.sh --fmt)
 	bash scripts/lint.sh --fmt
 
+fmt-py: ## ruff format (Python)
+	ruff format .
+
 secrets: ## Secrets audit (same checks as CI)
 	bash scripts/lint.sh --secrets
 
 test: ## Unit tests (pytest)
 	python3 -m pytest tests/unit -q
+
+test-bash: ## Bash unit tests (bats)
+	bats --print-output-on-failure tests/bats
 
 test-env: ## .env parser contract fixtures + differential fuzz
 	bash scripts/check_env_contract.sh

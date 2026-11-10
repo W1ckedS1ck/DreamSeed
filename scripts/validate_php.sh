@@ -19,7 +19,7 @@ VHOST="/etc/nginx/sites-available/${DOMAIN}-ssl.conf"
 SLOWLOG="/var/log/php${PHP_VERSION}-fpm-slow.log"
 
 tmp_php="$(mktemp --suffix=.php "${WEB_ROOT}/_fpm_check_XXXXXX")"
-json="$(mktemp /tmp/fpm-check-XXXXXX.json)"
+json="$(mktemp "${TMPDIR:-/tmp}/fpm-check-XXXXXX.json")"
 cleanup() {
     sudo rm -f "$tmp_php"
     rm -f "$json"

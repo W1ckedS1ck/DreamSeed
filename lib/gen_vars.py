@@ -5,12 +5,13 @@ Usage: gen_vars.py TARGET SCRIPT_DIR DST
 
 Reads environment variables and writes a JSON file for --extra-vars.
 """
+
 import json
 import os
 import re
 import sys
 
-JINJA_RE = re.compile(r'\{\{.*?\}\}')
+JINJA_RE = re.compile(r"\{\{.*?\}\}")
 
 
 def _check_jinja(key, val):
@@ -40,37 +41,39 @@ def main():
     # group_vars/all.yml handles static defaults via lookup('env').
     # Only pass dynamic per-target vars that cannot be expressed in group_vars.
     data = {
-        'deploy_env': target,
-        'server_ip': os.environ.get('SERVER_IP', ''),
-        'web_server': os.environ.get('WEB_SERVER', ''),
-        'secrets_dir': f'{script_dir}/secrets',
-        'scripts_dir': f'{script_dir}/scripts',
+        "deploy_env": target,
+        "server_ip": os.environ.get("SERVER_IP", ""),
+        "web_server": os.environ.get("WEB_SERVER", ""),
+        "secrets_dir": f"{script_dir}/secrets",
+        "scripts_dir": f"{script_dir}/scripts",
     }
     # Ephemeral test servers use a self-signed cert (no certbot DNS-01).
-    if target == 'test':
-        data['ssl_cf_dns_enabled'] = False
-    ssh_key = os.environ.get('SSH_PUBLIC_KEY_PATH', '')
+    if target == "test":
+        data["ssl_cf_dns_enabled"] = False
+    ssh_key = os.environ.get("SSH_PUBLIC_KEY_PATH", "")
     if ssh_key.strip():
-        data['ssh_public_key_path'] = ssh_key.strip()
-    additional_keys = os.environ.get('ADDITIONAL_SSH_KEYS', '')
+        data["ssh_public_key_path"] = ssh_key.strip()
+    additional_keys = os.environ.get("ADDITIONAL_SSH_KEYS", "")
     if additional_keys.strip():
-        data['additional_ssh_keys'] = [k.strip() for k in additional_keys.split('\n') if k.strip()]
+        data["additional_ssh_keys"] = [
+            k.strip() for k in additional_keys.split("\n") if k.strip()
+        ]
 
     # Fail2ban web-jail whitelist, per target (falls back to generic var).
     # Space-separated IPs/CIDRs; bans at the CF edge would otherwise lock out
     # known developers/AI agents whose dynamic ISP IPs trip the jails.
     env_key = f"FAIL2BAN_IGNOREIP_{target.upper().replace('-', '_')}"
-    ignoreip = os.environ.get(env_key, '') or os.environ.get('FAIL2BAN_IGNOREIP', '')
+    ignoreip = os.environ.get(env_key, "") or os.environ.get("FAIL2BAN_IGNOREIP", "")
     if ignoreip.strip():
-        data['fail2ban_ignoreip'] = ' '.join(ignoreip.split())
+        data["fail2ban_ignoreip"] = " ".join(ignoreip.split())
 
     for key, val in data.items():
         _check_jinja(key, val)
 
     fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as f:
+    with os.fdopen(fd, "w") as f:
         json.dump(data, f, indent=2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
