@@ -1,4 +1,4 @@
-# ─── Secrets & credentials ───────────────────────────────────────────
+# ─── Secrets & credentials ────────────────────────────────────────────
 secrets/
 .env
 .env.*
@@ -25,6 +25,7 @@ ansible/inventory/hosts-*.yml
 
 # ─── Agent / tool local state ─────────────────────────────────────────
 .claude/
+.codemie/
 .opencode/
 
 # ─── Logs & temporary files ───────────────────────────────────────────
@@ -40,7 +41,6 @@ logs/
 .idea/
 *.sw?
 *~
-*.service
 
 # ─── Python ───────────────────────────────────────────────────────────
 __pycache__/
@@ -50,11 +50,11 @@ __pycache__/
 venv/
 .venv/
 
-# ─── Internal docs & audit ───────────────────────────────────────────
+# ─── Internal docs & audit ────────────────────────────────────────────
 CLAUDE.md
 docs/private/
 
-# ─── Generated tool artifacts ────────────────────────────────────────
+# ─── Generated tool artifacts ─────────────────────────────────────────
 docs/codemap/codemap.json
 docs/codemap/codemap.html
 docs/codemap/codemap.lock
