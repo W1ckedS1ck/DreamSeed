@@ -51,8 +51,12 @@ jobs:
       - name: Install bats-core
         # Pinned exact version (Renovate-tracked) — a test-only tool with no
         # lockfile in this repo, so the ad-hoc install audit is waived.
+        # Install into a user-writable prefix: the runner's global npm prefix
+        # (/usr/local) is root-owned, and sudo npm is avoided on purpose.
         # zizmor: ignore[adhoc-packages]
-        run: npm install -g "bats@$BATS_VERSION"
+        run: npm install -g --prefix "$HOME/.local" "bats@$BATS_VERSION"
+      - name: Add bats to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Bash unit tests (bats)
         run: bats --print-output-on-failure tests/bats
       - name: Cloudflare IP updater selftest
