@@ -109,8 +109,8 @@ The **passing** badge is self-certified: every **MUST** criterion must be
 | `crypto_random` | N/A | No key/nonce generation in this repository. |
 | `delivery_mitm` | Met | HTTPS and SSH for all delivery. |
 | `delivery_unsigned` | Met | Downloads are verified (SHA256 for actionlint/gitleaks; HTTPS; apt signatures). |
-| `vulnerabilities_fixed_60_days` | Met | Dependabot, Trivy and CodeQL; no unpatched medium+ alerts known for >60 days. |
-| `vulnerabilities_critical_fixed` | Met | SECURITY.md targets critical fixes in 7 days; Dependabot automates updates. |
+| `vulnerabilities_fixed_60_days` | Met | Dependabot alerts, Renovate (OSV), Trivy and CodeQL; no unpatched medium+ alerts known for >60 days. |
+| `vulnerabilities_critical_fixed` | Met | SECURITY.md targets critical fixes in 7 days; Renovate (`osvVulnerabilityAlerts`) opens the fix PRs, Dependabot alerts remain enabled. |
 | `no_leaked_credentials` | Met | Secret scanning + push protection + Gitleaks full-history scan. |
 
 ### Analysis

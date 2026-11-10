@@ -182,7 +182,7 @@ def test_ruleset_bypass_and_missing_rules_are_flagged() -> None:
     assert "pull requests" in titles
 
 
-def test_disabled_security_switches_are_flagged() -> None:
+def test_disabled_secret_scanning_switches_are_flagged() -> None:
     routes = healthy_routes()
     routes[f"/repos/{REPO}"][1]["security_and_analysis"] = {
         "secret_scanning": {"status": "disabled"},
@@ -191,7 +191,20 @@ def test_disabled_security_switches_are_flagged() -> None:
     }
     report = build(routes)
     severities = {f.severity for f in report.findings if f.check == "security_settings"}
-    assert severities == {"high", "medium"}
+    assert severities == {"high"}
+
+
+def test_disabled_dependabot_security_updates_is_policy_not_a_finding() -> None:
+    """Renovate owns fix PRs; Dependabot alerts (not updates) stay enabled."""
+    routes = healthy_routes()
+    routes[f"/repos/{REPO}"][1]["security_and_analysis"] = {
+        "secret_scanning": {"status": "enabled"},
+        "secret_scanning_push_protection": {"status": "enabled"},
+        "dependabot_security_updates": {"status": "disabled"},
+    }
+    report = build(routes)
+    assert not [f for f in report.findings if f.check == "security_settings"]
+    assert any("Renovate opens fix PRs" in note for note in report.notes)
 
 
 def test_dependabot_alerts_grouped_by_severity() -> None:
