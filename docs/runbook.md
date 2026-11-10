@@ -1470,7 +1470,7 @@ ssh prod "bash /home/ubuntu/Scripts/send_report.sh daily 2>&1"
 
 ### B8. 🔴 Synthetic Monitoring Failure (Grafana Cloud)
 
-**What triggered:** Grafana Cloud Synthetic Monitoring checks (4 checks: HTTP main, MultiHTTP, Grafana, SSL) from global probes (US, Canada, Europe, Asia) detected downtime, slow response, or SSL issues
+**What triggered:** Grafana Cloud Synthetic Monitoring checks (4 checks per monitored domain: HTTP main, MultiHTTP, Grafana, SSL) from global probes (US, Canada, Europe, Asia) detected downtime, slow response, or SSL issues
 **Severity:** CRITICAL — external visibility is degraded
 **Causes:**
 

@@ -15,21 +15,23 @@ repos:
 
   - repo: local
     hooks:
-      # System shellcheck: shellcheck-py ships no wheels for Python >=3.14 and
-      # builds from source (downloads the binary at build time), which hangs
-      # behind a slow/offline network. CI installs shellcheck-py; locally use
-      # the brew/dev package. The dedicated ShellCheck job is the real gate.
+      # Local hook uses the system (brew/dev) shellcheck. CI installs the
+      # pinned shellcheck-py package instead. The dedicated ShellCheck job is
+      # the real gate.
       - id: shellcheck
         name: shellcheck
         entry: shellcheck --severity=error
         language: system
         types: [shell]
-        exclude: \.tftpl$
+        # .bats files use bats' `@test` syntax, which is not valid shellcheck input.
+        exclude: \.(tftpl|bats)$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.4
     hooks:
       - id: ruff
+        types: [python]
+      - id: ruff-format
         types: [python]
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
@@ -50,25 +52,25 @@ repos:
         name: terraform-docs (aws)
         entry: bash -c "command -v terraform-docs >/dev/null 2>&1 && cd terraform/aws && terraform-docs markdown table --output-file README.md . || echo 'skip (unavailable)'"
         language: system
-        files: ^terraform/aws/.*\.tf$
+        files: ^terraform/aws/(.*\.tf|\.terraform\.lock\.hcl)$
         pass_filenames: false
       - id: terraform-docs-hetzner
         name: terraform-docs (hetzner)
         entry: bash -c "command -v terraform-docs >/dev/null 2>&1 && cd terraform/hetzner && terraform-docs markdown table --output-file README.md . || echo 'skip (unavailable)'"
         language: system
-        files: ^terraform/hetzner/.*\.tf$
+        files: ^terraform/hetzner/(.*\.tf|\.terraform\.lock\.hcl)$
         pass_filenames: false
       - id: terraform-docs-grafana
         name: terraform-docs (grafana)
         entry: bash -c "command -v terraform-docs >/dev/null 2>&1 && cd terraform/grafana && terraform-docs markdown table --output-file README.md . || echo 'skip (unavailable)'"
         language: system
-        files: ^terraform/grafana/.*\.tf$
+        files: ^terraform/grafana/(.*\.tf|\.terraform\.lock\.hcl)$
         pass_filenames: false
       - id: terraform-docs-cloudflare
         name: terraform-docs (cloudflare)
         entry: bash -c "command -v terraform-docs >/dev/null 2>&1 && cd terraform/cloudflare && terraform-docs markdown table --output-file README.md . || echo 'skip (unavailable)'"
         language: system
-        files: ^terraform/cloudflare/.*\.tf$
+        files: ^terraform/cloudflare/(.*\.tf|\.terraform\.lock\.hcl)$
         pass_filenames: false
 
   - repo: local

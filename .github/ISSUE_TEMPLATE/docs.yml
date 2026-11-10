@@ -1,0 +1,36 @@
+name: 📝 Documentation
+description: Report a typo, an inaccurate command, or a missing section.
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Where is the problem?
+      description: File path, wiki page or section anchor.
+      placeholder: docs/runbook.md → "Restore from cloud"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested wording or command (optional)
+      render: markdown
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the current main branch and the wiki.
+          required: true

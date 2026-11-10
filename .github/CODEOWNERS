@@ -34,3 +34,9 @@ renovate.json                  @W1ckedS1ck
 # Documentation
 docs/*                         @W1ckedS1ck
 README.md                      @W1ckedS1ck
+CONTRIBUTING.md                @W1ckedS1ck
+CODE_OF_CONDUCT.md             @W1ckedS1ck
+
+# Community templates
+.github/ISSUE_TEMPLATE/*       @W1ckedS1ck
+.github/PULL_REQUEST_TEMPLATE.md @W1ckedS1ck

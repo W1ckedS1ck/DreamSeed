@@ -72,7 +72,12 @@ def _chat_allowed(update: Update) -> bool:
         log.warning("Ignored message from unauthorized chat: %s", chat_id)
         return False
     msg = update.message
-    return not (msg and msg.reply_to_message and msg.reply_to_message.from_user and msg.reply_to_message.from_user.is_bot)
+    return not (
+        msg
+        and msg.reply_to_message
+        and msg.reply_to_message.from_user
+        and msg.reply_to_message.from_user.is_bot
+    )
 
 
 def get_env() -> str:
@@ -107,7 +112,9 @@ def _local_backups(subdir: str, prefix: str) -> list:
     path = os.path.join(BACKUP_DIR, subdir)
     try:
         files = [f for f in os.listdir(path) if f.startswith(prefix)]
-        return sorted(files, key=lambda x: os.path.getmtime(os.path.join(path, x)), reverse=True)
+        return sorted(
+            files, key=lambda x: os.path.getmtime(os.path.join(path, x)), reverse=True
+        )
     except OSError:
         return []
 
@@ -115,12 +122,19 @@ def _local_backups(subdir: str, prefix: str) -> list:
 async def _rclone_lsf(path: str) -> list:
     try:
         proc = await asyncio.create_subprocess_exec(
-            "rclone", "lsf", path, "--files-only", "--format", "tps",
+            "rclone",
+            "lsf",
+            path,
+            "--files-only",
+            "--format",
+            "tps",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-        lines = [line.split(";", 2) for line in out.decode().strip().split("\n") if line]
+        lines = [
+            line.split(";", 2) for line in out.decode().strip().split("\n") if line
+        ]
         return sorted(lines, key=lambda x: x[0], reverse=True) if lines else []
     except (OSError, TimeoutError, UnicodeDecodeError):
         return []

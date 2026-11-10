@@ -1,0 +1,14 @@
+# Local-only gitleaks config (scripts/lint.sh --gitleaks).
+#
+# secrets/ is gitignored and must never be committed, but a working-tree scan
+# (--no-git) reads those local files (Ansible Vault blobs, rclone.conf, LE
+# private keys) and would fail while CI stays green. Skip only that path here;
+# CI's full-history scan uses .gitleaks.toml and stays strict. The gate against
+# actually committing secrets/ is `lint.sh --secrets` ("secrets/ not tracked"),
+# which CI runs alongside the history scan.
+[extend]
+path = ".gitleaks.toml"
+
+[[allowlists]]
+description = "Local secrets/ directory is gitignored and never committed"
+paths = ['''^secrets/''']

@@ -19,6 +19,7 @@ Outputs: Markdown (job summary), JSON, Prometheus text, Telegram HTML.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import html
 import json
 import os
@@ -158,10 +159,8 @@ class GitHub:
                 return resp.status, json.load(resp)
         except urllib.error.HTTPError as exc:
             body: object | None = None
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 body = json.load(exc)
-            except (ValueError, OSError):
-                pass
             return exc.code, body
         except (urllib.error.URLError, TimeoutError, OSError):
             return 0, None
@@ -186,7 +185,9 @@ def _group(items: list[dict], key: str) -> dict[str, list[dict]]:
     return grouped
 
 
-def check_secret_scanning(github: GitHub, repo: str) -> tuple[str, list[Finding], list[str]]:
+def check_secret_scanning(
+    github: GitHub, repo: str
+) -> tuple[str, list[Finding], list[str]]:
     status, alerts = github.get(
         f"/repos/{repo}/secret-scanning/alerts?state=open&per_page={PER_PAGE}"
     )
@@ -205,7 +206,11 @@ def check_secret_scanning(github: GitHub, repo: str) -> tuple[str, list[Finding]
                 key="secret_scanning:token",
             )
         ]
-        return _status_for(findings), findings, ["secret scanning alerts unreadable (HTTP 403)"]
+        return (
+            _status_for(findings),
+            findings,
+            ["secret scanning alerts unreadable (HTTP 403)"],
+        )
     if status != 200 or not isinstance(alerts, list):
         return "skipped", [], [f"secret scanning alerts unreadable (HTTP {status})"]
 
@@ -245,7 +250,11 @@ def check_dependabot(github: GitHub, repo: str) -> tuple[str, list[Finding], lis
                 key="dependabot:token",
             )
         ]
-        return _status_for(findings), findings, ["Dependabot alerts unreadable (HTTP 403)"]
+        return (
+            _status_for(findings),
+            findings,
+            ["Dependabot alerts unreadable (HTTP 403)"],
+        )
     if status != 200 or not isinstance(alerts, list):
         return "skipped", [], [f"Dependabot alerts unreadable (HTTP {status})"]
 
@@ -281,7 +290,9 @@ def check_dependabot(github: GitHub, repo: str) -> tuple[str, list[Finding], lis
     return _status_for(findings), findings, []
 
 
-def check_code_scanning(github: GitHub, repo: str) -> tuple[str, list[Finding], list[str]]:
+def check_code_scanning(
+    github: GitHub, repo: str
+) -> tuple[str, list[Finding], list[str]]:
     status, alerts = github.get(
         f"/repos/{repo}/code-scanning/alerts?state=open&per_page={PER_PAGE}"
     )
@@ -297,7 +308,11 @@ def check_code_scanning(github: GitHub, repo: str) -> tuple[str, list[Finding], 
                 key="code_scanning:token",
             )
         ]
-        return _status_for(findings), findings, ["code scanning alerts unreadable (HTTP 403)"]
+        return (
+            _status_for(findings),
+            findings,
+            ["code scanning alerts unreadable (HTTP 403)"],
+        )
     if status != 200 or not isinstance(alerts, list):
         return "skipped", [], [f"code scanning alerts unreadable (HTTP {status})"]
 
@@ -310,7 +325,9 @@ def check_code_scanning(github: GitHub, repo: str) -> tuple[str, list[Finding], 
     findings: list[Finding] = []
     for sev in sorted(by_severity, key=lambda s: SEVERITY_RANK[s]):
         group = by_severity[sev]
-        rules = sorted({str((a.get("rule") or {}).get("id") or "unknown") for a in group})
+        rules = sorted(
+            {str((a.get("rule") or {}).get("id") or "unknown") for a in group}
+        )
         findings.append(
             Finding(
                 check="code_scanning",
@@ -379,7 +396,9 @@ def check_security_settings(
         ("secret_scanning_non_provider_patterns", "non-provider patterns"),
     ):
         if switch(name) != "enabled":
-            notes.append(f"secret scanning {label} not enabled (needs GitHub Secret Protection)")
+            notes.append(
+                f"secret scanning {label} not enabled (needs GitHub Secret Protection)"
+            )
 
     return _status_for(findings), findings, notes
 
@@ -403,10 +422,9 @@ def _pick_ruleset(
             continue
         if preferred and ruleset.get("name") == preferred:
             return detail, 200
-        include = (
-            ((detail.get("conditions") or {}).get("ref_name") or {}).get("include")
-            or []
-        )
+        include = ((detail.get("conditions") or {}).get("ref_name") or {}).get(
+            "include"
+        ) or []
         if "~DEFAULT_BRANCH" in include:
             return detail, 200
     return None, last_status
@@ -448,7 +466,8 @@ def check_ruleset_drift(detail: dict, expected: dict, url: str) -> list[Finding]
             check="ruleset",
             severity="high",
             title=f"Ruleset {live['name']} differs from its committed definition",
-            detail="Changed: " + ", ".join(changed)
+            detail="Changed: "
+            + ", ".join(changed)
             + ". Revert it in GitHub, or update .github/rulesets/protect-main.json in a PR.",
             url=url,
             key="ruleset:drift",
@@ -512,9 +531,7 @@ def check_ruleset(
 
     bypass = detail.get("bypass_actors") or []
     if bypass:
-        actors = ", ".join(
-            f"{a.get('actor_type')}:{a.get('actor_id')}" for a in bypass
-        )
+        actors = ", ".join(f"{a.get('actor_type')}:{a.get('actor_id')}" for a in bypass)
         findings.append(
             Finding(
                 check="ruleset",
@@ -548,7 +565,9 @@ def check_ruleset(
         required: set[str] = set()
         for rule in detail.get("rules") or []:
             if rule.get("type") == "required_status_checks":
-                contexts = (rule.get("parameters") or {}).get("required_status_checks") or []
+                contexts = (rule.get("parameters") or {}).get(
+                    "required_status_checks"
+                ) or []
                 required = {str(c.get("context")) for c in contexts}
         missing = expected_checks - required
         stale = required - expected_checks
@@ -642,7 +661,9 @@ def check_actions_policy(
     return _status_for(findings), findings, notes
 
 
-def check_scorecard(github: GitHub, repo: str) -> tuple[str, list[Finding], list[str], float | None]:
+def check_scorecard(
+    github: GitHub, repo: str
+) -> tuple[str, list[Finding], list[str], float | None]:
     status, data = github.get_public(SCORECARD_API.format(repo=repo))
     if status != 200 or not isinstance(data, dict) or data.get("score") is None:
         return "skipped", [], [f"OpenSSF Scorecard unavailable (HTTP {status})"], None
@@ -812,8 +833,12 @@ def render_markdown(report: Report) -> str:
     if report.total:
         lines += ["", "### Findings", ""]
         for finding in report.sorted_findings():
-            title = f"[{finding.title}]({finding.url})" if finding.url else finding.title
-            lines.append(f"- {SEVERITY_ICON[finding.severity]} **{finding.severity}** — {title}")
+            title = (
+                f"[{finding.title}]({finding.url})" if finding.url else finding.title
+            )
+            lines.append(
+                f"- {SEVERITY_ICON[finding.severity]} **{finding.severity}** — {title}"
+            )
             if finding.detail:
                 lines.append(f"  - {finding.detail}")
 
@@ -872,10 +897,8 @@ def new_and_resolved(
 
 def render_prometheus(report: Report) -> str:
     stamp = 0
-    try:
+    with contextlib.suppress(ValueError):
         stamp = int(datetime.fromisoformat(report.generated_at).timestamp())
-    except ValueError:
-        pass
 
     lines = [
         "# HELP github_posture_findings Open findings by severity.",
@@ -889,7 +912,9 @@ def render_prometheus(report: Report) -> str:
         "# TYPE github_posture_check_ok gauge",
     ]
     for name, state in sorted(report.checks.items()):
-        lines.append(f'github_posture_check_ok{{check="{name}"}} {1 if state == "ok" else 0}')
+        lines.append(
+            f'github_posture_check_ok{{check="{name}"}} {1 if state == "ok" else 0}'
+        )
 
     lines += [
         "# HELP github_posture_check_findings Findings per check.",
@@ -926,7 +951,9 @@ def render_telegram(
         for finding in new:
             counts[finding.severity] = counts.get(finding.severity, 0) + 1
         parts = [
-            f"{SEVERITY_ICON[sev]} {counts[sev]}" for sev in SEVERITY_RANK if counts.get(sev)
+            f"{SEVERITY_ICON[sev]} {counts[sev]}"
+            for sev in SEVERITY_RANK
+            if counts.get(sev)
         ]
         noun = "finding" if len(new) == 1 else "findings"
         headline = f"⚠️ <b>{len(new)} new {noun}</b> · " + " · ".join(parts)
@@ -973,7 +1000,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--ci-workflow", help="parse required jobs from this ci.yml")
-    parser.add_argument("--expected-checks", help="comma-separated required check names")
+    parser.add_argument(
+        "--expected-checks", help="comma-separated required check names"
+    )
     parser.add_argument("--ruleset", help="prefer this ruleset name")
     parser.add_argument(
         "--ruleset-file",
@@ -1015,7 +1044,9 @@ def main(argv: list[str] | None = None) -> int:
             config_errors.append(("config:ci-workflow", f"{ci_path}: {exc}"))
 
     expected_ruleset: dict | None = None
-    ruleset_path = args.ruleset_file or (RULESET_FILE if Path(RULESET_FILE).is_file() else None)
+    ruleset_path = args.ruleset_file or (
+        RULESET_FILE if Path(RULESET_FILE).is_file() else None
+    )
     if ruleset_path:
         try:
             expected_ruleset = load_expected_ruleset(ruleset_path)
@@ -1052,12 +1083,18 @@ def main(argv: list[str] | None = None) -> int:
         "json": render_json,
         "prometheus": render_prometheus,
     }
-    print(renderers[args.format](report) if args.format in renderers else telegram_message())
+    print(
+        renderers[args.format](report)
+        if args.format in renderers
+        else telegram_message()
+    )
 
     if args.write_dir:
         out = Path(args.write_dir)
         out.mkdir(parents=True, exist_ok=True)
-        (out / "github-posture.md").write_text(render_markdown(report), encoding="utf-8")
+        (out / "github-posture.md").write_text(
+            render_markdown(report), encoding="utf-8"
+        )
         (out / "github-posture.json").write_text(render_json(report), encoding="utf-8")
         (out / "github-posture.prom").write_text(
             render_prometheus(report), encoding="utf-8"

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Deep audit — covers all auto-checkable items from AUDIT_CHECKLIST.md
-# Manual only: backup manual run (smart_backup.sh + upload_backups_to_gdrive.sh)
+# Deep audit — server-side checks that do not fit in check_services.sh
+# (manual; run on the server). See docs/runbook.md for the operational context.
 # Run: bash /home/ubuntu/Scripts/audit_deep.sh
 set -euo pipefail
 

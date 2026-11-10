@@ -1,22 +1,22 @@
 # ─── Secrets & credentials ───────────────────────────────────────────
 secrets/
 .env
-.env.local
+.env.*
+!.env.example
 *.pem
 *.key
+id_rsa*
+id_ed25519*
+.netrc
 
 # ─── Terraform ────────────────────────────────────────────────────────
 *.tfstate*
-*.tfplan
-*.tfplan.json
+*.tfplan*
 .terraform/
-crash.log
-override.tf
-override.tf.json
-terraform/*/terraform.tfvars
-terraform/*/terraform.tfvars.json
+override.tf*
 # Generated per-deploy auto-loaded var file (deploy.sh → TFC remote exec)
-terraform/*/deploy.auto.tfvars
+terraform/*/*.tfvars
+terraform/*/*.tfvars.json
 
 # ─── Ansible ──────────────────────────────────────────────────────────
 *.retry
@@ -26,11 +26,13 @@ ansible/inventory/hosts-*.yml
 # ─── Agent / tool local state ─────────────────────────────────────────
 .claude/
 .opencode/
-.codemie/
 
-# ─── Logs ─────────────────────────────────────────────────────────────
+# ─── Logs & temporary files ───────────────────────────────────────────
 logs/
 *.log
+*.bak
+*.orig
+*.tmp
 
 # ─── Editors & OS ─────────────────────────────────────────────────────
 .DS_Store
@@ -44,6 +46,7 @@ logs/
 __pycache__/
 *.pyc
 .ruff_cache/
+.pytest_cache/
 venv/
 .venv/
 
@@ -52,7 +55,7 @@ CLAUDE.md
 docs/private/
 
 # ─── Generated tool artifacts ────────────────────────────────────────
-docs/codemie/analytics/
 docs/codemap/codemap.json
 docs/codemap/codemap.html
 docs/codemap/codemap.lock
+docs/codemie/

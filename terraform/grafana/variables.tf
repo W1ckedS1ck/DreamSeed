@@ -22,9 +22,14 @@ variable "sm_enabled" {
   default     = true
 }
 
-variable "domain" {
-  description = "Domain to monitor (e.g. dreamseed.online)"
-  type        = string
+variable "domains" {
+  description = "Domains to monitor (e.g. [\"dreamseed.online\"] or [\"aws.vitalikuts.online\", \"hetz.vitalikuts.online\"])"
+  type        = list(string)
+
+  validation {
+    condition     = alltrue([for d in var.domains : can(regex("^[A-Za-z0-9.-]+$", d))])
+    error_message = "Each domain must contain only letters, digits, dots, and hyphens."
+  }
 }
 
 variable "sm_url" {

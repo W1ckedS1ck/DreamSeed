@@ -64,7 +64,9 @@ def main() -> int:
             checked += 1
             if result.returncode != 0:
                 failures += 1
-                print(f"::error file={action}::{action.name} step {index} failed shellcheck")
+                print(
+                    f"::error file={action}::{action.name} step {index} failed shellcheck"
+                )
                 print(result.stdout, result.stderr)
 
     print(f"composite actions: {checked} run block(s) checked, {failures} failed")

@@ -12,13 +12,7 @@
   "major": {
     "dependencyDashboardApproval": true
   },
-  "enabledManagers": ["github-actions", "terraform", "pip_requirements", "pip-compile", "ansible-galaxy", "custom.regex"],
-  "pip_requirements": {
-    "managerFilePatterns": [
-      "/^ansible/requirements-deploy\\.in$/",
-      "/^ci/requirements\\.in$/"
-    ]
-  },
+  "enabledManagers": ["github-actions", "terraform", "pip-compile", "ansible-galaxy", "custom.regex"],
   "pip-compile": {
     "managerFilePatterns": [
       "/^ci/requirements\\.txt$/",
@@ -63,6 +57,16 @@
     },
     {
       "customType": "regex",
+      "description": "Track bats-core version in CI",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": ["BATS_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "bats",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
       "description": "Track actionlint version in CI",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
@@ -98,6 +102,26 @@
         "/^\\.tflint\\.hcl$/"
       ],
       "matchStrings": ["version = \"(?<currentValue>v?[\\w.\\-]+)\"\\s+# renovate: depName=(?<depName>\\S+)"],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track uv version in the setup-ansible composite action",
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-ansible/action\\.yml$/"
+      ],
+      "matchStrings": ["default: \"(?<currentValue>[\\w.\\-]+)\"\\s+# renovate: depName=astral-sh/uv"],
+      "depNameTemplate": "astral-sh/uv",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Track uv version in the GitHub posture workflow",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/github-posture\\.yml$/"
+      ],
+      "matchStrings": ["UV_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "astral-sh/uv",
       "datasourceTemplate": "github-releases"
     },
     {
@@ -274,8 +298,8 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Group and automerge non-major python dependencies",
-      "matchManagers": ["pip_requirements"],
+      "description": "Group and automerge non-major python dependencies (pip-compile updates the .in and regenerates the hashed .txt)",
+      "matchManagers": ["pip-compile"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "Python pip packages",
       "automerge": true,

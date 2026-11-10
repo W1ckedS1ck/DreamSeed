@@ -106,7 +106,8 @@ The URL points to the Prometheus endpoint, **not** the Grafana instance.
 ### Terraform (Grafana API — dashboards, folders, SM)
 
 Uses the Grafana **instance** URL (`*.grafana.net`), NOT the Prometheus endpoint.
-Instance URL is hardcoded in `grafana-cloud.yml`, not stored in secrets.
+Instance URL is hardcoded in `grafana-cloud.yml`, not stored in secrets. The dev
+instances to monitor are selected per run with the `dev_instances` input.
 
 > ⚠ **Source of truth = GitHub Secrets.** The `grafana-cloud.yml` workflow reads these from
 > GitHub Secrets, NOT from `secrets/.env`. The vault copies can drift out of date (Grafana Cloud

@@ -35,6 +35,7 @@ The **passing** badge is self-certified: every **MUST** criterion must be
 | `description_good` | Met | README → “About the Product”. |
 | `interact` | Met | README (Quick Start), GitHub Issues, [CONTRIBUTING.md](https://github.com/W1ckedS1ck/DreamSeed/blob/main/CONTRIBUTING.md). |
 | `contribution` | Met | <https://github.com/W1ckedS1ck/DreamSeed/blob/main/CONTRIBUTING.md> |
+| `code_of_conduct` | Met | [CODE_OF_CONDUCT.md](https://github.com/W1ckedS1ck/DreamSeed/blob/main/CODE_OF_CONDUCT.md) (Contributor Covenant 3.0). |
 | `contribution_requirements` | Met | CONTRIBUTING → “Requirements”; [docs/linters.md](https://github.com/W1ckedS1ck/DreamSeed/blob/main/docs/linters.md). |
 | `floss_license` | Met | MIT. |
 | `floss_license_osi` | Met | MIT is OSI-approved. |
@@ -80,9 +81,9 @@ The **passing** badge is self-certified: every **MUST** criterion must be
 | `build` | N/A | No compiled artifact: Terraform/Ansible apply the configuration. CI validates it (`terraform validate`, `ansible-lint`). |
 | `build_common_tools` | N/A | Same as `build`. |
 | `build_floss_tools` | N/A | Same as `build`; Terraform/Ansible are FLOSS. |
-| `test` | Met | `make test` / `python3 -m pytest tests/unit -q`; CI job `.env Parser Contract`. |
-| `test_invocation` | Met | `make test`; standard pytest invocation. |
-| `test_most` | Met | Unit tests cover templates, bot helpers, CI guards and the posture audit; env parsers have a fixture contract + differential fuzz. |
+| `test` | Met | `make test` (pytest) + `make test-bash` (bats); CI runs both plus the `.env Parser Contract` job. |
+| `test_invocation` | Met | `make test` / `make test-bash`; standard pytest and bats invocations. |
+| `test_most` | Met | Unit tests cover templates, bot helpers, CI guards, the posture audit and `gen_vars`; bats covers CLI parsing, target resolution and `.env` parsing; env parsers also have a fixture contract + differential fuzz. |
 | `test_continuous_integration` | Met | GitHub Actions runs on every PR and push to `main`/`dev`. |
 | `test_policy` | Met | CONTRIBUTING requires tests for behavior changes. |
 | `tests_are_added` | Met | Recent PRs add tests (posture audit, templates, bot helpers). |

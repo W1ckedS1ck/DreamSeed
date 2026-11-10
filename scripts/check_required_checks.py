@@ -56,9 +56,7 @@ def ci_job_names() -> set[str]:
     with open(CI_WORKFLOW, encoding="utf-8") as fh:
         workflow = yaml.safe_load(fh)
     # GitHub falls back to the job id when a job has no explicit name.
-    return {
-        job.get("name", job_id) for job_id, job in workflow["jobs"].items()
-    }
+    return {job.get("name", job_id) for job_id, job in workflow["jobs"].items()}
 
 
 def main() -> int:
@@ -82,7 +80,9 @@ def main() -> int:
         for name in missing:
             print(f"  missing required check: {name}", file=sys.stderr)
         for name in stale:
-            print(f"  stale required check (no such ci.yml job): {name}", file=sys.stderr)
+            print(
+                f"  stale required check (no such ci.yml job): {name}", file=sys.stderr
+            )
         print(
             "Update Settings -> Rules -> Protect Main to match.",
             file=sys.stderr,
@@ -90,8 +90,7 @@ def main() -> int:
         return 1
 
     print(
-        f"OK: {len(expected)} PR-facing ci.yml jobs are all required on "
-        f"{RULESET_NAME}"
+        f"OK: {len(expected)} PR-facing ci.yml jobs are all required on {RULESET_NAME}"
     )
     return 0
 

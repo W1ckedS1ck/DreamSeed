@@ -11,6 +11,24 @@ on:
         options:
           - prod
           - dev
+      dev_instances:
+        description: 'Dev instance(s) to monitor (ignored when workspace=prod)'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - both
+          - dev-aws
+          - dev-hetz
+      apply_scope:
+        description: 'Apply everything, or only the Synthetic Monitoring checks'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - synthetic-monitoring-only
 
 concurrency:
   group: grafana-cloud-${{ inputs.workspace }}
@@ -64,10 +82,35 @@ jobs:
         run: |
           echo "TF_WORKSPACE=$WORKSPACE_INPUT" >> "$GITHUB_ENV"
 
+      - name: Use local Terraform execution
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          WORKSPACE_INPUT: ${{ inputs.workspace }}
+        run: |
+          # terraform/grafana reads dashboard JSON from ../../ansible-roles/grafana/files.
+          # Terraform Cloud's remote runner only uploads terraform/grafana, so run
+          # plan/apply on this runner while keeping state in Terraform Cloud.
+          WS_NAME="dreamseed-grafana-cloud-${WORKSPACE_INPUT}"
+          WS_ID=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $TF_API_TOKEN" \
+            "https://app.terraform.io/api/v2/organizations/DreamSeed/workspaces/${WS_NAME}" \
+            | jq -r '.data.id')
+          if [[ -z "$WS_ID" || "$WS_ID" == "null" ]]; then
+            echo "::error::Terraform Cloud workspace ${WS_NAME} not found"
+            exit 1
+          fi
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TF_API_TOKEN" \
+            -H "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/workspaces/${WS_ID}" \
+            -d '{"data":{"type":"workspaces","attributes":{"execution-mode":"local"}}}' \
+            | jq -r '"Terraform execution mode: " + .data.attributes["execution-mode"]'
+
       - name: Write terraform.tfvars.json
         working-directory: terraform/grafana
         env:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
+          DEV_INSTANCES: ${{ inputs.dev_instances }}
           PROD_SA_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_SA_TOKEN }}
           PROD_TOKEN: ${{ secrets.PROD_GRAFANA_CLOUD_TOKEN }}
           PROD_SM_TOKEN: ${{ secrets.PROD_SM_ACCESS_TOKEN }}
@@ -78,23 +121,57 @@ jobs:
             TOKEN="${PROD_SA_TOKEN:-$PROD_TOKEN}"
             SM_TOKEN="$PROD_SM_TOKEN"
             GRAFANA_URL="https://dreamseed.grafana.net"
-            DOMAIN="dreamseed.online"
+            DOMAINS_JSON='["dreamseed.online"]'
             SM_URL="https://synthetic-monitoring-api-us-east-0.grafana.net"
           else
             TOKEN="$DEV_SA_TOKEN"
             SM_TOKEN="$DEV_SM_TOKEN"
             GRAFANA_URL="https://vitalikuts.grafana.net"
-            DOMAIN="aws.vitalikuts.online"
             SM_URL="https://synthetic-monitoring-api-eu-north-0.grafana.net"
+
+            case "$DEV_INSTANCES" in
+              dev-aws)
+                DOMAINS_JSON='["aws.vitalikuts.online"]'
+                ;;
+              dev-hetz)
+                DOMAINS_JSON='["hetz.vitalikuts.online"]'
+                ;;
+              both)
+                DOMAINS_JSON='["aws.vitalikuts.online","hetz.vitalikuts.online"]'
+                ;;
+              auto)
+                DOMAINS=()
+                for domain in aws.vitalikuts.online hetz.vitalikuts.online; do
+                  body=$(mktemp)
+                  code=$(curl -sS -L --max-redirs 3 -A 'DreamSeed-Grafana-SM/1.0' -H 'Cache-Control: no-cache' -o "$body" -w '%{http_code}' --max-time 20 "https://$domain/" || true)
+                  echo "Probe https://$domain/ -> ${code:-000}"
+                  if [[ "$code" == "200" ]] && grep -qi 'DreamSeed' "$body"; then
+                    DOMAINS+=("\"$domain\"")
+                  fi
+                  rm -f "$body"
+                done
+                if [[ ${#DOMAINS[@]} -eq 0 ]]; then
+                  echo "::error::No dev instance is reachable (aws.vitalikuts.online / hetz.vitalikuts.online). Choose dev-aws, dev-hetz, or both explicitly."
+                  exit 1
+                fi
+                DOMAINS_JSON="[$(IFS=,; echo "${DOMAINS[*]}")]"
+                ;;
+              *)
+                echo "::error::Unknown dev_instances value: $DEV_INSTANCES"
+                exit 1
+                ;;
+            esac
           fi
+
+          echo "Monitoring domains: $DOMAINS_JSON"
           jq -n \
             --arg url "$GRAFANA_URL" \
             --arg token "$TOKEN" \
             --arg sm_token "$SM_TOKEN" \
-            --arg domain "$DOMAIN" \
+            --argjson domains "$DOMAINS_JSON" \
             --arg sm_url "$SM_URL" \
             --arg sm_enabled "true" \
-            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domain: $domain, sm_url: $sm_url, sm_enabled: ($sm_enabled == "true")}' \
+            '{grafana_cloud_url: $url, grafana_cloud_token: $token, sm_access_token: $sm_token, domains: $domains, sm_url: $sm_url, sm_enabled: ($sm_enabled == "true")}' \
             > terraform.tfvars.json
 
       - name: Terraform Init
@@ -103,11 +180,35 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/grafana
-        run: terraform plan -input=false
+        env:
+          APPLY_SCOPE: ${{ inputs.apply_scope }}
+        run: |
+          TARGETS=()
+          if [[ "$APPLY_SCOPE" == "synthetic-monitoring-only" ]]; then
+            TARGETS=(
+              -target=grafana_synthetic_monitoring_check.http_main
+              -target=grafana_synthetic_monitoring_check.multi_main
+              -target=grafana_synthetic_monitoring_check.http_grafana
+              -target=grafana_synthetic_monitoring_check.ssl_main
+            )
+          fi
+          terraform plan -input=false "${TARGETS[@]}"
 
       - name: Terraform Apply
         working-directory: terraform/grafana
-        run: terraform apply -auto-approve -input=false
+        env:
+          APPLY_SCOPE: ${{ inputs.apply_scope }}
+        run: |
+          TARGETS=()
+          if [[ "$APPLY_SCOPE" == "synthetic-monitoring-only" ]]; then
+            TARGETS=(
+              -target=grafana_synthetic_monitoring_check.http_main
+              -target=grafana_synthetic_monitoring_check.multi_main
+              -target=grafana_synthetic_monitoring_check.http_grafana
+              -target=grafana_synthetic_monitoring_check.ssl_main
+            )
+          fi
+          terraform apply -auto-approve -input=false "${TARGETS[@]}"
 
       - name: Verify folder exists
         working-directory: terraform/grafana
@@ -124,6 +225,8 @@ jobs:
         if: always()
         env:
           WORKSPACE_INPUT: ${{ inputs.workspace }}
+          DEV_INSTANCES: ${{ inputs.dev_instances }}
+          APPLY_SCOPE: ${{ inputs.apply_scope }}
         run: |
           M="$GITHUB_STEP_SUMMARY"
 
@@ -135,6 +238,7 @@ jobs:
             GRAFANA_URL="vitalikuts.grafana.net"
           fi
 
+          DOMAINS=$(jq -r '.domains | join(", ")' terraform.tfvars.json 2>/dev/null || echo "n/a")
           STATUS="${{ job.status == 'success' && '✅' || '❌' }}"
 
           {
@@ -144,6 +248,11 @@ jobs:
             echo "|---|---|"
             echo "| **Target** | \`${TARGET}\` |"
             echo "| **Grafana** | ${GRAFANA_URL} |"
+            echo "| **Domains** | \`${DOMAINS:-n/a}\` |"
+            echo "| **Apply scope** | \`${APPLY_SCOPE}\` |"
+            if [[ "$WORKSPACE_INPUT" != "prod" ]]; then
+              echo "| **Dev source** | \`${DEV_INSTANCES}\` |"
+            fi
           } >> "$M"
 
           OUTPUT=$(terraform output -json 2>/dev/null || echo "{}")

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/W1ckedS1ck/DreamSeed/security/advisories/new
+    about: Do not open a public issue for security reports. Use GitHub private vulnerability reporting (see SECURITY.md).
+  - name: 📖 Documentation, runbook and ADRs
+    url: https://github.com/W1ckedS1ck/DreamSeed/wiki
+    about: Architecture, runbook, operations guide, secrets reference and decision records.
+  - name: 💬 Questions and ideas
+    url: https://github.com/W1ckedS1ck/DreamSeed/discussions
+    about: Ask a question or discuss an approach before opening an issue.

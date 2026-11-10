@@ -121,6 +121,16 @@ Two separate stacks exist:
 - **prod** — `dreamseed.grafana.net` (org id 1)
 - **dev** — `vitalikuts.grafana.net` (org id 2, shared by dev-aws + dev-hetz)
 
+Synthetic Monitoring can watch one or both dev instances. The `[M] Grafana Cloud`
+workflow input `dev_instances` accepts `auto` (probe both and monitor whichever
+answers), `both`, `dev-aws`, or `dev-hetz`; prod always monitors
+`dreamseed.online`. Explicit values keep checks even if that instance is down,
+while `auto` only monitors reachable instances. Under the hood the Terraform
+module takes a `domains` list and creates one set of checks per domain
+(~29.6k checks/mo each, so two domains still fit the free tier). Use
+`apply_scope=synthetic-monitoring-only` to update only the SM checks without
+touching dashboards.
+
 ### Push URL (vmagent)
 
 ```
@@ -225,6 +235,13 @@ GitHub Variable (not a secret): `FARO_COLLECTOR_URL`. `FARO_APP_NAME` needs no s
 |----------|------------|-------------|
 | `FARO_COLLECTOR_URL` | `https://faro-collector-prod-eu-north-0.grafana.net/collect/<app_id>` | `https://faro-collector-prod-us-east-2.grafana.net/collect/<app_id>` |
 | `FARO_APP_NAME` | *(auto = domain)* | *(auto = domain)* |
+
+The dev stack uses one shared Faro app — `DreamSeed (dev)` — for `aws`,
+`hetz`, and `test` instances; its CORS origins must list all of them. Grafana
+does not allow renaming a Faro app after it has received data, so changing the
+display name requires creating a new app and updating `FARO_COLLECTOR_URL`. The
+SDK `app.name` (`FARO_APP_NAME`) still distinguishes instances via
+`service.name`.
 
 ---
 
