@@ -263,6 +263,11 @@ ansible-roles/<name>/
 **Routine updates are handled by Renovate** (`renovate.json`): non-major provider bumps
 automerge weekly, major bumps arrive as PRs requiring review. No manual action needed.
 
+> Dependabot **security updates** are intentionally disabled so a CVE cannot
+> produce two PRs: Renovate owns the fix PRs via `osvVulnerabilityAlerts`.
+> Dependabot **alerts** and the dependency graph stay enabled for the Security
+> tab and OpenSSF Scorecard.
+
 Only force-update manually for a major outside the schedule or an urgent security fix.
 
 ### How to force-update providers

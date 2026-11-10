@@ -16,7 +16,7 @@ secret material — only alert metadata (type, count, URL).
 | `secret_scanning` | No open secret scanning alerts |
 | `dependabot` | No open Dependabot alerts (grouped by severity) |
 | `code_scanning` | No open code scanning alerts (grouped by severity) |
-| `security_settings` | Secret scanning, push protection and Dependabot security updates are on |
+| `security_settings` | Secret scanning and push protection are on. Dependabot **security updates** are intentionally off (Renovate owns fix PRs via `osvVulnerabilityAlerts`); Dependabot **alerts** stay on and are checked by `dependabot` |
 | `ruleset` | The default-branch ruleset is active, has no bypass actors, blocks deletion/force-push, requires PRs, its required checks match `ci.yml`, and its policy matches the committed `.github/rulesets/protect-main.json` |
 | `actions` | Default token is read-only, PR approval is off, SHA pinning is required |
 | `scorecard` | OpenSSF Scorecard is at least 7.0 |

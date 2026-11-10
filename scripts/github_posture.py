@@ -366,11 +366,6 @@ def check_security_settings(
             "high",
             "Secret scanning push protection is disabled",
         ),
-        (
-            "dependabot_security_updates",
-            "medium",
-            "Dependabot security updates are disabled",
-        ),
     )
     for name, severity, title in required:
         state = switch(name)
@@ -388,6 +383,15 @@ def check_security_settings(
                     key=f"setting:{name}",
                 )
             )
+
+    # Dependency-fix PRs are owned by Renovate (osvVulnerabilityAlerts: true).
+    # Dependabot security-update PRs are intentionally disabled so the same CVE
+    # cannot produce two PRs; Dependabot *alerts* stay enabled and are checked
+    # by check_dependabot(). Record the policy as a note, not a finding.
+    if switch("dependabot_security_updates") != "enabled":
+        notes.append(
+            "Dependabot security updates disabled by policy — Renovate opens fix PRs"
+        )
 
     # These two are part of paid GitHub Secret Protection. Reporting them as
     # findings would nag forever on the current plan, so record them as notes.
