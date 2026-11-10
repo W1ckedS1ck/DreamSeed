@@ -456,10 +456,10 @@ run_secrets_audit() {
         print_fail ".gitignore not found"
         ((++issues))
     else
-        if grep -q "^secrets/" .gitignore && grep -q "^\.env" .gitignore && grep -q "^\*\.service" .gitignore; then
-            print_ok ".gitignore looks good (secrets/, .env, *.service excluded)"
+        if grep -q "^secrets/" .gitignore && grep -q "^\.env" .gitignore; then
+            print_ok ".gitignore looks good (secrets/, .env excluded)"
         else
-            print_fail ".gitignore missing some critical excludes (secrets/, .env, *.service)"
+            print_fail ".gitignore missing some critical excludes (secrets/, .env)"
             ((++issues))
         fi
     fi

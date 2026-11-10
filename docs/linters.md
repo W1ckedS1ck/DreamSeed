@@ -31,7 +31,7 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 | 13 | **zizmor** | CI | GitHub Actions security (workflow attacks, secrets) | GitHub Actions |
 | 14 | **Renovate Config Validator** | local + CI | `renovate.json` schema + custom manager patterns (runs in `--fast` and in the pre-commit CI job) | JSON/RegEx |
 | 15 | **Cloudflare IP ranges** | local | vendored `cloudflare-realip.conf` vs live `cloudflare.com/ips` (runs in `--fast`) | Data |
-| 16 | **Secrets audit** | local + CI | `.gitignore` excludes (`secrets/`, `.env`, `*.service`), `secrets/` not tracked in git, no hardcoded-secret patterns in tracked files | Secrets |
+| 16 | **Secrets audit** | local + CI | `.gitignore` excludes (`secrets/`, `.env`), `secrets/` not tracked in git, no hardcoded-secret patterns in tracked files | Secrets |
 | 17 | **Deploy Check** | CI | real `deploy.sh -c` smoke test (env parse, vault, playbook syntax) | orchestration |
 | 18 | **Env parser contract** | local + CI | `scripts/check_env_contract.sh` — all 3 .env parsers produce identical output on contract fixtures (`tests/env/`); run before editing `lib/env.sh`, `scripts/common_functions.sh` or `scripts/env_loader.py` | bash+python |
 | 19 | **terraform-docs** | local (pre-commit) | regenerates per-root `terraform/<root>/README.md` from module docs; one hook per root (aws/hetzner/grafana/cloudflare), graceful skip when binary is absent | HCL → Markdown |
