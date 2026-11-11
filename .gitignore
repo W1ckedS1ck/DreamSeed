@@ -59,3 +59,5 @@ docs/codemap/codemap.json
 docs/codemap/codemap.html
 docs/codemap/codemap.lock
 docs/codemie/
+.coverage
+.coverage.*

@@ -29,6 +29,7 @@ RENOVATE_VERSION="44.225.1"
 TOOLS=(
     "shellcheck:shellcheck:brew install shellcheck"
     "ruff:ruff:uv tool install ruff"
+    "mypy:mypy:uv tool install mypy"
     "ansible-lint:ansible-lint:uv tool install ansible-lint"
     "actionlint:actionlint:brew install actionlint"
     "tflint:tflint:brew install tflint"
@@ -82,7 +83,8 @@ run_shellcheck() {
 
     local sh_files=()
     while IFS= read -r -d '' f; do sh_files+=("$f"); done < <(
-        find . -name "*.sh" -not -path "./.git/*" -not -path "./secrets/*" -print0
+        find . -name "*.sh" -not -path "./.git/*" -not -path "./secrets/*" \
+            -not -path "./.venv/*" -not -path "./venv/*" -print0
     )
 
     local rc=0
@@ -135,6 +137,29 @@ run_ruff() {
         ci_annotation "Ruff" "pass"
     else
         ci_annotation "Ruff" "fail"
+    fi
+    group_end
+}
+
+run_mypy() {
+    group_start "mypy (Python types)"
+    if ! tool_available mypy; then
+        print_skip "mypy not installed"
+        group_end
+        return 0
+    fi
+
+    local rc=0
+    if mypy; then
+        print_ok "No type errors"
+    else
+        print_fail "Type errors found"
+        rc=1
+    fi
+    if [[ $rc -eq 0 ]]; then
+        ci_annotation "mypy" "pass"
+    else
+        ci_annotation "mypy" "fail"
     fi
     group_end
 }
@@ -475,6 +500,18 @@ run_secrets_audit() {
         print_ok "secrets/ not tracked"
     fi
 
+    # Internal notes (docs/private/) are gitignored; two files slipped into history in July 2026.
+    # No credentials were in them, but they must never be tracked again.
+    local tracked_private
+    tracked_private=$(git ls-files 2>/dev/null | grep "^docs/private/") || true
+    if [[ -n "$tracked_private" ]]; then
+        print_fail "docs/private/ is tracked in git (internal notes must stay out)"
+        echo "$tracked_private"
+        ((++issues))
+    else
+        print_ok "docs/private/ not tracked"
+    fi
+
     local tracked_env
     # Basename .env or .env.* (real secret files), excluding the empty-value
     # .env.example template and tests/env/*.env contract fixtures (fake values).
@@ -676,6 +713,7 @@ EOF
 run_fast() {
     run_shellcheck
     run_ruff
+    run_mypy
     run_bats
     run_ansible_lint
     run_actionlint
@@ -720,6 +758,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --ruff)
             MODE="ruff"
+            shift
+            ;;
+        --mypy)
+            MODE="mypy"
             shift
             ;;
         --bats)
@@ -803,6 +845,7 @@ case "$MODE" in
     full) run_full ;;
     shellcheck) run_shellcheck ;;
     ruff) run_ruff ;;
+    mypy) run_mypy ;;
     bats) run_bats ;;
     ansible-lint) run_ansible_lint ;;
     actionlint) run_actionlint ;;

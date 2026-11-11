@@ -21,8 +21,9 @@ PRIMARY_TOKEN = "primary-token"
 FALLBACK_TOKEN = "fallback-token"
 
 
-class FakeGitHub:
+class FakeGitHub(gp.GitHub):
     def __init__(self, routes: dict, public: dict | None = None) -> None:
+        super().__init__()
         self.routes = routes
         self.public = public or {}
         self.calls: list[str] = []
@@ -114,7 +115,7 @@ def build(
     client = FakeGitHub(routes, public)
     return gp.collect(
         REPO,
-        client,  # type: ignore[arg-type]
+        client,
         expected_checks=expected,
         include_scorecard=scorecard is not None,
         now=1_700_000_000,
@@ -381,8 +382,8 @@ def test_public_fetch_drops_github_headers(monkeypatch) -> None:
         def __enter__(self):
             return self
 
-        def __exit__(self, *_args) -> bool:
-            return False
+        def __exit__(self, *_args) -> None:
+            return None
 
         def read(self) -> bytes:
             return b'{"score": 8.0}'

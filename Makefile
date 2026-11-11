@@ -5,17 +5,24 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help lint lint-full fmt fmt-py secrets test test-bash test-env bench-install precommit cloudflare-ips dry-run
+.PHONY: help deps lint lint-full fmt fmt-py types secrets test test-bash test-env bench-install precommit cloudflare-ips dry-run
+
+# Prefer the repo-local venv created by `make deps`; fall back to whatever python3 is on PATH.
+PY := $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-lint: ## Fast lint (shellcheck, ruff, ansible-lint, actionlint, zizmor, yamllint, ...)
-	bash scripts/lint.sh --fast
+deps: ## Create .venv and install the hash-pinned test/lint deps (ci/requirements.txt)
+	uv venv .venv --python 3.12 --allow-existing
+	uv pip install --python .venv/bin/python --require-hashes -r ci/requirements.txt
+
+lint: ## Fast lint (shellcheck, ruff, mypy, ansible-lint, actionlint, zizmor, yamllint, ...)
+	PATH="$(CURDIR)/.venv/bin:$$PATH" bash scripts/lint.sh --fast
 
 lint-full: ## Full lint suite (adds terraform validate, tflint, gitleaks, trivy, secrets)
-	bash scripts/lint.sh --full
+	PATH="$(CURDIR)/.venv/bin:$$PATH" bash scripts/lint.sh --full
 
 fmt: ## terraform fmt (via scripts/lint.sh --fmt)
 	bash scripts/lint.sh --fmt
@@ -24,10 +31,13 @@ fmt-py: ## ruff format (Python)
 	ruff format .
 
 secrets: ## Secrets audit (same checks as CI)
-	bash scripts/lint.sh --secrets
+	PATH="$(CURDIR)/.venv/bin:$$PATH" bash scripts/lint.sh --secrets
 
-test: ## Unit tests (pytest)
-	python3 -m pytest tests/unit -q
+types: ## Type-check the Python tooling (config: mypy.ini)
+	$(PY) -m mypy
+
+test: ## Unit tests + coverage floor (same command as CI)
+	PYTHON=$(PY) bash scripts/test_unit.sh
 
 test-bash: ## Bash unit tests (bats)
 	bats --print-output-on-failure tests/bats

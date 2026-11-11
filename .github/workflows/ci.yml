@@ -347,8 +347,13 @@ jobs:
           cache-dependency-glob: ci/requirements.txt
       - name: Install unit test dependencies
         run: uv pip install --system --require-hashes -r ci/requirements.txt
-      - name: Run unit tests (templates, bot helpers, CI job names, posture)
-        run: python3 -m pytest tests/unit -q
+      # The job name stays ".env Parser Contract": it is a REQUIRED status check on Protect Main, and
+      # check_required_checks.py compares job NAMES. Types and coverage ride along here instead of a
+      # new job, so branch protection needs no change.
+      - name: Unit tests (coverage floor)
+        run: bash scripts/test_unit.sh
+      - name: Types (mypy, source + tests)
+        run: python3 -m mypy
 
   deploy-check:
     name: Deploy Check

@@ -195,7 +195,7 @@ def check_secret_scanning(
         # Secret scanning alerts are their own permission; GITHUB_TOKEN does
         # not have it. Do not go quiet about that — a blind audit is worse
         # than a noisy one.
-        findings = [
+        token_findings = [
             Finding(
                 check="secret_scanning",
                 severity="medium",
@@ -207,8 +207,8 @@ def check_secret_scanning(
             )
         ]
         return (
-            _status_for(findings),
-            findings,
+            _status_for(token_findings),
+            token_findings,
             ["secret scanning alerts unreadable (HTTP 403)"],
         )
     if status != 200 or not isinstance(alerts, list):
@@ -239,7 +239,7 @@ def check_dependabot(github: GitHub, repo: str) -> tuple[str, list[Finding], lis
         f"/repos/{repo}/dependabot/alerts?state=open&per_page={PER_PAGE}"
     )
     if status == 403:
-        findings = [
+        token_findings = [
             Finding(
                 check="dependabot",
                 severity="medium",
@@ -251,8 +251,8 @@ def check_dependabot(github: GitHub, repo: str) -> tuple[str, list[Finding], lis
             )
         ]
         return (
-            _status_for(findings),
-            findings,
+            _status_for(token_findings),
+            token_findings,
             ["Dependabot alerts unreadable (HTTP 403)"],
         )
     if status != 200 or not isinstance(alerts, list):
@@ -297,7 +297,7 @@ def check_code_scanning(
         f"/repos/{repo}/code-scanning/alerts?state=open&per_page={PER_PAGE}"
     )
     if status == 403:
-        findings = [
+        token_findings = [
             Finding(
                 check="code_scanning",
                 severity="medium",
@@ -309,8 +309,8 @@ def check_code_scanning(
             )
         ]
         return (
-            _status_for(findings),
-            findings,
+            _status_for(token_findings),
+            token_findings,
             ["code scanning alerts unreadable (HTTP 403)"],
         )
     if status != 200 or not isinstance(alerts, list):
@@ -506,7 +506,7 @@ def check_ruleset(
             )
         # 403 (token scope) or 0 (network): we could not look, which is not
         # the same as "no protection". Say so without crying critical.
-        findings = [
+        token_findings = [
             Finding(
                 check="ruleset",
                 severity="medium",
@@ -516,7 +516,11 @@ def check_ruleset(
                 key="ruleset:unreadable",
             )
         ]
-        return _status_for(findings), findings, [f"rulesets unreadable (HTTP {status})"]
+        return (
+            _status_for(token_findings),
+            token_findings,
+            [f"rulesets unreadable (HTTP {status})"],
+        )
 
     name = str(detail.get("name") or "unnamed")
     findings: list[Finding] = []

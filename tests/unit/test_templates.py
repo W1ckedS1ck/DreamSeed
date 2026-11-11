@@ -36,7 +36,9 @@ ENV.filters["bool"] = lambda value: str(value).lower() in ("1", "true", "yes", "
 
 
 def _render(name: str, context: dict | None = None) -> str:
-    source, _, _ = ENV.loader.get_source(ENV, name)
+    loader = ENV.loader
+    assert loader is not None
+    source, _, _ = loader.get_source(ENV, name)
     names = meta.find_undeclared_variables(ENV.parse(source))
     values = {n: "x" for n in names}
     values.update(context or {})
