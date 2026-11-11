@@ -4,7 +4,7 @@
 
 There are 2 layers of linting:
 
-- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff (lint + format), bats, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
+- **Local**: `./deploy.sh --lint` or `./scripts/lint.sh` — fast mode covers ShellCheck, ruff (lint + format), mypy, bats, ansible-lint, actionlint, zizmor, yamllint, Renovate, markdownlint, Cloudflare IPs. Run `./scripts/lint.sh --full --ci` for the full suite (adds terraform fmt, tflint, terraform validate, gitleaks, Trivy, secrets audit; `--ci` just adds GitHub annotations)
 - **CI on GitHub**: `ci.yml` (12 jobs on push — 11 on PRs, Deploy Check is push-only; 11 required for merge)
 - **Task runner**: `make help` lists shortcuts (`make lint`, `make lint-full`, `make test-env`, ...). Each delegates to the same scripts as CI — one source of truth.
 
@@ -18,6 +18,7 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 |---|------|-------|----------------|----------|
 | 1 | **ShellCheck** | local + CI | `deploy.sh`, `scripts/*.sh`, `.github/scripts/*.sh`, composite-action `run:` blocks | Bash |
 | 2 | **ruff** | local + CI (pre-commit) | every `.py` in the repo (`ruff check .`) + formatter (`ruff format --check .`); rules in `ruff.toml` | Python |
+| 2b | **mypy** | local + CI | `mypy.ini`: `scripts/`, `lib/`, `.github/actions/`, `docs/codemap/`, `tests/`; `check_untyped_defs` on | Python |
 | 3 | **ansible-lint** | local + CI | `ansible/playbook-*.yml`, `ansible-roles/*/tasks/*.yml` | YAML/Ansible |
 | 4 | **tflint** | local + CI | `terraform/aws/*.tf`, `terraform/hetzner/*.tf`, `terraform/grafana/*.tf`, `terraform/cloudflare/*.tf` | HCL/Terraform |
 | 5 | **terraform validate** | CI | `*.tf` syntax | HCL |
@@ -40,6 +41,14 @@ The `.env Parser Contract` job runs both the fixture contract (`scripts/check_en
 ---
 
 ## Details
+
+### 2b. mypy (Python types)
+
+Config: `mypy.ini` (`python_version = 3.12`, `check_untyped_defs = true`, `ignore_missing_imports`).
+Run locally: `make types` (or `./scripts/lint.sh --mypy`). CI runs it as a step of the required
+`.env Parser Contract` job; the same job runs `make test`'s coverage floor (80 % over the modules the
+pytest suite actually exercises — `scripts/env_loader.py`/`lint_actions.py` are covered by the parser
+contract and the lint itself, `telegram_bot.py` is network-bound).
 
 ### 1. ShellCheck (Bash)
 
