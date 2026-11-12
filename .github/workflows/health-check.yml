@@ -29,8 +29,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
-      # Scheduled runs target prod-hetz too — keep the production gate.
-      name: ${{ contains(fromJSON('["prod", "prod-hetz"]'), matrix.target) && 'production' || '' }}
+      # Scheduled runs intentionally use the unprotected `prod-hetz` environment:
+      # the shared `env-prod-hetz` concurrency group stays locked while a job
+      # waits for approval, so an unapproved scheduled run blocks every prod
+      # deploy (seen 2026-11-12: [B] Security Update #34 held the group 3 days).
+      # Manual prod runs keep the `production` gate.
+      name: ${{ github.event_name == 'schedule' && 'prod-hetz' || (contains(fromJSON('["prod", "prod-hetz"]'), matrix.target) && 'production' || '') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

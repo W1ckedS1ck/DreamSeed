@@ -16,6 +16,26 @@ else
     NC=''
 fi
 
+# Match a pattern against a pipeline WITHOUT the pipefail/SIGPIPE trap.
+#
+# `producer | grep -q PAT` looks right but is a coin flip under `set -o pipefail`: grep
+# exits on the first match, the producer is still writing, gets SIGPIPE, and the whole
+# pipeline reports failure — a hit becomes a miss. Seen in practice as
+# `php -m | grep -qi xml` intermittently claiming the xml extension is missing, and as a
+# safety check in RESTORE_ALL treatable as "archive is clean". This drains stdin to EOF
+# (so the producer always exits 0) and then matches a here-string.
+#
+#   cmd | pipe_has -F 'literal'
+#   cmd | pipe_has -E '^regex$'
+#   cmd | pipe_has -qi 'case-insensitive-substring'
+pipe_has() {
+    local flags="${1:--E}" pattern="${2:-}" body
+    shift 2 2>/dev/null || shift $#
+    body="$(cat)"
+    # shellcheck disable=SC2086  # flags is a grep option string ("-E", "-qi", ...)
+    grep -q $flags -- "$pattern" <<<"$body"
+}
+
 # Backup rotation defaults (overridable via server .env: PROJECT_KEEP / DB_KEEP)
 
 # Print an env file's plaintext to stdout, tolerating both storage forms:
@@ -28,7 +48,11 @@ resolve_env_plain() {
         echo "Error: file $f not found!" >&2
         return 1
     }
-    if head -c 16 "$f" 2>/dev/null | grep -qF '$ANSIBLE_VAULT'; then
+    # Same pipefail trap as pipe_has(): `head -c 16 "$f" | grep -qF magic` can report a
+    # miss when grep exits first and head is killed by SIGPIPE. Compare the prefix instead.
+    local magic
+    magic="$(head -c 32 "$f" 2>/dev/null || true)"
+    if [ "${magic:0:14}" = '$ANSIBLE_VAULT' ]; then
         ansible-vault view "$f" --vault-password-file "$pw" 2>/dev/null || {
             echo "Error: cannot decrypt $f" >&2
             return 1
