@@ -30,6 +30,34 @@
     backup: true
   notify: Reload Nginx
 
+# Public one-off endpoints (/check-email.php, /claim-order-email.php,
+# /ds-meta-capi.php, /share-tree*.php) are called directly, bypassing MODX
+# routing, so they carry their own method/rate limits in the vhost. They need:
+#   - a limit_req_zone definition (http context → conf.d)
+#   - a standalone FastCGI snippet those locations can include
+# Both are provisioned here so a deploy never leaves the endpoints unguarded.
+- name: Deploy Nginx rate-limit zone for public one-off endpoints
+  become: true
+  ansible.builtin.copy:
+    src: ds-endpoints.conf
+    dest: /etc/nginx/conf.d/ds-endpoints.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Reload Nginx
+
+- name: Deploy FastCGI snippet for public one-off endpoints
+  become: true
+  ansible.builtin.template:
+    src: ds-fastcgi-php.conf.j2
+    dest: /etc/nginx/snippets/ds-fastcgi-php.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Reload Nginx
+
 - name: Ensure Faro vendor directory exists
   become: true
   ansible.builtin.file:
