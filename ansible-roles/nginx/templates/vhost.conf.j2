@@ -1,7 +1,7 @@
 server {
     listen 80;
     listen [::]:80;
-    server_name {{ domain }};
+    server_name {{ domain }} {{ www_domain }};
 
     location /.well-known/acme-challenge/ {
         root {{ web_root }};
@@ -15,6 +15,9 @@ server {
     }
 
     location / {
-        return 301 https://$host$request_uri;
+        # Canonical host: never keep "www" in the URL. Redirecting to the apex
+        # directly (instead of $host) turns a www request into one hop, while
+        # $request_uri preserves the path and query string.
+        return 301 https://{{ domain }}$request_uri;
     }
 }

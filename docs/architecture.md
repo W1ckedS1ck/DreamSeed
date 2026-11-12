@@ -84,6 +84,41 @@ flowchart LR
 
 ---
 
+## Hostnames & TLS
+
+Every environment is served on exactly **one** canonical hostname; the `www.`
+alias only exists to redirect. This is not cosmetic: a `www` name that resolves to
+a stale IP (or whose certificate lacks the `www` SAN) makes Cloudflare answer
+**`Error 522 — Connection timed out`** for that half of the traffic while the apex
+stays perfectly healthy.
+
+| Environment | Canonical host | www alias |
+|---|---|---|
+| `prod` / `prod-hetz` | `dreamseed.online` | `www.dreamseed.online` → 301 apex |
+| `dev-hetz` | `hetz.vitalikuts.online` | `www.hetz.vitalikuts.online` → 301 apex |
+| `dev-aws` | `aws.vitalikuts.online` | `www.aws.vitalikuts.online` → 301 apex |
+| `test` | `test.vitalikuts.online` | same pattern (self-signed cert, no CF DNS) |
+
+Three pieces have to agree, and all three are provisioned from code:
+
+1. **DNS** — `lib/post.sh:update_dns` creates/updates the `www.<domain>` A record
+   with the same IP as the apex (`lib/helpers.sh:update_cloudflare_dns`).
+2. **Certificate** — the `ssl` role requests one Let's Encrypt lineage covering
+   both names (`-d <domain> -d www.<domain>`) and runs `certbot --expand` when an
+   existing cert was issued for the apex only (a plain re-run would just renew the
+   old SANs and leave `www` uncovered).
+3. **nginx** — the `:80` vhost listens for both names and redirects to
+   `https://<apex>`; `:443` has a dedicated `www.<domain>` block
+   (`vhost-ssl.conf.j2`), because the apex block answers unknown Host headers with
+   `444` (direct-IP / WAF-bypass guard) and nginx selects a vhost by SNI + Host.
+   Both redirects use `$request_uri`, so path and query string survive.
+
+Monitoring: `check_site.sh` pushes `www_redirect_ok` every minute (local SNI probe,
+Cloudflare-independent), so a stale `www` record or a certificate without the
+`www` SAN turns into a Grafana alert instead of a visitor-facing 522.
+
+---
+
 ## Secrets Flow
 
 ```

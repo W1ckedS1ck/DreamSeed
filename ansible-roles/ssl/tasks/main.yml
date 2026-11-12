@@ -20,6 +20,19 @@
     path: "/etc/letsencrypt/renewal/{{ domain }}.conf"
   register: ssl_renewal_conf
 
+# Adding a name to an existing lineage needs `certbot --expand`: re-running the
+# new `-d` list only renews the old SANs, so www.<domain> would stay uncovered
+# and Cloudflare Full (strict) would keep answering 522 for it.
+- name: Check whether the certificate covers the www host
+  become: true
+  ansible.builtin.command: >
+    openssl x509 -in /etc/letsencrypt/live/{{ domain }}/fullchain.pem
+    -noout -checkhost {{ www_domain }}
+  register: ssl_www_san
+  changed_when: false
+  failed_when: false
+  when: ssl_cert_file.stat.exists
+
 # --- Certbot DNS Challenge (CloudFlare) ---
 - name: Obtain or skip Let's Encrypt certificate via DNS-01
   when: ssl_cf_dns_enabled | default(true) | bool
@@ -41,7 +54,8 @@
         mode: "0600"
       when: cloudflare_api_token is defined and cloudflare_api_token | length > 0
 
-    # Run certbot if no cert, or existing one isn't certbot-managed (restored from backup).
+    # Run certbot if no cert, an existing one isn't certbot-managed (restored
+    # from backup), or the current cert does not cover www.<domain> yet.
     - name: Obtain SSL certificate via DNS CloudFlare
       become: true
       ansible.builtin.command: >
@@ -49,12 +63,16 @@
         --dns-cloudflare
         --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
         {% if ssl_staging | default(false) %}--staging{% endif %}
+        --expand
         -d {{ domain }}
+        -d {{ www_domain }}
         --non-interactive
         --agree-tos
         -m {{ admin_email }}
         --rsa-key-size 4096
-      when: cloudflare_api_token is defined and cloudflare_api_token | length > 0 and (not ssl_cert_file.stat.exists or not ssl_renewal_conf.stat.exists)
+      when:
+        - cloudflare_api_token is defined and cloudflare_api_token | length > 0
+        - (not ssl_cert_file.stat.exists) or (not ssl_renewal_conf.stat.exists) or ((ssl_www_san.rc | default(1)) != 0)
       register: ssl_certbot_result
       failed_when: false
       changed_when: ssl_certbot_result is not skipped and ssl_certbot_result.rc is defined and ssl_certbot_result.rc == 0

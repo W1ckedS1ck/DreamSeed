@@ -262,3 +262,32 @@ server {
         return 204;
     }
 }
+
+# --- Canonical host: www.{{ domain }} -> {{ domain }} (301) ---
+# Separate server block on purpose: the apex block above ends unknown Host
+# headers with 444 (direct-IP / WAF-bypass guard), and nginx picks a vhost by
+# SNI + Host, so "www" needs its own block. The certificate in this lineage
+# covers both names (ssl role, DNS-01 challenge).
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{ www_domain }};
+
+    access_log /var/log/nginx/{{ domain }}-ssl-access.log;
+    error_log /var/log/nginx/{{ domain }}-ssl-error.log;
+
+{% if ssl_has_cert | default(false) %}
+    ssl_certificate /etc/letsencrypt/live/{{ domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ domain }}/privkey.pem;
+{% else %}
+    ssl_certificate /etc/ssl/certs/selfsigned.crt;
+    ssl_certificate_key /etc/ssl/private/selfsigned.key;
+{% endif %}
+
+    # Redirect-only vhost: inherit nginx's default TLS policy (TLSv1.2/1.3) and
+    # keep HSTS so the browser pins the host even before it lands on the apex.
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+    # $request_uri keeps path + query, so deep links survive the redirect.
+    return 301 https://{{ domain }}$request_uri;
+}

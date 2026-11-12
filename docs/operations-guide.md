@@ -74,6 +74,32 @@ If DNS hasn't propagated → wait 5-10 min and re-run: `./deploy.sh <target> -n 
 
 ---
 
+### `www.<domain>` answers Cloudflare `Error 522`
+
+The apex is fine, the `www` host times out. Three things must agree, and each one
+has a distinct symptom:
+
+```bash
+# 1. DNS: www must resolve to the SAME proxied IP as the apex
+dig +short www.dreamseed.online
+dig +short dreamseed.online          # must match
+
+# 2. Certificate: must carry the www SAN (else Full(strict) → 522)
+sudo openssl x509 -in /etc/letsencrypt/live/<domain>/fullchain.pem -noout -checkhost www.<domain>
+sudo certbot certificates | grep -A2 "<domain>"   # Domains: <domain> www.<domain>
+
+# 3. nginx: dedicated www vhost that 301s to the apex
+curl -sI --resolve "www.<domain>:443:127.0.0.1" https://www.<domain>/ | head -3
+# expect: 301 + location: https://<domain>/
+```
+
+Fixes: a stale `www` A record is corrected by the deploy DNS step
+(`lib/post.sh:update_dns`), a missing SAN by re-running playbook 02 (the `ssl`
+role passes `--expand`), and a missing vhost by re-running playbook 02 as well.
+Metric: `www_redirect_ok` from `check_site.sh` (1 = www 301s to the apex).
+
+---
+
 ### Ansible playbook fails mid-deploy
 
 Check the last playbook output. Common failures:

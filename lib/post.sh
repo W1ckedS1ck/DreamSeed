@@ -9,6 +9,10 @@ update_dns() {
             step_fail "CLOUDFLARE_API_TOKEN not set — refusing to skip DNS silently (use --no-dns to skip intentionally)"
         fi
         update_cloudflare_dns "$DEPLOY_DOMAIN" "$SERVER_IP" || step_fail "Cloudflare DNS update failed"
+        # www must resolve to the same origin: nginx 301s it to the apex, and a
+        # stale/missing record is exactly what produces a Cloudflare 522 on www.
+        update_cloudflare_dns "www.${DEPLOY_DOMAIN}" "$SERVER_IP" ||
+            step_fail "Cloudflare DNS update failed for www.${DEPLOY_DOMAIN}"
         # Grey-cloud (no proxy) — for direct SSH without Cloudflare (dev only)
         if [[ ! "$TARGET" =~ ^prod ]]; then
             update_cloudflare_dns_direct "ssh.${DEPLOY_DOMAIN}" "$SERVER_IP" ||
