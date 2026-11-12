@@ -1,0 +1,18 @@
+# FastCGI worker for the public one-off endpoints: same settings as the main
+# `location ~ \.php$` (php_fastcgi.conf.j2), but standalone so those fixed
+# locations can run PHP without inheriting the whole vhost. Kept as its own
+# snippet because nginx allows only one FastCGI handler per location.
+include snippets/fastcgi-php.conf;
+fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+include fastcgi_params;
+fastcgi_buffer_size 32k;
+fastcgi_buffers 16 16k;
+fastcgi_connect_timeout 60s;
+fastcgi_send_timeout 300s;
+fastcgi_read_timeout 300s;
+fastcgi_hide_header X-Powered-By;
+# MODX strips Cache-Control at PHP level; keep the nginx-managed header only
+# (same reason as in php_fastcgi.conf.j2).
+fastcgi_hide_header Cache-Control;
+fastcgi_param HTTP_HOST $host;

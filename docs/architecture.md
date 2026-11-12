@@ -322,6 +322,11 @@ Layer 3 — Application:
   fail2ban: dreamseed-botsearch (vulnerability scanners — 2 hits) → edge ban 12h
   fail2ban: dreamseed-bad-request (HTTP 400 — 6 hits) → edge ban 1h
   Web-jail whitelist per env: FAIL2BAN_IGNOREIP_<TARGET> (secrets/.env)
+  Public one-off endpoints (called directly, no MODX routing) get fixed
+            locations with method + rate limits: /check-email.php,
+            /claim-order-email.php (POST only), /ds-meta-capi.php (POST/OPTIONS),
+            /share-tree.php, /share-tree-img.php (GET only), /config.core.php → 404.
+            Zone: ds_endpoints 60 r/m burst 20 (conf.d/ds-endpoints.conf)
   MODX core dirs: 0750, config: 0640 root:www-data
 
 Layer 4 — System:

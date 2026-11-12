@@ -123,6 +123,46 @@ server {
         try_files $uri $uri/ @modx;
     }
 
+    # --- Public one-off endpoints: restrict HTTP methods + rate limit ---
+    # These PHP files live in the webroot and are called directly (no MODX
+    # routing), so each needs its own fixed location: without it the generic
+    # `location ~ \.php$` serves them with no method restriction and no limit.
+    location = /config.core.php {
+        return 404;
+    }
+
+    location = /check-email.php {
+        limit_except POST { deny all; }
+        limit_req zone=ds_endpoints burst=20 nodelay;
+        limit_req_status 429;
+        include /etc/nginx/snippets/ds-fastcgi-php.conf;
+    }
+
+    location = /claim-order-email.php {
+        limit_except POST { deny all; }
+        limit_req zone=ds_endpoints burst=20 nodelay;
+        limit_req_status 429;
+        include /etc/nginx/snippets/ds-fastcgi-php.conf;
+    }
+
+    # Meta Conversions API relay — POST only (OPTIONS for CORS preflight).
+    location = /ds-meta-capi.php {
+        limit_except POST OPTIONS { deny all; }
+        limit_req zone=ds_endpoints burst=20 nodelay;
+        limit_req_status 429;
+        include /etc/nginx/snippets/ds-fastcgi-php.conf;
+    }
+
+    location = /share-tree.php {
+        limit_except GET { deny all; }
+        include /etc/nginx/snippets/ds-fastcgi-php.conf;
+    }
+
+    location = /share-tree-img.php {
+        limit_except GET { deny all; }
+        include /etc/nginx/snippets/ds-fastcgi-php.conf;
+    }
+
     location @modx {
         rewrite ^/(.*)$ /index.php?q=$1&$args last;
     }
