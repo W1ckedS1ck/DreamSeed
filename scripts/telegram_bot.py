@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from env_loader import load_env
-from telegram import Update
+from telegram import Message, Update
 from telegram.error import NetworkError
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
@@ -63,21 +63,34 @@ BOT_USERNAME = os.environ.get("BOT_USERNAME", "DreamSeedOnline_bot")
 DB_PREFIX = os.environ.get("DB_PREFIX", "db_")
 
 
-def _chat_allowed(update: Update) -> bool:
+def _owner_message(update: Update) -> Message | None:
+    """The message a command should answer, or None when the update is not for us.
+
+    Explicit ``is None`` guards, not asserts: ``python -O`` strips asserts, and a
+    missing chat/message is a normal condition here (channel posts, edited
+    messages) — not an invariant violation. ``effective_message`` is PTB's
+    canonical accessor; ``update.message`` is None for anything that is not a
+    plain message.
+    """
+    chat = update.effective_chat
+    if chat is None:
+        log.warning("Update without effective_chat — ignored")
+        return None
     if not TG_CHAT_ID:
         log.error("TG_CHAT_ID not set — all messages rejected")
-        return False
-    chat_id = str(update.effective_chat.id)
+        return None
+    chat_id = str(chat.id)
     if chat_id != TG_CHAT_ID:
         log.warning("Ignored message from unauthorized chat: %s", chat_id)
-        return False
-    msg = update.message
-    return not (
-        msg
-        and msg.reply_to_message
-        and msg.reply_to_message.from_user
-        and msg.reply_to_message.from_user.is_bot
-    )
+        return None
+    message = update.effective_message
+    if message is None:
+        log.warning("Update without a message — ignored")
+        return None
+    reply = message.reply_to_message
+    if reply is not None and reply.from_user is not None and reply.from_user.is_bot:
+        return None
+    return message
 
 
 def get_env() -> str:
@@ -141,7 +154,8 @@ async def _rclone_lsf(path: str) -> list:
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _chat_allowed(update):
+    reply_to = _owner_message(update)
+    if reply_to is None:
         return
 
     env = get_env()
@@ -172,11 +186,12 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         msg += f"  🗺 {line[1]} ({get_size(line[2])})\n"
     msg += f"\n⏰ Last check: {datetime.now(UTC).strftime('%d.%m %H:%M')}"
 
-    await update.message.reply_text(msg, parse_mode="HTML")
+    await reply_to.reply_text(msg, parse_mode="HTML")
 
 
 async def cmd_backups(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _chat_allowed(update):
+    reply_to = _owner_message(update)
+    if reply_to is None:
         return
 
     env = get_env()
@@ -194,13 +209,14 @@ async def cmd_backups(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         for f in db_files
     )
 
-    await update.message.reply_text(msg, parse_mode="HTML")
+    await reply_to.reply_text(msg, parse_mode="HTML")
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _chat_allowed(update):
+    reply_to = _owner_message(update)
+    if reply_to is None:
         return
-    await update.message.reply_text("Use /status or /backups")
+    await reply_to.reply_text("Use /status or /backups")
 
 
 # --- Health endpoint (Better Stack "Telegram Bot" monitor probes /bot-health,
