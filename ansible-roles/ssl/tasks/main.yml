@@ -22,16 +22,27 @@
 
 # Adding a name to an existing lineage needs `certbot --expand`: re-running the
 # new `-d` list only renews the old SANs, so www.<domain> would stay uncovered
-# and Cloudflare Full (strict) would keep answering 522 for it.
-- name: Check whether the certificate covers the www host
+# and Cloudflare Full (strict) would keep failing the origin handshake.
+# NOTE: `openssl x509 -checkhost` exits 0 even when it prints "does NOT match"
+# (OpenSSL 3.0.13), so the SAN list is parsed instead of trusting its exit code.
+- name: Read the certificate SAN list
   become: true
   ansible.builtin.command: >
     openssl x509 -in /etc/letsencrypt/live/{{ domain }}/fullchain.pem
-    -noout -checkhost {{ www_domain }}
-  register: ssl_www_san
+    -noout -ext subjectAltName
+  register: ssl_san_list
   changed_when: false
   failed_when: false
   when: ssl_cert_file.stat.exists
+
+- name: Decide whether the certificate must cover the www host
+  ansible.builtin.set_fact:
+    ssl_needs_www: >-
+      {{
+        (not ssl_cert_file.stat.exists)
+        or (not ssl_renewal_conf.stat.exists)
+        or (('DNS:' ~ www_domain) not in (ssl_san_list.stdout | default('')))
+      }}
 
 # --- Certbot DNS Challenge (CloudFlare) ---
 - name: Obtain or skip Let's Encrypt certificate via DNS-01
@@ -72,7 +83,7 @@
         --rsa-key-size 4096
       when:
         - cloudflare_api_token is defined and cloudflare_api_token | length > 0
-        - (not ssl_cert_file.stat.exists) or (not ssl_renewal_conf.stat.exists) or ((ssl_www_san.rc | default(1)) != 0)
+        - ssl_needs_www | bool
       register: ssl_certbot_result
       failed_when: false
       changed_when: ssl_certbot_result is not skipped and ssl_certbot_result.rc is defined and ssl_certbot_result.rc == 0
