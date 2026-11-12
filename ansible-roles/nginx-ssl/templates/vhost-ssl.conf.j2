@@ -263,6 +263,7 @@ server {
     }
 }
 
+{% if www_redirect_enabled | bool %}
 # --- Canonical host: www.{{ domain }} -> {{ domain }} (301) ---
 # Separate server block on purpose: the apex block above ends unknown Host
 # headers with 444 (direct-IP / WAF-bypass guard), and nginx picks a vhost by
@@ -291,3 +292,4 @@ server {
     # $request_uri keeps path + query, so deep links survive the redirect.
     return 301 https://{{ domain }}$request_uri;
 }
+{% endif %}

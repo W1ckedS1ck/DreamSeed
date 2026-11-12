@@ -33,7 +33,7 @@
   register: ssl_san_list
   changed_when: false
   failed_when: false
-  when: ssl_cert_file.stat.exists
+  when: ssl_cert_file.stat.exists and (www_redirect_enabled | bool)
 
 - name: Decide whether the certificate must cover the www host
   ansible.builtin.set_fact:
@@ -41,7 +41,10 @@
       {{
         (not ssl_cert_file.stat.exists)
         or (not ssl_renewal_conf.stat.exists)
-        or (('DNS:' ~ www_domain) not in (ssl_san_list.stdout | default('')))
+        or (
+             (www_redirect_enabled | bool)
+             and (('DNS:' ~ www_domain) not in (ssl_san_list.stdout | default('')))
+           )
       }}
 
 # --- Certbot DNS Challenge (CloudFlare) ---
@@ -76,7 +79,7 @@
         {% if ssl_staging | default(false) %}--staging{% endif %}
         --expand
         -d {{ domain }}
-        -d {{ www_domain }}
+        {% if www_redirect_enabled | bool %}-d {{ www_domain }}{% endif %}
         --non-interactive
         --agree-tos
         -m {{ admin_email }}

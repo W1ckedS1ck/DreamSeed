@@ -1,7 +1,7 @@
 server {
     listen 80;
     listen [::]:80;
-    server_name {{ domain }} {{ www_domain }};
+    server_name {{ domain }}{% if www_redirect_enabled | bool %} {{ www_domain }}{% endif %};
 
     location /.well-known/acme-challenge/ {
         root {{ web_root }};

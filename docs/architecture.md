@@ -95,9 +95,16 @@ stays perfectly healthy.
 | Environment | Canonical host | www alias |
 |---|---|---|
 | `prod` / `prod-hetz` | `dreamseed.online` | `www.dreamseed.online` → 301 apex |
-| `dev-hetz` | `hetz.vitalikuts.online` | `www.hetz.vitalikuts.online` → 301 apex |
-| `dev-aws` | `aws.vitalikuts.online` | `www.aws.vitalikuts.online` → 301 apex |
-| `test` | `test.vitalikuts.online` | same pattern (self-signed cert, no CF DNS) |
+| `dev-hetz` | `hetz.vitalikuts.online` | — (apex domain only) |
+| `dev-aws` | `aws.vitalikuts.online` | — (apex domain only) |
+| `test` | `test.vitalikuts.online` | — (apex domain only) |
+
+The alias is created only for **apex-style** domains (`www_domain` /
+`www_redirect_enabled` in `ansible/group_vars/all.yml`, mirrored in `lib/post.sh`).
+Reason: Cloudflare **Universal SSL** covers `<zone>` and `*.<zone>` only, so
+`www.hetz.vitalikuts.online` (two labels below the zone) has no certificate at the
+edge and the client TLS handshake fails before the request ever reaches nginx.
+Subdomain deployments are already canonical, so there is nothing to redirect.
 
 Three pieces have to agree, and all three are provisioned from code:
 

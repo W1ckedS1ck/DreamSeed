@@ -15,6 +15,7 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         echo "site_up{instance=\"{{ domain }}\"} 0"
     fi
 
+{% if www_redirect_enabled | bool %}
     # Canonical host: www.<domain> must answer 301 to the apex. Local SNI probe,
     # independent of Cloudflare — a wrong DNS record, a certificate without the
     # www SAN, or a missing www vhost all surface here (that combination is what
@@ -26,6 +27,7 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
     else
         echo "www_redirect_ok{instance=\"{{ domain }}\"} 0"
     fi
+{% endif %}
 
     # MODX core check
     if [ -f "{{ web_root }}/manager/config.core.php" ] && [ -f "{{ web_root }}/core/model/modx/modx.class.php" ]; then

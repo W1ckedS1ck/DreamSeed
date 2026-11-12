@@ -35,15 +35,17 @@ setup() {
     [ "${#lines[@]}" -eq 2 ]
 }
 
-@test "update_dns: dev also writes the grey-cloud ssh record" {
+@test "update_dns: subdomain deployments skip the www alias" {
+    # Cloudflare Universal SSL covers <zone> + *.<zone>: www.hetz.vitalikuts.online
+    # would have no edge certificate, so dev/test must not get the record.
     TARGET="dev-hetz"
     DEPLOY_DOMAIN="hetz.vitalikuts.online"
     run update_dns
     [ "$status" -eq 0 ]
     run cat "$CALLS_FILE"
     [ "${lines[0]}" = "dns hetz.vitalikuts.online 203.0.113.10" ]
-    [ "${lines[1]}" = "dns www.hetz.vitalikuts.online 203.0.113.10" ]
-    [ "${lines[2]}" = "direct ssh.hetz.vitalikuts.online 203.0.113.10" ]
+    [ "${lines[1]}" = "direct ssh.hetz.vitalikuts.online 203.0.113.10" ]
+    [ "${#lines[@]}" -eq 2 ]
 }
 
 @test "update_dns: --no-dns touches nothing" {

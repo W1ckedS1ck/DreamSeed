@@ -98,6 +98,13 @@ Fixes: a stale `www` A record is corrected by the deploy DNS step
 role passes `--expand`), and a missing vhost by re-running playbook 02 as well.
 Metric: `www_redirect_ok` from `check_site.sh` (1 = www 301s to the apex).
 
+Only apex-style domains get the alias (`www_redirect_enabled`). On a subdomain
+deployment (`hetz.vitalikuts.online`) `www.hetz.vitalikuts.online` can never be
+served by Cloudflare: Universal SSL only covers `<zone>` and `*.<zone>`, so the
+edge has no certificate for that two-label name and the TLS handshake fails
+before nginx sees the request. A browser reports `SSL_ERROR_HANDSHAKE_FAILURE`
+(Chrome: `ERR_SSL_PROTOCOL_ERROR`), not a 522 — that is expected, not a bug.
+
 ---
 
 ### Ansible playbook fails mid-deploy
