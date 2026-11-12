@@ -212,6 +212,46 @@ outside_in() {
         fail "DNS: один из хостов не резолвится"
     fi
 
+    # Edge IPs are identical for every proxied record, so the check above cannot
+    # catch a stale origin (exactly how www pointed at a dead host until
+    # 2026-11-12). Compare the A-record *content* when a Cloudflare token is
+    # available; stay read-only and skip cleanly when it is not.
+    if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+        local zone zone_id apex_origin www_origin
+        zone="$(dig +noall +answer SOA "$DOMAIN" 2>/dev/null | awk 'NR==1 {sub(/\.$/, "", $1); print $1}')"
+        zone_id=""
+        if [ -n "$zone" ]; then
+            zone_id="$(curl -fsS -m 10 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                -G --data-urlencode "name=$zone" "https://api.cloudflare.com/client/v4/zones" 2>/dev/null |
+                python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["result"][0]["id"] if d.get("result") else "", end="")' 2>/dev/null || true)"
+        fi
+
+        cf_a() { # fqdn -> newline-separated origin IPs; non-zero on API failure
+            local body
+            body="$(curl -fsS -m 10 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                -G --data-urlencode "type=A" --data-urlencode "name=$1" \
+                "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" 2>/dev/null)" || return 1
+            printf '%s' "$body" |
+                python3 -c 'import sys,json; d=json.load(sys.stdin); print("\n".join(sorted(r["content"] for r in d.get("result",[]))), end="")' 2>/dev/null || return 1
+        }
+
+        if [ -z "$zone_id" ]; then
+            warn "DNS origin: не удалось получить zone id (проверь CLOUDFLARE_API_TOKEN)"
+        elif ! apex_origin="$(cf_a "$DOMAIN")"; then
+            warn "DNS origin: Cloudflare API не отдал A-записи $DOMAIN"
+        elif ! www_origin="$(cf_a "www.$DOMAIN")"; then
+            warn "DNS origin: Cloudflare API не отдал A-записи www.$DOMAIN"
+        elif [ -z "$www_origin" ]; then
+            info "DNS origin: A-записи www.$DOMAIN нет (алиас не настроен)"
+        elif [ "$apex_origin" = "$www_origin" ]; then
+            ok "DNS origin: apex и www указывают на один origin ($(printf '%s' "$apex_origin" | tr '\n' ' '))"
+        else
+            fail "DNS origin: apex и www расходятся (apex ${apex_origin:-—} / www ${www_origin:-—})"
+        fi
+    else
+        info "DNS origin: CLOUDFLARE_API_TOKEN не задан — проверка origin пропущена"
+    fi
+
     # Edge headers: cheap regression guard for the CSP/HSTS work in PR #301.
     local headers missing=""
     headers="$(curl -sk -m 20 -D - -o /dev/null "https://$DOMAIN/" 2>/dev/null)"
