@@ -509,7 +509,7 @@ if [ -n "$SELECTED_PROJECT" ]; then
         echo -e "${RED}✗ Project archive corrupted: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
-    if timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | grep -qE '^/|(^|/)\.\.(/|$)'; then
+    if timeout 300 sudo tar -tzf "$SELECTED_PROJECT" 2>/dev/null | pipe_has -E '^/|(^|/)\.\.(/|$)'; then
         echo -e "${RED}✗ Project archive contains absolute or path-traversal entries: $(basename "$SELECTED_PROJECT")${NC}"
         exit 1
     fi
@@ -547,8 +547,8 @@ PYEOF
     fi
     # New-format archives keep an empty tiles/ marker (contents live in the tiles
     # artifact) — without that artifact the restore would silently lose the map.
-    if printf '%s\n' "$_proj_listing" | grep -qE '^[^/]+/tiles/$' \
-        && ! printf '%s\n' "$_proj_listing" | grep -qE '^[^/]+/tiles/.' \
+    if grep -qE '^[^/]+/tiles/$' <<<"$_proj_listing" \
+        && ! grep -qE '^[^/]+/tiles/.' <<<"$_proj_listing" \
         && [ -z "$SELECTED_TILES" ]; then
         echo -e "${RED}✗ Project archive expects tiles (empty tiles/ marker) but no tiles backup — restore would lose the map${NC}"
         exit 1
@@ -718,7 +718,7 @@ if [ -n "$SELECTED_TILES" ]; then
         _tiles_listing=$(timeout 300 sudo tar -tzf "$SELECTED_TILES" 2>/dev/null || true)
         _tiles_top=$(printf '%s\n' "$_tiles_listing" | head -1 | cut -d/ -f1 || true)
         _tiles_safe=0
-        if [ "$_tiles_top" = "tiles" ] && ! printf '%s\n' "$_tiles_listing" | grep -qE '^/|(^|/)\.\.(/|$)'; then
+        if [ "$_tiles_top" = "tiles" ] && ! grep -qE '^/|(^|/)\.\.(/|$)' <<<"$_tiles_listing"; then
             # Same tar-slip guard as the project archive above: reject symlinks
             # whose target escapes the archive root (extracted as root).
             if timeout 300 sudo python3 - "$SELECTED_TILES" <<'PYEOF' 2>/dev/null

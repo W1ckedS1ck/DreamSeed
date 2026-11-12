@@ -145,6 +145,32 @@ SSH → sudo journalctl -u vmagent --no-pager -n 20
 
 ---
 
+## Verifying Production After Manual Changes
+
+`web_root` (`/var/www/html`) is **not** in git: an asset edited in place exists only on the
+server and in the hourly project backup. After such an edit, run the operator-side check from
+your machine — it is read-only (no restart, no `chown`, no cache purge):
+
+```bash
+./scripts/verify_prod.sh                 # outside-in + www edits + drift + audit_deep.sh
+./scripts/verify_prod.sh --fast          # skip the server audit (~5 s)
+./scripts/verify_prod.sh --www-only --since "3 hours ago"
+```
+
+It covers what the server-side tools cannot see: the six monitor endpoints through
+Cloudflare, the `/bot-health` body and the monitor keyword, the `www → apex` 301, TLS expiry
+and SAN, DNS parity between apex and www, the security headers, the edited files themselves
+(owner, mode, `php -l`, `?v=` bump, and the served bytes vs the bytes on disk), repo-vs-server
+drift for the deployed scripts, and finally `audit_deep.sh` folded into the same report. Exit
+code = number of failed checks, so it can be wired into CI or cron later.
+
+Two rules it enforces, both learned the hard way:
+
+- **Bump `?v=`** whenever you edit a JS/CSS asset. Static files are served `immutable` for
+  30 days, so a returning visitor keeps the old copy otherwise.
+- **Keep the owner at `www-data:www-data`.** Uploading as `ubuntu` (SFTP/scp) leaves the file
+  owned by `ubuntu`, and MODX can no longer create siblings next to it.
+
 ## Managing Grafana Alert Rules
 
 ### Where alerts are defined

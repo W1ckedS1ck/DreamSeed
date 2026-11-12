@@ -86,7 +86,7 @@ echo "    Uptime: $(uptime -p 2>/dev/null || uptime | awk '{$1=$2=$3=""; print}'
 echo "    CPU: $(nproc) cores"
 echo "    Memory: $(free -h | awk '/Mem/ {print $3 " / " $2}')"
 echo "    Disk: $(df -h --total 2>/dev/null | grep total | awk '{print $3 " / " $2 " (" $5 ")"}')"
-if swapon --show 2>/dev/null | grep -q .; then
+if swapon --show 2>/dev/null | pipe_has -E '.'; then
     echo "    Swap: $(swapon --show 2>/dev/null | awk 'NR==2{print $3 " / " $2}')"
 fi
 
@@ -106,7 +106,7 @@ else
 fi
 
 # Swap
-if swapon --show 2>/dev/null | grep -q .; then
+if swapon --show 2>/dev/null | pipe_has -E '.'; then
     ok "Swap enabled" "swap_enabled"
 else
     warn "No swap" "swap_enabled"
@@ -123,7 +123,7 @@ echo "── 2. Web Server ──"
 
 # nginx -t
 if [[ "$WEB_SVC" == "nginx" ]]; then
-    if sudo nginx -t 2>&1 | grep -q "successful"; then
+    if sudo nginx -t 2>&1 | pipe_has -F "successful"; then
         ok "nginx config syntax OK" "nginx_syntax"
     else
         fail "nginx config syntax ERROR" "nginx_syntax"
@@ -288,11 +288,13 @@ echo "── 4. PHP ──"
 echo "    Version: $(php -v 2>/dev/null | head -1)"
 echo "    FPM: $(systemctl is-active "php${PHP_VER}-fpm" 2>/dev/null || echo "inactive")"
 
-# Extensions
+# Extensions — `php -m` is read once (11 spawns cost ~0.4 s) and matched with grep on a
+# here-string, not on a pipe: see pipe_has() for why `php -m | grep -q` is a coin flip.
 _req_exts="pdo_mysql redis curl mbstring json xml zip gd openssl"
 _ext_missing=0
+_php_mods="$(php -m 2>/dev/null || true)"
 for _ext in $_req_exts; do
-    if ! php -m 2>/dev/null | grep -qi "$_ext"; then
+    if ! grep -qi "$_ext" <<<"$_php_mods"; then
         echo "    $F Extension missing: $_ext"
         ((_ext_missing++)) || true
     fi
@@ -317,7 +319,7 @@ echo "    Opcache: enabled=$_opcache_enabled mem=${_opcache_mem}MB files=$_opcac
 _fpm_save_handler=$(grep -r 'session.save_handler' /etc/php/*/fpm/pool.d/ 2>/dev/null | grep 'php_value' | awk -F'=' '{print $2}' | tr -d ' ' | head -1)
 if [[ "$_fpm_save_handler" == "redis" ]]; then
     ok "FPM session handler: redis (pool override)" "fpm_session_redis"
-elif redis-cli --scan --pattern 'PHPREDIS_*' 2>/dev/null | head -1 | grep -q .; then
+elif [ -n "$(redis-cli --scan --pattern 'PHPREDIS_*' 2>/dev/null | head -1)" ]; then
     ok "FPM session handler: pool redis (verified by Redis keys)" "fpm_session_redis"
 else
     warn "FPM session handler: $_fpm_save_handler (expect redis)" "fpm_session_redis"
@@ -351,7 +353,7 @@ _innodb_buf=$(mysql -N -e "SHOW VARIABLES LIKE 'innodb_buffer_pool_size'" 2>/dev
 _slow_q=$(mysql -N -e "SHOW GLOBAL STATUS LIKE 'Slow_queries'" 2>/dev/null | awk '{print $2}')
 echo "    Size: ${_db_size} MB | InnoDB buffer: ${_innodb_buf} | Slow queries: $_slow_q"
 
-if ss -tlnp 2>/dev/null | grep -q '127.0.0.1:3306'; then
+if ss -tlnp 2>/dev/null | pipe_has -F '127.0.0.1:3306'; then
     ok "MariaDB bound to localhost" "mysql_bind_local"
 else
     fail "MariaDB NOT bound to localhost" "mysql_bind_local"
@@ -362,7 +364,7 @@ fi
 echo ""
 echo "── 6. Redis ──"
 
-if redis-cli ping 2>/dev/null | grep -q PONG; then
+if redis-cli ping 2>/dev/null | pipe_has -F PONG; then
     ok "Redis ping OK" "redis_ping"
 else
     fail "Redis not responding" "redis_ping"
@@ -372,7 +374,7 @@ echo "    Version: $(redis-server -v 2>/dev/null | awk '{print $3}')"
 echo "    Memory: $(redis-cli INFO memory 2>/dev/null | grep 'used_memory_human' | cut -d: -f2) / $(redis-cli INFO memory 2>/dev/null | grep 'maxmemory_human' | cut -d: -f2)"
 echo "    Keys: $(redis-cli DBSIZE 2>/dev/null)"
 
-if ss -tlnp 2>/dev/null | grep -q '127.0.0.1:6379'; then
+if ss -tlnp 2>/dev/null | pipe_has -F '127.0.0.1:6379'; then
     ok "Redis bound to localhost" "redis_bind_local"
 else
     fail "Redis NOT bound to localhost" "redis_bind_local"
@@ -416,7 +418,7 @@ else
 fi
 
 # Local certificates
-if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name:"; then
+if sudo certbot certificates 2>/dev/null | pipe_has -F "Certificate Name:"; then
     echo "    Certbot: certificates present"
     sudo certbot certificates 2>/dev/null | grep "Expiry Date" | head -1 | sed 's/^/    /'
 elif ls /etc/ssl/certs/selfsigned.crt 2>/dev/null; then
@@ -445,7 +447,7 @@ else
 fi
 
 # Cache on tmpfs
-if findmnt -n /var/www/html/core/cache 2>/dev/null | grep -q tmpfs; then
+if findmnt -n /var/www/html/core/cache 2>/dev/null | pipe_has -F tmpfs; then
     ok "Cache on tmpfs" "cache_tmpfs"
 else
     warn "Cache NOT on tmpfs" "cache_tmpfs"
@@ -495,7 +497,7 @@ for r in d['data']['result']:
   print(r['metric']['job'], r['value'][1])
 " 2>/dev/null) || _up_targets=""
 
-if echo "$_up_targets" | grep -q '1'; then
+if grep -q '1' <<<"$_up_targets"; then
     echo "    Scrape targets:"
     echo "$_up_targets" | while read -r _job _val; do
         [[ "$_val" == "1" ]] && echo "      $P $_job" || echo "      $F $_job ($_val)"

@@ -167,7 +167,7 @@ fi
 if curl -sfk --max-time 5 "https://$DOMAIN/" >/dev/null 2>&1; then
     echo "  ✓ SSL: Cloudflare (edge)"
     export_metric "ssl_certificate_valid{provider=\"cloudflare\"} 1"
-elif certbot certificates 2>/dev/null | grep -q "^  Certificate Name:"; then
+elif certbot certificates 2>/dev/null | pipe_has -E "^  Certificate Name:"; then
     echo "  ✓ SSL: letsencrypt"
     export_metric "ssl_certificate_valid{provider=\"letsencrypt\"} 1"
 elif openssl x509 -in /etc/ssl/certs/ssl-cert-snakeoil.pem -noout 2>/dev/null; then
@@ -254,14 +254,14 @@ if [[ "$WEB_SVC" == "apache2" ]]; then
 fi
 _check_ep 9121 redis_ redis_exporter || fail=1
 # --- Backup crons ---
-if crontab -u ubuntu -l 2>/dev/null | grep -q smart_backup; then
+if crontab -u ubuntu -l 2>/dev/null | pipe_has -F smart_backup; then
     echo "  ✓ cron: backup"
     # NOT pushed — cron-backup alert must track smart_backup.sh runs, not this.
 else
     echo "  ✗ cron: backup not set"
     _local_fail=1
 fi
-if crontab -u ubuntu -l 2>/dev/null | grep -q upload_backups_to_gdrive; then
+if crontab -u ubuntu -l 2>/dev/null | pipe_has -F upload_backups_to_gdrive; then
     echo "  ✓ cron: upload"
 else
     echo "  ✗ cron: upload not set"
@@ -278,7 +278,7 @@ else
     _f2b_jails=$(sudo fail2ban-client status 2>/dev/null | grep "Jail list" | sed 's/.*:[[:space:]]*//' || echo "")
     _f2b_missing=0
     for _j in sshd modx-admin dreamseed-botsearch dreamseed-bad-request grafana recidive; do
-        if ! echo "$_f2b_jails" | grep -q "$_j"; then
+        if ! grep -q "$_j" <<<"$_f2b_jails"; then
             _f2b_missing=1
         fi
     done
@@ -382,7 +382,7 @@ fi
 # Warn-only: a broken Grafana must NOT suppress the Better Stack heartbeat below,
 # otherwise a healthy site pages as "down". service_status metric still flips to
 # 0 so dashboard alerting keeps visibility without paging.
-if curl -sf --max-time 5 "http://127.0.0.1:3000/api/health" 2>/dev/null | grep -q '"database": "ok"'; then
+if curl -sf --max-time 5 "http://127.0.0.1:3000/api/health" 2>/dev/null | pipe_has -F '"database": "ok"'; then
     echo "  ✓ Grafana: healthy"
     export_metric 'service_status{service="grafana-server"} 1'
 else
@@ -412,7 +412,7 @@ if [[ -n "${TG_TOKEN:-}" ]]; then
     if [[ -n "$_tg_cfg" ]]; then
         chmod 600 "$_tg_cfg"
         printf 'url = "https://api.telegram.org/bot%s/getMe"\n' "$TG_TOKEN" >"$_tg_cfg"
-        if curl -sf --max-time 5 --config "$_tg_cfg" 2>/dev/null | grep -q '"ok":true'; then
+        if curl -sf --max-time 5 --config "$_tg_cfg" 2>/dev/null | pipe_has -F '"ok":true'; then
             echo "  ✓ Telegram: API OK"
         else
             echo "  ⚠ Telegram: API unreachable (alerts won't send)"
