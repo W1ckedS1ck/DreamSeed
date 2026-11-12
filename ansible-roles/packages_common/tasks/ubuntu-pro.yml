@@ -41,6 +41,39 @@
     - pro_status.rc | default(1) == 0
     - not (pro_status.stdout | default('{}') | from_json).attached | default(false)
 
+- name: Read Ubuntu Pro status after attach
+  become: true
+  ansible.builtin.command:
+    cmd: pro status --format json
+  register: pro_status_post
+  changed_when: false
+  failed_when: false
+  when: ubuntu_pro_token | length > 0
+
+# `pro attach` enables only esm-infra/esm-apps; Livepatch must be enabled
+# explicitly. Re-apply on every run so a disabled service is brought back.
+- name: Enable Canonical Livepatch (Ubuntu Pro)
+  become: true
+  ansible.builtin.command:
+    cmd: pro enable livepatch --assume-yes
+  register: pro_livepatch
+  changed_when: pro_livepatch.rc | default(1) == 0
+  failed_when: false
+  when:
+    - ubuntu_pro_token | length > 0
+    - pro_status_post.rc | default(1) == 0
+    - (pro_status_post.stdout | default('{}') | from_json).services
+      | selectattr('name', 'equalto', 'livepatch')
+      | map(attribute='status') | first | default('') != 'enabled'
+
+- name: Report Livepatch status
+  ansible.builtin.debug:
+    msg: >-
+      Livepatch: {{ 'enabled (rc=' ~ pro_livepatch.rc ~ ')'
+      if pro_livepatch is defined and not (pro_livepatch.skipped | default(false))
+      else 'already enabled / not changed' }}
+  when: ubuntu_pro_token | length > 0
+
 - name: Report Ubuntu Pro attachment status
   when: ubuntu_pro_token | length > 0
   ansible.builtin.debug:
