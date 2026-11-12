@@ -17,6 +17,12 @@ on:
 # All writes are granted per job below, so the rest of the workflow stays read-only.
 permissions: read-all
 
+# One scorecard run at a time: a push to main while the weekly run is in flight would upload a second
+# SARIF for the same commit. Read-only analysis, so cancelling the older run is harmless.
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analysis:
     name: Scorecard analysis

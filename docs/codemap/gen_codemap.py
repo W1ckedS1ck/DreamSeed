@@ -55,7 +55,7 @@ def tracked_files():
 
 def module_files():
     files = tracked_files()
-    mods = {m: [] for m in SCOPE}
+    mods: dict[str, list[str]] = {m: [] for m in SCOPE}
     for f in files:
         parts = f.split("/")
         mod = parts[0] if len(parts) > 1 else "root"
@@ -1376,7 +1376,7 @@ def build():
     fps = module_fingerprints()
     dirty = not working_tree_clean()
 
-    topo = sorted(n["id"] for n in NODES) + sorted(
+    topo = sorted(str(n["id"]) for n in NODES) + sorted(
         f"{e['from_id']}->{e['to']}" for e in EDGES
     )
     graph_hash = hashlib.sha256("\n".join(topo).encode()).hexdigest()[:16]

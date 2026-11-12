@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+from typing import Any
 
 JINJA_RE = re.compile(r"\{\{.*?\}\}")
 
@@ -40,7 +41,7 @@ def main():
 
     # group_vars/all.yml handles static defaults via lookup('env').
     # Only pass dynamic per-target vars that cannot be expressed in group_vars.
-    data = {
+    data: dict[str, Any] = {
         "deploy_env": target,
         "server_ip": os.environ.get("SERVER_IP", ""),
         "web_server": os.environ.get("WEB_SERVER", ""),

@@ -1,0 +1,12 @@
+# Coverage scope for `make test` / CI (scripts/test_unit.sh).
+#
+# pytest-cov takes SOURCE as a package/dir, so the scope is `scripts` + `lib`; the three modules the
+# pytest suite does not drive are omitted here instead of being silently counted as 0 %:
+#   * scripts/env_loader.py   — exercised by the .env parser contract + differential fuzz
+#   * scripts/lint_actions.py — run by lint.sh itself over the composite actions
+#   * scripts/telegram_bot.py — network-bound (Telegram API); its pure helpers are covered
+[run]
+omit =
+    scripts/env_loader.py
+    scripts/lint_actions.py
+    scripts/telegram_bot.py

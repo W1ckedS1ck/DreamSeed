@@ -3,6 +3,15 @@
 
 ansible_python_interpreter: /usr/bin/python3
 domain: "{{ lookup('env', 'DEPLOY_DOMAIN') | mandatory('domain required — run via deploy.sh or pass -e domain=...') }}"
+# Canonical host: the site answers on {{ domain }} only. www.{{ domain }} gets a
+# DNS record (deploy.sh post step), a place in the certificate (ssl role) and a
+# 301 to the apex in both nginx vhosts. Old "www" links must never 522/404.
+# Alias only for apex-style domains: Cloudflare Universal SSL covers <zone> and
+# *.<zone>, so www.<sub>.<zone> (dev: www.hetz.vitalikuts.online) has no edge
+# certificate and the TLS handshake dies before nginx is reached. One dot ==
+# apex; lib/post.sh:update_dns mirrors the same rule for the DNS record.
+www_domain: "www.{{ domain }}"
+www_redirect_enabled: "{{ (domain.split('.') | length) == 2 }}"
 admin_email: "hello@dreamseed.online"
 web_server: "nginx"
 

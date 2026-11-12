@@ -15,6 +15,20 @@ VM_PUSH_URL="http://127.0.0.1:8428/api/v1/import/prometheus"
         echo "site_up{instance=\"{{ domain }}\"} 0"
     fi
 
+{% if www_redirect_enabled | bool %}
+    # Canonical host: www.<domain> must answer 301 to the apex. Local SNI probe,
+    # independent of Cloudflare — a wrong DNS record, a certificate without the
+    # www SAN, or a missing www vhost all surface here (that combination is what
+    # once made www show "Error 522" while the apex was healthy).
+    _www_resp=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}|%{redirect_url}" \
+        --resolve "{{ www_domain }}:443:127.0.0.1" "https://{{ www_domain }}/" 2>/dev/null) || _www_resp="000|"
+    if [ "${_www_resp%%|*}" = "301" ] && [ "${_www_resp#*|}" = "https://{{ domain }}/" ]; then
+        echo "www_redirect_ok{instance=\"{{ domain }}\"} 1"
+    else
+        echo "www_redirect_ok{instance=\"{{ domain }}\"} 0"
+    fi
+{% endif %}
+
     # MODX core check
     if [ -f "{{ web_root }}/manager/config.core.php" ] && [ -f "{{ web_root }}/core/model/modx/modx.class.php" ]; then
         echo "modx_core_ok{instance=\"{{ domain }}\"} 1"

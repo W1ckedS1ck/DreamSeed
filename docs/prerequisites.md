@@ -127,13 +127,18 @@ brew install trivy
 brew install gitleaks
 ```
 
-Run the test suites locally:
+Install the Python test/type dependencies (hash-pinned, the same file CI uses) and run the suites:
 
 ```bash
-make test        # Python unit tests (pytest)
+make deps        # creates .venv and installs ci/requirements.txt (pytest, mypy, pytest-cov)
+make test        # unit tests + coverage floor (same command as CI)
+make types       # mypy over scripts/, lib/, actions, codemap and tests
 make test-bash   # shell helpers (bats)
 make test-env    # .env parser contract + differential fuzz
 ```
+
+`make test` without `make deps` falls back to `python3` — that only works if pytest, pyyaml and
+jinja2 are already installed globally, which is why the fresh-clone path is `make deps` first.
 
 ## Secrets setup
 

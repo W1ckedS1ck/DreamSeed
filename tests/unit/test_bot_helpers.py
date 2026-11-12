@@ -27,7 +27,7 @@ class _Any:
 _stub(
     "env_loader", load_env=lambda path: None
 )  # bot loads scripts/.env at import; CI has none
-_stub("telegram", Update=_Any)
+_stub("telegram", Update=_Any, Message=_Any)
 _stub("telegram.error", NetworkError=Exception)
 _stub(
     "telegram.ext",
@@ -59,3 +59,56 @@ def test_get_size_formats_megabytes_and_kilobytes() -> None:
 def test_get_size_empty_and_missing_file() -> None:
     assert bot.get_size("") == "-"
     assert bot.get_size("/nonexistent/path/backup.tar.gz") == "-"
+
+
+def _update(
+    chat_id: int | None,
+    *,
+    has_message: bool = True,
+    reply_from_bot: bool | None = None,
+) -> types.SimpleNamespace:
+    reply = None
+    if reply_from_bot is not None:
+        reply = types.SimpleNamespace(
+            from_user=types.SimpleNamespace(is_bot=reply_from_bot)
+        )
+    message = types.SimpleNamespace(reply_to_message=reply) if has_message else None
+    chat = types.SimpleNamespace(id=chat_id) if chat_id is not None else None
+    return types.SimpleNamespace(effective_chat=chat, effective_message=message)
+
+
+def test_owner_message_returns_message_for_owner_chat(monkeypatch) -> None:
+    monkeypatch.setattr(bot, "TG_CHAT_ID", "42")
+    update = _update(42)
+    assert bot._owner_message(update) is update.effective_message
+
+
+def test_owner_message_rejects_update_without_chat(monkeypatch) -> None:
+    monkeypatch.setattr(bot, "TG_CHAT_ID", "42")
+    assert bot._owner_message(_update(None)) is None
+
+
+def test_owner_message_rejects_foreign_chat(monkeypatch) -> None:
+    monkeypatch.setattr(bot, "TG_CHAT_ID", "42")
+    assert bot._owner_message(_update(7)) is None
+
+
+def test_owner_message_rejects_unset_chat_id(monkeypatch) -> None:
+    monkeypatch.setattr(bot, "TG_CHAT_ID", "")
+    assert bot._owner_message(_update(42)) is None
+
+
+def test_owner_message_rejects_update_without_message(monkeypatch) -> None:
+    monkeypatch.setattr(bot, "TG_CHAT_ID", "42")
+    assert bot._owner_message(_update(42, has_message=False)) is None
+
+
+def test_owner_message_rejects_reply_to_bot(monkeypatch) -> None:
+    monkeypatch.setattr(bot, "TG_CHAT_ID", "42")
+    assert bot._owner_message(_update(42, reply_from_bot=True)) is None
+
+
+def test_owner_message_allows_reply_to_human(monkeypatch) -> None:
+    monkeypatch.setattr(bot, "TG_CHAT_ID", "42")
+    update = _update(42, reply_from_bot=False)
+    assert bot._owner_message(update) is update.effective_message

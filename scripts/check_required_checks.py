@@ -13,6 +13,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from typing import Any
 
 import yaml
 
@@ -23,7 +24,7 @@ PUSH_ONLY = {"Deploy Check"}
 API = "https://api.github.com"
 
 
-def _get(path: str, token: str | None) -> object:
+def _get(path: str, token: str | None) -> Any:
     req = urllib.request.Request(
         f"{API}{path}",
         headers={
