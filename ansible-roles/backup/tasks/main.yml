@@ -201,6 +201,24 @@
     state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
   become: true
 
+- name: Setup scheduled gift delivery cron (every 5 minutes)
+  ansible.builtin.cron:
+    name: "DreamSeed scheduled gifts"
+    minute: "*/5"
+    job: "/usr/bin/php {{ web_root }}/core/components/dreamseed/cron/send-scheduled-gifts.php >> /home/ubuntu/backups/logs/gift-cron.log 2>&1"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+  become: true
+
+- name: Setup unfinished-registration reminder cron (hourly at :05)
+  ansible.builtin.cron:
+    name: "DreamSeed registration reminders"
+    minute: "5"
+    job: "/usr/bin/php {{ web_root }}/core/components/dreamseed/cron/registration-reminders.php >> /home/ubuntu/backups/logs/reg-reminders.log 2>&1"
+    user: ubuntu
+    state: "{{ backup_cron_enabled | bool | ternary('present', 'absent') }}"
+  become: true
+
 - name: Check MODX system_settings table
   ansible.mariadb.mariadb_query:
     login_unix_socket: /run/mysqld/mysqld.sock
