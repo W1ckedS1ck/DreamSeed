@@ -114,6 +114,7 @@ jobs:
             else
               write_env "TF_VAR_hcloud_token=$HETZ_TOKEN"
               write_env "TF_VAR_server_type=cx23"
+              write_env "TF_VAR_os_image=${{ vars.DEV_HETZ_OS_IMAGE || 'ubuntu-24.04' }}"
               write_env "TF_VAR_ssh_key_name=Vitali.pub"
               write_env "TF_VAR_primary_ip_name=primary_ip-1"
             fi
@@ -272,6 +273,7 @@ jobs:
             else
               write_env "TF_VAR_hcloud_token=$HETZ_TOKEN"
               write_env "TF_VAR_server_type=cx23"
+              write_env "TF_VAR_os_image=${{ vars.DEV_HETZ_OS_IMAGE || 'ubuntu-24.04' }}"
               write_env "TF_VAR_ssh_key_name=Vitali.pub"
               write_env "TF_VAR_primary_ip_name=primary_ip-1"
             fi

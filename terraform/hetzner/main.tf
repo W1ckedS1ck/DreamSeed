@@ -139,7 +139,7 @@ resource "hcloud_primary_ip" "main" {
 resource "hcloud_server" "main" {
   name               = "dreamseed-${var.environment}"
   server_type        = var.server_type
-  image              = "ubuntu-24.04"
+  image              = var.os_image
   location           = var.location
   labels             = local.labels
   ssh_keys           = local.use_existing_key ? [data.hcloud_ssh_key.default[0].id] : [hcloud_ssh_key.ci_key[0].id]

@@ -149,6 +149,9 @@ jobs:
           PROD_HETZ_PRIMARY_IP_NAME=
           PROD_HETZ_ENABLE_PRIMARY_IP=true
           EOF
+          # Dev OS image comes from a repo variable so it can be switched
+          # (e.g. Ubuntu 26.04 testing) without a code change; unset = 24.04.
+          echo "DEV_HETZ_OS_IMAGE=${{ vars.DEV_HETZ_OS_IMAGE || 'ubuntu-24.04' }}" >> secrets/.env
 
       - name: Deploy
         if: inputs.action == 'deploy'
