@@ -239,7 +239,7 @@ for item in data.get('data', []):
 }
 
 for spec in \
-    "https://${DOMAIN}/|Main site|The Dreamers|180|keyword" \
+    "https://${DOMAIN}/|Main site|Garden of Dreamers|180|keyword" \
     "https://${DOMAIN}/manager/|Admin panel|MODX|300|keyword" \
     "https://${DOMAIN}/grafana|Grafana|Grafana|180|keyword" \
     "https://${DOMAIN}/bot-health|Telegram Bot||180|status" \
