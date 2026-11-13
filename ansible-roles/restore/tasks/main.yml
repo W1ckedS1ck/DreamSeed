@@ -431,6 +431,24 @@
         - restore_modx_check.query_result is defined
         - restore_modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
 
+    # A dump restored from prod carries site_url=https://dreamseed.online/.
+    # MODX emits it as <base href> and builds absolute asset URLs from it, so on
+    # dev every relative CSS/JS/image would resolve to prod and be blocked by
+    # the dev CSP (default-src 'self') — the page renders unstyled.
+    - name: Point MODX site_url at this deployment's domain
+      ansible.mariadb.mariadb_query:
+        login_unix_socket: /run/mysqld/mysqld.sock
+        login_user: root
+        query: >
+          UPDATE `{{ db_name }}`.`{{ db_prefix | default('modx_') }}system_settings`
+          SET `value` = 'https://{{ domain }}/'
+          WHERE `key` = 'site_url' AND `value` <> 'https://{{ domain }}/'
+      become: true
+      when:
+        - restore_latest_db.stdout | trim != ""
+        - restore_modx_check.query_result is defined
+        - restore_modx_check.query_result[0][0]['cnt'] | default(0) | int > 0
+
     - name: Clear MODX system settings cache and restart FPM to apply Redis session handler
       become: true
       when: restore_latest_db.stdout | trim != ""
