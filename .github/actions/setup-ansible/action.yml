@@ -5,7 +5,7 @@ inputs:
   uv-version:
     description: uv release to install (kept in sync with ci.yml UV_VERSION)
     required: false
-    default: "0.13.7" # renovate: depName=astral-sh/uv
+    default: "0.13.8" # renovate: depName=astral-sh/uv
 
 runs:
   using: composite
