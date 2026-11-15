@@ -108,6 +108,7 @@ jobs:
               echo "TF_VAR_hcloud_token=$HCLOUD_TOKEN" >> "$GITHUB_ENV"
               echo "TF_VAR_environment=dev-hetz" >> "$GITHUB_ENV"
               echo "TF_VAR_server_type=cx23" >> "$GITHUB_ENV"
+              echo "TF_VAR_os_image=${{ vars.DEV_HETZ_OS_IMAGE || 'ubuntu-24.04' }}" >> "$GITHUB_ENV"
               echo "TF_VAR_ssh_key_name=Vitali.pub" >> "$GITHUB_ENV"
               echo "TF_VAR_primary_ip_name=primary_ip-1" >> "$GITHUB_ENV"
               ;;

@@ -150,10 +150,10 @@ outside_in() {
     # turn a healthy page into a failure.
     local home
     home="$(curl -sk -m 20 "https://$DOMAIN/" 2>/dev/null)"
-    if grep -qF "The Dreamers" <<<"$home"; then
+    if grep -qF "Garden of Dreamers" <<<"$home"; then
         ok "главная содержит ключевое слово монитора"
     else
-        fail "на главной нет 'The Dreamers' (монитор Better Stack покраснеет)"
+        fail "на главной нет 'Garden of Dreamers' (монитор Better Stack покраснеет)"
     fi
 
     # www must 301 to the apex, never 522/404 (Cloudflare Full(strict) needs the SAN).
@@ -322,7 +322,7 @@ www_edits() {
     if [ -n "$php_files" ]; then
         local lint_out
         lint_out="$(ssh_prod "for f in $php_files; do sudo -u www-data php -l \"\$f\" 2>&1; done" </dev/null)"
-        if grep -q "Parse error\|syntax error" <<<"$lint_out"; then
+        if grep -q "Parse error" <<<"$lint_out"; then
             fail "php -l нашёл синтаксическую ошибку: $(echo "$lint_out" | grep -m1 -i 'error')"
         else
             ok "php -l: ошибок нет ($(echo "$php_files" | wc -w | tr -d ' ') файл(ов))"

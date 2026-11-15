@@ -178,6 +178,7 @@ apply_target_vars() {
     if [[ "$TF_PROVIDER" == "hetzner" ]]; then
         local v_token="${pfx}_HCLOUD_TOKEN"
         local v_type="${pfx}_SERVER_TYPE"
+        local v_image="${pfx}_OS_IMAGE"
         local v_loc="${pfx}_LOCATION"
         local v_keyname="${pfx}_SSH_KEY_NAME"
         local v_ipname="${pfx}_PRIMARY_IP_NAME"
@@ -186,11 +187,12 @@ apply_target_vars() {
         # fall back to unprefixed (e.g. HCLOUD_TOKEN) for backward compatibility
         HCLOUD_TOKEN="${!v_token:-${HCLOUD_TOKEN:-}}"
         HETZNER_SERVER_TYPE="${!v_type:-${HETZNER_SERVER_TYPE:-}}"
+        HETZNER_OS_IMAGE="${!v_image:-${HETZNER_OS_IMAGE:-}}"
         HETZNER_LOCATION="${!v_loc:-${HETZNER_LOCATION:-}}"
         HETZNER_SSH_KEY_NAME="${!v_keyname:-${HETZNER_SSH_KEY_NAME:-}}"
         HETZNER_PRIMARY_IP_NAME="${!v_ipname:-${HETZNER_PRIMARY_IP_NAME:-}}"
         HETZNER_ENABLE_PRIMARY_IP="${!v_create_ip:-${HETZNER_ENABLE_PRIMARY_IP:-}}"
-        export HCLOUD_TOKEN HETZNER_SERVER_TYPE HETZNER_LOCATION HETZNER_SSH_KEY_NAME HETZNER_PRIMARY_IP_NAME HETZNER_ENABLE_PRIMARY_IP
+        export HCLOUD_TOKEN HETZNER_SERVER_TYPE HETZNER_OS_IMAGE HETZNER_LOCATION HETZNER_SSH_KEY_NAME HETZNER_PRIMARY_IP_NAME HETZNER_ENABLE_PRIMARY_IP
     fi
 }
 
@@ -226,6 +228,7 @@ export_tf_env() {
     [[ "$TF_PROVIDER" == "hetzner" ]] && {
         export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
         [[ -n "${HETZNER_SERVER_TYPE:-}" ]] && export TF_VAR_server_type="$HETZNER_SERVER_TYPE"
+        [[ -n "${HETZNER_OS_IMAGE:-}" ]] && export TF_VAR_os_image="$HETZNER_OS_IMAGE"
         [[ -n "${HETZNER_LOCATION:-}" ]] && export TF_VAR_location="$HETZNER_LOCATION"
         [[ -n "${HETZNER_SSH_KEY_NAME:-}" ]] && export TF_VAR_ssh_key_name="$HETZNER_SSH_KEY_NAME"
         [[ -n "${HETZNER_PRIMARY_IP_NAME:-}" ]] && export TF_VAR_primary_ip_name="$HETZNER_PRIMARY_IP_NAME"

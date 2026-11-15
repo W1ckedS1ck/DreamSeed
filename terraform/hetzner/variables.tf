@@ -38,6 +38,12 @@ variable "server_type" {
   default     = "cx23"
 }
 
+variable "os_image" {
+  description = "Hetzner OS image name (e.g. ubuntu-24.04, ubuntu-26.04). Changing it replaces the server."
+  type        = string
+  default     = "ubuntu-24.04"
+}
+
 variable "location" {
   description = "Hetzner datacenter location (nbg1, fsn1, hel1, ash)"
   type        = string

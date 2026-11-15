@@ -1253,7 +1253,7 @@ sudo systemctl restart telegram-bot
 
 ### B1. 🔴 BetterStack Alert — dreamseed.online (Main site monitor)
 
-**What triggered:** Better Stack (from 4 global regions — EU, US, Asia, Australia) cannot reach `https://dreamseed.online` — either the HTTP check failed or the keyword **"The Dreamers"** is missing from the response
+**What triggered:** Better Stack (from 4 global regions — EU, US, Asia, Australia) cannot reach `https://dreamseed.online` — either the HTTP check failed or the keyword **"Garden of Dreamers"** is missing from the response
 **Severity:** CRITICAL — server may be down
 **Causes (from most to least likely):**
 
@@ -1288,7 +1288,7 @@ sudo systemctl restart telegram-bot
    curl -sS -o /dev/null -w "%{http_code}" https://dreamseed.online/
 
    # Check keyword presence
-   curl -sS https://dreamseed.online/ | grep -o "The Dreamers" || echo "NOT FOUND"
+   curl -sS https://dreamseed.online/ | grep -o "Garden of Dreamers" || echo "NOT FOUND"
    ```
 
 4. **Check Cloudflare status:**
