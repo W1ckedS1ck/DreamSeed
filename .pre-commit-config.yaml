@@ -27,7 +27,7 @@ repos:
         exclude: \.(tftpl|bats)$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
+    rev: v0.17.5
     hooks:
       - id: ruff
         types: [python]
@@ -35,7 +35,7 @@ repos:
         types: [python]
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.24.0
+    rev: v0.24.1
     hooks:
       - id: markdownlint-cli2
         args: ["--config", "markdownlint-cli2.jsonc"]
