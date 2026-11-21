@@ -16,6 +16,11 @@ on:
 permissions:
   contents: read
 
+# Wiki/Pages pushes are not idempotent under races: let each commit's run finish.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish-code-map:
     # Pages site stays main-only; dev only syncs the wiki (see sync-wiki).

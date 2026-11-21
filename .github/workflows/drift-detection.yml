@@ -135,8 +135,18 @@ jobs:
         working-directory: ${{ matrix.tf_dir }}
         run: |
           # All backends are remote (Terraform Cloud) — plan without -out.
-          terraform plan -detailed-exitcode -no-color -input=false 2>&1 | tee /tmp/plan.log
-          rc=${PIPESTATUS[0]}
+          # Retry only transient backend/provider failures; a persistent error still fails the job.
+          set +e
+          for attempt in 1 2 3; do
+            terraform plan -detailed-exitcode -no-color -input=false 2>&1 | tee /tmp/plan.log
+            rc=${PIPESTATUS[0]}
+            if [ "$rc" -ne 1 ] || [ "$attempt" -eq 3 ] || ! grep -qE 'Failed to read logs: 5[0-9]{2}|error connecting to the remote backend|Failed to install provider|Failed to query available provider packages' /tmp/plan.log; then
+              break
+            fi
+            echo "::warning::Transient Terraform error for ${{ matrix.target }} (attempt $attempt/3), retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          set -e
           CHANGES=$(grep -c '^  #' /tmp/plan.log || true)
 
           if [ "$rc" -eq 1 ]; then
