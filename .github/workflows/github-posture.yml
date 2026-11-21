@@ -39,7 +39,7 @@ permissions:
 
 env:
   # uv provides pyyaml in an ephemeral env for the posture script.
-  UV_VERSION: "0.13.8"
+  UV_VERSION: "0.13.9"
 
 jobs:
   posture:
