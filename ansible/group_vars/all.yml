@@ -32,7 +32,7 @@ db_min_tables: 100
 # ==== PHP ====
 # HARD LOCK: MODX 2.x is incompatible with PHP > 8.3. Never bump (renovate rule + deploy/lint guards enforce).
 
-php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3.36', true) }}" # renovate: depName=php
+php_version: "{{ lookup('env', 'PHP_VERSION') | default('8.3.37', true) }}" # renovate: depName=php
 
 # ==== Redis ====
 
