@@ -120,12 +120,24 @@ uv tool install ruff
 uv pip install --require-hashes -r ansible/requirements-deploy.txt
 
 # Terraform
-brew install tflint
+# tflint lost its homebrew-core formula on 2026-05-13 (removed over the BUSL license);
+# upstream ships it as a cask in their own tap.
+brew trust terraform-linters/tap && brew install --cask terraform-linters/tap/tflint
 brew install trivy
+
+# GitHub Actions workflows
+brew install actionlint
+
+# Markdown
+brew install markdownlint-cli2
 
 # Secrets
 brew install gitleaks
 ```
+
+Versions are pinned in the `env:` block of `.github/workflows/ci.yml`; Renovate bumps those pins, so a
+local tool older than the pin is drift. `scripts/lint.sh --list` prints what is installed and the exact
+install command for everything that is missing.
 
 Install the Python test/type dependencies (hash-pinned, the same file CI uses) and run the suites:
 
@@ -148,3 +160,28 @@ cp .env.example secrets/.env
 ```
 
 See `.env.example` for the full list of variables.
+
+## New machine / disaster recovery
+
+Everything needed to rebuild a workstation is in this repo, except the items below — they are
+deliberately outside git and must live in a password manager:
+
+| Item | Why it is not in git |
+|------|----------------------|
+| `secrets/.env` | credentials (AWS, Hetzner, Cloudflare, Terraform, Telegram, Better Stack) |
+| `~/.ssh/` keys and `~/.ssh/config` | private keys |
+
+CI does **not** read `secrets/.env`: `deploy.yml` receives the same values as GitHub Actions secrets.
+Those are write-only, so a lost laptop means **rotating** tokens at the providers, not reading them back.
+
+Rebuild order:
+
+```bash
+git clone <repo> && cd DreamSeed
+make deps                    # .venv + hash-pinned ci/requirements.txt (pytest, mypy)
+make test && make test-bash  # the same commands CI runs
+bash scripts/lint.sh --full  # full local gate
+pre-commit install           # optional: the same hooks CI runs
+```
+
+`scripts/lint.sh --list` answers "what is missing here and how do I install it" for the whole toolchain.
