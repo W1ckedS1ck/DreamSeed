@@ -2,5 +2,5 @@
 # regenerates ansible/requirements-deploy.txt (with hashes) via the pip-compile
 # manager.
 ansible-core==2.22.0
-ansible-lint==26.11.0
+ansible-lint==26.11.1
 PyMySQL==1.2.4
