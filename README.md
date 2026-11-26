@@ -56,6 +56,9 @@
 ## ⚡ Quick Start
 
 ```bash
+# 0. First time on a machine? install the toolchain first — see docs/prerequisites.md
+#    (or run: bash scripts/lint.sh --list — prints what is missing and how to install it)
+
 # 1. Check everything lints clean (2 min)
 ./deploy.sh --lint
 
