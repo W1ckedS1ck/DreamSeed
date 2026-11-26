@@ -69,7 +69,7 @@ fail2ban_ignoreip: ""
 
 # Grafana installs as apt-latest (apt repo lags GitHub ~2w); this var = documented
 # expected version — Renovate PRs are the release radar, deploy log shows drift.
-grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.3.1', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
+grafana_version: "{{ lookup('env', 'GRAFANA_VERSION') | default('13.3.2', true) }}" # renovate: depName=grafana/grafana datasource=github-releases
 # Grafana log verbosity. warn drops the per-query INFO flood from grafana_scheduler.
 grafana_log_level: "{{ lookup('env', 'GRAFANA_LOG_LEVEL') | default('warn', true) }}"
 # Grafana admin password (used by /etc/grafana/grafana.env systemd EnvironmentFile)
@@ -88,12 +88,12 @@ monitoring_apache_version: "{{ lookup('env', 'MONITORING_APACHE_VERSION') | defa
 monitoring_mysql_version: "{{ lookup('env', 'MONITORING_MYSQL_VERSION') | default('0.21.0', true) }}" # renovate: depName=prometheus/mysqld_exporter datasource=github-releases
 monitoring_vm_version: "{{ lookup('env', 'MONITORING_VM_VERSION') | default('1.157.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
 monitoring_vmagent_version: "{{ lookup('env', 'MONITORING_VMAGENT_VERSION') | default('1.157.0', true) }}" # renovate: depName=VictoriaMetrics/VictoriaMetrics datasource=github-releases
-monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.98.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
+monitoring_redis_version: "{{ lookup('env', 'MONITORING_REDIS_VERSION') | default('1.99.0', true) }}" # renovate: depName=oliver006/redis_exporter datasource=github-releases
 telegram_bot_version: "{{ lookup('env', 'TELEGRAM_BOT_VERSION') | default('22.8', true) }}" # renovate: depName=python-telegram-bot datasource=pypi
 # Pinned uv binary — keep in sync with UV_VERSION in .github/workflows/ci.yml
 # (tests/unit/test_version_sync.py enforces it). Install path: release .sha256
 # asset -> get_url checksum (same pattern as install-pinned-binary).
-uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.13.9', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
+uv_version: "{{ lookup('env', 'UV_VERSION') | default('0.13.10', true) }}" # renovate: depName=astral-sh/uv datasource=github-releases
 # rclone: the Ubuntu package lags badly (1.60.1 on 24.04) and measurably slows
 # GDrive restores. Pin the official release; SHA256 verified from upstream SHA256SUMS.
 rclone_version: "{{ lookup('env', 'RCLONE_VERSION') | default('1.76.0', true) }}" # renovate: depName=rclone/rclone datasource=github-releases
@@ -150,7 +150,7 @@ faro_enabled: "{{ deploy_env in ['dev-hetz', 'prod-hetz', 'prod'] }}"
 faro_debug: "{{ deploy_env in ['dev-hetz'] }}"  # allows ?faro=1 to bypass sampling/consent on dev only
 faro_app_name: "{{ lookup('env', 'FARO_APP_NAME') | default(domain, true) }}"
 faro_collector_url: "{{ lookup('env', 'FARO_COLLECTOR_URL') | default('', true) }}"
-faro_sdk_version: "2.14.0"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
+faro_sdk_version: "2.15.0"  # renovate: depName=@grafana/faro-web-sdk datasource=npm
 faro_loader_path: "/theme/js/vendor/faro-loader.js"
 faro_loader_version: "2"  # bump when the loader content changes (cache-busting)
 faro_sdk_path: "/theme/js/vendor/faro-web-sdk-{{ faro_sdk_version }}.iife.js"
