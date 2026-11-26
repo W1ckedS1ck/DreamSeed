@@ -32,11 +32,11 @@ TOOLS=(
     "mypy:mypy:uv tool install mypy"
     "ansible-lint:ansible-lint:uv tool install ansible-lint"
     "actionlint:actionlint:brew install actionlint"
-    "tflint:tflint:brew install tflint"
+    "tflint:tflint:brew trust terraform-linters/tap && brew install --cask terraform-linters/tap/tflint"
     "gitleaks:gitleaks:brew install gitleaks"
     "trivy:trivy:brew install trivy"
     "terraform:terraform:brew install terraform"
-    "markdownlint-cli2:markdownlint-cli2:npm install -g markdownlint-cli2"
+    "markdownlint-cli2:markdownlint-cli2:brew install markdownlint-cli2"
     "bats:bats:brew install bats-core"
 )
 
@@ -455,7 +455,7 @@ run_trivy() {
 run_markdownlint() {
     group_start "markdownlint (Documentation)"
     if ! tool_available markdownlint-cli2; then
-        print_skip "markdownlint-cli2 not installed (npm install -g markdownlint-cli2)"
+        print_skip "markdownlint-cli2 not installed (brew install markdownlint-cli2)"
         group_end
         return 0
     fi
