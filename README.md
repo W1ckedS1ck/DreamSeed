@@ -6,6 +6,8 @@
 ![Rollback](https://github.com/W1ckedS1ck/DreamSeed/actions/workflows/rollback.yml/badge.svg)
 [![Better Stack](https://uptime.betterstack.com/status-badges/v1/monitor/2e2g1.svg)](https://status.dreamseed.online)
 ![Last Commit](https://img.shields.io/github/last-commit/W1ckedS1ck/DreamSeed/main)
+[![Discussions](https://img.shields.io/github/discussions/W1ckedS1ck/DreamSeed)](https://github.com/W1ckedS1ck/DreamSeed/discussions)
+![Contributors](https://img.shields.io/github/contributors/W1ckedS1ck/DreamSeed)
 
 ![Terraform](https://img.shields.io/badge/Terraform-1.17-7B42BC?logo=terraform)
 ![Ansible](https://img.shields.io/badge/Ansible--core-2.22-EE0000?logo=ansible)
